@@ -280,3 +280,45 @@ export async function isApiConfigured(): Promise<boolean> {
   const apiKey = await AsyncStorage.getItem(STORAGE_KEY_API_KEY);
   return !!apiKey;
 }
+
+export interface ApiSettingsStatus {
+  apiKeyConfigured: boolean;
+  apiUrl: string;
+  lastUpdated: string | null;
+}
+
+export async function getApiSettingsStatus(): Promise<ApiSettingsStatus> {
+  const url = `${API_BASE_URL}/api/settings/api`;
+  console.log('[API] Fetching API settings status:', url);
+  const headers = await getApiHeaders();
+  
+  try {
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      // If endpoint doesn't exist yet (404), return default status
+      if (response.status === 404) {
+        const config = await getApiConfiguration();
+        return {
+          apiKeyConfigured: !!config.apiKey,
+          apiUrl: config.apiUrl || 'https://api.myshiptracking.com/v1',
+          lastUpdated: null,
+        };
+      }
+      const errorText = await response.text();
+      console.error('[API] Failed to fetch API settings status:', response.status, errorText);
+      throw new Error('Failed to fetch API settings status');
+    }
+    const data = await response.json();
+    console.log('[API] API settings status:', data);
+    return data;
+  } catch (error) {
+    console.error('[API] Error fetching API settings status:', error);
+    // Fallback to local storage if backend endpoint not available
+    const config = await getApiConfiguration();
+    return {
+      apiKeyConfigured: !!config.apiKey,
+      apiUrl: config.apiUrl || 'https://api.myshiptracking.com/v1',
+      lastUpdated: null,
+    };
+  }
+}

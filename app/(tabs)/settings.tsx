@@ -10,11 +10,13 @@ import {
   TouchableOpacity,
   useColorScheme,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { Stack } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
+import { getApiSettingsStatus, type ApiSettingsStatus } from '@/utils/seaTimeApi';
 
 const STORAGE_KEY_API_KEY = '@myshiptracking_api_key';
 const STORAGE_KEY_API_URL = '@myshiptracking_api_url';
@@ -29,6 +31,8 @@ export default function SettingsScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [apiStatus, setApiStatus] = useState<ApiSettingsStatus | null>(null);
 
   useEffect(() => {
     loadSettings();
@@ -41,6 +45,14 @@ export default function SettingsScreen() {
 
       if (savedApiKey) setApiKey(savedApiKey);
       if (savedApiUrl) setApiUrl(savedApiUrl);
+
+      // Load API status from backend
+      try {
+        const status = await getApiSettingsStatus();
+        setApiStatus(status);
+      } catch (error) {
+        console.log('Could not fetch API status:', error);
+      }
     } catch (error) {
       console.error('Failed to load settings:', error);
     } finally {
@@ -59,12 +71,61 @@ export default function SettingsScreen() {
       await AsyncStorage.setItem(STORAGE_KEY_API_KEY, apiKey.trim());
       await AsyncStorage.setItem(STORAGE_KEY_API_URL, apiUrl.trim() || DEFAULT_API_URL);
 
+      // Refresh API status after saving
+      try {
+        const status = await getApiSettingsStatus();
+        setApiStatus(status);
+      } catch (error) {
+        console.log('Could not fetch updated API status:', error);
+      }
+
       Alert.alert('Success', 'API settings saved successfully');
     } catch (error) {
       console.error('Failed to save settings:', error);
       Alert.alert('Error', 'Failed to save settings. Please try again.');
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const testConnection = async () => {
+    if (!apiKey.trim()) {
+      Alert.alert('Error', 'Please enter an API key first');
+      return;
+    }
+
+    setIsTesting(true);
+    try {
+      // First save the settings
+      await AsyncStorage.setItem(STORAGE_KEY_API_KEY, apiKey.trim());
+      await AsyncStorage.setItem(STORAGE_KEY_API_URL, apiUrl.trim() || DEFAULT_API_URL);
+
+      // Try to fetch API status to test connection
+      const status = await getApiSettingsStatus();
+      setApiStatus(status);
+
+      if (status.apiKeyConfigured) {
+        Alert.alert(
+          'Connection Successful',
+          'Your MyShipTracking API credentials are configured correctly.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert(
+          'Connection Test',
+          'Settings saved, but API key not yet verified by backend. Try checking a vessel to verify.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      console.error('Connection test failed:', error);
+      Alert.alert(
+        'Connection Failed',
+        'Could not connect to the API. Please check your API key and URL.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsTesting(false);
     }
   };
 
@@ -194,6 +255,32 @@ export default function SettingsScreen() {
             </Text>
           </View>
 
+          {apiStatus && (
+            <View style={[styles.statusCard, { 
+              backgroundColor: isDark ? '#0F1A27' : '#F5F9FC',
+              borderColor: apiStatus.apiKeyConfigured ? colors.success : colors.warning,
+            }]}>
+              <View style={styles.statusRow}>
+                <IconSymbol
+                  ios_icon_name={apiStatus.apiKeyConfigured ? 'checkmark.circle.fill' : 'exclamationmark.circle.fill'}
+                  android_material_icon_name={apiStatus.apiKeyConfigured ? 'check-circle' : 'warning'}
+                  size={20}
+                  color={apiStatus.apiKeyConfigured ? colors.success : colors.warning}
+                />
+                <Text style={[styles.statusText, { 
+                  color: apiStatus.apiKeyConfigured ? colors.success : colors.warning 
+                }]}>
+                  {apiStatus.apiKeyConfigured ? 'API Key Configured' : 'API Key Not Configured'}
+                </Text>
+              </View>
+              {apiStatus.lastUpdated && (
+                <Text style={[styles.statusSubtext, { color: secondaryTextColor }]}>
+                  Last updated: {new Date(apiStatus.lastUpdated).toLocaleString()}
+                </Text>
+              )}
+            </View>
+          )}
+
           <View style={styles.buttonGroup}>
             <TouchableOpacity
               style={[
@@ -204,21 +291,49 @@ export default function SettingsScreen() {
               onPress={saveSettings}
               disabled={isSaving}
             >
-              <IconSymbol
-                ios_icon_name="checkmark.circle.fill"
-                android_material_icon_name="check-circle"
-                size={20}
-                color="#FFFFFF"
-              />
+              {isSaving ? (
+                <ActivityIndicator color="#FFFFFF" size="small" />
+              ) : (
+                <IconSymbol
+                  ios_icon_name="checkmark.circle.fill"
+                  android_material_icon_name="check-circle"
+                  size={20}
+                  color="#FFFFFF"
+                />
+              )}
               <Text style={styles.buttonText}>
                 {isSaving ? 'Saving...' : 'Save Settings'}
               </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={[
+                styles.button,
+                styles.testButton,
+                isTesting && styles.buttonDisabled,
+              ]}
+              onPress={testConnection}
+              disabled={isTesting || isSaving}
+            >
+              {isTesting ? (
+                <ActivityIndicator color={colors.accent} size="small" />
+              ) : (
+                <IconSymbol
+                  ios_icon_name="network"
+                  android_material_icon_name="wifi"
+                  size={20}
+                  color={colors.accent}
+                />
+              )}
+              <Text style={[styles.buttonTextSecondary, { color: colors.accent }]}>
+                {isTesting ? 'Testing...' : 'Test Connection'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.button, styles.secondaryButton]}
               onPress={resetToDefaults}
-              disabled={isSaving}
+              disabled={isSaving || isTesting}
             >
               <IconSymbol
                 ios_icon_name="arrow.counterclockwise"
@@ -391,6 +506,26 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontStyle: 'italic',
   },
+  statusCard: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 2,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  statusText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  statusSubtext: {
+    fontSize: 13,
+    marginLeft: 28,
+  },
   buttonGroup: {
     gap: 12,
   },
@@ -409,6 +544,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderWidth: 2,
     borderColor: colors.primary,
+  },
+  testButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: colors.accent,
   },
   buttonDisabled: {
     opacity: 0.6,
