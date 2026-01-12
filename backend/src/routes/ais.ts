@@ -91,7 +91,7 @@ async function fetchVesselAISData(mmsi: string, logger: any): Promise<AISVesselD
     }
 
     const data: MyShipTrackingResponse = await response.json();
-    logger.info(`Received AIS response for MMSI ${mmsi}:`, { features: data.features?.length || 0 });
+    logger.info(`Received AIS response for MMSI ${mmsi}: ${data.features?.length || 0} features`);
 
     if (!data.features || data.features.length === 0) {
       logger.warn(`No AIS features found for MMSI ${mmsi}`);
@@ -124,13 +124,9 @@ async function fetchVesselAISData(mmsi: string, logger: any): Promise<AISVesselD
 
     const is_moving = speed !== null && speed > MOVING_SPEED_THRESHOLD;
 
-    logger.info(`Processed AIS data for MMSI ${mmsi}:`, {
-      name,
-      speed_knots: speed,
-      is_moving,
-      latitude,
-      longitude,
-    });
+    logger.info(
+      `Processed AIS data for MMSI ${mmsi}: name=${name}, speed=${speed}, is_moving=${is_moving}, lat=${latitude}, lon=${longitude}`
+    );
 
     return {
       name,
@@ -182,12 +178,19 @@ export function register(app: App, fastify: FastifyInstance) {
             sea_time_entry_created: { type: 'boolean' },
           },
         },
-        400: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
+        500: { type: 'object', properties: { error: { type: 'string' } } },
+        502: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
     const { vesselId } = request.params;
+
+    // Check if API key is configured
+    if (!AIS_API_KEY) {
+      app.logger.error('MyShipTracking API key is not configured');
+      return reply.code(500).send({ error: 'AIS API configuration missing' });
+    }
 
     // Fetch vessel from database
     const vessel = await app.db
@@ -196,7 +199,8 @@ export function register(app: App, fastify: FastifyInstance) {
       .where(eq(schema.vessels.id, vesselId));
 
     if (vessel.length === 0) {
-      return reply.code(404).send({ error: 'Vessel not found in database' });
+      app.logger.warn(`Vessel not found: ${vesselId}`);
+      return reply.code(404).send({ error: 'Vessel not found' });
     }
 
     const mmsi = vessel[0].mmsi;
@@ -205,9 +209,16 @@ export function register(app: App, fastify: FastifyInstance) {
     // Fetch real-time AIS data from MyShipTracking API
     const ais_data = await fetchVesselAISData(mmsi, app.logger);
 
-    // Check for API errors and return them
+    // Check for API errors and return appropriate status codes
     if (ais_data.error) {
-      return reply.code(400).send({ error: ais_data.error });
+      if (ais_data.error === 'Invalid API key') {
+        return reply.code(500).send({ error: ais_data.error });
+      } else if (ais_data.error === 'Vessel not found in AIS system') {
+        return reply.code(404).send({ error: ais_data.error });
+      } else {
+        // AIS service temporarily unavailable
+        return reply.code(502).send({ error: ais_data.error });
+      }
     }
 
     // Store the AIS check result
