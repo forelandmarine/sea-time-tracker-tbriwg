@@ -15,8 +15,7 @@ export default function TabLayout() {
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: isDark ? colors.textSecondaryDark : colors.textSecondary,
         tabBarStyle: {
-          backgroundColor: isDark ? colors.cardDark : colors.card,
-          borderTopColor: isDark ? colors.borderDark : colors.border,
+          backgroundColor: isDark ? colors.backgroundDark : colors.background,
         },
         headerShown: false,
       }}
@@ -27,9 +26,9 @@ export default function TabLayout() {
           title: 'Sea Time',
           tabBarIcon: ({ color }) => (
             <IconSymbol
-              ios_icon_name="anchor"
+              ios_icon_name="sailboat.fill"
               android_material_icon_name="directions-boat"
-              size={24}
+              size={28}
               color={color}
             />
           ),
@@ -41,9 +40,23 @@ export default function TabLayout() {
           title: 'Reports',
           tabBarIcon: ({ color }) => (
             <IconSymbol
-              ios_icon_name="chart.bar"
+              ios_icon_name="chart.bar.fill"
               android_material_icon_name="assessment"
-              size={24}
+              size={28}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color }) => (
+            <IconSymbol
+              ios_icon_name="gearshape.fill"
+              android_material_icon_name="settings"
+              size={28}
               color={color}
             />
           ),
