@@ -1,6 +1,14 @@
 import { pgTable, text, timestamp, uuid, boolean, decimal, index } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
+export const api_settings = pgTable('api_settings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  api_key: text('api_key').notNull(),
+  api_url: text('api_url').notNull(),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+  updated_at: timestamp('updated_at').defaultNow().notNull(),
+});
+
 export const vessels = pgTable('vessels', {
   id: uuid('id').primaryKey().defaultRandom(),
   mmsi: text('mmsi').notNull().unique(),
