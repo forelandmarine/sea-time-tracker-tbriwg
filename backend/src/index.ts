@@ -20,5 +20,13 @@ aisRoutes.register(app, app.fastify);
 seaTimeRoutes.register(app, app.fastify);
 reportsRoutes.register(app, app.fastify);
 
+// Log API configuration status
+const aisApiKey = process.env.MYSHIPTRACKING_API_KEY;
+if (aisApiKey) {
+  app.logger.info('MyShipTracking API key configured');
+} else {
+  app.logger.warn('MyShipTracking API key not configured - AIS tracking will fail. Set MYSHIPTRACKING_API_KEY environment variable');
+}
+
 await app.run();
 app.logger.info('Application running');

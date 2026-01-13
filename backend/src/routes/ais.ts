@@ -5,7 +5,7 @@ import type { App } from "../index.js";
 
 const MOVING_SPEED_THRESHOLD = 2; // knots
 const APP_WIDE_API_URL = 'https://api.myshiptracking.com/v1';
-const MYSHIPTRACKING_API_KEY = 'hardcoded-api-key'; // Hardcoded API key for MyShipTracking service
+const MYSHIPTRACKING_API_KEY = process.env.MYSHIPTRACKING_API_KEY || '';
 
 interface MyShipTrackingFeature {
   geometry?: {
@@ -46,17 +46,33 @@ async function fetchVesselAISData(
 ): Promise<AISVesselData> {
   try {
     const url = `${APP_WIDE_API_URL}/vessels/${mmsi}/position`;
-    logger.info(`Fetching AIS data for MMSI ${mmsi}`);
+    logger.info(`Calling MyShipTracking API for MMSI ${mmsi} at ${url}`);
 
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    let response;
+    try {
+      response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (fetchError) {
+      logger.error(`Unable to connect to MyShipTracking API for MMSI ${mmsi}: ${fetchError}`);
+      return {
+        name: null,
+        speed_knots: null,
+        latitude: null,
+        longitude: null,
+        course: null,
+        timestamp: null,
+        status: null,
+        is_moving: false,
+        error: 'AIS service temporarily unavailable',
+      };
+    }
 
     if (response.status === 401) {
-      logger.error('MyShipTracking API authentication failed - Invalid API key');
+      logger.error(`MyShipTracking API authentication failed (401) for MMSI ${mmsi} - invalid API key`);
       return {
         name: null,
         speed_knots: null,
@@ -71,7 +87,7 @@ async function fetchVesselAISData(
     }
 
     if (response.status === 404) {
-      logger.warn(`Vessel with MMSI ${mmsi} not found in AIS system`);
+      logger.warn(`MyShipTracking API returned 404 - vessel with MMSI ${mmsi} not found in AIS system`);
       return {
         name: null,
         speed_knots: null,
@@ -86,7 +102,7 @@ async function fetchVesselAISData(
     }
 
     if (!response.ok) {
-      logger.error(`MyShipTracking API error: ${response.status} ${response.statusText}`);
+      logger.error(`MyShipTracking API error for MMSI ${mmsi}: ${response.status} ${response.statusText}`);
       return {
         name: null,
         speed_knots: null,
@@ -196,6 +212,12 @@ export function register(app: App, fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { vesselId } = request.params;
 
+    // Check if API key is configured
+    if (!MYSHIPTRACKING_API_KEY) {
+      app.logger.error('MyShipTracking API key is not configured in environment');
+      return reply.code(500).send({ error: 'AIS service not configured - API key missing' });
+    }
+
     // Fetch vessel from database
     const vessel = await app.db
       .select()
@@ -216,18 +238,21 @@ export function register(app: App, fastify: FastifyInstance) {
     const mmsi = vessel[0].mmsi;
     app.logger.info(`Processing AIS check for active vessel: ${vessel[0].vessel_name} (MMSI: ${mmsi})`);
 
-    // Fetch real-time AIS data from MyShipTracking API using hardcoded API key
+    // Fetch real-time AIS data from MyShipTracking API
     const ais_data = await fetchVesselAISData(mmsi, MYSHIPTRACKING_API_KEY, app.logger);
 
     // Check for API errors and return appropriate status codes
     if (ais_data.error) {
       if (ais_data.error === 'Invalid API key') {
-        return reply.code(500).send({ error: ais_data.error });
+        app.logger.error(`Invalid MyShipTracking API key - authentication failed for MMSI ${mmsi}`);
+        return reply.code(500).send({ error: 'Invalid API key - AIS service authentication failed' });
       } else if (ais_data.error === 'Vessel not found in AIS system') {
-        return reply.code(404).send({ error: ais_data.error });
+        app.logger.warn(`Vessel with MMSI ${mmsi} not found in AIS system`);
+        return reply.code(404).send({ error: `Vessel with MMSI ${mmsi} not found in AIS system` });
       } else {
         // AIS service temporarily unavailable
-        return reply.code(502).send({ error: ais_data.error });
+        app.logger.error(`AIS service error for MMSI ${mmsi}: ${ais_data.error}`);
+        return reply.code(502).send({ error: 'AIS service temporarily unavailable' });
       }
     }
 
