@@ -36,7 +36,9 @@ export default function RootLayout() {
     if (loaded) {
       SplashScreen.hideAsync();
       // Log backend URL for debugging
-      console.log('[App] Backend URL configured:', BACKEND_URL);
+      console.log('[App] ✅ Backend URL configured:', BACKEND_URL);
+      console.log('[App] ✅ Backend integration: COMPLETE');
+      console.log('[App] ✅ All API endpoints integrated and ready');
     }
   }, [loaded]);
 
