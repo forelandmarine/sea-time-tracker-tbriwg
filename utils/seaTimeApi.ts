@@ -3,12 +3,13 @@ import Constants from 'expo-constants';
 
 const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || '';
 
-// 🔧 DEVELOPER CONFIGURATION - Set your MyShipTracking API key here
-// This API key is NOT accessible to users and is only used by the backend
+// MyShipTracking API key - Replace with your actual API key
+// Get your API key from: https://www.myshiptracking.com/
 const MYSHIPTRACKING_API_KEY = 'YOUR_MYSHIPTRACKING_API_KEY_HERE';
 
 // Log the backend URL for debugging
 console.log('[SeaTimeAPI] Backend URL configured:', API_BASE_URL);
+console.log('[SeaTimeAPI] MyShipTracking API key configured:', MYSHIPTRACKING_API_KEY !== 'YOUR_MYSHIPTRACKING_API_KEY_HERE');
 
 export interface Vessel {
   id: string;
@@ -62,8 +63,12 @@ function checkBackendConfigured() {
 function getApiHeaders(): HeadersInit {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    'X-API-Key': MYSHIPTRACKING_API_KEY,
   };
+  
+  // Add MyShipTracking API key for AIS endpoints
+  if (MYSHIPTRACKING_API_KEY && MYSHIPTRACKING_API_KEY !== 'YOUR_MYSHIPTRACKING_API_KEY_HERE') {
+    headers['X-API-Key'] = MYSHIPTRACKING_API_KEY;
+  }
   
   return headers;
 }
@@ -113,6 +118,7 @@ export async function activateVessel(vesselId: string): Promise<Vessel> {
   const response = await fetch(url, {
     method: 'PUT',
     headers,
+    body: JSON.stringify({}),
   });
   if (!response.ok) {
     const errorText = await response.text();
@@ -132,6 +138,7 @@ export async function deleteVessel(vesselId: string): Promise<{ success: boolean
   const response = await fetch(url, {
     method: 'DELETE',
     headers,
+    body: JSON.stringify({}),
   });
   if (!response.ok) {
     const errorText = await response.text();
@@ -168,6 +175,7 @@ export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> 
   const response = await fetch(url, {
     method: 'POST',
     headers,
+    body: JSON.stringify({}),
   });
   if (!response.ok) {
     const errorText = await response.text();
@@ -291,6 +299,7 @@ export async function deleteSeaTimeEntry(entryId: string): Promise<{ success: bo
   const response = await fetch(url, {
     method: 'DELETE',
     headers,
+    body: JSON.stringify({}),
   });
   if (!response.ok) {
     const errorText = await response.text();
