@@ -1,4 +1,3 @@
-
 // Global error logging for runtime errors
 // Captures console.log/warn/error and sends to Natively server for AI debugging
 
@@ -12,7 +11,7 @@ const clearLogAfterDelay = (logKey: string) => {
 };
 
 // Queue for batching logs
-let logQueue: { level: string; message: string; source: string; timestamp: string; platform: string }[] = [];
+let logQueue: Array<{ level: string; message: string; source: string; timestamp: string; platform: string }> = [];
 let flushTimeout: ReturnType<typeof setTimeout> | null = null;
 const FLUSH_INTERVAL = 500; // Flush every 500ms
 
@@ -69,7 +68,6 @@ const getLogServerUrl = (): string | null => {
     }
   } catch (e) {
     // Silently fail
-    console.log('[Natively] Error getting log server URL:', e);
   }
 
   urlChecked = true;
@@ -111,7 +109,6 @@ const flushLogs = async () => {
       });
     } catch (e) {
       // Silently ignore sync errors
-      console.log('[Natively] Error sending log:', e);
     }
   }
 };
@@ -167,7 +164,6 @@ const sendErrorToParent = (level: string, message: string, data: any) => {
     }
   } catch (error) {
     // Silently fail
-    console.log('[Natively] Error sending to parent:', error);
   }
 };
 
