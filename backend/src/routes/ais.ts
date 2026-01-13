@@ -4,8 +4,14 @@ import * as schema from "../db/schema.js";
 import type { App } from "../index.js";
 
 const MOVING_SPEED_THRESHOLD = 2; // knots
-const APP_WIDE_API_URL = 'https://api.myshiptracking.com/v1';
+const MYSHIPTRACKING_API_URL = 'https://api.myshiptracking.com/api/v2/vessel';
 const MYSHIPTRACKING_API_KEY = process.env.MYSHIPTRACKING_API_KEY || '';
+
+// Helper to mask API key for logging
+function maskAPIKey(key: string): string {
+  if (!key || key.length < 10) return '***';
+  return key.substring(0, 10) + '***';
+}
 
 // Helper function to log API calls to debug log table
 async function logAPICall(
@@ -38,23 +44,25 @@ async function logAPICall(
   }
 }
 
-interface MyShipTrackingFeature {
-  geometry?: {
-    coordinates?: [number, number];
-  };
-  properties?: {
-    SHIPNAME?: string;
-    SPEED?: number | string;
-    COURSE?: number | string;
-    TIMESTAMP?: number | string;
-    STATUS?: string;
-    [key: string]: any;
-  };
-}
-
-interface MyShipTrackingResponse {
-  features?: MyShipTrackingFeature[];
-  type?: string;
+interface MyShipTrackingVesselResponse {
+  mmsi?: number | string;
+  imo?: number | string;
+  name?: string;
+  callsign?: string;
+  ship_type?: string;
+  status?: string;
+  flag?: string;
+  built?: number;
+  length?: number;
+  width?: number;
+  latitude?: number;
+  longitude?: number;
+  speed?: number;
+  course?: number;
+  heading?: number;
+  destination?: string;
+  eta?: string;
+  timestamp?: number;
   [key: string]: any;
 }
 
@@ -75,12 +83,23 @@ async function fetchVesselAISData(
   apiKey: string,
   logger: any,
   vesselId?: string,
-  app?: App
+  app?: App,
+  extended: boolean = false
 ): Promise<AISVesselData> {
   try {
-    const url = `${APP_WIDE_API_URL}/vessels/${mmsi}/position`;
+    // Build request URL with MMSI parameter and optional extended response
+    const urlObj = new URL(MYSHIPTRACKING_API_URL);
+    urlObj.searchParams.append('mmsi', mmsi);
+    if (extended) {
+      urlObj.searchParams.append('response', 'extended');
+    }
+    const url = urlObj.toString();
     const requestTime = new Date();
-    logger.info(`Calling MyShipTracking API for MMSI ${mmsi} at ${url}`);
+
+    // Log request details (mask API key for security)
+    const maskedKey = maskAPIKey(apiKey);
+    logger.info(`Calling MyShipTracking API - URL: ${url}, API Key: ${maskedKey}`);
+    logger.debug(`Request headers - Authorization: Bearer ${maskedKey}, Content-Type: application/json`);
 
     let response;
     let authStatus = 'success';
@@ -88,15 +107,16 @@ async function fetchVesselAISData(
 
     try {
       response = await fetch(url, {
+        method: 'GET',
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json',
         },
       });
     } catch (fetchError) {
       authStatus = 'connection_error';
       errorMessage = String(fetchError);
-      logger.error(`Unable to connect to MyShipTracking API for MMSI ${mmsi}: ${fetchError}`);
+      logger.error(`Connection error calling MyShipTracking API for MMSI ${mmsi}: ${fetchError}`);
       if (vesselId && app) {
         await logAPICall(app, vesselId, mmsi, url, requestTime, 'connection_error', null, authStatus, errorMessage);
       }
@@ -112,6 +132,8 @@ async function fetchVesselAISData(
         error: 'AIS service temporarily unavailable',
       };
     }
+
+    logger.info(`MyShipTracking API response status: ${response.status} ${response.statusText}`);
 
     if (response.status === 401) {
       authStatus = 'authentication_failed';
@@ -176,47 +198,30 @@ async function fetchVesselAISData(
       };
     }
 
-    const data: MyShipTrackingResponse = await response.json();
-    logger.info(`Received AIS response for MMSI ${mmsi}: ${data.features?.length || 0} features`);
+    const data: MyShipTrackingVesselResponse = await response.json();
+    logger.info(`Received AIS response for MMSI ${mmsi}`);
+    logger.debug(`Response body: ${JSON.stringify(data).substring(0, 500)}`);
 
     if (vesselId && app) {
       const responseBody = JSON.stringify(data).substring(0, 1000);
       await logAPICall(app, vesselId, mmsi, url, requestTime, '200', responseBody, authStatus, null);
     }
 
-    if (!data.features || data.features.length === 0) {
-      logger.warn(`No AIS features found for MMSI ${mmsi}`);
-      return {
-        name: null,
-        speed_knots: null,
-        latitude: null,
-        longitude: null,
-        course: null,
-        timestamp: null,
-        status: null,
-        is_moving: false,
-        error: 'Vessel not found in AIS system',
-      };
-    }
-
-    const feature = data.features[0];
-    const coords = feature.geometry?.coordinates || [];
-    const props = feature.properties || {};
-
-    const longitude = coords[0] ? parseFloat(String(coords[0])) : null;
-    const latitude = coords[1] ? parseFloat(String(coords[1])) : null;
-    const name = props.SHIPNAME ? String(props.SHIPNAME) : null;
-    const speed = props.SPEED ? parseFloat(String(props.SPEED)) : null;
-    const course = props.COURSE ? parseFloat(String(props.COURSE)) : null;
-    const status = props.STATUS ? String(props.STATUS) : null;
-    const timestamp = props.TIMESTAMP
-      ? new Date(parseFloat(String(props.TIMESTAMP)) * 1000)
+    // Extract vessel data from response
+    const latitude = data.latitude ? parseFloat(String(data.latitude)) : null;
+    const longitude = data.longitude ? parseFloat(String(data.longitude)) : null;
+    const name = data.name ? String(data.name) : null;
+    const speed = data.speed ? parseFloat(String(data.speed)) : null;
+    const course = data.course ? parseFloat(String(data.course)) : null;
+    const status = data.status ? String(data.status) : null;
+    const timestamp = data.timestamp
+      ? new Date(parseFloat(String(data.timestamp)) * 1000)
       : new Date();
 
     const is_moving = speed !== null && speed > MOVING_SPEED_THRESHOLD;
 
     logger.info(
-      `Processed AIS data for MMSI ${mmsi}: name=${name}, speed=${speed}, is_moving=${is_moving}, lat=${latitude}, lon=${longitude}`
+      `Processed AIS data for MMSI ${mmsi}: name=${name}, speed=${speed} knots, is_moving=${is_moving}, lat=${latitude}, lon=${longitude}`
     );
 
     return {
@@ -303,8 +308,8 @@ export function register(app: App, fastify: FastifyInstance) {
     const mmsi = vessel[0].mmsi;
     app.logger.info(`Processing AIS check for active vessel: ${vessel[0].vessel_name} (MMSI: ${mmsi})`);
 
-    // Fetch real-time AIS data from MyShipTracking API
-    const ais_data = await fetchVesselAISData(mmsi, MYSHIPTRACKING_API_KEY, app.logger, vesselId, app);
+    // Fetch real-time AIS data from MyShipTracking API with extended response
+    const ais_data = await fetchVesselAISData(mmsi, MYSHIPTRACKING_API_KEY, app.logger, vesselId, app, true);
 
     // Check for API errors and return appropriate status codes
     if (ais_data.error) {
@@ -538,7 +543,7 @@ export function register(app: App, fastify: FastifyInstance) {
     }
 
     const mmsi = vessel[0].mmsi;
-    const ais_data = await fetchVesselAISData(mmsi, MYSHIPTRACKING_API_KEY, app.logger, vesselId, app);
+    const ais_data = await fetchVesselAISData(mmsi, MYSHIPTRACKING_API_KEY, app.logger, vesselId, app, extended);
 
     if (ais_data.error) {
       if (ais_data.error === 'Invalid API key') {
@@ -568,7 +573,7 @@ export function register(app: App, fastify: FastifyInstance) {
       eta: null,
     };
 
-    app.logger.info(`Returned manual AIS check for MMSI ${mmsi}`);
+    app.logger.info(`Returned manual AIS check for MMSI ${mmsi} with extended=${extended}`);
     return reply.code(200).send(response);
   });
 
