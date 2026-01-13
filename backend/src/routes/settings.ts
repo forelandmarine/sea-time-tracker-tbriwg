@@ -27,33 +27,26 @@ export function register(app: App, fastify: FastifyInstance) {
       .orderBy(desc(schema.api_settings.updated_at))
       .limit(1);
 
-    if (settings.length === 0) {
-      return reply.code(200).send({
-        apiKeyConfigured: false,
-        apiUrl: '',
-        lastUpdated: null,
-      });
-    }
+    const apiKeyConfigured = settings.length > 0 && !!settings[0].api_key;
+    const lastUpdated = settings.length > 0 ? settings[0].updated_at : new Date();
 
-    const setting = settings[0];
     return reply.code(200).send({
-      apiKeyConfigured: !!setting.api_key,
-      apiUrl: setting.api_url,
-      lastUpdated: setting.updated_at,
+      apiKeyConfigured,
+      apiUrl: 'https://api.myshiptracking.com/v1',
+      lastUpdated,
     });
   });
 
-  // POST /api/settings/api - Update API configuration
-  fastify.post<{ Body: { apiKey: string; apiUrl: string } }>('/api/settings/api', {
+  // POST /api/settings/api - Update API key configuration
+  fastify.post<{ Body: { apiKey: string } }>('/api/settings/api', {
     schema: {
-      description: 'Update API configuration',
+      description: 'Update MyShipTracking API key',
       tags: ['settings'],
       body: {
         type: 'object',
-        required: ['apiKey', 'apiUrl'],
+        required: ['apiKey'],
         properties: {
           apiKey: { type: 'string', description: 'MyShipTracking API key' },
-          apiUrl: { type: 'string', description: 'MyShipTracking API base URL' },
         },
       },
       response: {
@@ -69,11 +62,13 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    const { apiKey, apiUrl } = request.body;
+    const { apiKey } = request.body;
 
-    if (!apiKey || !apiUrl) {
-      return reply.code(400).send({ error: 'API key and URL are required' });
+    if (!apiKey) {
+      return reply.code(400).send({ error: 'API key is required' });
     }
+
+    const appWideUrl = 'https://api.myshiptracking.com/v1';
 
     // Get existing settings
     const existing = await app.db
@@ -91,7 +86,7 @@ export function register(app: App, fastify: FastifyInstance) {
         .update(schema.api_settings)
         .set({
           api_key: apiKey,
-          api_url: apiUrl,
+          api_url: appWideUrl,
           updated_at: now,
         })
         .where(eq(schema.api_settings.id, existing[0].id))
@@ -104,18 +99,18 @@ export function register(app: App, fastify: FastifyInstance) {
         .insert(schema.api_settings)
         .values({
           api_key: apiKey,
-          api_url: apiUrl,
+          api_url: appWideUrl,
         })
         .returning();
 
       result = created;
     }
 
-    app.logger.info('API configuration updated');
+    app.logger.info('API key configuration updated');
 
     return reply.code(200).send({
       success: true,
-      message: 'API configuration updated successfully',
+      message: 'API key configured successfully',
       lastUpdated: result.updated_at,
     });
   });

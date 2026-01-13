@@ -4,6 +4,7 @@ import * as schema from "../db/schema.js";
 import type { App } from "../index.js";
 
 const MOVING_SPEED_THRESHOLD = 2; // knots
+const APP_WIDE_API_URL = 'https://api.myshiptracking.com/v1';
 
 interface MyShipTrackingFeature {
   geometry?: {
@@ -40,12 +41,11 @@ interface AISVesselData {
 async function fetchVesselAISData(
   mmsi: string,
   apiKey: string,
-  apiUrl: string,
   logger: any
 ): Promise<AISVesselData> {
   try {
-    const url = `${apiUrl}/vessels/${mmsi}/position`;
-    logger.info(`Fetching AIS data for MMSI ${mmsi} from ${apiUrl}`);
+    const url = `${APP_WIDE_API_URL}/vessels/${mmsi}/position`;
+    logger.info(`Fetching AIS data for MMSI ${mmsi}`);
 
     const response = await fetch(url, {
       headers: {
@@ -195,30 +195,19 @@ export function register(app: App, fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { vesselId } = request.params;
 
-    // Get API credentials from request headers or database
-    let apiKey = (request.headers['x-api-key'] || request.headers['authorization']) as string;
-    let apiUrl = request.headers['x-api-url'] as string;
+    // Fetch app-wide API key from database
+    const settings = await app.db
+      .select()
+      .from(schema.api_settings)
+      .orderBy(desc(schema.api_settings.updated_at))
+      .limit(1);
 
-    if (apiKey && apiKey.startsWith('Bearer ')) {
-      apiKey = apiKey.substring(7);
+    if (settings.length === 0 || !settings[0].api_key) {
+      app.logger.error('MyShipTracking API key not configured');
+      return reply.code(500).send({ error: 'AIS API configuration missing' });
     }
 
-    // If credentials not in headers, fetch from database
-    if (!apiKey || !apiUrl) {
-      const settings = await app.db
-        .select()
-        .from(schema.api_settings)
-        .orderBy(desc(schema.api_settings.updated_at))
-        .limit(1);
-
-      if (settings.length === 0 || !settings[0].api_key || !settings[0].api_url) {
-        app.logger.error('MyShipTracking API credentials not configured');
-        return reply.code(500).send({ error: 'AIS API configuration missing' });
-      }
-
-      if (!apiKey) apiKey = settings[0].api_key;
-      if (!apiUrl) apiUrl = settings[0].api_url;
-    }
+    const apiKey = settings[0].api_key;
 
     // Fetch vessel from database
     const vessel = await app.db
@@ -234,8 +223,8 @@ export function register(app: App, fastify: FastifyInstance) {
     const mmsi = vessel[0].mmsi;
     app.logger.info(`Processing AIS check for vessel: ${vessel[0].vessel_name} (MMSI: ${mmsi})`);
 
-    // Fetch real-time AIS data from MyShipTracking API
-    const ais_data = await fetchVesselAISData(mmsi, apiKey, apiUrl, app.logger);
+    // Fetch real-time AIS data from MyShipTracking API using app-wide key
+    const ais_data = await fetchVesselAISData(mmsi, apiKey, app.logger);
 
     // Check for API errors and return appropriate status codes
     if (ais_data.error) {
