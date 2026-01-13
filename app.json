@@ -2,7 +2,7 @@
 {
   "expo": {
     "name": "SeaTime Tracker",
-    "slug": "SeaTime Tracker",
+    "slug": "seatime-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png",
@@ -15,9 +15,12 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.Natively",
+      "bundleIdentifier": "com.seatimetracker.app",
+      "buildNumber": "1",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "SeaTime Tracker needs your location to track vessel movements and sea time.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "SeaTime Tracker needs your location to track vessel movements and sea time in the background."
       }
     },
     "android": {
@@ -26,7 +29,8 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.anonymous.Natively"
+      "package": "com.seatimetracker.app",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png",
@@ -37,14 +41,16 @@
       "expo-router",
       "expo-web-browser"
     ],
-    "scheme": "natively",
+    "scheme": "seatimetracker",
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
       "router": {},
-      "backendUrl": "https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev"
+      "backendUrl": "https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev",
+      "eas": {
+        "projectId": "YOUR_PROJECT_ID_HERE"
+      }
     }
-  },
-  "scheme": "SeaTime Tracker"
+  }
 }
