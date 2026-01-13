@@ -176,11 +176,20 @@ export default function SeaTimeScreen() {
       console.log('[SeaTime] AIS check result:', result);
       
       // Handle null values from API response
-      const speedText = result.speed_knots !== null ? `${result.speed_knots.toFixed(1)} knots` : 'unknown';
-      const latText = result.latitude !== null ? `${result.latitude.toFixed(4)}°` : 'unknown';
-      const lonText = result.longitude !== null ? `${result.longitude.toFixed(4)}°` : 'unknown';
+      const speedText = result.speed_knots !== null ? `${result.speed_knots.toFixed(1)} knots` : 'Unknown';
+      const latText = result.latitude !== null ? `${result.latitude.toFixed(4)}°` : 'Unknown';
+      const lonText = result.longitude !== null ? `${result.longitude.toFixed(4)}°` : 'Unknown';
       
-      if (result.is_moving) {
+      // Check if all data is null - this means the vessel is not transmitting AIS
+      const allDataNull = result.speed_knots === null && result.latitude === null && result.longitude === null;
+      
+      if (allDataNull) {
+        Alert.alert(
+          'No AIS Data Available',
+          `The MyShipTracking API is not returning data for this vessel.\n\nPossible reasons:\n\n• The vessel is not currently transmitting AIS\n• The vessel is in port with AIS turned off\n• The MMSI number may be incorrect\n• The vessel may be out of AIS coverage\n\nPlease check:\n1. The MMSI number is correct\n2. The vessel is at sea and transmitting\n3. Try again in a few minutes`,
+          [{ text: 'OK' }]
+        );
+      } else if (result.is_moving) {
         const message = `Vessel is moving at ${speedText}.\nPosition: ${latText}, ${lonText}${result.sea_time_entry_created ? '\n\nA sea time entry has been created and is pending confirmation.' : ''}`;
         Alert.alert('Vessel Moving', message, [{ text: 'OK' }]);
       } else {
