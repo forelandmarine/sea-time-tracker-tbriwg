@@ -1,38 +1,65 @@
 
+import { Tabs } from 'expo-router';
 import React from 'react';
-import { Stack } from 'expo-router';
-import FloatingTabBar, { TabBarItem } from '@/components/FloatingTabBar';
+import FloatingTabBar from '@/components/FloatingTabBar';
+import { Href } from 'expo-router';
+
+interface TabBarItem {
+  route: Href;
+  label: string;
+  ios_icon_name: string;
+  android_material_icon_name: string;
+}
 
 export default function TabLayout() {
-  // Define the tabs configuration
   const tabs: TabBarItem[] = [
     {
-      name: '(home)',
-      route: '/(tabs)/(home)/',
-      icon: 'directions-boat',
-      label: 'Sea Time',
+      route: '/(tabs)/(home)' as Href,
+      label: 'Home',
+      ios_icon_name: 'house.fill',
+      android_material_icon_name: 'home',
     },
     {
-      name: 'profile',
-      route: '/(tabs)/profile',
-      icon: 'assessment',
+      route: '/(tabs)/profile' as Href,
       label: 'Reports',
+      ios_icon_name: 'doc.text.fill',
+      android_material_icon_name: 'description',
+    },
+    {
+      route: '/(tabs)/settings' as Href,
+      label: 'Settings',
+      ios_icon_name: 'gear',
+      android_material_icon_name: 'settings',
     },
   ];
 
-  // For Android and Web, use Stack navigation with custom floating tab bar
   return (
     <>
-      <Stack
+      <Tabs
+        tabBar={() => <FloatingTabBar tabs={tabs} />}
         screenOptions={{
           headerShown: false,
-          animation: 'none',
         }}
       >
-        <Stack.Screen key="home" name="(home)" />
-        <Stack.Screen key="profile" name="profile" />
-      </Stack>
-      <FloatingTabBar tabs={tabs} />
+        <Tabs.Screen
+          name="(home)"
+          options={{
+            title: 'Home',
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: 'Reports',
+          }}
+        />
+        <Tabs.Screen
+          name="settings"
+          options={{
+            title: 'Settings',
+          }}
+        />
+      </Tabs>
     </>
   );
 }

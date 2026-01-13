@@ -1,53 +1,65 @@
 
-import React from 'react';
 import { Tabs } from 'expo-router';
-import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
-import { useColorScheme } from 'react-native';
+import React from 'react';
+import FloatingTabBar from '@/components/FloatingTabBar';
+import { Href } from 'expo-router';
+
+interface TabBarItem {
+  route: Href;
+  label: string;
+  ios_icon_name: string;
+  android_material_icon_name: string;
+}
 
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
+  const tabs: TabBarItem[] = [
+    {
+      route: '/(tabs)/(home)' as Href,
+      label: 'Home',
+      ios_icon_name: 'house.fill',
+      android_material_icon_name: 'home',
+    },
+    {
+      route: '/(tabs)/profile' as Href,
+      label: 'Reports',
+      ios_icon_name: 'doc.text.fill',
+      android_material_icon_name: 'description',
+    },
+    {
+      route: '/(tabs)/settings' as Href,
+      label: 'Settings',
+      ios_icon_name: 'gear',
+      android_material_icon_name: 'settings',
+    },
+  ];
 
   return (
-    <Tabs
-      screenOptions={{
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: isDark ? colors.textSecondaryDark : colors.textSecondary,
-        tabBarStyle: {
-          backgroundColor: isDark ? colors.backgroundDark : colors.background,
-        },
-        headerShown: false,
-      }}
-    >
-      <Tabs.Screen
-        name="(home)"
-        options={{
-          title: 'Sea Time',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol
-              ios_icon_name="sailboat.fill"
-              android_material_icon_name="directions-boat"
-              size={28}
-              color={color}
-            />
-          ),
+    <>
+      <Tabs
+        tabBar={() => <FloatingTabBar tabs={tabs} />}
+        screenOptions={{
+          headerShown: false,
         }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Reports',
-          tabBarIcon: ({ color }) => (
-            <IconSymbol
-              ios_icon_name="chart.bar.fill"
-              android_material_icon_name="assessment"
-              size={28}
-              color={color}
-            />
-          ),
-        }}
-      />
-    </Tabs>
+      >
+        <Tabs.Screen
+          name="(home)"
+          options={{
+            title: 'Home',
+          }}
+        />
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: 'Reports',
+          }}
+        />
+        <Tabs.Screen
+          name="settings"
+          options={{
+            title: 'Settings',
+          }}
+        />
+      </Tabs>
+    </>
   );
 }

@@ -3,13 +3,9 @@ import Constants from 'expo-constants';
 
 const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || '';
 
-// MyShipTracking API key - Replace with your actual API key
-// Get your API key from: https://www.myshiptracking.com/
-const MYSHIPTRACKING_API_KEY = 'YOUR_MYSHIPTRACKING_API_KEY_HERE';
-
 // Log the backend URL for debugging
 console.log('[SeaTimeAPI] Backend URL configured:', API_BASE_URL);
-console.log('[SeaTimeAPI] MyShipTracking API key configured:', MYSHIPTRACKING_API_KEY !== 'YOUR_MYSHIPTRACKING_API_KEY_HERE');
+console.log('[SeaTimeAPI] API authentication is handled securely by the backend');
 
 export interface Vessel {
   id: string;
@@ -39,6 +35,12 @@ export interface AISCheckResult {
   sea_time_entry_created: boolean;
 }
 
+export interface AISStatus {
+  is_moving: boolean;
+  current_check: any;
+  recent_checks: any[];
+}
+
 export interface ReportSummary {
   total_hours: number;
   total_days: number;
@@ -52,6 +54,26 @@ export interface ReportSummary {
   }[];
 }
 
+export interface ScheduledTask {
+  id: string;
+  task_type: string;
+  vessel_id: string | null;
+  interval_hours: number;
+  last_run: string | null;
+  next_run: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AISDebugLog {
+  timestamp: string;
+  mmsi: string;
+  url: string;
+  status: number;
+  response: any;
+  error: string | null;
+}
+
 // Helper function to check if backend is configured
 function checkBackendConfigured() {
   if (!API_BASE_URL) {
@@ -59,7 +81,7 @@ function checkBackendConfigured() {
   }
 }
 
-// Helper function to get API headers (no API key - backend handles that)
+// Helper function to get API headers
 function getApiHeaders(): HeadersInit {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -161,7 +183,7 @@ export async function getVesselSeaTime(vesselId: string): Promise<SeaTimeEntry[]
 export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/check/${vesselId}`;
-  console.log('[API] Checking vessel AIS:', vesselId);
+  console.log('[API] Checking vessel AIS with secure authentication:', vesselId);
   const headers = getApiHeaders();
   const response = await fetch(url, {
     method: 'POST',
@@ -174,25 +196,26 @@ export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> 
     
     try {
       const errorData = await response.json();
-      console.error('[API] Failed to check vessel AIS:', response.status, errorData);
+      console.error('[API] AIS check failed:', response.status, errorData);
       
       // Provide specific error messages based on the backend response
       if (errorData.error) {
-        if (errorData.error.includes('API key not configured') || errorData.error.includes('Invalid MyShipTracking API key')) {
-          errorMessage = '⚠️ MyShipTracking API Configuration Required\n\nThe MyShipTracking API key is not configured or invalid. Please contact the app developer to set up the API key.\n\nTo configure:\n1. Get an API key from myshiptracking.com\n2. Set the MYSHIPTRACKING_API_KEY environment variable on the backend';
+        if (errorData.error.includes('API key') || errorData.error.includes('authentication failed')) {
+          errorMessage = '🔐 Authentication Error\n\nThe MyShipTracking API authentication failed. The API key may be invalid or expired.\n\nThis is a backend configuration issue. Please contact support.';
         } else if (errorData.error.includes('not found in AIS system')) {
-          errorMessage = '🔍 Vessel Not Found in AIS System\n\nThe vessel MMSI could not be found in the MyShipTracking database. This could mean:\n\n• The MMSI number is incorrect\n• The vessel is not broadcasting AIS signals\n• The vessel is out of AIS coverage range\n\nPlease verify the MMSI number is correct and the vessel is actively transmitting AIS data.';
+          errorMessage = '🔍 Vessel Not Found\n\nThe vessel MMSI could not be found in the MyShipTracking database.\n\nPossible reasons:\n• MMSI number is incorrect\n• Vessel is not broadcasting AIS\n• Vessel is out of coverage range\n\nPlease verify the MMSI number.';
         } else if (errorData.error.includes('temporarily unavailable')) {
-          errorMessage = '🌐 AIS Service Temporarily Unavailable\n\nThe MyShipTracking API is currently unavailable. Please try again in a few minutes.\n\nIf the problem persists, the service may be experiencing downtime.';
+          errorMessage = '🌐 Service Unavailable\n\nThe MyShipTracking API is temporarily unavailable. Please try again in a few minutes.';
+        } else if (errorData.error.includes('not active')) {
+          errorMessage = '⚠️ Vessel Not Active\n\nThis vessel is not active. Please activate the vessel first before checking AIS data.';
         } else {
           errorMessage = errorData.error;
         }
       }
     } catch (parseError) {
-      // If we can't parse the error response, try to get text
       try {
         const errorText = await response.text();
-        console.error('[API] Failed to check vessel AIS (text):', response.status, errorText);
+        console.error('[API] AIS check failed (text):', response.status, errorText);
         if (errorText) {
           errorMessage = errorText;
         }
@@ -205,14 +228,8 @@ export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> 
   }
   
   const data = await response.json();
-  console.log('[API] AIS check result:', data);
+  console.log('[API] AIS check successful:', data);
   return data;
-}
-
-export interface AISStatus {
-  is_moving: boolean;
-  current_check: any;
-  recent_checks: any[];
 }
 
 export async function getVesselAISStatus(vesselId: string): Promise<AISStatus> {
@@ -228,6 +245,156 @@ export async function getVesselAISStatus(vesselId: string): Promise<AISStatus> {
   }
   const data = await response.json();
   console.log('[API] AIS status:', data);
+  return data;
+}
+
+export interface AISLocationData {
+  mmsi: string;
+  imo: string | null;
+  name: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  speed: number | null;
+  course: number | null;
+  heading: number | null;
+  timestamp: string | null;
+  status: string | null;
+  destination: string | null;
+  eta: string | null;
+}
+
+export async function getVesselAISLocation(vesselId: string, extended: boolean = false): Promise<AISLocationData> {
+  checkBackendConfigured();
+  const params = extended ? '?extended=true' : '';
+  const url = `${API_BASE_URL}/api/ais/check/${vesselId}${params}`;
+  console.log('[API] Getting vessel AIS location data:', vesselId, 'extended:', extended);
+  const headers = getApiHeaders();
+  const response = await fetch(url, { headers });
+  
+  if (!response.ok) {
+    let errorMessage = 'Failed to get vessel AIS location';
+    
+    try {
+      const errorData = await response.json();
+      console.error('[API] AIS location fetch failed:', response.status, errorData);
+      
+      if (errorData.error) {
+        if (errorData.error.includes('API key') || errorData.error.includes('authentication failed')) {
+          errorMessage = '🔐 Authentication Error\n\nThe MyShipTracking API authentication failed. The API key may be invalid or expired.\n\nThis is a backend configuration issue. Please contact support.';
+        } else if (errorData.error.includes('not found in AIS system')) {
+          errorMessage = '🔍 Vessel Not Found\n\nThe vessel MMSI could not be found in the MyShipTracking database.\n\nPossible reasons:\n• MMSI number is incorrect\n• Vessel is not broadcasting AIS\n• Vessel is out of coverage range\n\nPlease verify the MMSI number.';
+        } else if (errorData.error.includes('temporarily unavailable')) {
+          errorMessage = '🌐 Service Unavailable\n\nThe MyShipTracking API is temporarily unavailable. Please try again in a few minutes.';
+        } else {
+          errorMessage = errorData.error;
+        }
+      }
+    } catch (parseError) {
+      try {
+        const errorText = await response.text();
+        console.error('[API] AIS location fetch failed (text):', response.status, errorText);
+        if (errorText) {
+          errorMessage = errorText;
+        }
+      } catch (textError) {
+        console.error('[API] Could not parse error response:', textError);
+      }
+    }
+    
+    throw new Error(errorMessage);
+  }
+  
+  const data = await response.json();
+  console.log('[API] AIS location data:', data);
+  return data;
+}
+
+// Scheduled Tasks
+export async function scheduleAISChecks(vesselId: string, intervalHours: number = 4): Promise<ScheduledTask> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/ais/schedule-check`;
+  console.log('[API] Scheduling AIS checks for vessel:', vesselId, 'every', intervalHours, 'hours');
+  const headers = getApiHeaders();
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ vessel_id: vesselId, interval_hours: intervalHours }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[API] Failed to schedule AIS checks:', response.status, errorText);
+    throw new Error('Failed to schedule AIS checks');
+  }
+  const data = await response.json();
+  console.log('[API] AIS checks scheduled:', data);
+  return data;
+}
+
+export async function getScheduledTasks(): Promise<ScheduledTask[]> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/ais/scheduled-tasks`;
+  console.log('[API] Fetching scheduled tasks');
+  const headers = getApiHeaders();
+  
+  try {
+    const response = await fetch(url, { headers });
+    if (!response.ok) {
+      // If endpoint doesn't exist (404), return empty array
+      if (response.status === 404) {
+        console.warn('[API] Scheduled tasks endpoint not found (404) - feature may not be implemented yet');
+        return [];
+      }
+      const errorText = await response.text();
+      console.error('[API] Failed to fetch scheduled tasks:', response.status, errorText);
+      throw new Error('Failed to fetch scheduled tasks');
+    }
+    const data = await response.json();
+    console.log('[API] Scheduled tasks fetched:', data.length);
+    return data;
+  } catch (error: any) {
+    // If network error or endpoint doesn't exist, return empty array
+    if (error.message?.includes('fetch') || error.message?.includes('Network')) {
+      console.warn('[API] Scheduled tasks endpoint may not be available:', error.message);
+      return [];
+    }
+    throw error;
+  }
+}
+
+export async function toggleScheduledTask(taskId: string, isActive: boolean): Promise<ScheduledTask> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/ais/scheduled-tasks/${taskId}/toggle`;
+  console.log('[API] Toggling scheduled task:', taskId, isActive);
+  const headers = getApiHeaders();
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ is_active: isActive }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[API] Failed to toggle scheduled task:', response.status, errorText);
+    throw new Error('Failed to toggle scheduled task');
+  }
+  const data = await response.json();
+  console.log('[API] Scheduled task toggled:', data);
+  return data;
+}
+
+// Debug Endpoints
+export async function getAISDebugLogs(vesselId: string): Promise<AISDebugLog[]> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/ais/debug/${vesselId}`;
+  console.log('[API] Fetching AIS debug logs for vessel:', vesselId);
+  const headers = getApiHeaders();
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[API] Failed to fetch debug logs:', response.status, errorText);
+    throw new Error('Failed to fetch debug logs');
+  }
+  const data = await response.json();
+  console.log('[API] Debug logs fetched:', data.length);
   return data;
 }
 
