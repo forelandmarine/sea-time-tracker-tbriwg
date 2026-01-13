@@ -187,9 +187,12 @@ export default function SeaTimeScreen() {
       }
       
       await loadData();
-    } catch (error) {
+    } catch (error: any) {
       console.error('[SeaTime] Error checking vessel:', error);
-      Alert.alert('Error', 'Failed to check vessel status. Please try again.');
+      
+      // Display the detailed error message from the API
+      const errorMessage = error?.message || 'Failed to check vessel status. Please try again.';
+      Alert.alert('AIS Check Failed', errorMessage, [{ text: 'OK' }]);
     }
   };
 

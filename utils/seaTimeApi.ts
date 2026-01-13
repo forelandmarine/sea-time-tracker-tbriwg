@@ -168,20 +168,42 @@ export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> 
     headers,
     body: JSON.stringify({}),
   });
+  
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[API] Failed to check vessel AIS:', response.status, errorText);
+    let errorMessage = 'Failed to check vessel AIS';
     
-    // Provide more helpful error messages
-    if (response.status === 500 && errorText.includes('API key not configured')) {
-      throw new Error('MyShipTracking API key not configured. Please contact the developer.');
-    }
-    if (response.status === 502) {
-      throw new Error('Failed to connect to MyShipTracking API. Please try again later.');
+    try {
+      const errorData = await response.json();
+      console.error('[API] Failed to check vessel AIS:', response.status, errorData);
+      
+      // Provide specific error messages based on the backend response
+      if (errorData.error) {
+        if (errorData.error.includes('API key not configured') || errorData.error.includes('Invalid MyShipTracking API key')) {
+          errorMessage = '⚠️ MyShipTracking API Configuration Required\n\nThe MyShipTracking API key is not configured or invalid. Please contact the app developer to set up the API key.\n\nTo configure:\n1. Get an API key from myshiptracking.com\n2. Set the MYSHIPTRACKING_API_KEY environment variable on the backend';
+        } else if (errorData.error.includes('not found in AIS system')) {
+          errorMessage = '🔍 Vessel Not Found in AIS System\n\nThe vessel MMSI could not be found in the MyShipTracking database. This could mean:\n\n• The MMSI number is incorrect\n• The vessel is not broadcasting AIS signals\n• The vessel is out of AIS coverage range\n\nPlease verify the MMSI number is correct and the vessel is actively transmitting AIS data.';
+        } else if (errorData.error.includes('temporarily unavailable')) {
+          errorMessage = '🌐 AIS Service Temporarily Unavailable\n\nThe MyShipTracking API is currently unavailable. Please try again in a few minutes.\n\nIf the problem persists, the service may be experiencing downtime.';
+        } else {
+          errorMessage = errorData.error;
+        }
+      }
+    } catch (parseError) {
+      // If we can't parse the error response, try to get text
+      try {
+        const errorText = await response.text();
+        console.error('[API] Failed to check vessel AIS (text):', response.status, errorText);
+        if (errorText) {
+          errorMessage = errorText;
+        }
+      } catch (textError) {
+        console.error('[API] Could not parse error response:', textError);
+      }
     }
     
-    throw new Error('Failed to check vessel AIS');
+    throw new Error(errorMessage);
   }
+  
   const data = await response.json();
   console.log('[API] AIS check result:', data);
   return data;

@@ -1,71 +1,87 @@
 
-# SeaTime Tracker - API Configuration Guide
+# MyShipTracking API Configuration
 
-## Developer Configuration Required
+## Current Issue
 
-The MyShipTracking API key is now configured as a **developer-only variable** and is not accessible to end users.
+The "Check AIS Status" feature is currently returning an error because the MyShipTracking API key is not properly configured on the backend.
 
-### How to Set the API Key
+## Error Messages You May See
 
-1. Open `utils/seaTimeApi.ts`
-2. Find the following line near the top of the file:
+- **"MyShipTracking API Configuration Required"** - The API key is not set or is invalid
+- **"Vessel Not Found in AIS System"** - The MMSI number may be incorrect, or the vessel is not broadcasting AIS
+- **"AIS Service Temporarily Unavailable"** - The MyShipTracking API is experiencing downtime
 
-```typescript
-const MYSHIPTRACKING_API_KEY = 'YOUR_MYSHIPTRACKING_API_KEY_HERE';
+## How to Fix
+
+### For Developers
+
+The backend needs a valid MyShipTracking API key to be configured:
+
+1. **Get an API Key:**
+   - Visit [myshiptracking.com](https://www.myshiptracking.com/)
+   - Sign up for an account
+   - Obtain your API key from the dashboard
+
+2. **Configure the Backend:**
+   - Set the environment variable `MYSHIPTRACKING_API_KEY` on your backend server
+   - The backend will automatically use this key for all AIS requests
+
+3. **Verify Configuration:**
+   - Check the backend logs on startup - it should show "API key configured: true"
+   - Test the "Check AIS Status" button with a known valid MMSI
+
+### For Users
+
+If you see an error when checking AIS status:
+
+1. **Verify MMSI Number:**
+   - Make sure the MMSI number is correct (9 digits)
+   - You can verify MMSIs on [marinetraffic.com](https://www.marinetraffic.com/) or [vesselfinder.com](https://www.vesselfinder.com/)
+
+2. **Check Vessel is Broadcasting:**
+   - The vessel must be actively transmitting AIS signals
+   - The vessel must be within AIS coverage range
+
+3. **Contact Support:**
+   - If the MMSI is correct and the vessel is broadcasting, contact the app developer
+   - The API key may need to be configured or renewed
+
+## Technical Details
+
+### Backend Configuration
+
+The backend (`backend/src/routes/ais.ts`) reads the API key from:
+```javascript
+const MYSHIPTRACKING_API_KEY = process.env.MYSHIPTRACKING_API_KEY || 'YOUR_MYSHIPTRACKING_API_KEY_HERE';
 ```
 
-3. Replace `'YOUR_MYSHIPTRACKING_API_KEY_HERE'` with your actual MyShipTracking API key:
+### API Endpoint
 
-```typescript
-const MYSHIPTRACKING_API_KEY = 'your-actual-api-key-from-myshiptracking';
+The backend calls:
+```
+GET https://api.myshiptracking.com/v1/vessels/{MMSI}/position
+Authorization: Bearer {API_KEY}
 ```
 
-4. Save the file and rebuild the app
+### Response Codes
 
-### Getting a MyShipTracking API Key
+- **200** - Success, vessel data returned
+- **401** - Invalid API key
+- **404** - Vessel not found in AIS system
+- **502** - API service unavailable
 
-1. Visit [MyShipTracking](https://www.myshiptracking.com/)
-2. Sign up for an account or log in
-3. Navigate to the API section to obtain your API key
-4. Copy the API key and paste it into `utils/seaTimeApi.ts` as described above
+## Testing
 
-### Security Notes
+To test if the API is working:
 
-- The API key is **hardcoded in the frontend** and sent to the backend via the `X-API-Key` header
-- Users **cannot view or modify** the API key through the app interface
-- The Settings screen has been **removed** - users can no longer configure API keys
-- The API key is included in the app bundle, so it should be considered **semi-public**
-- For production apps, consider moving the API key to environment variables or a secure backend configuration
+1. Add a vessel with a known active MMSI (e.g., a large commercial vessel)
+2. Set it as active
+3. Click "Check AIS Status"
+4. You should see the vessel's current position and speed
 
-### Changes Made
+## Support
 
-1. **Removed Settings Screen**: The settings tab and all related UI have been removed
-2. **Hardcoded API Key**: API key is now set as a constant in `utils/seaTimeApi.ts`
-3. **Backend Updated**: Backend now reads API key from `X-API-Key` request header instead of database
-4. **No User Access**: Users cannot view, modify, or configure the API key
-
-### Testing
-
-After setting your API key:
-
-1. Rebuild the app: `npm run dev`
-2. Add a vessel with a valid MMSI
-3. Activate the vessel
-4. Click "Check Vessel" to verify AIS data is being fetched correctly
-5. If you see an error about API key configuration, double-check that you've set the key in `utils/seaTimeApi.ts`
-
-### Troubleshooting
-
-**Error: "MyShipTracking API key not configured"**
-- Make sure you've replaced `'YOUR_MYSHIPTRACKING_API_KEY_HERE'` with your actual API key
-- Rebuild the app after making changes
-
-**Error: "Failed to connect to MyShipTracking API"**
-- Verify your API key is valid
-- Check your internet connection
-- Ensure MyShipTracking API is accessible
-
-**No data returned for vessel**
-- Verify the MMSI is correct
-- Check that the vessel is broadcasting AIS data
-- Try a different vessel MMSI to test
+For issues with:
+- **API Configuration** - Contact the backend developer
+- **MMSI Verification** - Use online vessel tracking services
+- **App Functionality** - Check the app logs for detailed error messages
