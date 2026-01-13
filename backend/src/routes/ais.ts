@@ -5,6 +5,7 @@ import type { App } from "../index.js";
 
 const MOVING_SPEED_THRESHOLD = 2; // knots
 const APP_WIDE_API_URL = 'https://api.myshiptracking.com/v1';
+const MYSHIPTRACKING_API_KEY = 'hardcoded-api-key'; // Hardcoded API key for MyShipTracking service
 
 interface MyShipTrackingFeature {
   geometry?: {
@@ -189,20 +190,11 @@ export function register(app: App, fastify: FastifyInstance) {
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
-        500: { type: 'object', properties: { error: { type: 'string' } } },
         502: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
     const { vesselId } = request.params;
-
-    // Get API key from X-API-Key header
-    const apiKey = request.headers['x-api-key'] as string;
-
-    if (!apiKey) {
-      app.logger.error('MyShipTracking API key not provided in X-API-Key header');
-      return reply.code(400).send({ error: 'Missing X-API-Key header' });
-    }
 
     // Fetch vessel from database
     const vessel = await app.db
@@ -224,8 +216,8 @@ export function register(app: App, fastify: FastifyInstance) {
     const mmsi = vessel[0].mmsi;
     app.logger.info(`Processing AIS check for active vessel: ${vessel[0].vessel_name} (MMSI: ${mmsi})`);
 
-    // Fetch real-time AIS data from MyShipTracking API using app-wide key
-    const ais_data = await fetchVesselAISData(mmsi, apiKey, app.logger);
+    // Fetch real-time AIS data from MyShipTracking API using hardcoded API key
+    const ais_data = await fetchVesselAISData(mmsi, MYSHIPTRACKING_API_KEY, app.logger);
 
     // Check for API errors and return appropriate status codes
     if (ais_data.error) {
