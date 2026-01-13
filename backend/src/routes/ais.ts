@@ -187,6 +187,7 @@ export function register(app: App, fastify: FastifyInstance) {
             sea_time_entry_created: { type: 'boolean' },
           },
         },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
         500: { type: 'object', properties: { error: { type: 'string' } } },
         502: { type: 'object', properties: { error: { type: 'string' } } },
@@ -220,8 +221,14 @@ export function register(app: App, fastify: FastifyInstance) {
       return reply.code(404).send({ error: 'Vessel not found' });
     }
 
+    // Check if vessel is active
+    if (!vessel[0].is_active) {
+      app.logger.warn(`Cannot track inactive vessel: ${vesselId}`);
+      return reply.code(400).send({ error: 'Vessel is not active. Please activate the vessel first.' });
+    }
+
     const mmsi = vessel[0].mmsi;
-    app.logger.info(`Processing AIS check for vessel: ${vessel[0].vessel_name} (MMSI: ${mmsi})`);
+    app.logger.info(`Processing AIS check for active vessel: ${vessel[0].vessel_name} (MMSI: ${mmsi})`);
 
     // Fetch real-time AIS data from MyShipTracking API using app-wide key
     const ais_data = await fetchVesselAISData(mmsi, apiKey, app.logger);

@@ -13,9 +13,11 @@ export const vessels = pgTable('vessels', {
   id: uuid('id').primaryKey().defaultRandom(),
   mmsi: text('mmsi').notNull().unique(),
   vessel_name: text('vessel_name').notNull(),
+  is_active: boolean('is_active').notNull().default(false),
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('mmsi_idx').on(table.mmsi),
+  index('is_active_idx').on(table.is_active),
 ]);
 
 export const sea_time_entries = pgTable('sea_time_entries', {
