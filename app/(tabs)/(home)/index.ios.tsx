@@ -324,40 +324,42 @@ export default function SeaTimeScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Pending Confirmations</Text>
             {pendingEntries.map((entry, index) => (
-              <View key={entry.id || index} style={[styles.card, styles.pendingCard]}>
-                <View style={styles.cardHeader}>
-                  <IconSymbol
-                    ios_icon_name="clock"
-                    android_material_icon_name="schedule"
-                    size={24}
-                    color={colors.warning}
-                  />
-                  <Text style={styles.cardTitle}>{entry.vessel.vessel_name}</Text>
+              <React.Fragment key={entry.id || index}>
+                <View style={[styles.card, styles.pendingCard]}>
+                  <View style={styles.cardHeader}>
+                    <IconSymbol
+                      ios_icon_name="clock"
+                      android_material_icon_name="schedule"
+                      size={24}
+                      color={colors.warning}
+                    />
+                    <Text style={styles.cardTitle}>{entry.vessel.vessel_name}</Text>
+                  </View>
+                  <Text style={styles.cardText}>
+                    SeaTime Tracker thinks you have been at sea for more than 4 hours.
+                  </Text>
+                  <Text style={styles.cardText}>
+                    Started: {formatDate(entry.start_time)}
+                  </Text>
+                  <View style={styles.cardActions}>
+                    <TouchableOpacity
+                      style={[styles.button, styles.confirmButton]}
+                      onPress={() => {
+                        setSelectedEntry(entry);
+                        setShowConfirmModal(true);
+                      }}
+                    >
+                      <Text style={styles.buttonText}>Confirm</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.button, styles.rejectButton]}
+                      onPress={() => handleRejectEntry(entry.id)}
+                    >
+                      <Text style={styles.buttonText}>Reject</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <Text style={styles.cardText}>
-                  SeaTime Tracker thinks you have been at sea for more than 4 hours.
-                </Text>
-                <Text style={styles.cardText}>
-                  Started: {formatDate(entry.start_time)}
-                </Text>
-                <View style={styles.cardActions}>
-                  <TouchableOpacity
-                    style={[styles.button, styles.confirmButton]}
-                    onPress={() => {
-                      setSelectedEntry(entry);
-                      setShowConfirmModal(true);
-                    }}
-                  >
-                    <Text style={styles.buttonText}>Confirm</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.button, styles.rejectButton]}
-                    onPress={() => handleRejectEntry(entry.id)}
-                  >
-                    <Text style={styles.buttonText}>Reject</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              </React.Fragment>
             ))}
           </View>
         )}
@@ -425,7 +427,10 @@ export default function SeaTimeScreen() {
               <View style={styles.cardActions}>
                 <TouchableOpacity
                   style={[styles.button, styles.checkButton]}
-                  onPress={() => handleCheckVessel(activeVessel.id, activeVessel.vessel_name, activeVessel.is_active)}
+                  onPress={(e) => {
+                    e?.stopPropagation?.();
+                    handleCheckVessel(activeVessel.id, activeVessel.vessel_name, activeVessel.is_active);
+                  }}
                 >
                   <IconSymbol
                     ios_icon_name="location"
@@ -438,7 +443,10 @@ export default function SeaTimeScreen() {
                 
                 <TouchableOpacity
                   style={[styles.button, styles.deleteButton]}
-                  onPress={() => handleDeleteVessel(activeVessel.id, activeVessel.vessel_name)}
+                  onPress={(e) => {
+                    e?.stopPropagation?.();
+                    handleDeleteVessel(activeVessel.id, activeVessel.vessel_name);
+                  }}
                 >
                   <IconSymbol
                     ios_icon_name="trash"
@@ -461,48 +469,56 @@ export default function SeaTimeScreen() {
               Tap vessel name to view sea time history
             </Text>
             {historicVessels.map((vessel, index) => (
-              <View key={vessel.id || index} style={styles.card}>
-                <TouchableOpacity
-                  style={styles.cardClickable}
-                  onPress={() => handleVesselPress(vessel.id)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.cardHeader}>
-                    <View style={styles.vesselInfo}>
-                      <Text style={styles.cardTitle}>{vessel.vessel_name}</Text>
-                      <Text style={styles.cardSubtext}>MMSI: {vessel.mmsi}</Text>
-                    </View>
-                  </View>
-                </TouchableOpacity>
-                
-                <View style={styles.cardActions}>
+              <React.Fragment key={vessel.id || index}>
+                <View style={styles.card}>
                   <TouchableOpacity
-                    style={[styles.button, styles.activateButton]}
-                    onPress={() => handleActivateVessel(vessel.id, vessel.vessel_name)}
+                    style={styles.cardClickable}
+                    onPress={() => handleVesselPress(vessel.id)}
+                    activeOpacity={0.7}
                   >
-                    <IconSymbol
-                      ios_icon_name="checkmark.circle"
-                      android_material_icon_name="check-circle"
-                      size={18}
-                      color={colors.card}
-                    />
-                    <Text style={styles.buttonText}>Set as Active</Text>
+                    <View style={styles.cardHeader}>
+                      <View style={styles.vesselInfo}>
+                        <Text style={styles.cardTitle}>{vessel.vessel_name}</Text>
+                        <Text style={styles.cardSubtext}>MMSI: {vessel.mmsi}</Text>
+                      </View>
+                    </View>
                   </TouchableOpacity>
                   
-                  <TouchableOpacity
-                    style={[styles.button, styles.deleteButton]}
-                    onPress={() => handleDeleteVessel(vessel.id, vessel.vessel_name)}
-                  >
-                    <IconSymbol
-                      ios_icon_name="trash"
-                      android_material_icon_name="delete"
-                      size={18}
-                      color={colors.card}
-                    />
-                    <Text style={styles.buttonText}>Delete</Text>
-                  </TouchableOpacity>
+                  <View style={styles.cardActions}>
+                    <TouchableOpacity
+                      style={[styles.button, styles.activateButton]}
+                      onPress={(e) => {
+                        e?.stopPropagation?.();
+                        handleActivateVessel(vessel.id, vessel.vessel_name);
+                      }}
+                    >
+                      <IconSymbol
+                        ios_icon_name="checkmark.circle"
+                        android_material_icon_name="check-circle"
+                        size={18}
+                        color={colors.card}
+                      />
+                      <Text style={styles.buttonText}>Set as Active</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity
+                      style={[styles.button, styles.deleteButton]}
+                      onPress={(e) => {
+                        e?.stopPropagation?.();
+                        handleDeleteVessel(vessel.id, vessel.vessel_name);
+                      }}
+                    >
+                      <IconSymbol
+                        ios_icon_name="trash"
+                        android_material_icon_name="delete"
+                        size={18}
+                        color={colors.card}
+                      />
+                      <Text style={styles.buttonText}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-              </View>
+              </React.Fragment>
             ))}
           </View>
         )}
@@ -516,37 +532,38 @@ export default function SeaTimeScreen() {
             </View>
           ) : (
             seaTimeEntries.slice(0, 5).map((entry, index) => (
-              <TouchableOpacity
-                key={entry.id || index}
-                style={styles.card}
-                onPress={() => handleVesselPress(entry.vessel.id)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.cardHeader}>
-                  <Text style={styles.cardTitle}>{entry.vessel.vessel_name}</Text>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: getStatusColor(entry.status) },
-                    ]}
-                  >
-                    <Text style={styles.statusText}>
-                      {entry.status.toUpperCase()}
-                    </Text>
+              <React.Fragment key={entry.id || index}>
+                <TouchableOpacity
+                  style={styles.card}
+                  onPress={() => handleVesselPress(entry.vessel.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.cardHeader}>
+                    <Text style={styles.cardTitle}>{entry.vessel.vessel_name}</Text>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: getStatusColor(entry.status) },
+                      ]}
+                    >
+                      <Text style={styles.statusText}>
+                        {entry.status.toUpperCase()}
+                      </Text>
+                    </View>
                   </View>
-                </View>
-                <Text style={styles.cardText}>
-                  {formatDate(entry.start_time)} → {entry.end_time ? formatDate(entry.end_time) : 'Ongoing'}
-                </Text>
-                {entry.duration_hours && (
                   <Text style={styles.cardText}>
-                    Duration: {entry.duration_hours.toFixed(1)} hours
+                    {formatDate(entry.start_time)} → {entry.end_time ? formatDate(entry.end_time) : 'Ongoing'}
                   </Text>
-                )}
-                {entry.notes && (
-                  <Text style={styles.cardNotes}>Notes: {entry.notes}</Text>
-                )}
-              </TouchableOpacity>
+                  {entry.duration_hours && (
+                    <Text style={styles.cardText}>
+                      Duration: {entry.duration_hours.toFixed(1)} hours
+                    </Text>
+                  )}
+                  {entry.notes && (
+                    <Text style={styles.cardNotes}>Notes: {entry.notes}</Text>
+                  )}
+                </TouchableOpacity>
+              </React.Fragment>
             ))
           )}
         </View>
