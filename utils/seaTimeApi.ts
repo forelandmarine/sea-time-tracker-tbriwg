@@ -1,10 +1,11 @@
 
 import Constants from 'expo-constants';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || 'https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev';
-const STORAGE_KEY_API_KEY = '@myshiptracking_api_key';
-const STORAGE_KEY_API_URL = '@myshiptracking_api_url';
+
+// App-wide MyShipTracking API key (configured by developers)
+const MYSHIPTRACKING_API_KEY = 'M56gZlmWzEnfaQaZfD8UiT*cKlt3^OL$^g';
+const MYSHIPTRACKING_API_URL = 'https://api.myshiptracking.com/v1';
 
 export interface Vessel {
   id: string;
@@ -47,21 +48,12 @@ export interface ReportSummary {
 }
 
 // Helper function to get API configuration headers
-async function getApiHeaders(): Promise<HeadersInit> {
-  const apiKey = await AsyncStorage.getItem(STORAGE_KEY_API_KEY);
-  const apiUrl = await AsyncStorage.getItem(STORAGE_KEY_API_URL);
-  
+function getApiHeaders(): HeadersInit {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
+    'X-MyShipTracking-API-Key': MYSHIPTRACKING_API_KEY,
+    'X-MyShipTracking-API-URL': MYSHIPTRACKING_API_URL,
   };
-  
-  // Add MyShipTracking API credentials if available
-  if (apiKey) {
-    headers['X-MyShipTracking-API-Key'] = apiKey;
-  }
-  if (apiUrl) {
-    headers['X-MyShipTracking-API-URL'] = apiUrl;
-  }
   
   return headers;
 }
@@ -70,7 +62,7 @@ async function getApiHeaders(): Promise<HeadersInit> {
 export async function getVessels(): Promise<Vessel[]> {
   const url = `${API_BASE_URL}/api/vessels`;
   console.log('[API] Fetching vessels:', url);
-  const headers = await getApiHeaders();
+  const headers = getApiHeaders();
   const response = await fetch(url, { headers });
   if (!response.ok) {
     const errorText = await response.text();
@@ -85,7 +77,7 @@ export async function getVessels(): Promise<Vessel[]> {
 export async function createVessel(mmsi: string, vessel_name: string): Promise<Vessel> {
   const url = `${API_BASE_URL}/api/vessels`;
   console.log('[API] Creating vessel:', { mmsi, vessel_name });
-  const headers = await getApiHeaders();
+  const headers = getApiHeaders();
   const response = await fetch(url, {
     method: 'POST',
     headers,
@@ -104,7 +96,7 @@ export async function createVessel(mmsi: string, vessel_name: string): Promise<V
 export async function deleteVessel(vesselId: string): Promise<{ success: boolean }> {
   const url = `${API_BASE_URL}/api/vessels/${vesselId}`;
   console.log('[API] Deleting vessel:', vesselId);
-  const headers = await getApiHeaders();
+  const headers = getApiHeaders();
   const response = await fetch(url, {
     method: 'DELETE',
     headers,
@@ -123,7 +115,7 @@ export async function deleteVessel(vesselId: string): Promise<{ success: boolean
 export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> {
   const url = `${API_BASE_URL}/api/ais/check/${vesselId}`;
   console.log('[API] Checking vessel AIS:', vesselId);
-  const headers = await getApiHeaders();
+  const headers = getApiHeaders();
   const response = await fetch(url, {
     method: 'POST',
     headers,
@@ -134,10 +126,10 @@ export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> 
     
     // Provide more helpful error messages
     if (response.status === 500 && errorText.includes('API key not configured')) {
-      throw new Error('MyShipTracking API key not configured. Please add your API key in Settings.');
+      throw new Error('MyShipTracking API key not configured. Please contact support.');
     }
     if (response.status === 502) {
-      throw new Error('Failed to connect to MyShipTracking API. Please check your API settings.');
+      throw new Error('Failed to connect to MyShipTracking API. Please try again later.');
     }
     
     throw new Error('Failed to check vessel AIS');
@@ -151,7 +143,7 @@ export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> 
 export async function getSeaTimeEntries(): Promise<SeaTimeEntry[]> {
   const url = `${API_BASE_URL}/api/sea-time`;
   console.log('[API] Fetching sea time entries:', url);
-  const headers = await getApiHeaders();
+  const headers = getApiHeaders();
   const response = await fetch(url, { headers });
   if (!response.ok) {
     const errorText = await response.text();
@@ -166,7 +158,7 @@ export async function getSeaTimeEntries(): Promise<SeaTimeEntry[]> {
 export async function getPendingEntries(): Promise<SeaTimeEntry[]> {
   const url = `${API_BASE_URL}/api/sea-time/pending`;
   console.log('[API] Fetching pending entries:', url);
-  const headers = await getApiHeaders();
+  const headers = getApiHeaders();
   const response = await fetch(url, { headers });
   if (!response.ok) {
     const errorText = await response.text();
@@ -181,7 +173,7 @@ export async function getPendingEntries(): Promise<SeaTimeEntry[]> {
 export async function confirmSeaTimeEntry(entryId: string, notes?: string): Promise<SeaTimeEntry> {
   const url = `${API_BASE_URL}/api/sea-time/${entryId}/confirm`;
   console.log('[API] Confirming sea time entry:', entryId, notes);
-  const headers = await getApiHeaders();
+  const headers = getApiHeaders();
   const response = await fetch(url, {
     method: 'PUT',
     headers,
@@ -200,7 +192,7 @@ export async function confirmSeaTimeEntry(entryId: string, notes?: string): Prom
 export async function rejectSeaTimeEntry(entryId: string, notes?: string): Promise<SeaTimeEntry> {
   const url = `${API_BASE_URL}/api/sea-time/${entryId}/reject`;
   console.log('[API] Rejecting sea time entry:', entryId, notes);
-  const headers = await getApiHeaders();
+  const headers = getApiHeaders();
   const response = await fetch(url, {
     method: 'PUT',
     headers,
@@ -219,7 +211,7 @@ export async function rejectSeaTimeEntry(entryId: string, notes?: string): Promi
 export async function deleteSeaTimeEntry(entryId: string): Promise<{ success: boolean }> {
   const url = `${API_BASE_URL}/api/sea-time/${entryId}`;
   console.log('[API] Deleting sea time entry:', entryId);
-  const headers = await getApiHeaders();
+  const headers = getApiHeaders();
   const response = await fetch(url, {
     method: 'DELETE',
     headers,
@@ -242,7 +234,7 @@ export async function getReportSummary(startDate?: string, endDate?: string): Pr
   
   const url = `${API_BASE_URL}/api/reports/summary${params.toString() ? '?' + params.toString() : ''}`;
   console.log('[API] Fetching report summary:', url);
-  const headers = await getApiHeaders();
+  const headers = getApiHeaders();
   const response = await fetch(url, { headers });
   if (!response.ok) {
     const errorText = await response.text();
@@ -259,7 +251,7 @@ export async function downloadCSVReport(startDate?: string, endDate?: string): P
   
   const url = `${API_BASE_URL}/api/reports/csv${params.toString() ? '?' + params.toString() : ''}`;
   console.log('[API] Downloading CSV report:', url);
-  const headers = await getApiHeaders();
+  const headers = getApiHeaders();
   const response = await fetch(url, { headers });
   if (!response.ok) {
     const errorText = await response.text();
@@ -269,16 +261,16 @@ export async function downloadCSVReport(startDate?: string, endDate?: string): P
   return response.text();
 }
 
-// API Configuration helpers
-export async function getApiConfiguration(): Promise<{ apiKey: string | null; apiUrl: string | null }> {
-  const apiKey = await AsyncStorage.getItem(STORAGE_KEY_API_KEY);
-  const apiUrl = await AsyncStorage.getItem(STORAGE_KEY_API_URL);
-  return { apiKey, apiUrl };
+// API Configuration helpers (for informational purposes only)
+export function getApiConfiguration(): { apiKey: string; apiUrl: string } {
+  return { 
+    apiKey: MYSHIPTRACKING_API_KEY,
+    apiUrl: MYSHIPTRACKING_API_URL 
+  };
 }
 
-export async function isApiConfigured(): Promise<boolean> {
-  const apiKey = await AsyncStorage.getItem(STORAGE_KEY_API_KEY);
-  return !!apiKey;
+export function isApiConfigured(): boolean {
+  return !!MYSHIPTRACKING_API_KEY;
 }
 
 export interface ApiSettingsStatus {
@@ -290,17 +282,16 @@ export interface ApiSettingsStatus {
 export async function getApiSettingsStatus(): Promise<ApiSettingsStatus> {
   const url = `${API_BASE_URL}/api/settings/api`;
   console.log('[API] Fetching API settings status:', url);
-  const headers = await getApiHeaders();
+  const headers = getApiHeaders();
   
   try {
     const response = await fetch(url, { headers });
     if (!response.ok) {
       // If endpoint doesn't exist yet (404), return default status
       if (response.status === 404) {
-        const config = await getApiConfiguration();
         return {
-          apiKeyConfigured: !!config.apiKey,
-          apiUrl: config.apiUrl || 'https://api.myshiptracking.com/v1',
+          apiKeyConfigured: isApiConfigured(),
+          apiUrl: MYSHIPTRACKING_API_URL,
           lastUpdated: null,
         };
       }
@@ -313,11 +304,10 @@ export async function getApiSettingsStatus(): Promise<ApiSettingsStatus> {
     return data;
   } catch (error) {
     console.error('[API] Error fetching API settings status:', error);
-    // Fallback to local storage if backend endpoint not available
-    const config = await getApiConfiguration();
+    // Fallback to hardcoded configuration
     return {
-      apiKeyConfigured: !!config.apiKey,
-      apiUrl: config.apiUrl || 'https://api.myshiptracking.com/v1',
+      apiKeyConfigured: isApiConfigured(),
+      apiUrl: MYSHIPTRACKING_API_URL,
       lastUpdated: null,
     };
   }

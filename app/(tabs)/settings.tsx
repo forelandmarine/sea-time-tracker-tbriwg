@@ -3,36 +3,26 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   StyleSheet,
   ScrollView,
-  Alert,
   TouchableOpacity,
   useColorScheme,
   Platform,
   ActivityIndicator,
 } from 'react-native';
 import { Stack } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
-import { getApiSettingsStatus, type ApiSettingsStatus } from '@/utils/seaTimeApi';
-
-const STORAGE_KEY_API_KEY = '@myshiptracking_api_key';
-const STORAGE_KEY_API_URL = '@myshiptracking_api_url';
-const DEFAULT_API_URL = 'https://api.myshiptracking.com/v1';
+import { getApiSettingsStatus, getApiConfiguration, type ApiSettingsStatus } from '@/utils/seaTimeApi';
 
 export default function SettingsScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  const [apiKey, setApiKey] = useState('');
-  const [apiUrl, setApiUrl] = useState(DEFAULT_API_URL);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
   const [apiStatus, setApiStatus] = useState<ApiSettingsStatus | null>(null);
+  const [apiConfig, setApiConfig] = useState<{ apiKey: string; apiUrl: string } | null>(null);
 
   useEffect(() => {
     loadSettings();
@@ -40,11 +30,9 @@ export default function SettingsScreen() {
 
   const loadSettings = async () => {
     try {
-      const savedApiKey = await AsyncStorage.getItem(STORAGE_KEY_API_KEY);
-      const savedApiUrl = await AsyncStorage.getItem(STORAGE_KEY_API_URL);
-
-      if (savedApiKey) setApiKey(savedApiKey);
-      if (savedApiUrl) setApiUrl(savedApiUrl);
+      // Get hardcoded API configuration
+      const config = getApiConfiguration();
+      setApiConfig(config);
 
       // Load API status from backend
       try {
@@ -60,98 +48,22 @@ export default function SettingsScreen() {
     }
   };
 
-  const saveSettings = async () => {
-    if (!apiKey.trim()) {
-      Alert.alert('Error', 'Please enter a valid API key');
-      return;
-    }
-
-    setIsSaving(true);
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY_API_KEY, apiKey.trim());
-      await AsyncStorage.setItem(STORAGE_KEY_API_URL, apiUrl.trim() || DEFAULT_API_URL);
-
-      // Refresh API status after saving
-      try {
-        const status = await getApiSettingsStatus();
-        setApiStatus(status);
-      } catch (error) {
-        console.log('Could not fetch updated API status:', error);
-      }
-
-      Alert.alert('Success', 'API settings saved successfully');
-    } catch (error) {
-      console.error('Failed to save settings:', error);
-      Alert.alert('Error', 'Failed to save settings. Please try again.');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const testConnection = async () => {
-    if (!apiKey.trim()) {
-      Alert.alert('Error', 'Please enter an API key first');
-      return;
-    }
-
     setIsTesting(true);
     try {
-      // First save the settings
-      await AsyncStorage.setItem(STORAGE_KEY_API_KEY, apiKey.trim());
-      await AsyncStorage.setItem(STORAGE_KEY_API_URL, apiUrl.trim() || DEFAULT_API_URL);
-
       // Try to fetch API status to test connection
       const status = await getApiSettingsStatus();
       setApiStatus(status);
 
       if (status.apiKeyConfigured) {
-        Alert.alert(
-          'Connection Successful',
-          'Your MyShipTracking API credentials are configured correctly.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert(
-          'Connection Test',
-          'Settings saved, but API key not yet verified by backend. Try checking a vessel to verify.',
-          [{ text: 'OK' }]
-        );
+        // Show success message (you could use a toast or alert here)
+        console.log('Connection successful');
       }
     } catch (error) {
       console.error('Connection test failed:', error);
-      Alert.alert(
-        'Connection Failed',
-        'Could not connect to the API. Please check your API key and URL.',
-        [{ text: 'OK' }]
-      );
     } finally {
       setIsTesting(false);
     }
-  };
-
-  const resetToDefaults = () => {
-    Alert.alert(
-      'Reset to Defaults',
-      'Are you sure you want to reset API settings to defaults?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            setApiUrl(DEFAULT_API_URL);
-            setApiKey('');
-            try {
-              await AsyncStorage.removeItem(STORAGE_KEY_API_KEY);
-              await AsyncStorage.setItem(STORAGE_KEY_API_URL, DEFAULT_API_URL);
-              Alert.alert('Success', 'Settings reset to defaults');
-            } catch (error) {
-              console.error('Failed to reset settings:', error);
-            }
-          },
-        },
-      ]
-    );
   };
 
   const bgColor = isDark ? colors.backgroundDark : colors.background;
@@ -159,6 +71,11 @@ export default function SettingsScreen() {
   const textColor = isDark ? colors.textDark : colors.text;
   const secondaryTextColor = isDark ? colors.textSecondaryDark : colors.textSecondary;
   const borderColor = isDark ? colors.borderDark : colors.border;
+
+  // Mask API key for display (show first 8 and last 4 characters)
+  const maskedApiKey = apiConfig?.apiKey 
+    ? `${apiConfig.apiKey.substring(0, 8)}${'*'.repeat(20)}${apiConfig.apiKey.substring(apiConfig.apiKey.length - 4)}`
+    : '';
 
   return (
     <>
@@ -179,80 +96,40 @@ export default function SettingsScreen() {
         <View style={[styles.card, { backgroundColor: cardColor, borderColor }]}>
           <View style={styles.iconHeader}>
             <IconSymbol
-              ios_icon_name="key.fill"
-              android_material_icon_name="vpn-key"
+              ios_icon_name="checkmark.shield.fill"
+              android_material_icon_name="verified-user"
               size={32}
-              color={colors.primary}
+              color={colors.success}
             />
             <Text style={[styles.cardTitle, { color: textColor }]}>
-              MyShipTracking API Configuration
+              API Configuration
             </Text>
           </View>
 
           <Text style={[styles.description, { color: secondaryTextColor }]}>
-            Configure your MyShipTracking API credentials to enable vessel tracking and AIS data integration.
+            Your MyShipTracking API credentials are pre-configured by the app developers. No additional setup required.
           </Text>
 
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: textColor }]}>API Key *</Text>
-            <View style={styles.passwordContainer}>
-              <TextInput
-                style={[
-                  styles.input,
-                  styles.passwordInput,
-                  {
-                    backgroundColor: isDark ? '#0F1A27' : '#F5F9FC',
-                    color: textColor,
-                    borderColor,
-                  },
-                ]}
-                value={apiKey}
-                onChangeText={setApiKey}
-                placeholder="Enter your MyShipTracking API key"
-                placeholderTextColor={secondaryTextColor}
-                secureTextEntry={!showApiKey}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TouchableOpacity
-                style={styles.eyeButton}
-                onPress={() => setShowApiKey(!showApiKey)}
-              >
-                <IconSymbol
-                  ios_icon_name={showApiKey ? 'eye.slash.fill' : 'eye.fill'}
-                  android_material_icon_name={showApiKey ? 'visibility-off' : 'visibility'}
-                  size={20}
-                  color={secondaryTextColor}
-                />
-              </TouchableOpacity>
+          <View style={[styles.infoCard, { 
+            backgroundColor: isDark ? '#0F1A27' : '#F5F9FC',
+            borderColor: colors.success,
+          }]}>
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoLabel, { color: secondaryTextColor }]}>
+                API Key:
+              </Text>
+              <Text style={[styles.infoValue, { color: textColor }]}>
+                {maskedApiKey}
+              </Text>
             </View>
-            <Text style={[styles.hint, { color: secondaryTextColor }]}>
-              Required for authenticating with MyShipTracking API
-            </Text>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={[styles.label, { color: textColor }]}>API Base URL</Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  backgroundColor: isDark ? '#0F1A27' : '#F5F9FC',
-                  color: textColor,
-                  borderColor,
-                },
-              ]}
-              value={apiUrl}
-              onChangeText={setApiUrl}
-              placeholder={DEFAULT_API_URL}
-              placeholderTextColor={secondaryTextColor}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-            />
-            <Text style={[styles.hint, { color: secondaryTextColor }]}>
-              Default: {DEFAULT_API_URL}
-            </Text>
+            <View style={styles.infoRow}>
+              <Text style={[styles.infoLabel, { color: secondaryTextColor }]}>
+                API URL:
+              </Text>
+              <Text style={[styles.infoValue, { color: textColor }]}>
+                {apiConfig?.apiUrl || 'Loading...'}
+              </Text>
+            </View>
           </View>
 
           {apiStatus && (
@@ -270,82 +147,40 @@ export default function SettingsScreen() {
                 <Text style={[styles.statusText, { 
                   color: apiStatus.apiKeyConfigured ? colors.success : colors.warning 
                 }]}>
-                  {apiStatus.apiKeyConfigured ? 'API Key Configured' : 'API Key Not Configured'}
+                  {apiStatus.apiKeyConfigured ? 'API Connected' : 'API Not Connected'}
                 </Text>
               </View>
               {apiStatus.lastUpdated && (
                 <Text style={[styles.statusSubtext, { color: secondaryTextColor }]}>
-                  Last updated: {new Date(apiStatus.lastUpdated).toLocaleString()}
+                  Last checked: {new Date(apiStatus.lastUpdated).toLocaleString()}
                 </Text>
               )}
             </View>
           )}
 
-          <View style={styles.buttonGroup}>
-            <TouchableOpacity
-              style={[
-                styles.button,
-                styles.primaryButton,
-                isSaving && styles.buttonDisabled,
-              ]}
-              onPress={saveSettings}
-              disabled={isSaving}
-            >
-              {isSaving ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <IconSymbol
-                  ios_icon_name="checkmark.circle.fill"
-                  android_material_icon_name="check-circle"
-                  size={20}
-                  color="#FFFFFF"
-                />
-              )}
-              <Text style={styles.buttonText}>
-                {isSaving ? 'Saving...' : 'Save Settings'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.button,
-                styles.testButton,
-                isTesting && styles.buttonDisabled,
-              ]}
-              onPress={testConnection}
-              disabled={isTesting || isSaving}
-            >
-              {isTesting ? (
-                <ActivityIndicator color={colors.accent} size="small" />
-              ) : (
-                <IconSymbol
-                  ios_icon_name="network"
-                  android_material_icon_name="wifi"
-                  size={20}
-                  color={colors.accent}
-                />
-              )}
-              <Text style={[styles.buttonTextSecondary, { color: colors.accent }]}>
-                {isTesting ? 'Testing...' : 'Test Connection'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.button, styles.secondaryButton]}
-              onPress={resetToDefaults}
-              disabled={isSaving || isTesting}
-            >
+          <TouchableOpacity
+            style={[
+              styles.button,
+              styles.testButton,
+              isTesting && styles.buttonDisabled,
+            ]}
+            onPress={testConnection}
+            disabled={isTesting}
+          >
+            {isTesting ? (
+              <ActivityIndicator color={colors.accent} size="small" />
+            ) : (
               <IconSymbol
-                ios_icon_name="arrow.counterclockwise"
-                android_material_icon_name="refresh"
+                ios_icon_name="network"
+                android_material_icon_name="wifi"
                 size={20}
-                color={colors.primary}
+                color={colors.accent}
               />
-              <Text style={[styles.buttonTextSecondary, { color: colors.primary }]}>
-                Reset to Defaults
-              </Text>
-            </TouchableOpacity>
-          </View>
+            )}
+            <Text style={[styles.buttonTextSecondary, { color: colors.accent }]}>
+              {isTesting ? 'Testing Connection...' : 'Test Connection'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         <View style={[styles.card, { backgroundColor: cardColor, borderColor }]}>
@@ -357,7 +192,34 @@ export default function SettingsScreen() {
               color={colors.accent}
             />
             <Text style={[styles.cardTitle, { color: textColor }]}>
-              How to Get Your API Key
+              About API Configuration
+            </Text>
+          </View>
+
+          <Text style={[styles.noteText, { color: secondaryTextColor }]}>
+            • The MyShipTracking API key is securely embedded in the app
+          </Text>
+          <Text style={[styles.noteText, { color: secondaryTextColor }]}>
+            • No manual configuration is required from users
+          </Text>
+          <Text style={[styles.noteText, { color: secondaryTextColor }]}>
+            • All vessel tracking features are ready to use immediately
+          </Text>
+          <Text style={[styles.noteText, { color: secondaryTextColor }]}>
+            • The API key is managed by the app developers
+          </Text>
+        </View>
+
+        <View style={[styles.card, { backgroundColor: cardColor, borderColor }]}>
+          <View style={styles.iconHeader}>
+            <IconSymbol
+              ios_icon_name="antenna.radiowaves.left.and.right"
+              android_material_icon_name="settings-input-antenna"
+              size={28}
+              color={colors.primary}
+            />
+            <Text style={[styles.cardTitle, { color: textColor }]}>
+              How It Works
             </Text>
           </View>
 
@@ -367,7 +229,7 @@ export default function SettingsScreen() {
                 <Text style={styles.stepNumberText}>1</Text>
               </View>
               <Text style={[styles.stepText, { color: textColor }]}>
-                Visit myshiptracking.com and create an account
+                Add vessels by entering their MMSI numbers
               </Text>
             </View>
 
@@ -376,7 +238,7 @@ export default function SettingsScreen() {
                 <Text style={styles.stepNumberText}>2</Text>
               </View>
               <Text style={[styles.stepText, { color: textColor }]}>
-                Navigate to API Settings in your account dashboard
+                The app automatically tracks vessel movements via AIS data
               </Text>
             </View>
 
@@ -385,7 +247,7 @@ export default function SettingsScreen() {
                 <Text style={styles.stepNumberText}>3</Text>
               </View>
               <Text style={[styles.stepText, { color: textColor }]}>
-                Generate a new API key and copy it
+                Receive notifications when sea time is detected (4+ hours)
               </Text>
             </View>
 
@@ -394,7 +256,7 @@ export default function SettingsScreen() {
                 <Text style={styles.stepNumberText}>4</Text>
               </View>
               <Text style={[styles.stepText, { color: textColor }]}>
-                Paste the API key in the field above and save
+                Confirm or reject sea time entries and generate reports
               </Text>
             </View>
           </View>
@@ -403,27 +265,18 @@ export default function SettingsScreen() {
         <View style={[styles.card, { backgroundColor: cardColor, borderColor }]}>
           <View style={styles.iconHeader}>
             <IconSymbol
-              ios_icon_name="exclamationmark.triangle.fill"
-              android_material_icon_name="warning"
+              ios_icon_name="questionmark.circle.fill"
+              android_material_icon_name="help"
               size={28}
               color={colors.warning}
             />
             <Text style={[styles.cardTitle, { color: textColor }]}>
-              Important Notes
+              Need Help?
             </Text>
           </View>
 
-          <Text style={[styles.noteText, { color: secondaryTextColor }]}>
-            • Keep your API key secure and do not share it with others
-          </Text>
-          <Text style={[styles.noteText, { color: secondaryTextColor }]}>
-            • The API key is stored locally on your device
-          </Text>
-          <Text style={[styles.noteText, { color: secondaryTextColor }]}>
-            • Vessel tracking requires a valid API key to function
-          </Text>
-          <Text style={[styles.noteText, { color: secondaryTextColor }]}>
-            • Check MyShipTracking API documentation for rate limits
+          <Text style={[styles.description, { color: secondaryTextColor }]}>
+            If you experience any issues with vessel tracking or API connectivity, please contact support or check the app documentation.
           </Text>
         </View>
       </ScrollView>
@@ -473,38 +326,25 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 15,
     lineHeight: 22,
-    marginBottom: 24,
+    marginBottom: 16,
   },
-  inputGroup: {
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  input: {
-    borderRadius: 12,
+  infoCard: {
     padding: 16,
-    fontSize: 15,
-    borderWidth: 1,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 2,
   },
-  passwordContainer: {
-    position: 'relative',
+  infoRow: {
+    marginBottom: 12,
   },
-  passwordInput: {
-    paddingRight: 50,
-  },
-  eyeButton: {
-    position: 'absolute',
-    right: 16,
-    top: 16,
-    padding: 4,
-  },
-  hint: {
+  infoLabel: {
     fontSize: 13,
-    marginTop: 6,
-    fontStyle: 'italic',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  infoValue: {
+    fontSize: 14,
+    fontFamily: Platform.select({ ios: 'Courier', android: 'monospace', default: 'monospace' }),
   },
   statusCard: {
     padding: 16,
@@ -526,9 +366,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginLeft: 28,
   },
-  buttonGroup: {
-    gap: 12,
-  },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -537,14 +374,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     gap: 8,
   },
-  primaryButton: {
-    backgroundColor: colors.primary,
-  },
-  secondaryButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
   testButton: {
     backgroundColor: 'transparent',
     borderWidth: 2,
@@ -552,11 +381,6 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.6,
-  },
-  buttonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
   },
   buttonTextSecondary: {
     fontSize: 16,
