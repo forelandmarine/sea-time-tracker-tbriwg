@@ -12,6 +12,7 @@ import {
   useColorScheme,
   RefreshControl,
   Platform,
+  Image,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -270,8 +271,17 @@ export default function SeaTimeScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>SeaTime Tracker</Text>
-        <Text style={styles.headerSubtitle}>MCA Sea Service Testimonials</Text>
+        <View style={styles.headerTitleContainer}>
+          <Image
+            source={require('@/assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png')}
+            style={styles.headerIcon}
+            resizeMode="contain"
+          />
+          <View>
+            <Text style={styles.headerTitle}>SeaTime Tracker</Text>
+            <Text style={styles.headerSubtitle}>MCA Sea Service Testimonials</Text>
+          </View>
+        </View>
       </View>
 
       <ScrollView
@@ -642,6 +652,15 @@ const createStyles = (isDark: boolean) =>
       borderBottomColor: isDark ? colors.borderDark : colors.border,
       boxShadow: '0px 2px 8px rgba(0, 119, 190, 0.1)',
       elevation: 3,
+    },
+    headerTitleContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    headerIcon: {
+      width: 48,
+      height: 48,
     },
     headerTitle: {
       fontSize: 28,
