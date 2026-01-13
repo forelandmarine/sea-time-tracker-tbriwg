@@ -175,13 +175,18 @@ export default function SeaTimeScreen() {
       const result = await seaTimeApi.checkVesselAIS(vesselId);
       console.log('[SeaTime] AIS check result:', result);
       
+      // Handle null values from API response
+      const speedText = result.speed_knots !== null ? `${result.speed_knots.toFixed(1)} knots` : 'unknown';
+      const latText = result.latitude !== null ? `${result.latitude.toFixed(4)}°` : 'unknown';
+      const lonText = result.longitude !== null ? `${result.longitude.toFixed(4)}°` : 'unknown';
+      
       if (result.is_moving) {
-        const message = `Vessel is moving at ${result.speed_knots.toFixed(1)} knots.\nPosition: ${result.latitude.toFixed(4)}°, ${result.longitude.toFixed(4)}°${result.sea_time_entry_created ? '\n\nA sea time entry has been created and is pending confirmation.' : ''}`;
+        const message = `Vessel is moving at ${speedText}.\nPosition: ${latText}, ${lonText}${result.sea_time_entry_created ? '\n\nA sea time entry has been created and is pending confirmation.' : ''}`;
         Alert.alert('Vessel Moving', message, [{ text: 'OK' }]);
       } else {
         Alert.alert(
           'Vessel Stationary',
-          `Vessel is not moving (speed: ${result.speed_knots.toFixed(1)} knots).\nPosition: ${result.latitude.toFixed(4)}°, ${result.longitude.toFixed(4)}°`,
+          `Vessel is not moving (speed: ${speedText}).\nPosition: ${latText}, ${lonText}`,
           [{ text: 'OK' }]
         );
       }
