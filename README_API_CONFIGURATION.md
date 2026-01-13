@@ -1,87 +1,47 @@
 
-# MyShipTracking API Configuration
+# SeaTime Tracker - API Configuration
 
-## Current Issue
+## MyShipTracking API Integration
 
-The "Check AIS Status" feature is currently returning an error because the MyShipTracking API key is not properly configured on the backend.
+The SeaTime Tracker app uses the MyShipTracking API to fetch real-time AIS (Automatic Identification System) data for vessels.
 
-## Error Messages You May See
+### API Configuration
 
-- **"MyShipTracking API Configuration Required"** - The API key is not set or is invalid
-- **"Vessel Not Found in AIS System"** - The MMSI number may be incorrect, or the vessel is not broadcasting AIS
-- **"AIS Service Temporarily Unavailable"** - The MyShipTracking API is experiencing downtime
+**API Endpoint:** `https://api.myshiptracking.com/api/v2/vessel`
 
-## How to Fix
+**API Key:** `M56gZlmWzEnfaQaZfD8UiT*cKlt3^OL$^g`
 
-### For Developers
+### Authentication
 
-The backend needs a valid MyShipTracking API key to be configured:
+The API key must be passed in the HTTP request header using one of these methods:
+- `Authorization: Bearer M56gZlmWzEnfaQaZfD8UiT*cKlt3^OL$^g`
+- `x-api-key: M56gZlmWzEnfaQaZfD8UiT*cKlt3^OL$^g`
 
-1. **Get an API Key:**
-   - Visit [myshiptracking.com](https://www.myshiptracking.com/)
-   - Sign up for an account
-   - Obtain your API key from the dashboard
+### API Parameters
 
-2. **Configure the Backend:**
-   - Set the environment variable `MYSHIPTRACKING_API_KEY` on your backend server
-   - The backend will automatically use this key for all AIS requests
+**Required:**
+- `mmsi` - 9-digit Maritime Mobile Service Identity number
 
-3. **Verify Configuration:**
-   - Check the backend logs on startup - it should show "API key configured: true"
-   - Test the "Check AIS Status" button with a known valid MMSI
+**Optional:**
+- `response` - Either "simple" (default) or "extended" for additional details
 
-### For Users
+### Example Request
 
-If you see an error when checking AIS status:
-
-1. **Verify MMSI Number:**
-   - Make sure the MMSI number is correct (9 digits)
-   - You can verify MMSIs on [marinetraffic.com](https://www.marinetraffic.com/) or [vesselfinder.com](https://www.vesselfinder.com/)
-
-2. **Check Vessel is Broadcasting:**
-   - The vessel must be actively transmitting AIS signals
-   - The vessel must be within AIS coverage range
-
-3. **Contact Support:**
-   - If the MMSI is correct and the vessel is broadcasting, contact the app developer
-   - The API key may need to be configured or renewed
-
-## Technical Details
+```bash
+curl -X GET "https://api.myshiptracking.com/api/v2/vessel?mmsi=123456789&response=extended" \
+  -H "Authorization: Bearer M56gZlmWzEnfaQaZfD8UiT*cKlt3^OL$^g"
+```
 
 ### Backend Configuration
 
-The backend (`backend/src/routes/ais.ts`) reads the API key from:
-```javascript
-const MYSHIPTRACKING_API_KEY = process.env.MYSHIPTRACKING_API_KEY || 'YOUR_MYSHIPTRACKING_API_KEY_HERE';
-```
+The backend automatically uses the API key stored in the environment variable `MYSHIPTRACKING_API_KEY`. If not set, it defaults to the key above.
 
-### API Endpoint
+The backend handles:
+1. Fetching vessel AIS data from MyShipTracking API
+2. Determining if a vessel is moving (speed > 0.5 knots)
+3. Creating sea time entries when vessels are detected at sea
+4. Tracking vessel positions and status
 
-The backend calls:
-```
-GET https://api.myshiptracking.com/v1/vessels/{MMSI}/position
-Authorization: Bearer {API_KEY}
-```
+### Coverage Note
 
-### Response Codes
-
-- **200** - Success, vessel data returned
-- **401** - Invalid API key
-- **404** - Vessel not found in AIS system
-- **502** - API service unavailable
-
-## Testing
-
-To test if the API is working:
-
-1. Add a vessel with a known active MMSI (e.g., a large commercial vessel)
-2. Set it as active
-3. Click "Check AIS Status"
-4. You should see the vessel's current position and speed
-
-## Support
-
-For issues with:
-- **API Configuration** - Contact the backend developer
-- **MMSI Verification** - Use online vessel tracking services
-- **App Functionality** - Check the app logs for detailed error messages
+Only terrestrial AIS data is supported. Coverage depends on the MyShipTracking network. Check [MyShipTracking.com](https://myshiptracking.com) for live coverage information.
