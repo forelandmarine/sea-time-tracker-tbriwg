@@ -1,16 +1,16 @@
 
 import Constants from 'expo-constants';
 
-const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || 'https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev';
+const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || '';
 
-// App-wide MyShipTracking API key (configured by developers)
-const MYSHIPTRACKING_API_KEY = 'M56gZlmWzEnfaQaZfD8UiT*cKlt3^OL$^g';
-const MYSHIPTRACKING_API_URL = 'https://api.myshiptracking.com/v1';
+// Log the backend URL for debugging
+console.log('[SeaTimeAPI] Backend URL configured:', API_BASE_URL);
 
 export interface Vessel {
   id: string;
   mmsi: string;
   vessel_name: string;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -47,19 +47,68 @@ export interface ReportSummary {
   }[];
 }
 
-// Helper function to get API configuration headers
+export interface ApiSettings {
+  apiKeyConfigured: boolean;
+  apiUrl: string;
+  lastUpdated?: string;
+}
+
+// Helper function to check if backend is configured
+function checkBackendConfigured() {
+  if (!API_BASE_URL) {
+    throw new Error('Backend URL not configured. Please rebuild the app or check app.json configuration.');
+  }
+}
+
+// Helper function to get API headers
 function getApiHeaders(): HeadersInit {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
-    'X-MyShipTracking-API-Key': MYSHIPTRACKING_API_KEY,
-    'X-MyShipTracking-API-URL': MYSHIPTRACKING_API_URL,
   };
   
   return headers;
 }
 
+// Settings Management
+export async function getApiSettings(): Promise<ApiSettings> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/settings/api`;
+  console.log('[API] Fetching API settings:', url);
+  const headers = getApiHeaders();
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[API] Failed to fetch API settings:', response.status, errorText);
+    throw new Error('Failed to fetch API settings');
+  }
+  const data = await response.json();
+  console.log('[API] API settings fetched:', data);
+  return data;
+}
+
+export async function updateApiKey(apiKey: string): Promise<{ success: boolean; message: string; lastUpdated: string }> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/settings/api`;
+  console.log('[API] Updating API key');
+  const headers = getApiHeaders();
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ apiKey }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[API] Failed to update API key:', response.status, errorText);
+    throw new Error('Failed to update API key');
+  }
+  const data = await response.json();
+  console.log('[API] API key updated:', data);
+  return data;
+}
+
 // Vessel Management
 export async function getVessels(): Promise<Vessel[]> {
+  checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels`;
   console.log('[API] Fetching vessels:', url);
   const headers = getApiHeaders();
@@ -74,14 +123,15 @@ export async function getVessels(): Promise<Vessel[]> {
   return data;
 }
 
-export async function createVessel(mmsi: string, vessel_name: string): Promise<Vessel> {
+export async function createVessel(mmsi: string, vessel_name: string, is_active?: boolean): Promise<Vessel> {
+  checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels`;
-  console.log('[API] Creating vessel:', { mmsi, vessel_name });
+  console.log('[API] Creating vessel:', { mmsi, vessel_name, is_active });
   const headers = getApiHeaders();
   const response = await fetch(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ mmsi, vessel_name }),
+    body: JSON.stringify({ mmsi, vessel_name, is_active }),
   });
   if (!response.ok) {
     const errorText = await response.text();
@@ -93,7 +143,27 @@ export async function createVessel(mmsi: string, vessel_name: string): Promise<V
   return data;
 }
 
+export async function activateVessel(vesselId: string): Promise<Vessel> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/vessels/${vesselId}/activate`;
+  console.log('[API] Activating vessel:', vesselId);
+  const headers = getApiHeaders();
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[API] Failed to activate vessel:', response.status, errorText);
+    throw new Error('Failed to activate vessel');
+  }
+  const data = await response.json();
+  console.log('[API] Vessel activated:', data);
+  return data;
+}
+
 export async function deleteVessel(vesselId: string): Promise<{ success: boolean }> {
+  checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels/${vesselId}`;
   console.log('[API] Deleting vessel:', vesselId);
   const headers = getApiHeaders();
@@ -113,6 +183,7 @@ export async function deleteVessel(vesselId: string): Promise<{ success: boolean
 
 // AIS Tracking
 export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> {
+  checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/check/${vesselId}`;
   console.log('[API] Checking vessel AIS:', vesselId);
   const headers = getApiHeaders();
@@ -126,7 +197,7 @@ export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> 
     
     // Provide more helpful error messages
     if (response.status === 500 && errorText.includes('API key not configured')) {
-      throw new Error('MyShipTracking API key not configured. Please contact support.');
+      throw new Error('MyShipTracking API key not configured. Please configure it in Settings.');
     }
     if (response.status === 502) {
       throw new Error('Failed to connect to MyShipTracking API. Please try again later.');
@@ -139,8 +210,31 @@ export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> 
   return data;
 }
 
+export interface AISStatus {
+  is_moving: boolean;
+  current_check: any;
+  recent_checks: any[];
+}
+
+export async function getVesselAISStatus(vesselId: string): Promise<AISStatus> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/ais/status/${vesselId}`;
+  console.log('[API] Getting vessel AIS status:', vesselId);
+  const headers = getApiHeaders();
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[API] Failed to get vessel AIS status:', response.status, errorText);
+    throw new Error('Failed to get vessel AIS status');
+  }
+  const data = await response.json();
+  console.log('[API] AIS status:', data);
+  return data;
+}
+
 // Sea Time Management
 export async function getSeaTimeEntries(): Promise<SeaTimeEntry[]> {
+  checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time`;
   console.log('[API] Fetching sea time entries:', url);
   const headers = getApiHeaders();
@@ -156,6 +250,7 @@ export async function getSeaTimeEntries(): Promise<SeaTimeEntry[]> {
 }
 
 export async function getPendingEntries(): Promise<SeaTimeEntry[]> {
+  checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/pending`;
   console.log('[API] Fetching pending entries:', url);
   const headers = getApiHeaders();
@@ -171,6 +266,7 @@ export async function getPendingEntries(): Promise<SeaTimeEntry[]> {
 }
 
 export async function confirmSeaTimeEntry(entryId: string, notes?: string): Promise<SeaTimeEntry> {
+  checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/${entryId}/confirm`;
   console.log('[API] Confirming sea time entry:', entryId, notes);
   const headers = getApiHeaders();
@@ -190,6 +286,7 @@ export async function confirmSeaTimeEntry(entryId: string, notes?: string): Prom
 }
 
 export async function rejectSeaTimeEntry(entryId: string, notes?: string): Promise<SeaTimeEntry> {
+  checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/${entryId}/reject`;
   console.log('[API] Rejecting sea time entry:', entryId, notes);
   const headers = getApiHeaders();
@@ -209,6 +306,7 @@ export async function rejectSeaTimeEntry(entryId: string, notes?: string): Promi
 }
 
 export async function deleteSeaTimeEntry(entryId: string): Promise<{ success: boolean }> {
+  checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/${entryId}`;
   console.log('[API] Deleting sea time entry:', entryId);
   const headers = getApiHeaders();
@@ -228,6 +326,7 @@ export async function deleteSeaTimeEntry(entryId: string): Promise<{ success: bo
 
 // Reports
 export async function getReportSummary(startDate?: string, endDate?: string): Promise<ReportSummary> {
+  checkBackendConfigured();
   const params = new URLSearchParams();
   if (startDate) params.append('startDate', startDate);
   if (endDate) params.append('endDate', endDate);
@@ -245,6 +344,7 @@ export async function getReportSummary(startDate?: string, endDate?: string): Pr
 }
 
 export async function downloadCSVReport(startDate?: string, endDate?: string): Promise<string> {
+  checkBackendConfigured();
   const params = new URLSearchParams();
   if (startDate) params.append('startDate', startDate);
   if (endDate) params.append('endDate', endDate);

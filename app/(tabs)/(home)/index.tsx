@@ -21,6 +21,7 @@ interface Vessel {
   id: string;
   mmsi: string;
   vessel_name: string;
+  is_active: boolean;
   created_at: string;
 }
 
@@ -48,6 +49,7 @@ export default function SeaTimeScreen() {
   const [showAddVessel, setShowAddVessel] = useState(false);
   const [newMMSI, setNewMMSI] = useState('');
   const [newVesselName, setNewVesselName] = useState('');
+  const [setAsActive, setSetAsActive] = useState(true);
   
   // Confirm entry modal
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -95,20 +97,53 @@ export default function SeaTimeScreen() {
     }
 
     try {
-      console.log('[SeaTime] Adding vessel:', { mmsi: newMMSI, vessel_name: newVesselName });
+      console.log('[SeaTime] Adding vessel:', { mmsi: newMMSI, vessel_name: newVesselName, is_active: setAsActive });
       
-      const newVessel = await seaTimeApi.createVessel(newMMSI.trim(), newVesselName.trim());
+      const newVessel = await seaTimeApi.createVessel(newMMSI.trim(), newVesselName.trim(), setAsActive);
       console.log('[SeaTime] Vessel created:', newVessel);
       
       setShowAddVessel(false);
       setNewMMSI('');
       setNewVesselName('');
+      setSetAsActive(true);
       await loadData();
-      Alert.alert('Success', 'Vessel added successfully');
+      
+      if (setAsActive) {
+        Alert.alert('Success', `${newVesselName.trim()} is now your active vessel and will be tracked automatically.`);
+      } else {
+        Alert.alert('Success', 'Vessel added successfully as historic vessel.');
+      }
     } catch (error) {
       console.error('[SeaTime] Error adding vessel:', error);
       Alert.alert('Error', 'Failed to add vessel. Please try again.');
     }
+  };
+
+  const handleActivateVessel = async (vesselId: string, vesselName: string) => {
+    Alert.alert(
+      'Set Active Vessel',
+      `Set "${vesselName}" as your active vessel? This will automatically track its sea time.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Set Active',
+          onPress: async () => {
+            try {
+              console.log('[SeaTime] Activating vessel:', vesselId);
+              
+              await seaTimeApi.activateVessel(vesselId);
+              console.log('[SeaTime] Vessel activated successfully');
+              
+              await loadData();
+              Alert.alert('Success', `${vesselName} is now your active vessel.`);
+            } catch (error) {
+              console.error('[SeaTime] Error activating vessel:', error);
+              Alert.alert('Error', 'Failed to activate vessel. Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleCheckVessel = async (vesselId: string) => {
@@ -174,10 +209,10 @@ export default function SeaTimeScreen() {
     }
   };
 
-  const handleDeleteVessel = async (vesselId: string) => {
+  const handleDeleteVessel = async (vesselId: string, vesselName: string) => {
     Alert.alert(
       'Delete Vessel',
-      'Are you sure you want to delete this vessel?',
+      `Are you sure you want to delete "${vesselName}"? This will also delete all associated sea time history.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -226,6 +261,9 @@ export default function SeaTimeScreen() {
     }
   };
 
+  const activeVessel = vessels.find(v => v.is_active);
+  const historicVessels = vessels.filter(v => !v.is_active);
+
   const styles = createStyles(isDark);
 
   return (
@@ -255,8 +293,8 @@ export default function SeaTimeScreen() {
         {pendingEntries.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>⚠️ Pending Confirmations</Text>
-            {pendingEntries.map((entry) => (
-              <View key={entry.id} style={[styles.card, styles.pendingCard]}>
+            {pendingEntries.map((entry, index) => (
+              <View key={entry.id || index} style={[styles.card, styles.pendingCard]}>
                 <View style={styles.cardHeader}>
                   <IconSymbol
                     ios_icon_name="clock"
@@ -294,10 +332,10 @@ export default function SeaTimeScreen() {
           </View>
         )}
 
-        {/* Vessels */}
+        {/* Active Vessel */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>⚓ Tracked Vessels</Text>
+            <Text style={styles.sectionTitle}>🎯 Active Vessel</Text>
             <TouchableOpacity
               style={styles.addButton}
               onPress={() => setShowAddVessel(true)}
@@ -311,7 +349,7 @@ export default function SeaTimeScreen() {
             </TouchableOpacity>
           </View>
 
-          {vessels.length === 0 ? (
+          {!activeVessel ? (
             <View style={styles.emptyState}>
               <IconSymbol
                 ios_icon_name="sailboat"
@@ -319,20 +357,72 @@ export default function SeaTimeScreen() {
                 size={64}
                 color={colors.textSecondary}
               />
-              <Text style={styles.emptyText}>No vessels tracked yet</Text>
+              <Text style={styles.emptyText}>No active vessel</Text>
               <Text style={styles.emptySubtext}>
-                Add a vessel by MMSI to start tracking sea time
+                Add a vessel to start tracking sea time automatically
               </Text>
             </View>
           ) : (
-            vessels.map((vessel) => (
-              <View key={vessel.id} style={styles.card}>
+            <View style={[styles.card, styles.activeCard]}>
+              <View style={styles.activeBadgeContainer}>
+                <View style={styles.activeBadge}>
+                  <IconSymbol
+                    ios_icon_name="checkmark.circle.fill"
+                    android_material_icon_name="check-circle"
+                    size={16}
+                    color={colors.card}
+                  />
+                  <Text style={styles.activeBadgeText}>ACTIVE</Text>
+                </View>
+              </View>
+              <View style={styles.cardHeader}>
+                <View style={styles.vesselInfo}>
+                  <Text style={styles.cardTitle}>{activeVessel.vessel_name}</Text>
+                  <Text style={styles.cardSubtext}>MMSI: {activeVessel.mmsi}</Text>
+                  <Text style={styles.activeDescription}>
+                    This vessel is being tracked automatically
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => handleDeleteVessel(activeVessel.id, activeVessel.vessel_name)}>
+                  <IconSymbol
+                    ios_icon_name="trash"
+                    android_material_icon_name="delete"
+                    size={20}
+                    color={colors.danger}
+                  />
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={[styles.button, styles.checkButton]}
+                onPress={() => handleCheckVessel(activeVessel.id)}
+              >
+                <IconSymbol
+                  ios_icon_name="location"
+                  android_material_icon_name="my-location"
+                  size={18}
+                  color={colors.card}
+                />
+                <Text style={styles.buttonText}>Check AIS Status</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        {/* Historic Vessels */}
+        {historicVessels.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>📚 Historic Vessels</Text>
+            <Text style={styles.sectionDescription}>
+              These vessels maintain their sea time history but are not actively tracked
+            </Text>
+            {historicVessels.map((vessel, index) => (
+              <View key={vessel.id || index} style={styles.card}>
                 <View style={styles.cardHeader}>
                   <View style={styles.vesselInfo}>
                     <Text style={styles.cardTitle}>{vessel.vessel_name}</Text>
                     <Text style={styles.cardSubtext}>MMSI: {vessel.mmsi}</Text>
                   </View>
-                  <TouchableOpacity onPress={() => handleDeleteVessel(vessel.id)}>
+                  <TouchableOpacity onPress={() => handleDeleteVessel(vessel.id, vessel.vessel_name)}>
                     <IconSymbol
                       ios_icon_name="trash"
                       android_material_icon_name="delete"
@@ -341,22 +431,36 @@ export default function SeaTimeScreen() {
                     />
                   </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={[styles.button, styles.checkButton]}
-                  onPress={() => handleCheckVessel(vessel.id)}
-                >
-                  <IconSymbol
-                    ios_icon_name="location"
-                    android_material_icon_name="my-location"
-                    size={18}
-                    color={colors.card}
-                  />
-                  <Text style={styles.buttonText}>Check AIS Status</Text>
-                </TouchableOpacity>
+                <View style={styles.cardActions}>
+                  <TouchableOpacity
+                    style={[styles.button, styles.activateButton]}
+                    onPress={() => handleActivateVessel(vessel.id, vessel.vessel_name)}
+                  >
+                    <IconSymbol
+                      ios_icon_name="checkmark.circle"
+                      android_material_icon_name="check-circle"
+                      size={18}
+                      color={colors.card}
+                    />
+                    <Text style={styles.buttonText}>Set as Active</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.button, styles.checkButton]}
+                    onPress={() => handleCheckVessel(vessel.id)}
+                  >
+                    <IconSymbol
+                      ios_icon_name="location"
+                      android_material_icon_name="my-location"
+                      size={18}
+                      color={colors.card}
+                    />
+                    <Text style={styles.buttonText}>Check Status</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            ))
-          )}
-        </View>
+            ))}
+          </View>
+        )}
 
         {/* Recent Sea Time */}
         <View style={styles.section}>
@@ -366,8 +470,8 @@ export default function SeaTimeScreen() {
               <Text style={styles.emptyText}>No sea time recorded yet</Text>
             </View>
           ) : (
-            seaTimeEntries.slice(0, 5).map((entry) => (
-              <View key={entry.id} style={styles.card}>
+            seaTimeEntries.slice(0, 5).map((entry, index) => (
+              <View key={entry.id || index} style={styles.card}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardTitle}>{entry.vessel.vessel_name}</Text>
                   <View
@@ -428,6 +532,28 @@ export default function SeaTimeScreen() {
               onChangeText={setNewVesselName}
             />
             
+            <TouchableOpacity
+              style={styles.checkboxContainer}
+              onPress={() => setSetAsActive(!setAsActive)}
+            >
+              <View style={[styles.checkbox, setAsActive && styles.checkboxChecked]}>
+                {setAsActive && (
+                  <IconSymbol
+                    ios_icon_name="checkmark"
+                    android_material_icon_name="check"
+                    size={16}
+                    color={colors.card}
+                  />
+                )}
+              </View>
+              <View style={styles.checkboxLabel}>
+                <Text style={styles.checkboxText}>Set as active vessel</Text>
+                <Text style={styles.checkboxSubtext}>
+                  Active vessels are tracked automatically
+                </Text>
+              </View>
+            </TouchableOpacity>
+            
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.button, styles.cancelButton]}
@@ -435,6 +561,7 @@ export default function SeaTimeScreen() {
                   setShowAddVessel(false);
                   setNewMMSI('');
                   setNewVesselName('');
+                  setSetAsActive(true);
                 }}
               >
                 <Text style={styles.buttonText}>Cancel</Text>
@@ -561,6 +688,12 @@ const createStyles = (isDark: boolean) =>
       color: isDark ? colors.textDark : colors.text,
       marginBottom: 12,
     },
+    sectionDescription: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondaryDark : colors.textSecondary,
+      marginBottom: 12,
+      marginTop: -8,
+    },
     addButton: {
       backgroundColor: colors.primary,
       width: 40,
@@ -582,6 +715,38 @@ const createStyles = (isDark: boolean) =>
     pendingCard: {
       borderColor: colors.warning,
       borderWidth: 2,
+    },
+    activeCard: {
+      borderColor: colors.success,
+      borderWidth: 2,
+      position: 'relative',
+    },
+    activeBadgeContainer: {
+      position: 'absolute',
+      top: -1,
+      right: -1,
+      zIndex: 1,
+    },
+    activeBadge: {
+      backgroundColor: colors.success,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderTopRightRadius: 11,
+      borderBottomLeftRadius: 11,
+    },
+    activeBadgeText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.card,
+    },
+    activeDescription: {
+      fontSize: 12,
+      color: colors.success,
+      marginTop: 4,
+      fontWeight: '500',
     },
     cardHeader: {
       flexDirection: 'row',
@@ -639,7 +804,11 @@ const createStyles = (isDark: boolean) =>
     },
     checkButton: {
       backgroundColor: colors.primary,
-      marginTop: 8,
+      flex: 1,
+    },
+    activateButton: {
+      backgroundColor: colors.success,
+      flex: 1,
     },
     confirmButton: {
       backgroundColor: colors.success,
@@ -718,6 +887,39 @@ const createStyles = (isDark: boolean) =>
     textArea: {
       height: 80,
       textAlignVertical: 'top',
+    },
+    checkboxContainer: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      marginTop: 16,
+      gap: 12,
+    },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 6,
+      borderWidth: 2,
+      borderColor: isDark ? colors.borderDark : colors.border,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: 2,
+    },
+    checkboxChecked: {
+      backgroundColor: colors.success,
+      borderColor: colors.success,
+    },
+    checkboxLabel: {
+      flex: 1,
+    },
+    checkboxText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? colors.textDark : colors.text,
+    },
+    checkboxSubtext: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondaryDark : colors.textSecondary,
+      marginTop: 2,
     },
     modalActions: {
       flexDirection: 'row',
