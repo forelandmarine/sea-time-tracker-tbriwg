@@ -91,8 +91,13 @@ export default function AISDiagnosticScreen() {
             ? JSON.parse(debugLogs[0].response_body)
             : debugLogs[0].response_body;
         } catch (e) {
-          console.error('Failed to parse raw response:', e);
-          rawResponse = debugLogs[0].response_body;
+          console.error('Failed to parse raw response (likely truncated JSON):', e);
+          // If JSON parsing fails, show the truncated string with a warning
+          rawResponse = {
+            _error: 'JSON parsing failed - response may be truncated in database',
+            _truncated_response: debugLogs[0].response_body,
+            _note: 'The backend is being updated to fix this issue. The database column was too small to store the full API response.'
+          };
         }
       }
 
