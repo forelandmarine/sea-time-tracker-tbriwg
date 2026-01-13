@@ -68,12 +68,20 @@ interface MyShipTrackingVesselResponse {
 
 interface AISVesselData {
   name: string | null;
+  mmsi: string | null;
+  imo: string | null;
   speed_knots: number | null;
   latitude: number | null;
   longitude: number | null;
   course: number | null;
+  heading: number | null;
   timestamp: Date | null;
   status: string | null;
+  destination: string | null;
+  eta: string | null;
+  callsign: string | null;
+  ship_type: string | null;
+  flag: string | null;
   is_moving: boolean;
   error: string | null;
 }
@@ -122,12 +130,20 @@ async function fetchVesselAISData(
       }
       return {
         name: null,
+        mmsi: null,
+        imo: null,
         speed_knots: null,
         latitude: null,
         longitude: null,
         course: null,
+        heading: null,
         timestamp: null,
         status: null,
+        destination: null,
+        eta: null,
+        callsign: null,
+        ship_type: null,
+        flag: null,
         is_moving: false,
         error: 'AIS service temporarily unavailable',
       };
@@ -151,12 +167,20 @@ async function fetchVesselAISData(
       }
       return {
         name: null,
+        mmsi: null,
+        imo: null,
         speed_knots: null,
         latitude: null,
         longitude: null,
         course: null,
+        heading: null,
         timestamp: null,
         status: null,
+        destination: null,
+        eta: null,
+        callsign: null,
+        ship_type: null,
+        flag: null,
         is_moving: false,
         error: 'Invalid API key',
       };
@@ -172,12 +196,20 @@ async function fetchVesselAISData(
       }
       return {
         name: null,
+        mmsi: null,
+        imo: null,
         speed_knots: null,
         latitude: null,
         longitude: null,
         course: null,
+        heading: null,
         timestamp: null,
         status: null,
+        destination: null,
+        eta: null,
+        callsign: null,
+        ship_type: null,
+        flag: null,
         is_moving: false,
         error: 'Rate limit exceeded',
       };
@@ -193,12 +225,20 @@ async function fetchVesselAISData(
       }
       return {
         name: null,
+        mmsi: null,
+        imo: null,
         speed_knots: null,
         latitude: null,
         longitude: null,
         course: null,
+        heading: null,
         timestamp: null,
         status: null,
+        destination: null,
+        eta: null,
+        callsign: null,
+        ship_type: null,
+        flag: null,
         is_moving: false,
         error: 'Vessel not found in AIS system',
       };
@@ -214,12 +254,20 @@ async function fetchVesselAISData(
       }
       return {
         name: null,
+        mmsi: null,
+        imo: null,
         speed_knots: null,
         latitude: null,
         longitude: null,
         course: null,
+        heading: null,
         timestamp: null,
         status: null,
+        destination: null,
+        eta: null,
+        callsign: null,
+        ship_type: null,
+        flag: null,
         is_moving: false,
         error: 'AIS service temporarily unavailable',
       };
@@ -245,12 +293,20 @@ async function fetchVesselAISData(
     }
 
     // Extract vessel data from response
+    const vesselMmsi = data.mmsi ? String(data.mmsi) : null;
+    const imo = data.imo ? String(data.imo) : null;
     const latitude = data.latitude ? parseFloat(String(data.latitude)) : null;
     const longitude = data.longitude ? parseFloat(String(data.longitude)) : null;
     const name = data.name ? String(data.name) : null;
     const speed = data.speed ? parseFloat(String(data.speed)) : null;
     const course = data.course ? parseFloat(String(data.course)) : null;
+    const heading = data.heading ? parseFloat(String(data.heading)) : null;
     const status = data.status ? String(data.status) : null;
+    const destination = data.destination ? String(data.destination) : null;
+    const eta = data.eta ? String(data.eta) : null;
+    const callsign = data.callsign ? String(data.callsign) : null;
+    const ship_type = data.ship_type ? String(data.ship_type) : null;
+    const flag = data.flag ? String(data.flag) : null;
     const timestamp = data.timestamp
       ? new Date(parseFloat(String(data.timestamp)) * 1000)
       : new Date();
@@ -259,7 +315,7 @@ async function fetchVesselAISData(
 
     // Log extracted and processed values
     logger.info(
-      `Processed AIS data for MMSI ${mmsi}: name=${name}, speed=${speed} knots, is_moving=${is_moving}, lat=${latitude}, lon=${longitude}`
+      `Processed AIS data for MMSI ${mmsi}: name=${name}, speed=${speed} knots, is_moving=${is_moving}, lat=${latitude}, lon=${longitude}, destination=${destination}, eta=${eta}`
     );
 
     // Log null/missing field warnings for diagnostics
@@ -275,15 +331,29 @@ async function fetchVesselAISData(
     if (status === null) {
       logger.warn(`Missing status data for MMSI ${mmsi}: status=null`);
     }
+    if (destination === null) {
+      logger.debug(`Missing destination data for MMSI ${mmsi}: destination=null`);
+    }
+    if (eta === null) {
+      logger.debug(`Missing ETA data for MMSI ${mmsi}: eta=null`);
+    }
 
     return {
       name,
+      mmsi: vesselMmsi,
+      imo,
       speed_knots: speed,
       latitude,
       longitude,
       course,
+      heading,
       timestamp,
       status,
+      destination,
+      eta,
+      callsign,
+      ship_type,
+      flag,
       is_moving,
       error: null,
     };
@@ -291,12 +361,20 @@ async function fetchVesselAISData(
     logger.error(`Error fetching vessel AIS data for MMSI ${mmsi}: ${error}`);
     return {
       name: null,
+      mmsi: null,
+      imo: null,
       speed_knots: null,
       latitude: null,
       longitude: null,
       course: null,
+      heading: null,
       timestamp: null,
       status: null,
+      destination: null,
+      eta: null,
+      callsign: null,
+      ship_type: null,
+      flag: null,
       is_moving: false,
       error: 'AIS service temporarily unavailable',
     };
@@ -564,6 +642,9 @@ export function register(app: App, fastify: FastifyInstance) {
             status: { type: ['string', 'null'] },
             destination: { type: ['string', 'null'] },
             eta: { type: ['string', 'null'] },
+            callsign: { type: ['string', 'null'] },
+            vessel_type: { type: ['string', 'null'] },
+            flag: { type: ['string', 'null'] },
           },
         },
         401: { type: 'object', properties: { error: { type: 'string' } } },
@@ -611,21 +692,24 @@ export function register(app: App, fastify: FastifyInstance) {
     }
 
     const response = {
-      mmsi,
-      imo: null,
+      mmsi: ais_data.mmsi || mmsi,
+      imo: ais_data.imo,
       name: ais_data.name,
       latitude: ais_data.latitude,
       longitude: ais_data.longitude,
       speed: ais_data.speed_knots,
       course: ais_data.course,
-      heading: ais_data.course,
+      heading: ais_data.heading,
       timestamp: ais_data.timestamp?.toISOString() || null,
       status: ais_data.status,
-      destination: null,
-      eta: null,
+      destination: ais_data.destination,
+      eta: ais_data.eta,
+      callsign: extended ? ais_data.callsign : undefined,
+      vessel_type: extended ? ais_data.ship_type : undefined,
+      flag: extended ? ais_data.flag : undefined,
     };
 
-    app.logger.info(`Returned manual AIS check for MMSI ${mmsi} with extended=${extended}`);
+    app.logger.info(`Returned manual AIS check for MMSI ${mmsi} with extended=${extended} - fields: name=${response.name}, speed=${response.speed}, lat=${response.latitude}, lon=${response.longitude}, destination=${response.destination}, eta=${response.eta}`);
     return reply.code(200).send(response);
   });
 
