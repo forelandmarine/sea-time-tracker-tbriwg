@@ -14,6 +14,7 @@ import {
   Platform,
   Image,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import * as seaTimeApi from '@/utils/seaTimeApi';
@@ -38,6 +39,7 @@ interface SeaTimeEntry {
 }
 
 export default function SeaTimeScreen() {
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   
@@ -238,6 +240,11 @@ export default function SeaTimeScreen() {
     );
   };
 
+  const handleVesselPress = (vesselId: string) => {
+    console.log('[SeaTime] Navigating to vessel detail:', vesselId);
+    router.push(`/vessel/${vesselId}`);
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-GB', {
@@ -365,7 +372,11 @@ export default function SeaTimeScreen() {
               </Text>
             </View>
           ) : (
-            <View style={[styles.card, styles.activeCard]}>
+            <TouchableOpacity
+              style={[styles.card, styles.activeCard]}
+              onPress={() => handleVesselPress(activeVessel.id)}
+              activeOpacity={0.7}
+            >
               <View style={styles.activeBadgeContainer}>
                 <View style={styles.activeBadge}>
                   <IconSymbol
@@ -382,10 +393,15 @@ export default function SeaTimeScreen() {
                   <Text style={styles.cardTitle}>{activeVessel.vessel_name}</Text>
                   <Text style={styles.cardSubtext}>MMSI: {activeVessel.mmsi}</Text>
                   <Text style={styles.activeDescription}>
-                    This vessel is being tracked automatically
+                    Tap to view sea time history
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => handleDeleteVessel(activeVessel.id, activeVessel.vessel_name)}>
+                <TouchableOpacity 
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleDeleteVessel(activeVessel.id, activeVessel.vessel_name);
+                  }}
+                >
                   <IconSymbol
                     ios_icon_name="trash"
                     android_material_icon_name="delete"
@@ -396,7 +412,10 @@ export default function SeaTimeScreen() {
               </View>
               <TouchableOpacity
                 style={[styles.button, styles.checkButton]}
-                onPress={() => handleCheckVessel(activeVessel.id)}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  handleCheckVessel(activeVessel.id);
+                }}
               >
                 <IconSymbol
                   ios_icon_name="location"
@@ -406,7 +425,7 @@ export default function SeaTimeScreen() {
                 />
                 <Text style={styles.buttonText}>Check AIS Status</Text>
               </TouchableOpacity>
-            </View>
+            </TouchableOpacity>
           )}
         </View>
 
@@ -415,16 +434,26 @@ export default function SeaTimeScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Historic Vessels</Text>
             <Text style={styles.sectionDescription}>
-              These vessels maintain their sea time history but are not actively tracked
+              Tap any vessel to view its sea time history
             </Text>
             {historicVessels.map((vessel, index) => (
-              <View key={vessel.id || index} style={styles.card}>
+              <TouchableOpacity
+                key={vessel.id || index}
+                style={styles.card}
+                onPress={() => handleVesselPress(vessel.id)}
+                activeOpacity={0.7}
+              >
                 <View style={styles.cardHeader}>
                   <View style={styles.vesselInfo}>
                     <Text style={styles.cardTitle}>{vessel.vessel_name}</Text>
                     <Text style={styles.cardSubtext}>MMSI: {vessel.mmsi}</Text>
                   </View>
-                  <TouchableOpacity onPress={() => handleDeleteVessel(vessel.id, vessel.vessel_name)}>
+                  <TouchableOpacity 
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleDeleteVessel(vessel.id, vessel.vessel_name);
+                    }}
+                  >
                     <IconSymbol
                       ios_icon_name="trash"
                       android_material_icon_name="delete"
@@ -436,7 +465,10 @@ export default function SeaTimeScreen() {
                 <View style={styles.cardActions}>
                   <TouchableOpacity
                     style={[styles.button, styles.activateButton]}
-                    onPress={() => handleActivateVessel(vessel.id, vessel.vessel_name)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleActivateVessel(vessel.id, vessel.vessel_name);
+                    }}
                   >
                     <IconSymbol
                       ios_icon_name="checkmark.circle"
@@ -448,7 +480,10 @@ export default function SeaTimeScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.button, styles.checkButton]}
-                    onPress={() => handleCheckVessel(vessel.id)}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleCheckVessel(vessel.id);
+                    }}
                   >
                     <IconSymbol
                       ios_icon_name="location"
@@ -459,7 +494,7 @@ export default function SeaTimeScreen() {
                     <Text style={styles.buttonText}>Check Status</Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -473,7 +508,12 @@ export default function SeaTimeScreen() {
             </View>
           ) : (
             seaTimeEntries.slice(0, 5).map((entry, index) => (
-              <View key={entry.id || index} style={styles.card}>
+              <TouchableOpacity
+                key={entry.id || index}
+                style={styles.card}
+                onPress={() => handleVesselPress(entry.vessel.id)}
+                activeOpacity={0.7}
+              >
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardTitle}>{entry.vessel.vessel_name}</Text>
                   <View
@@ -498,7 +538,7 @@ export default function SeaTimeScreen() {
                 {entry.notes && (
                   <Text style={styles.cardNotes}>Notes: {entry.notes}</Text>
                 )}
-              </View>
+              </TouchableOpacity>
             ))
           )}
         </View>

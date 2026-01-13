@@ -181,6 +181,22 @@ export async function deleteVessel(vesselId: string): Promise<{ success: boolean
   return data;
 }
 
+export async function getVesselSeaTime(vesselId: string): Promise<SeaTimeEntry[]> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/vessels/${vesselId}/sea-time`;
+  console.log('[API] Fetching sea time for vessel:', vesselId);
+  const headers = getApiHeaders();
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[API] Failed to fetch vessel sea time:', response.status, errorText);
+    throw new Error('Failed to fetch vessel sea time');
+  }
+  const data = await response.json();
+  console.log('[API] Vessel sea time entries fetched:', data.length);
+  return data;
+}
+
 // AIS Tracking
 export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> {
   checkBackendConfigured();
