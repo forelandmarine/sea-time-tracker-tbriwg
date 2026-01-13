@@ -294,7 +294,7 @@ export default function SeaTimeScreen() {
         {/* Pending Confirmations */}
         {pendingEntries.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>⚠️ Pending Confirmations</Text>
+            <Text style={styles.sectionTitle}>Pending Confirmations</Text>
             {pendingEntries.map((entry, index) => (
               <View key={entry.id || index} style={[styles.card, styles.pendingCard]}>
                 <View style={styles.cardHeader}>
@@ -413,7 +413,7 @@ export default function SeaTimeScreen() {
         {/* Historic Vessels */}
         {historicVessels.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📚 Historic Vessels</Text>
+            <Text style={styles.sectionTitle}>Historic Vessels</Text>
             <Text style={styles.sectionDescription}>
               These vessels maintain their sea time history but are not actively tracked
             </Text>
