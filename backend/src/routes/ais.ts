@@ -45,7 +45,7 @@ async function logAPICall(
 }
 
 interface MyShipTrackingVesselResponse {
-  // Top-level fields
+  // Top-level fields (flat structure)
   mmsi?: number | string;
   imo?: number | string;
   vessel_name?: string;
@@ -54,8 +54,9 @@ interface MyShipTrackingVesselResponse {
   ship_type?: string;
   vessel_type?: string;
   status?: string;
+  nav_status?: string;
   flag?: string;
-  built?: number;
+  built?: number | string;
   length?: number;
   width?: number;
   latitude?: number;
@@ -69,6 +70,7 @@ interface MyShipTrackingVesselResponse {
   eta?: string;
   timestamp?: number;
   last_position_update?: number;
+  received?: string; // ISO 8601 timestamp string
 
   // Nested structure fields (if API returns nested object)
   vessel?: {
@@ -80,7 +82,7 @@ interface MyShipTrackingVesselResponse {
     ship_type?: string;
     vessel_type?: string;
     flag?: string;
-    built?: number;
+    built?: number | string;
     length?: number;
     width?: number;
   };
@@ -94,12 +96,14 @@ interface MyShipTrackingVesselResponse {
     destination?: string;
     eta?: string;
     status?: string;
+    nav_status?: string;
   };
   navigation?: {
     speed?: number;
     course?: number;
     heading?: number;
     status?: string;
+    nav_status?: string;
   };
   [key: string]: any;
 }
@@ -311,23 +315,26 @@ async function fetchVesselAISData(
       };
     }
 
-    const data: MyShipTrackingVesselResponse = await response.json();
+    const rawResponse = await response.json() as any;
     logger.info(`Received AIS response for MMSI ${mmsi}`);
 
     // Log complete raw response for diagnostics
-    const fullResponseJSON = JSON.stringify(data, null, 2);
+    const fullResponseJSON = JSON.stringify(rawResponse, null, 2);
     logger.info(`Raw API Response (Full Object):\n${fullResponseJSON}`);
 
+    // Extract the actual vessel data - it may be wrapped in a 'data' property
+    const data: MyShipTrackingVesselResponse = (rawResponse.data && typeof rawResponse.data === 'object') ? rawResponse.data : rawResponse;
+
     // Log individual response fields for clarity
-    logger.info(`AIS Response Fields - MMSI: ${data.mmsi}, IMO: ${data.imo}, Name: ${data.name}`);
-    logger.info(`AIS Response Fields - Position: [${data.latitude}, ${data.longitude}], Speed: ${data.speed} knots, Course: ${data.course}°`);
-    logger.info(`AIS Response Fields - Status: ${data.status}, Heading: ${data.heading}°, Destination: ${data.destination}`);
-    logger.info(`AIS Response Fields - ETA: ${data.eta}, Ship Type: ${data.ship_type}, Flag: ${data.flag}`);
-    logger.info(`AIS Response Fields - Callsign: ${data.callsign}, Built: ${data.built}, Timestamp: ${data.timestamp}`);
+    logger.info(`AIS Response Fields - MMSI: ${(data as any).mmsi}, IMO: ${(data as any).imo}, Name: ${(data as any).vessel_name || (data as any).name}`);
+    logger.info(`AIS Response Fields - Position: [${(data as any).lat || (data as any).latitude}, ${(data as any).lng || (data as any).longitude}], Speed: ${(data as any).speed} knots, Course: ${(data as any).course}°`);
+    logger.info(`AIS Response Fields - Status: ${(data as any).nav_status || (data as any).status}, Heading: ${(data as any).heading}°, Destination: ${(data as any).destination}`);
+    logger.info(`AIS Response Fields - ETA: ${(data as any).eta}, Ship Type: ${(data as any).vessel_type || (data as any).ship_type}, Flag: ${(data as any).flag}`);
+    logger.info(`AIS Response Fields - Callsign: ${(data as any).callsign}, Built: ${(data as any).built}, Received: ${(data as any).received}`);
 
     if (vesselId && app) {
       // Store full response without truncation
-      const responseBody = JSON.stringify(data);
+      const responseBody = JSON.stringify(rawResponse);
       await logAPICall(app, vesselId, mmsi, url, requestTime, '200', responseBody, authStatus, null);
     }
 
@@ -338,27 +345,28 @@ async function fetchVesselAISData(
         return (data as any)[field];
       }
       // Then try nested vessel object
-      if (data.vessel && field in data.vessel) {
-        return (data.vessel as any)[field];
+      if ((data as any).vessel && field in (data as any).vessel) {
+        return ((data as any).vessel as any)[field];
       }
       // Then try nested position object
-      if (data.position && (field === 'latitude' || field === 'longitude')) {
-        if (field === 'latitude') return (data.position as any).latitude || (data.position as any).lat;
-        if (field === 'longitude') return (data.position as any).longitude || (data.position as any).lng;
+      if ((data as any).position && (field === 'latitude' || field === 'longitude' || field === 'lat' || field === 'lng')) {
+        if (field === 'latitude' || field === 'lat') return ((data as any).position as any).latitude || ((data as any).position as any).lat;
+        if (field === 'longitude' || field === 'lng') return ((data as any).position as any).longitude || ((data as any).position as any).lng;
       }
       // Then try nested navigation object
-      if (data.navigation && (field === 'speed' || field === 'course' || field === 'heading' || field === 'status')) {
-        return (data.navigation as any)[field];
+      if ((data as any).navigation && (field === 'speed' || field === 'course' || field === 'heading' || field === 'nav_status' || field === 'status')) {
+        return ((data as any).navigation as any)[field];
       }
       // Then try nested voyage object
-      if (data.voyage && (field === 'destination' || field === 'eta' || field === 'status')) {
-        return (data.voyage as any)[field];
+      if ((data as any).voyage && (field === 'destination' || field === 'eta' || field === 'status' || field === 'nav_status')) {
+        return ((data as any).voyage as any)[field];
       }
-      // Check for alternative field names
-      if (field === 'name' && data.vessel_name) return data.vessel_name;
-      if (field === 'latitude' && (data.lat !== undefined)) return data.lat;
-      if (field === 'longitude' && (data.lng !== undefined)) return data.lng;
-      if (field === 'ship_type' && data.vessel_type) return data.vessel_type;
+      // Check for alternative field names at top level
+      if (field === 'name' && ((data as any).vessel_name)) return (data as any).vessel_name;
+      if (field === 'latitude' && ((data as any).lat !== undefined)) return (data as any).lat;
+      if (field === 'longitude' && ((data as any).lng !== undefined)) return (data as any).lng;
+      if (field === 'ship_type' && ((data as any).vessel_type)) return (data as any).vessel_type;
+      if (field === 'status' && ((data as any).nav_status)) return (data as any).nav_status;
       return undefined;
     };
 
@@ -378,27 +386,46 @@ async function fetchVesselAISData(
     const ship_type = getValue('ship_type') ? String(getValue('ship_type')) : null;
     const flag = getValue('flag') ? String(getValue('flag')) : null;
 
-    // Handle timestamp properly - if timestamp is provided and valid, use it; otherwise use current time
+    // Handle timestamp - try ISO 'received' field first, then numeric timestamps
     let timestamp: Date;
-    const timestampValue = getValue('timestamp') || getValue('last_position_update');
-    if (timestampValue) {
-      const parsedTimestamp = parseFloat(String(timestampValue));
-      // Check if timestamp is valid (not 0 and not negative)
-      if (parsedTimestamp > 0) {
-        // If timestamp is in seconds (reasonable UNIX timestamp range), convert to milliseconds
-        if (parsedTimestamp < 100000000000) {
-          timestamp = new Date(parsedTimestamp * 1000);
+    const receivedISO = getValue('received');
+
+    if (receivedISO && typeof receivedISO === 'string') {
+      // Parse ISO 8601 timestamp string (e.g., "2024-01-15T14:30:45Z")
+      try {
+        timestamp = new Date(receivedISO);
+        if (isNaN(timestamp.getTime())) {
+          logger.warn(`Invalid ISO timestamp for MMSI ${mmsi}: ${receivedISO}`);
+          timestamp = new Date();
         } else {
-          // Timestamp might already be in milliseconds
-          timestamp = new Date(parsedTimestamp);
+          logger.debug(`Parsed ISO timestamp for MMSI ${mmsi}: ${timestamp.toISOString()}`);
         }
-      } else {
-        logger.warn(`Invalid timestamp value for MMSI ${mmsi}: ${timestampValue}`);
+      } catch (e) {
+        logger.warn(`Failed to parse ISO timestamp for MMSI ${mmsi}: ${receivedISO}`);
         timestamp = new Date();
       }
     } else {
-      logger.debug(`No timestamp in AIS response for MMSI ${mmsi}, using current time`);
-      timestamp = new Date();
+      // Fall back to numeric timestamps
+      const timestampValue = getValue('timestamp') || getValue('last_position_update');
+      if (timestampValue) {
+        const parsedTimestamp = parseFloat(String(timestampValue));
+        // Check if timestamp is valid (not 0 and not negative)
+        if (parsedTimestamp > 0) {
+          // If timestamp is in seconds (reasonable UNIX timestamp range), convert to milliseconds
+          if (parsedTimestamp < 100000000000) {
+            timestamp = new Date(parsedTimestamp * 1000);
+          } else {
+            // Timestamp might already be in milliseconds
+            timestamp = new Date(parsedTimestamp);
+          }
+        } else {
+          logger.warn(`Invalid numeric timestamp value for MMSI ${mmsi}: ${timestampValue}`);
+          timestamp = new Date();
+        }
+      } else {
+        logger.debug(`No timestamp in AIS response for MMSI ${mmsi}, using current time`);
+        timestamp = new Date();
+      }
     }
 
     const is_moving = speed !== null && speed > MOVING_SPEED_THRESHOLD;
@@ -410,7 +437,7 @@ async function fetchVesselAISData(
 
     // Log summary of extracted vessel information
     logger.info(
-      `Vessel Information: callsign=${callsign}, type=${ship_type}, flag=${flag}, built=${data.built || 'unknown'}, imo=${imo}`
+      `Vessel Information: callsign=${callsign}, type=${ship_type}, flag=${flag}, built=${getValue('built') || 'unknown'}, imo=${imo}`
     );
 
     // Log null/missing field warnings for diagnostics
@@ -438,7 +465,7 @@ async function fetchVesselAISData(
     if (eta === null) {
       logger.debug(`Missing ETA data for MMSI ${mmsi}: eta=null`);
     }
-    if (!data.timestamp) {
+    if (!receivedISO && !getValue('timestamp') && !getValue('last_position_update')) {
       logger.debug(`No AIS timestamp in response for MMSI ${mmsi}, using current time`);
     }
 
