@@ -1,7 +1,8 @@
+
 {
   "expo": {
     "name": "SeaTime Tracker",
-    "slug": "SeaTime Tracker",
+    "slug": "seatime-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png",
@@ -51,6 +52,5 @@
         "projectId": "YOUR_PROJECT_ID_HERE"
       }
     }
-  },
-  "scheme": "SeaTime Tracker"
+  }
 }
