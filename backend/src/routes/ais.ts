@@ -307,15 +307,39 @@ async function fetchVesselAISData(
     const callsign = data.callsign ? String(data.callsign) : null;
     const ship_type = data.ship_type ? String(data.ship_type) : null;
     const flag = data.flag ? String(data.flag) : null;
-    const timestamp = data.timestamp
-      ? new Date(parseFloat(String(data.timestamp)) * 1000)
-      : new Date();
+
+    // Handle timestamp properly - if timestamp is provided and valid, use it; otherwise use current time
+    let timestamp: Date;
+    if (data.timestamp) {
+      const timestampValue = parseFloat(String(data.timestamp));
+      // Check if timestamp is valid (not 0 and not negative)
+      if (timestampValue > 0) {
+        // If timestamp is in seconds (reasonable UNIX timestamp range), convert to milliseconds
+        if (timestampValue < 100000000000) {
+          timestamp = new Date(timestampValue * 1000);
+        } else {
+          // Timestamp might already be in milliseconds
+          timestamp = new Date(timestampValue);
+        }
+      } else {
+        logger.warn(`Invalid timestamp value for MMSI ${mmsi}: ${data.timestamp}`);
+        timestamp = new Date();
+      }
+    } else {
+      logger.debug(`No timestamp in AIS response for MMSI ${mmsi}, using current time`);
+      timestamp = new Date();
+    }
 
     const is_moving = speed !== null && speed > MOVING_SPEED_THRESHOLD;
 
-    // Log extracted and processed values
+    // Log extracted and processed values with timestamp
     logger.info(
-      `Processed AIS data for MMSI ${mmsi}: name=${name}, speed=${speed} knots, is_moving=${is_moving}, lat=${latitude}, lon=${longitude}, destination=${destination}, eta=${eta}`
+      `Processed AIS data for MMSI ${mmsi}: name=${name}, speed=${speed} knots, is_moving=${is_moving}, lat=${latitude}, lon=${longitude}, course=${course}°, heading=${heading}°, status=${status}, destination=${destination}, eta=${eta}, timestamp=${timestamp.toISOString()}`
+    );
+
+    // Log summary of extracted vessel information
+    logger.info(
+      `Vessel Information: callsign=${callsign}, type=${ship_type}, flag=${flag}, built=${data.built || 'unknown'}, imo=${imo}`
     );
 
     // Log null/missing field warnings for diagnostics
@@ -331,11 +355,20 @@ async function fetchVesselAISData(
     if (status === null) {
       logger.warn(`Missing status data for MMSI ${mmsi}: status=null`);
     }
+    if (course === null) {
+      logger.debug(`Missing course data for MMSI ${mmsi}: course=null`);
+    }
+    if (heading === null) {
+      logger.debug(`Missing heading data for MMSI ${mmsi}: heading=null`);
+    }
     if (destination === null) {
       logger.debug(`Missing destination data for MMSI ${mmsi}: destination=null`);
     }
     if (eta === null) {
       logger.debug(`Missing ETA data for MMSI ${mmsi}: eta=null`);
+    }
+    if (!data.timestamp) {
+      logger.debug(`No AIS timestamp in response for MMSI ${mmsi}, using current time`);
     }
 
     return {
