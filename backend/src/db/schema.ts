@@ -57,3 +57,48 @@ export const ais_checksRelations = relations(ais_checks, ({ one }) => ({
     references: [vessels.id],
   }),
 }));
+
+export const ais_debug_logs = pgTable('ais_debug_logs', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  vessel_id: uuid('vessel_id').notNull().references(() => vessels.id, { onDelete: 'cascade' }),
+  mmsi: text('mmsi').notNull(),
+  api_url: text('api_url').notNull(),
+  request_time: timestamp('request_time').notNull(),
+  response_status: text('response_status').notNull(),
+  response_body: text('response_body'),
+  authentication_status: text('authentication_status').notNull(),
+  error_message: text('error_message'),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('ais_debug_logs_vessel_id_request_time_idx').on(table.vessel_id, table.request_time),
+  index('ais_debug_logs_mmsi_idx').on(table.mmsi),
+]);
+
+export const scheduled_tasks = pgTable('scheduled_tasks', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  task_type: text('task_type').notNull(), // e.g., 'ais_check'
+  vessel_id: uuid('vessel_id').notNull().references(() => vessels.id, { onDelete: 'cascade' }),
+  interval_hours: text('interval_hours').notNull(),
+  last_run: timestamp('last_run'),
+  next_run: timestamp('next_run').notNull(),
+  is_active: boolean('is_active').notNull().default(true),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+}, (table) => [
+  index('scheduled_tasks_vessel_id_task_type_idx').on(table.vessel_id, table.task_type),
+  index('scheduled_tasks_next_run_idx').on(table.next_run),
+  index('scheduled_tasks_is_active_idx').on(table.is_active),
+]);
+
+export const ais_debug_logsRelations = relations(ais_debug_logs, ({ one }) => ({
+  vessel: one(vessels, {
+    fields: [ais_debug_logs.vessel_id],
+    references: [vessels.id],
+  }),
+}));
+
+export const scheduled_tasksRelations = relations(scheduled_tasks, ({ one }) => ({
+  vessel: one(vessels, {
+    fields: [scheduled_tasks.vessel_id],
+    references: [vessels.id],
+  }),
+}));

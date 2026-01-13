@@ -1,11 +1,42 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { eq, desc, and, gte, isNotNull } from "drizzle-orm";
+import { eq, desc, and, gte, isNotNull, lt } from "drizzle-orm";
 import * as schema from "../db/schema.js";
 import type { App } from "../index.js";
 
 const MOVING_SPEED_THRESHOLD = 2; // knots
 const APP_WIDE_API_URL = 'https://api.myshiptracking.com/v1';
 const MYSHIPTRACKING_API_KEY = process.env.MYSHIPTRACKING_API_KEY || '';
+
+// Helper function to log API calls to debug log table
+async function logAPICall(
+  app: App,
+  vesselId: string,
+  mmsi: string,
+  url: string,
+  requestTime: Date,
+  responseStatus: string,
+  responseBody: string | null,
+  authStatus: string,
+  errorMessage: string | null
+) {
+  try {
+    await app.db
+      .insert(schema.ais_debug_logs)
+      .values({
+        vessel_id: vesselId,
+        mmsi,
+        api_url: url,
+        request_time: requestTime,
+        response_status: responseStatus,
+        response_body: responseBody,
+        authentication_status: authStatus,
+        error_message: errorMessage,
+      })
+      .execute();
+  } catch (logError) {
+    app.logger.error(`Failed to log API call for MMSI ${mmsi}: ${logError}`);
+  }
+}
 
 interface MyShipTrackingFeature {
   geometry?: {
@@ -42,13 +73,19 @@ interface AISVesselData {
 async function fetchVesselAISData(
   mmsi: string,
   apiKey: string,
-  logger: any
+  logger: any,
+  vesselId?: string,
+  app?: App
 ): Promise<AISVesselData> {
   try {
     const url = `${APP_WIDE_API_URL}/vessels/${mmsi}/position`;
+    const requestTime = new Date();
     logger.info(`Calling MyShipTracking API for MMSI ${mmsi} at ${url}`);
 
     let response;
+    let authStatus = 'success';
+    let errorMessage: string | null = null;
+
     try {
       response = await fetch(url, {
         headers: {
@@ -57,7 +94,12 @@ async function fetchVesselAISData(
         },
       });
     } catch (fetchError) {
+      authStatus = 'connection_error';
+      errorMessage = String(fetchError);
       logger.error(`Unable to connect to MyShipTracking API for MMSI ${mmsi}: ${fetchError}`);
+      if (vesselId && app) {
+        await logAPICall(app, vesselId, mmsi, url, requestTime, 'connection_error', null, authStatus, errorMessage);
+      }
       return {
         name: null,
         speed_knots: null,
@@ -72,7 +114,13 @@ async function fetchVesselAISData(
     }
 
     if (response.status === 401) {
+      authStatus = 'authentication_failed';
+      errorMessage = 'Invalid API key';
       logger.error(`MyShipTracking API authentication failed (401) for MMSI ${mmsi} - invalid API key`);
+      if (vesselId && app) {
+        const responseBody = await response.text();
+        await logAPICall(app, vesselId, mmsi, url, requestTime, '401', responseBody, authStatus, errorMessage);
+      }
       return {
         name: null,
         speed_knots: null,
@@ -87,7 +135,13 @@ async function fetchVesselAISData(
     }
 
     if (response.status === 404) {
+      authStatus = 'success';
+      errorMessage = 'Vessel not found in AIS system';
       logger.warn(`MyShipTracking API returned 404 - vessel with MMSI ${mmsi} not found in AIS system`);
+      if (vesselId && app) {
+        const responseBody = await response.text();
+        await logAPICall(app, vesselId, mmsi, url, requestTime, '404', responseBody, authStatus, errorMessage);
+      }
       return {
         name: null,
         speed_knots: null,
@@ -102,7 +156,13 @@ async function fetchVesselAISData(
     }
 
     if (!response.ok) {
+      authStatus = 'success';
+      errorMessage = `HTTP ${response.status} ${response.statusText}`;
       logger.error(`MyShipTracking API error for MMSI ${mmsi}: ${response.status} ${response.statusText}`);
+      if (vesselId && app) {
+        const responseBody = await response.text();
+        await logAPICall(app, vesselId, mmsi, url, requestTime, String(response.status), responseBody, authStatus, errorMessage);
+      }
       return {
         name: null,
         speed_knots: null,
@@ -118,6 +178,11 @@ async function fetchVesselAISData(
 
     const data: MyShipTrackingResponse = await response.json();
     logger.info(`Received AIS response for MMSI ${mmsi}: ${data.features?.length || 0} features`);
+
+    if (vesselId && app) {
+      const responseBody = JSON.stringify(data).substring(0, 1000);
+      await logAPICall(app, vesselId, mmsi, url, requestTime, '200', responseBody, authStatus, null);
+    }
 
     if (!data.features || data.features.length === 0) {
       logger.warn(`No AIS features found for MMSI ${mmsi}`);
@@ -166,7 +231,7 @@ async function fetchVesselAISData(
       error: null,
     };
   } catch (error) {
-    logger.error(`Error fetching vessel AIS data for MMSI ${mmsi}:`, error);
+    logger.error(`Error fetching vessel AIS data for MMSI ${mmsi}: ${error}`);
     return {
       name: null,
       speed_knots: null,
@@ -239,7 +304,7 @@ export function register(app: App, fastify: FastifyInstance) {
     app.logger.info(`Processing AIS check for active vessel: ${vessel[0].vessel_name} (MMSI: ${mmsi})`);
 
     // Fetch real-time AIS data from MyShipTracking API
-    const ais_data = await fetchVesselAISData(mmsi, MYSHIPTRACKING_API_KEY, app.logger);
+    const ais_data = await fetchVesselAISData(mmsi, MYSHIPTRACKING_API_KEY, app.logger, vesselId, app);
 
     // Check for API errors and return appropriate status codes
     if (ais_data.error) {
@@ -410,5 +475,245 @@ export function register(app: App, fastify: FastifyInstance) {
       current_check: latest_check.length > 0 ? latest_check[0] : null,
       recent_checks,
     });
+  });
+
+  // GET /api/ais/check/:vesselId - Manual AIS check (retrieve current location data)
+  fastify.get<{ Params: { vesselId: string }; Querystring: { extended?: string } }>('/api/ais/check/:vesselId', {
+    schema: {
+      description: 'Get current vessel location data from AIS',
+      tags: ['ais'],
+      params: {
+        type: 'object',
+        required: ['vesselId'],
+        properties: { vesselId: { type: 'string' } },
+      },
+      querystring: {
+        type: 'object',
+        properties: { extended: { type: 'string' } },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            mmsi: { type: 'string' },
+            imo: { type: ['string', 'null'] },
+            name: { type: ['string', 'null'] },
+            latitude: { type: ['number', 'null'] },
+            longitude: { type: ['number', 'null'] },
+            speed: { type: ['number', 'null'] },
+            course: { type: ['number', 'null'] },
+            heading: { type: ['number', 'null'] },
+            timestamp: { type: ['string', 'null'] },
+            status: { type: ['string', 'null'] },
+            destination: { type: ['string', 'null'] },
+            eta: { type: ['string', 'null'] },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+        502: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const { vesselId } = request.params;
+    const extended = request.query.extended === 'true';
+
+    app.logger.info(`Manual AIS check requested for vessel: ${vesselId}`);
+
+    // Validate API key
+    if (!MYSHIPTRACKING_API_KEY) {
+      app.logger.error('MyShipTracking API key not configured');
+      return reply.code(500).send({ error: 'AIS service not configured - API key missing' });
+    }
+
+    // Fetch vessel from database
+    const vessel = await app.db
+      .select()
+      .from(schema.vessels)
+      .where(eq(schema.vessels.id, vesselId));
+
+    if (vessel.length === 0) {
+      app.logger.warn(`Vessel not found: ${vesselId}`);
+      return reply.code(404).send({ error: 'Vessel not found' });
+    }
+
+    const mmsi = vessel[0].mmsi;
+    const ais_data = await fetchVesselAISData(mmsi, MYSHIPTRACKING_API_KEY, app.logger, vesselId, app);
+
+    if (ais_data.error) {
+      if (ais_data.error === 'Invalid API key') {
+        app.logger.error(`Authentication failed for MMSI ${mmsi}`);
+        return reply.code(401).send({ error: 'Invalid API key' });
+      } else if (ais_data.error === 'Vessel not found in AIS system') {
+        app.logger.warn(`Vessel ${mmsi} not found in AIS system`);
+        return reply.code(404).send({ error: 'Vessel not found in AIS system' });
+      } else {
+        app.logger.error(`AIS service error: ${ais_data.error}`);
+        return reply.code(502).send({ error: 'AIS service temporarily unavailable' });
+      }
+    }
+
+    const response = {
+      mmsi,
+      imo: null,
+      name: ais_data.name,
+      latitude: ais_data.latitude,
+      longitude: ais_data.longitude,
+      speed: ais_data.speed_knots,
+      course: ais_data.course,
+      heading: ais_data.course,
+      timestamp: ais_data.timestamp?.toISOString() || null,
+      status: ais_data.status,
+      destination: null,
+      eta: null,
+    };
+
+    app.logger.info(`Returned manual AIS check for MMSI ${mmsi}`);
+    return reply.code(200).send(response);
+  });
+
+  // POST /api/ais/schedule-check - Schedule automatic AIS checks
+  fastify.post<{ Body: { vessel_id: string; interval_hours: number } }>('/api/ais/schedule-check', {
+    schema: {
+      description: 'Schedule automatic AIS checks for a vessel',
+      tags: ['ais'],
+      body: {
+        type: 'object',
+        required: ['vessel_id', 'interval_hours'],
+        properties: {
+          vessel_id: { type: 'string' },
+          interval_hours: { type: 'number' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            task_id: { type: 'string' },
+            vessel_id: { type: 'string' },
+            interval_hours: { type: 'number' },
+            next_run: { type: 'string' },
+            is_active: { type: 'boolean' },
+          },
+        },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const { vessel_id, interval_hours } = request.body;
+
+    app.logger.info(`Scheduling AIS check for vessel ${vessel_id} with interval ${interval_hours} hours`);
+
+    // Verify vessel exists
+    const vessel = await app.db
+      .select()
+      .from(schema.vessels)
+      .where(eq(schema.vessels.id, vessel_id));
+
+    if (vessel.length === 0) {
+      app.logger.warn(`Vessel not found: ${vessel_id}`);
+      return reply.code(404).send({ error: 'Vessel not found' });
+    }
+
+    // Delete any existing scheduled tasks for this vessel
+    await app.db
+      .delete(schema.scheduled_tasks)
+      .where(
+        and(
+          eq(schema.scheduled_tasks.vessel_id, vessel_id),
+          eq(schema.scheduled_tasks.task_type, 'ais_check')
+        )
+      )
+      .execute();
+
+    // Create new scheduled task
+    const now = new Date();
+    const nextRun = new Date(now.getTime() + interval_hours * 60 * 60 * 1000);
+
+    const [task] = await app.db
+      .insert(schema.scheduled_tasks)
+      .values({
+        task_type: 'ais_check',
+        vessel_id,
+        interval_hours: String(interval_hours),
+        next_run: nextRun,
+        is_active: true,
+      })
+      .returning();
+
+    app.logger.info(`Created scheduled task ${task.id} for vessel ${vessel_id}, next run: ${nextRun}`);
+
+    return reply.code(200).send({
+      task_id: task.id,
+      vessel_id: task.vessel_id,
+      interval_hours: parseInt(task.interval_hours),
+      next_run: nextRun.toISOString(),
+      is_active: task.is_active,
+    });
+  });
+
+  // GET /api/ais/debug/:vesselId - Get debug logs for vessel API calls
+  fastify.get<{ Params: { vesselId: string }; Querystring: { limit?: string } }>('/api/ais/debug/:vesselId', {
+    schema: {
+      description: 'Get debug logs for vessel AIS API calls',
+      tags: ['ais'],
+      params: {
+        type: 'object',
+        required: ['vesselId'],
+        properties: { vesselId: { type: 'string' } },
+      },
+      querystring: {
+        type: 'object',
+        properties: { limit: { type: 'string' } },
+      },
+      response: {
+        200: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              mmsi: { type: 'string' },
+              api_url: { type: 'string' },
+              request_time: { type: 'string' },
+              response_status: { type: 'string' },
+              response_body: { type: ['string', 'null'] },
+              authentication_status: { type: 'string' },
+              error_message: { type: ['string', 'null'] },
+              created_at: { type: 'string' },
+            },
+          },
+        },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const { vesselId } = request.params;
+    const limit = request.query.limit ? parseInt(request.query.limit) : 10;
+
+    app.logger.info(`Retrieving debug logs for vessel ${vesselId}, limit: ${limit}`);
+
+    // Verify vessel exists
+    const vessel = await app.db
+      .select()
+      .from(schema.vessels)
+      .where(eq(schema.vessels.id, vesselId));
+
+    if (vessel.length === 0) {
+      app.logger.warn(`Vessel not found: ${vesselId}`);
+      return reply.code(404).send({ error: 'Vessel not found' });
+    }
+
+    // Fetch debug logs
+    const logs = await app.db
+      .select()
+      .from(schema.ais_debug_logs)
+      .where(eq(schema.ais_debug_logs.vessel_id, vesselId))
+      .orderBy(desc(schema.ais_debug_logs.request_time))
+      .limit(Math.min(limit, 100));
+
+    app.logger.info(`Retrieved ${logs.length} debug logs for vessel ${vesselId}`);
+
+    return reply.code(200).send(logs);
   });
 }
