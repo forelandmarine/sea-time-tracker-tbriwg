@@ -123,6 +123,8 @@ export default function SeaTimeScreen() {
   };
 
   const handleActivateVessel = async (vesselId: string, vesselName: string) => {
+    console.log('[SeaTime] User tapped Set as Active button for vessel:', vesselId, vesselName);
+    
     Alert.alert(
       'Set Active Vessel',
       `Set "${vesselName}" as your active vessel? This will automatically track its sea time.`,
@@ -149,7 +151,24 @@ export default function SeaTimeScreen() {
     );
   };
 
-  const handleCheckVessel = async (vesselId: string) => {
+  const handleCheckVessel = async (vesselId: string, vesselName: string, isActive: boolean) => {
+    console.log('[SeaTime] User tapped Check Status button for vessel:', vesselId, vesselName, 'isActive:', isActive);
+    
+    if (!isActive) {
+      Alert.alert(
+        'Inactive Vessel',
+        `"${vesselName}" is not currently active. Only active vessels can be tracked via AIS.\n\nWould you like to set it as active first?`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Set Active',
+            onPress: () => handleActivateVessel(vesselId, vesselName),
+          },
+        ]
+      );
+      return;
+    }
+    
     try {
       console.log('[SeaTime] Checking vessel AIS:', vesselId);
       
@@ -213,6 +232,8 @@ export default function SeaTimeScreen() {
   };
 
   const handleDeleteVessel = async (vesselId: string, vesselName: string) => {
+    console.log('[SeaTime] User tapped Delete button for vessel:', vesselId, vesselName);
+    
     Alert.alert(
       'Delete Vessel',
       `Are you sure you want to delete "${vesselName}"? This will also delete all associated sea time history.`,
@@ -372,11 +393,7 @@ export default function SeaTimeScreen() {
               </Text>
             </View>
           ) : (
-            <TouchableOpacity
-              style={[styles.card, styles.activeCard]}
-              onPress={() => handleVesselPress(activeVessel.id)}
-              activeOpacity={0.7}
-            >
+            <View style={[styles.card, styles.activeCard]}>
               <View style={styles.activeBadgeContainer}>
                 <View style={styles.activeBadge}>
                   <IconSymbol
@@ -388,44 +405,51 @@ export default function SeaTimeScreen() {
                   <Text style={styles.activeBadgeText}>ACTIVE</Text>
                 </View>
               </View>
-              <View style={styles.cardHeader}>
-                <View style={styles.vesselInfo}>
-                  <Text style={styles.cardTitle}>{activeVessel.vessel_name}</Text>
-                  <Text style={styles.cardSubtext}>MMSI: {activeVessel.mmsi}</Text>
-                  <Text style={styles.activeDescription}>
-                    Tap to view sea time history
-                  </Text>
+              
+              <TouchableOpacity
+                style={styles.cardClickable}
+                onPress={() => handleVesselPress(activeVessel.id)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={styles.vesselInfo}>
+                    <Text style={styles.cardTitle}>{activeVessel.vessel_name}</Text>
+                    <Text style={styles.cardSubtext}>MMSI: {activeVessel.mmsi}</Text>
+                    <Text style={styles.activeDescription}>
+                      Tap to view sea time history
+                    </Text>
+                  </View>
                 </View>
-                <TouchableOpacity 
-                  onPress={(e) => {
-                    e.stopPropagation();
-                    handleDeleteVessel(activeVessel.id, activeVessel.vessel_name);
-                  }}
+              </TouchableOpacity>
+              
+              <View style={styles.cardActions}>
+                <TouchableOpacity
+                  style={[styles.button, styles.checkButton]}
+                  onPress={() => handleCheckVessel(activeVessel.id, activeVessel.vessel_name, activeVessel.is_active)}
+                >
+                  <IconSymbol
+                    ios_icon_name="location"
+                    android_material_icon_name="my-location"
+                    size={18}
+                    color={colors.card}
+                  />
+                  <Text style={styles.buttonText}>Check AIS Status</Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[styles.button, styles.deleteButton]}
+                  onPress={() => handleDeleteVessel(activeVessel.id, activeVessel.vessel_name)}
                 >
                   <IconSymbol
                     ios_icon_name="trash"
                     android_material_icon_name="delete"
-                    size={20}
-                    color={colors.danger}
+                    size={18}
+                    color={colors.card}
                   />
+                  <Text style={styles.buttonText}>Delete</Text>
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={[styles.button, styles.checkButton]}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  handleCheckVessel(activeVessel.id);
-                }}
-              >
-                <IconSymbol
-                  ios_icon_name="location"
-                  android_material_icon_name="my-location"
-                  size={18}
-                  color={colors.card}
-                />
-                <Text style={styles.buttonText}>Check AIS Status</Text>
-              </TouchableOpacity>
-            </TouchableOpacity>
+            </View>
           )}
         </View>
 
@@ -434,41 +458,27 @@ export default function SeaTimeScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Historic Vessels</Text>
             <Text style={styles.sectionDescription}>
-              Tap any vessel to view its sea time history
+              Tap vessel name to view sea time history
             </Text>
             {historicVessels.map((vessel, index) => (
-              <TouchableOpacity
-                key={vessel.id || index}
-                style={styles.card}
-                onPress={() => handleVesselPress(vessel.id)}
-                activeOpacity={0.7}
-              >
-                <View style={styles.cardHeader}>
-                  <View style={styles.vesselInfo}>
-                    <Text style={styles.cardTitle}>{vessel.vessel_name}</Text>
-                    <Text style={styles.cardSubtext}>MMSI: {vessel.mmsi}</Text>
+              <View key={vessel.id || index} style={styles.card}>
+                <TouchableOpacity
+                  style={styles.cardClickable}
+                  onPress={() => handleVesselPress(vessel.id)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.cardHeader}>
+                    <View style={styles.vesselInfo}>
+                      <Text style={styles.cardTitle}>{vessel.vessel_name}</Text>
+                      <Text style={styles.cardSubtext}>MMSI: {vessel.mmsi}</Text>
+                    </View>
                   </View>
-                  <TouchableOpacity 
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleDeleteVessel(vessel.id, vessel.vessel_name);
-                    }}
-                  >
-                    <IconSymbol
-                      ios_icon_name="trash"
-                      android_material_icon_name="delete"
-                      size={20}
-                      color={colors.danger}
-                    />
-                  </TouchableOpacity>
-                </View>
+                </TouchableOpacity>
+                
                 <View style={styles.cardActions}>
                   <TouchableOpacity
                     style={[styles.button, styles.activateButton]}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleActivateVessel(vessel.id, vessel.vessel_name);
-                    }}
+                    onPress={() => handleActivateVessel(vessel.id, vessel.vessel_name)}
                   >
                     <IconSymbol
                       ios_icon_name="checkmark.circle"
@@ -478,23 +488,21 @@ export default function SeaTimeScreen() {
                     />
                     <Text style={styles.buttonText}>Set as Active</Text>
                   </TouchableOpacity>
+                  
                   <TouchableOpacity
-                    style={[styles.button, styles.checkButton]}
-                    onPress={(e) => {
-                      e.stopPropagation();
-                      handleCheckVessel(vessel.id);
-                    }}
+                    style={[styles.button, styles.deleteButton]}
+                    onPress={() => handleDeleteVessel(vessel.id, vessel.vessel_name)}
                   >
                     <IconSymbol
-                      ios_icon_name="location"
-                      android_material_icon_name="my-location"
+                      ios_icon_name="trash"
+                      android_material_icon_name="delete"
                       size={18}
                       color={colors.card}
                     />
-                    <Text style={styles.buttonText}>Check Status</Text>
+                    <Text style={styles.buttonText}>Delete</Text>
                   </TouchableOpacity>
                 </View>
-              </TouchableOpacity>
+              </View>
             ))}
           </View>
         )}
@@ -794,6 +802,9 @@ const createStyles = (isDark: boolean) =>
       marginTop: 4,
       fontWeight: '500',
     },
+    cardClickable: {
+      marginBottom: 12,
+    },
     cardHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -827,7 +838,6 @@ const createStyles = (isDark: boolean) =>
     cardActions: {
       flexDirection: 'row',
       gap: 8,
-      marginTop: 12,
     },
     statusBadge: {
       paddingHorizontal: 12,
@@ -854,6 +864,10 @@ const createStyles = (isDark: boolean) =>
     },
     activateButton: {
       backgroundColor: colors.success,
+      flex: 1,
+    },
+    deleteButton: {
+      backgroundColor: colors.danger,
       flex: 1,
     },
     confirmButton: {
