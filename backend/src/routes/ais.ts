@@ -135,6 +135,12 @@ async function fetchVesselAISData(
 
     logger.info(`MyShipTracking API response status: ${response.status} ${response.statusText}`);
 
+    // Extract API credits info from headers
+    const creditsRemaining = response.headers.get('X-Credits-Remaining');
+    if (creditsRemaining) {
+      logger.info(`API credits remaining: ${creditsRemaining}`);
+    }
+
     if (response.status === 401) {
       authStatus = 'authentication_failed';
       errorMessage = 'Invalid API key';
@@ -153,6 +159,27 @@ async function fetchVesselAISData(
         status: null,
         is_moving: false,
         error: 'Invalid API key',
+      };
+    }
+
+    if (response.status === 429) {
+      authStatus = 'rate_limited';
+      errorMessage = 'Rate limit exceeded';
+      logger.warn(`MyShipTracking API rate limit exceeded (429) for MMSI ${mmsi}`);
+      if (vesselId && app) {
+        const responseBody = await response.text();
+        await logAPICall(app, vesselId, mmsi, url, requestTime, '429', responseBody, authStatus, errorMessage);
+      }
+      return {
+        name: null,
+        speed_knots: null,
+        latitude: null,
+        longitude: null,
+        course: null,
+        timestamp: null,
+        status: null,
+        is_moving: false,
+        error: 'Rate limit exceeded',
       };
     }
 

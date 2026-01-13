@@ -6,6 +6,7 @@ import * as vesselsRoutes from './routes/vessels.js';
 import * as aisRoutes from './routes/ais.js';
 import * as seaTimeRoutes from './routes/sea-time.js';
 import * as reportsRoutes from './routes/reports.js';
+import * as trackingRoutes from './routes/tracking.js';
 
 // Create application with schema for full database type support
 export const app = await createApplication(schema);
@@ -19,6 +20,7 @@ vesselsRoutes.register(app, app.fastify);
 aisRoutes.register(app, app.fastify);
 seaTimeRoutes.register(app, app.fastify);
 reportsRoutes.register(app, app.fastify);
+trackingRoutes.register(app, app.fastify);
 
 // Log API configuration status
 const aisApiKey = process.env.MYSHIPTRACKING_API_KEY;
