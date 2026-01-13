@@ -270,15 +270,7 @@ export default function SeaTimeScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerContent}>
-          <IconSymbol
-            ios_icon_name="anchor"
-            android_material_icon_name="directions-boat"
-            size={32}
-            color={colors.primary}
-          />
-          <Text style={styles.headerTitle}>SeaTime Tracker</Text>
-        </View>
+        <Text style={styles.headerTitle}>SeaTime Tracker</Text>
         <Text style={styles.headerSubtitle}>MCA Sea Service Testimonials</Text>
       </View>
 
@@ -650,11 +642,6 @@ const createStyles = (isDark: boolean) =>
       borderBottomColor: isDark ? colors.borderDark : colors.border,
       boxShadow: '0px 2px 8px rgba(0, 119, 190, 0.1)',
       elevation: 3,
-    },
-    headerContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
     },
     headerTitle: {
       fontSize: 28,
