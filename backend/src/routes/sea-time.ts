@@ -1,5 +1,5 @@
-import type { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
-import { eq, and, isNull } from "drizzle-orm";
+import type { FastifyInstance } from "fastify";
+import { eq, and, isNull, desc } from "drizzle-orm";
 import * as schema from "../db/schema.js";
 import type { App } from "../index.js";
 
@@ -27,6 +27,71 @@ export function register(app: App, fastify: FastifyInstance) {
         vessel: true,
       },
     });
+  });
+
+  // GET /api/vessels/:vesselId/sea-time - Return sea time entries for a specific vessel
+  fastify.get<{ Params: { vesselId: string } }>('/api/vessels/:vesselId/sea-time', {
+    schema: {
+      description: 'Get all sea time entries for a specific vessel',
+      tags: ['sea-time'],
+      params: {
+        type: 'object',
+        required: ['vesselId'],
+        properties: { vesselId: { type: 'string' } },
+      },
+      response: {
+        200: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              vessel_id: { type: 'string' },
+              start_time: { type: 'string', format: 'date-time' },
+              end_time: { type: ['string', 'null'], format: 'date-time' },
+              duration_hours: { type: ['string', 'null'] },
+              status: { type: 'string' },
+              notes: { type: ['string', 'null'] },
+              created_at: { type: 'string', format: 'date-time' },
+              vessel: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  mmsi: { type: 'string' },
+                  vessel_name: { type: 'string' },
+                  is_active: { type: 'boolean' },
+                  created_at: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
+          },
+        },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const { vesselId } = request.params;
+
+    // Verify vessel exists
+    const vessel = await app.db
+      .select()
+      .from(schema.vessels)
+      .where(eq(schema.vessels.id, vesselId));
+
+    if (vessel.length === 0) {
+      return reply.code(404).send({ error: 'Vessel not found' });
+    }
+
+    // Get all sea time entries for the vessel, ordered by most recent first
+    const entries = await app.db.query.sea_time_entries.findMany({
+      where: eq(schema.sea_time_entries.vessel_id, vesselId),
+      with: {
+        vessel: true,
+      },
+      orderBy: desc(schema.sea_time_entries.start_time),
+    });
+
+    return reply.code(200).send(entries);
   });
 
   // GET /api/sea-time/pending - Return pending entries awaiting confirmation
