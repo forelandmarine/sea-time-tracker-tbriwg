@@ -45,6 +45,7 @@ async function callMyShipTrackingAPI(
 
     if (!response.ok) {
       logger.error(`MyShipTracking API error: ${response.status} - ${data?.error || 'Unknown error'}`);
+      logger.error(`Full error response: ${JSON.stringify(data, null, 2)}`);
       return {
         status: response.status,
         data: null,
@@ -54,6 +55,9 @@ async function callMyShipTrackingAPI(
     }
 
     logger.info(`MyShipTracking API success, credits remaining: ${creditsRemaining}`);
+    logger.info(`Raw API Response for endpoint ${endpoint}:\n${JSON.stringify(data, null, 2)}`);
+    logger.debug(`Response object keys: ${Object.keys(data).join(', ')}`);
+
     return {
       status: response.status,
       data,

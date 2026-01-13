@@ -227,7 +227,17 @@ async function fetchVesselAISData(
 
     const data: MyShipTrackingVesselResponse = await response.json();
     logger.info(`Received AIS response for MMSI ${mmsi}`);
-    logger.debug(`Response body: ${JSON.stringify(data).substring(0, 500)}`);
+
+    // Log complete raw response for diagnostics
+    const fullResponseJSON = JSON.stringify(data, null, 2);
+    logger.info(`Raw API Response (Full Object):\n${fullResponseJSON}`);
+
+    // Log individual response fields for clarity
+    logger.info(`AIS Response Fields - MMSI: ${data.mmsi}, IMO: ${data.imo}, Name: ${data.name}`);
+    logger.info(`AIS Response Fields - Position: [${data.latitude}, ${data.longitude}], Speed: ${data.speed} knots, Course: ${data.course}°`);
+    logger.info(`AIS Response Fields - Status: ${data.status}, Heading: ${data.heading}°, Destination: ${data.destination}`);
+    logger.info(`AIS Response Fields - ETA: ${data.eta}, Ship Type: ${data.ship_type}, Flag: ${data.flag}`);
+    logger.info(`AIS Response Fields - Callsign: ${data.callsign}, Built: ${data.built}, Timestamp: ${data.timestamp}`);
 
     if (vesselId && app) {
       const responseBody = JSON.stringify(data).substring(0, 1000);
@@ -247,9 +257,24 @@ async function fetchVesselAISData(
 
     const is_moving = speed !== null && speed > MOVING_SPEED_THRESHOLD;
 
+    // Log extracted and processed values
     logger.info(
       `Processed AIS data for MMSI ${mmsi}: name=${name}, speed=${speed} knots, is_moving=${is_moving}, lat=${latitude}, lon=${longitude}`
     );
+
+    // Log null/missing field warnings for diagnostics
+    if (latitude === null || longitude === null) {
+      logger.warn(`Missing position data for MMSI ${mmsi}: latitude=${latitude}, longitude=${longitude}`);
+    }
+    if (speed === null) {
+      logger.warn(`Missing speed data for MMSI ${mmsi}: speed=null`);
+    }
+    if (name === null) {
+      logger.warn(`Missing vessel name for MMSI ${mmsi}: name=null`);
+    }
+    if (status === null) {
+      logger.warn(`Missing status data for MMSI ${mmsi}: status=null`);
+    }
 
     return {
       name,
