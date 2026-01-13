@@ -117,7 +117,7 @@ export default function ReportsScreen() {
       >
         {/* Summary Cards */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📊 Summary</Text>
+          <Text style={styles.sectionTitle}>Summary</Text>
           
           <View style={styles.summaryGrid}>
             <View style={[styles.summaryCard, styles.primaryCard]}>
@@ -151,7 +151,7 @@ export default function ReportsScreen() {
         {/* By Vessel */}
         {summary && summary.entries_by_vessel.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>⚓ By Vessel</Text>
+            <Text style={styles.sectionTitle}>By Vessel</Text>
             {summary.entries_by_vessel.map((item, index) => (
               <View key={index} style={styles.card}>
                 <View style={styles.cardRow}>
@@ -168,7 +168,7 @@ export default function ReportsScreen() {
         {/* By Month */}
         {summary && summary.entries_by_month.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>📅 By Month</Text>
+            <Text style={styles.sectionTitle}>By Month</Text>
             {summary.entries_by_month.map((item, index) => (
               <View key={index} style={styles.card}>
                 <View style={styles.cardRow}>
@@ -184,7 +184,7 @@ export default function ReportsScreen() {
 
         {/* Export Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📄 Export</Text>
+          <Text style={styles.sectionTitle}>Export</Text>
           
           <TouchableOpacity
             style={[styles.button, styles.primaryButton]}
