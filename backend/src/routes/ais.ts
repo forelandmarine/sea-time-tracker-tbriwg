@@ -196,19 +196,13 @@ export function register(app: App, fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { vesselId } = request.params;
 
-    // Fetch app-wide API key from database
-    const settings = await app.db
-      .select()
-      .from(schema.api_settings)
-      .orderBy(desc(schema.api_settings.updated_at))
-      .limit(1);
+    // Get API key from X-API-Key header
+    const apiKey = request.headers['x-api-key'] as string;
 
-    if (settings.length === 0 || !settings[0].api_key) {
-      app.logger.error('MyShipTracking API key not configured');
-      return reply.code(500).send({ error: 'AIS API configuration missing' });
+    if (!apiKey) {
+      app.logger.error('MyShipTracking API key not provided in X-API-Key header');
+      return reply.code(400).send({ error: 'Missing X-API-Key header' });
     }
-
-    const apiKey = settings[0].api_key;
 
     // Fetch vessel from database
     const vessel = await app.db
