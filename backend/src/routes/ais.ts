@@ -45,11 +45,14 @@ async function logAPICall(
 }
 
 interface MyShipTrackingVesselResponse {
+  // Top-level fields
   mmsi?: number | string;
   imo?: number | string;
+  vessel_name?: string;
   name?: string;
   callsign?: string;
   ship_type?: string;
+  vessel_type?: string;
   status?: string;
   flag?: string;
   built?: number;
@@ -57,12 +60,47 @@ interface MyShipTrackingVesselResponse {
   width?: number;
   latitude?: number;
   longitude?: number;
+  lat?: number;
+  lng?: number;
   speed?: number;
   course?: number;
   heading?: number;
   destination?: string;
   eta?: string;
   timestamp?: number;
+  last_position_update?: number;
+
+  // Nested structure fields (if API returns nested object)
+  vessel?: {
+    mmsi?: number | string;
+    imo?: number | string;
+    vessel_name?: string;
+    name?: string;
+    callsign?: string;
+    ship_type?: string;
+    vessel_type?: string;
+    flag?: string;
+    built?: number;
+    length?: number;
+    width?: number;
+  };
+  position?: {
+    latitude?: number;
+    longitude?: number;
+    lat?: number;
+    lng?: number;
+  };
+  voyage?: {
+    destination?: string;
+    eta?: string;
+    status?: string;
+  };
+  navigation?: {
+    speed?: number;
+    course?: number;
+    heading?: number;
+    status?: string;
+  };
   [key: string]: any;
 }
 
@@ -288,41 +326,74 @@ async function fetchVesselAISData(
     logger.info(`AIS Response Fields - Callsign: ${data.callsign}, Built: ${data.built}, Timestamp: ${data.timestamp}`);
 
     if (vesselId && app) {
-      const responseBody = JSON.stringify(data).substring(0, 1000);
+      // Store full response without truncation
+      const responseBody = JSON.stringify(data);
       await logAPICall(app, vesselId, mmsi, url, requestTime, '200', responseBody, authStatus, null);
     }
 
-    // Extract vessel data from response
-    const vesselMmsi = data.mmsi ? String(data.mmsi) : null;
-    const imo = data.imo ? String(data.imo) : null;
-    const latitude = data.latitude ? parseFloat(String(data.latitude)) : null;
-    const longitude = data.longitude ? parseFloat(String(data.longitude)) : null;
-    const name = data.name ? String(data.name) : null;
-    const speed = data.speed ? parseFloat(String(data.speed)) : null;
-    const course = data.course ? parseFloat(String(data.course)) : null;
-    const heading = data.heading ? parseFloat(String(data.heading)) : null;
-    const status = data.status ? String(data.status) : null;
-    const destination = data.destination ? String(data.destination) : null;
-    const eta = data.eta ? String(data.eta) : null;
-    const callsign = data.callsign ? String(data.callsign) : null;
-    const ship_type = data.ship_type ? String(data.ship_type) : null;
-    const flag = data.flag ? String(data.flag) : null;
+    // Helper function to extract value from either top-level or nested object
+    const getValue = (field: string): any => {
+      // First try top-level
+      if (field in data) {
+        return (data as any)[field];
+      }
+      // Then try nested vessel object
+      if (data.vessel && field in data.vessel) {
+        return (data.vessel as any)[field];
+      }
+      // Then try nested position object
+      if (data.position && (field === 'latitude' || field === 'longitude')) {
+        if (field === 'latitude') return (data.position as any).latitude || (data.position as any).lat;
+        if (field === 'longitude') return (data.position as any).longitude || (data.position as any).lng;
+      }
+      // Then try nested navigation object
+      if (data.navigation && (field === 'speed' || field === 'course' || field === 'heading' || field === 'status')) {
+        return (data.navigation as any)[field];
+      }
+      // Then try nested voyage object
+      if (data.voyage && (field === 'destination' || field === 'eta' || field === 'status')) {
+        return (data.voyage as any)[field];
+      }
+      // Check for alternative field names
+      if (field === 'name' && data.vessel_name) return data.vessel_name;
+      if (field === 'latitude' && (data.lat !== undefined)) return data.lat;
+      if (field === 'longitude' && (data.lng !== undefined)) return data.lng;
+      if (field === 'ship_type' && data.vessel_type) return data.vessel_type;
+      return undefined;
+    };
+
+    // Extract vessel data from response (handling both flat and nested structures)
+    const vesselMmsi = getValue('mmsi') ? String(getValue('mmsi')) : null;
+    const imo = getValue('imo') ? String(getValue('imo')) : null;
+    const latitude = getValue('latitude') ? parseFloat(String(getValue('latitude'))) : null;
+    const longitude = getValue('longitude') ? parseFloat(String(getValue('longitude'))) : null;
+    const name = getValue('name') ? String(getValue('name')) : null;
+    const speed = getValue('speed') ? parseFloat(String(getValue('speed'))) : null;
+    const course = getValue('course') ? parseFloat(String(getValue('course'))) : null;
+    const heading = getValue('heading') ? parseFloat(String(getValue('heading'))) : null;
+    const status = getValue('status') ? String(getValue('status')) : null;
+    const destination = getValue('destination') ? String(getValue('destination')) : null;
+    const eta = getValue('eta') ? String(getValue('eta')) : null;
+    const callsign = getValue('callsign') ? String(getValue('callsign')) : null;
+    const ship_type = getValue('ship_type') ? String(getValue('ship_type')) : null;
+    const flag = getValue('flag') ? String(getValue('flag')) : null;
 
     // Handle timestamp properly - if timestamp is provided and valid, use it; otherwise use current time
     let timestamp: Date;
-    if (data.timestamp) {
-      const timestampValue = parseFloat(String(data.timestamp));
+    const timestampValue = getValue('timestamp') || getValue('last_position_update');
+    if (timestampValue) {
+      const parsedTimestamp = parseFloat(String(timestampValue));
       // Check if timestamp is valid (not 0 and not negative)
-      if (timestampValue > 0) {
+      if (parsedTimestamp > 0) {
         // If timestamp is in seconds (reasonable UNIX timestamp range), convert to milliseconds
-        if (timestampValue < 100000000000) {
-          timestamp = new Date(timestampValue * 1000);
+        if (parsedTimestamp < 100000000000) {
+          timestamp = new Date(parsedTimestamp * 1000);
         } else {
           // Timestamp might already be in milliseconds
-          timestamp = new Date(timestampValue);
+          timestamp = new Date(parsedTimestamp);
         }
       } else {
-        logger.warn(`Invalid timestamp value for MMSI ${mmsi}: ${data.timestamp}`);
+        logger.warn(`Invalid timestamp value for MMSI ${mmsi}: ${timestampValue}`);
         timestamp = new Date();
       }
     } else {

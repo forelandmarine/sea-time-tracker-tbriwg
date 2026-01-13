@@ -8,8 +8,8 @@ export const vessels = pgTable('vessels', {
   is_active: boolean('is_active').notNull().default(false),
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
-  index('mmsi_idx').on(table.mmsi),
-  index('is_active_idx').on(table.is_active),
+  index('vessels_mmsi_idx').on(table.mmsi),
+  index('vessels_is_active_idx').on(table.is_active),
 ]);
 
 export const sea_time_entries = pgTable('sea_time_entries', {
@@ -22,8 +22,8 @@ export const sea_time_entries = pgTable('sea_time_entries', {
   notes: text('notes'),
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
-  index('vessel_id_idx').on(table.vessel_id),
-  index('status_idx').on(table.status),
+  index('sea_time_entries_vessel_id_idx').on(table.vessel_id),
+  index('sea_time_entries_status_idx').on(table.status),
 ]);
 
 export const ais_checks = pgTable('ais_checks', {
@@ -36,7 +36,7 @@ export const ais_checks = pgTable('ais_checks', {
   longitude: decimal('longitude', { precision: 10, scale: 6 }),
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
-  index('vessel_id_check_time_idx').on(table.vessel_id, table.check_time),
+  index('ais_checks_vessel_time_idx').on(table.vessel_id, table.check_time),
 ]);
 
 export const vesselsRelations = relations(vessels, ({ many }) => ({
@@ -70,8 +70,8 @@ export const ais_debug_logs = pgTable('ais_debug_logs', {
   error_message: text('error_message'),
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
-  index('ais_debug_logs_vessel_id_request_time_idx').on(table.vessel_id, table.request_time),
-  index('ais_debug_logs_mmsi_idx').on(table.mmsi),
+  index('ais_debug_logs_vessel_request_time_idx').on(table.vessel_id, table.request_time),
+  index('ais_debug_logs_mmsi_request_idx').on(table.mmsi),
 ]);
 
 export const scheduled_tasks = pgTable('scheduled_tasks', {
@@ -84,9 +84,9 @@ export const scheduled_tasks = pgTable('scheduled_tasks', {
   is_active: boolean('is_active').notNull().default(true),
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
-  index('scheduled_tasks_vessel_id_task_type_idx').on(table.vessel_id, table.task_type),
-  index('scheduled_tasks_next_run_idx').on(table.next_run),
-  index('scheduled_tasks_is_active_idx').on(table.is_active),
+  index('scheduled_tasks_vessel_task_idx').on(table.vessel_id, table.task_type),
+  index('scheduled_tasks_next_run_task_idx').on(table.next_run),
+  index('scheduled_tasks_active_idx').on(table.is_active),
 ]);
 
 export const ais_debug_logsRelations = relations(ais_debug_logs, ({ one }) => ({
