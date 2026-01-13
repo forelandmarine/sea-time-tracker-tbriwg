@@ -3,6 +3,10 @@ import Constants from 'expo-constants';
 
 const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || '';
 
+// 🔧 DEVELOPER CONFIGURATION - Set your MyShipTracking API key here
+// This API key is NOT accessible to users and is only used by the backend
+const MYSHIPTRACKING_API_KEY = 'YOUR_MYSHIPTRACKING_API_KEY_HERE';
+
 // Log the backend URL for debugging
 console.log('[SeaTimeAPI] Backend URL configured:', API_BASE_URL);
 
@@ -47,12 +51,6 @@ export interface ReportSummary {
   }[];
 }
 
-export interface ApiSettings {
-  apiKeyConfigured: boolean;
-  apiUrl: string;
-  lastUpdated?: string;
-}
-
 // Helper function to check if backend is configured
 function checkBackendConfigured() {
   if (!API_BASE_URL) {
@@ -64,46 +62,10 @@ function checkBackendConfigured() {
 function getApiHeaders(): HeadersInit {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
+    'X-API-Key': MYSHIPTRACKING_API_KEY,
   };
   
   return headers;
-}
-
-// Settings Management
-export async function getApiSettings(): Promise<ApiSettings> {
-  checkBackendConfigured();
-  const url = `${API_BASE_URL}/api/settings/api`;
-  console.log('[API] Fetching API settings:', url);
-  const headers = getApiHeaders();
-  const response = await fetch(url, { headers });
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[API] Failed to fetch API settings:', response.status, errorText);
-    throw new Error('Failed to fetch API settings');
-  }
-  const data = await response.json();
-  console.log('[API] API settings fetched:', data);
-  return data;
-}
-
-export async function updateApiKey(apiKey: string): Promise<{ success: boolean; message: string; lastUpdated: string }> {
-  checkBackendConfigured();
-  const url = `${API_BASE_URL}/api/settings/api`;
-  console.log('[API] Updating API key');
-  const headers = getApiHeaders();
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ apiKey }),
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[API] Failed to update API key:', response.status, errorText);
-    throw new Error('Failed to update API key');
-  }
-  const data = await response.json();
-  console.log('[API] API key updated:', data);
-  return data;
 }
 
 // Vessel Management
@@ -213,7 +175,7 @@ export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> 
     
     // Provide more helpful error messages
     if (response.status === 500 && errorText.includes('API key not configured')) {
-      throw new Error('MyShipTracking API key not configured. Please configure it in Settings.');
+      throw new Error('MyShipTracking API key not configured. Please contact the developer.');
     }
     if (response.status === 502) {
       throw new Error('Failed to connect to MyShipTracking API. Please try again later.');
