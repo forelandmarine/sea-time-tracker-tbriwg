@@ -442,7 +442,7 @@ export default function SeaTimeScreen() {
                 </TouchableOpacity>
                 
                 <TouchableOpacity
-                  style={[styles.button, styles.deleteButton]}
+                  style={styles.deleteIconButton}
                   onPress={(e) => {
                     e?.stopPropagation?.();
                     handleDeleteVessel(activeVessel.id, activeVessel.vessel_name);
@@ -451,10 +451,9 @@ export default function SeaTimeScreen() {
                   <IconSymbol
                     ios_icon_name="trash"
                     android_material_icon_name="delete"
-                    size={18}
-                    color={colors.card}
+                    size={20}
+                    color={colors.danger}
                   />
-                  <Text style={styles.buttonText}>Delete</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -502,7 +501,7 @@ export default function SeaTimeScreen() {
                     </TouchableOpacity>
                     
                     <TouchableOpacity
-                      style={[styles.button, styles.deleteButton]}
+                      style={styles.deleteIconButton}
                       onPress={(e) => {
                         e?.stopPropagation?.();
                         handleDeleteVessel(vessel.id, vessel.vessel_name);
@@ -511,10 +510,9 @@ export default function SeaTimeScreen() {
                       <IconSymbol
                         ios_icon_name="trash"
                         android_material_icon_name="delete"
-                        size={18}
-                        color={colors.card}
+                        size={20}
+                        color={colors.danger}
                       />
-                      <Text style={styles.buttonText}>Delete</Text>
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -724,8 +722,8 @@ const createStyles = (isDark: boolean) =>
       gap: 12,
     },
     headerIcon: {
-      width: 48,
-      height: 48,
+      width: 53,
+      height: 53,
     },
     headerTitle: {
       fontSize: 28,
@@ -855,6 +853,7 @@ const createStyles = (isDark: boolean) =>
     cardActions: {
       flexDirection: 'row',
       gap: 8,
+      alignItems: 'center',
     },
     statusBadge: {
       paddingHorizontal: 12,
@@ -883,9 +882,15 @@ const createStyles = (isDark: boolean) =>
       backgroundColor: colors.success,
       flex: 1,
     },
-    deleteButton: {
-      backgroundColor: colors.danger,
-      flex: 1,
+    deleteIconButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 8,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: isDark ? 'rgba(211, 47, 47, 0.15)' : 'rgba(211, 47, 47, 0.1)',
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(211, 47, 47, 0.3)' : 'rgba(211, 47, 47, 0.2)',
     },
     confirmButton: {
       backgroundColor: colors.success,
