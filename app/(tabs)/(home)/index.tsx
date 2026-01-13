@@ -327,7 +327,7 @@ export default function SeaTimeScreen() {
         {/* Active Vessel */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>🎯 Active Vessel</Text>
+            <Text style={styles.sectionTitle}>Active Vessel</Text>
             <TouchableOpacity
               style={styles.addButton}
               onPress={() => setShowAddVessel(true)}
@@ -456,7 +456,7 @@ export default function SeaTimeScreen() {
 
         {/* Recent Sea Time */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📋 Recent Sea Time</Text>
+          <Text style={styles.sectionTitle}>Recent Sea Time</Text>
           {seaTimeEntries.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyText}>No sea time recorded yet</Text>
