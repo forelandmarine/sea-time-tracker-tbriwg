@@ -133,17 +133,22 @@ export default function SeaTimeScreen() {
       console.log('Checking AIS for vessel:', vesselId);
       const result = await seaTimeApi.checkVesselAIS(vesselId);
       
-      const speedText = result.speed_knots !== null ? result.speed_knots.toFixed(1) : 'Unknown';
+      // Handle null values gracefully
+      const speedText = result.speed_knots !== null && result.speed_knots !== undefined
+        ? result.speed_knots.toFixed(1) + ' knots'
+        : 'Unknown';
+      
       const positionText =
-        result.latitude !== null && result.longitude !== null
+        result.latitude !== null && result.latitude !== undefined &&
+        result.longitude !== null && result.longitude !== undefined
           ? `${result.latitude.toFixed(4)}, ${result.longitude.toFixed(4)}`
           : 'Unknown';
 
       const message = result.is_moving
-        ? `Vessel is moving (speed: ${speedText} knots)\nPosition: ${positionText}`
-        : `Vessel is not moving (speed: ${speedText})\nPosition: ${positionText}`;
+        ? `✅ Vessel is moving\n\nSpeed: ${speedText}\nPosition: ${positionText}`
+        : `⚓ Vessel is not moving\n\nSpeed: ${speedText}\nPosition: ${positionText}`;
 
-      Alert.alert('AIS Check', message);
+      Alert.alert(`AIS Check - ${vesselName}`, message);
       await loadData();
     } catch (error: any) {
       console.error('AIS check failed:', error);

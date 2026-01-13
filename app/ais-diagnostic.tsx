@@ -83,11 +83,24 @@ export default function AISDiagnosticScreen() {
       const debugLogs = await seaTimeApi.getAISDebugLogs(selectedVessel.id);
       console.log('Debug logs received:', debugLogs.length);
 
+      // Parse the raw response from debug logs
+      let rawResponse = null;
+      if (debugLogs.length > 0 && debugLogs[0].response_body) {
+        try {
+          rawResponse = typeof debugLogs[0].response_body === 'string' 
+            ? JSON.parse(debugLogs[0].response_body)
+            : debugLogs[0].response_body;
+        } catch (e) {
+          console.error('Failed to parse raw response:', e);
+          rawResponse = debugLogs[0].response_body;
+        }
+      }
+
       const result: DiagnosticResult = {
         vesselId: selectedVessel.id,
         vesselName: selectedVessel.vessel_name,
         mmsi: selectedVessel.mmsi,
-        rawResponse: debugLogs.length > 0 ? debugLogs[0].response_body : null,
+        rawResponse: rawResponse,
         parsedData: {
           name: locationData.name,
           latitude: locationData.latitude,
@@ -223,9 +236,25 @@ export default function AISDiagnosticScreen() {
                 </View>
               </View>
 
+              {/* Raw API Response - Show this FIRST */}
+              <View style={styles.resultSection}>
+                <Text style={styles.resultSectionTitle}>🔍 Raw API Response from MyShipTracking</Text>
+                <Text style={styles.sectionDescription}>
+                  This is the actual data returned by the MyShipTracking API:
+                </Text>
+                <ScrollView horizontal style={styles.jsonScrollView}>
+                  <Text style={styles.jsonText}>
+                    {formatJSON(diagnosticResult.rawResponse)}
+                  </Text>
+                </ScrollView>
+              </View>
+
               {/* Parsed Data */}
               <View style={styles.resultSection}>
-                <Text style={styles.resultSectionTitle}>Parsed AIS Data</Text>
+                <Text style={styles.resultSectionTitle}>📊 Parsed Data (What the App Sees)</Text>
+                <Text style={styles.sectionDescription}>
+                  This is how the backend parsed and returned the data to the app:
+                </Text>
                 <View style={styles.dataGrid}>
                   <DataField
                     label="Vessel Name"
@@ -280,14 +309,6 @@ export default function AISDiagnosticScreen() {
                 </View>
               </View>
 
-              {/* Raw API Response */}
-              <View style={styles.resultSection}>
-                <Text style={styles.resultSectionTitle}>Raw API Response</Text>
-                <Text style={styles.jsonText}>
-                  {formatJSON(diagnosticResult.rawResponse)}
-                </Text>
-              </View>
-
               {/* Debug Logs */}
               <View style={styles.resultSection}>
                 <Text style={styles.resultSectionTitle}>Recent API Calls</Text>
@@ -318,14 +339,12 @@ export default function AISDiagnosticScreen() {
 
               {/* Interpretation Guide */}
               <View style={styles.resultSection}>
-                <Text style={styles.resultSectionTitle}>Data Interpretation</Text>
+                <Text style={styles.resultSectionTitle}>💡 Data Interpretation</Text>
                 <Text style={styles.guideText}>
-                  ✅ <Text style={styles.guideBold}>Green values</Text>: Data is present and
-                  valid
+                  ✅ <Text style={styles.guideBold}>Green values</Text>: Data is present and valid
                 </Text>
                 <Text style={styles.guideText}>
-                  ⚠️ <Text style={styles.guideBold}>null values</Text>: Data is missing from
-                  the API response
+                  ⚠️ <Text style={styles.guideBold}>Red null values</Text>: Data is missing from the API response
                 </Text>
                 <Text style={styles.guideText}>
                   • If latitude/longitude are null, the vessel position is unknown
@@ -334,7 +353,10 @@ export default function AISDiagnosticScreen() {
                   • If speed is null, the vessel speed cannot be determined
                 </Text>
                 <Text style={styles.guideText}>
-                  • Check the Raw API Response to see exactly what MyShipTracking returned
+                  • Check the Raw API Response above to see exactly what MyShipTracking returned
+                </Text>
+                <Text style={styles.guideText}>
+                  • The backend should map: data.lat → latitude, data.lng → longitude, data.speed → speed
                 </Text>
               </View>
             </View>
@@ -426,6 +448,12 @@ function createStyles(isDark: boolean) {
       color: colors.text,
       marginBottom: 12,
     },
+    sectionDescription: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginBottom: 12,
+      lineHeight: 18,
+    },
     vesselCard: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -510,14 +538,17 @@ function createStyles(isDark: boolean) {
     dataGrid: {
       gap: 4,
     },
+    jsonScrollView: {
+      maxHeight: 400,
+    },
     jsonText: {
       fontFamily: 'monospace',
-      fontSize: 12,
+      fontSize: 11,
       color: colors.text,
       backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
       padding: 12,
       borderRadius: 8,
-      lineHeight: 18,
+      lineHeight: 16,
     },
     logEntry: {
       backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
