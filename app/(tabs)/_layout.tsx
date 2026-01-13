@@ -18,12 +18,6 @@ export default function TabLayout() {
       icon: 'assessment',
       label: 'Reports',
     },
-    {
-      name: 'settings',
-      route: '/(tabs)/settings',
-      icon: 'settings',
-      label: 'Settings',
-    },
   ];
 
   // For Android and Web, use Stack navigation with custom floating tab bar
@@ -37,7 +31,6 @@ export default function TabLayout() {
       >
         <Stack.Screen key="home" name="(home)" />
         <Stack.Screen key="profile" name="profile" />
-        <Stack.Screen key="settings" name="settings" />
       </Stack>
       <FloatingTabBar tabs={tabs} />
     </>
