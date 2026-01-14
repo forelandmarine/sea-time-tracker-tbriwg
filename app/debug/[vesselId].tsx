@@ -9,6 +9,7 @@ import {
   useColorScheme,
   RefreshControl,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -155,21 +156,31 @@ function createStyles(isDark: boolean) {
       color: colors.error,
       lineHeight: 18,
     },
-    codeBlock: {
-      backgroundColor: isDark ? '#0D1B2A' : '#F5F9FC',
+    expandButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: isDark ? 'rgba(0, 122, 255, 0.1)' : 'rgba(0, 122, 255, 0.05)',
       borderRadius: 8,
       padding: 12,
       marginTop: 12,
       borderWidth: 1,
       borderColor: isDark ? colors.border : colors.borderLight,
     },
-    codeHeader: {
-      fontSize: 11,
-      fontWeight: '700',
+    expandButtonText: {
+      fontSize: 13,
+      fontWeight: '600',
       color: colors.primary,
-      marginBottom: 8,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
+      flex: 1,
+    },
+    codeBlock: {
+      backgroundColor: isDark ? '#0D1B2A' : '#F5F9FC',
+      borderRadius: 8,
+      padding: 12,
+      marginTop: 8,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+      maxHeight: 300,
     },
     codeText: {
       fontSize: 11,
@@ -227,6 +238,7 @@ export default function DebugScreen() {
   const [logs, setLogs] = useState<AISDebugLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
@@ -255,6 +267,19 @@ export default function DebugScreen() {
     console.log('[DebugScreen] User initiated refresh');
     setRefreshing(true);
     loadLogs();
+  };
+
+  const toggleExpanded = (logId: string) => {
+    console.log('[DebugScreen] User toggled expand for log:', logId);
+    setExpandedLogs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(logId)) {
+        newSet.delete(logId);
+      } else {
+        newSet.add(logId);
+      }
+      return newSet;
+    });
   };
 
   const getStatusColor = (statusString: string) => {
@@ -387,69 +412,86 @@ export default function DebugScreen() {
             </Text>
           </View>
         ) : (
-          logs.map((log, index) => (
-            <View
-              key={log.id || index}
-              style={[
-                styles.logCard,
-                { borderLeftColor: getStatusColor(log.response_status) },
-              ]}
-            >
-              <View style={styles.logHeader}>
-                <Text style={styles.logTimestamp}>
-                  {formatDate(log.request_time)}
-                </Text>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(log.response_status) }]}>
-                  <Text style={styles.statusText}>{log.response_status}</Text>
+          logs.map((log, index) => {
+            const isExpanded = expandedLogs.has(log.id);
+            return (
+              <View
+                key={log.id || index}
+                style={[
+                  styles.logCard,
+                  { borderLeftColor: getStatusColor(log.response_status) },
+                ]}
+              >
+                <View style={styles.logHeader}>
+                  <Text style={styles.logTimestamp}>
+                    {formatDate(log.request_time)}
+                  </Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(log.response_status) }]}>
+                    <Text style={styles.statusText}>{log.response_status}</Text>
+                  </View>
                 </View>
-              </View>
 
-              <View style={styles.logRow}>
-                <Text style={styles.logLabel}>MMSI</Text>
-                <Text style={styles.logValue}>{log.mmsi}</Text>
-              </View>
+                <View style={styles.logRow}>
+                  <Text style={styles.logLabel}>MMSI</Text>
+                  <Text style={styles.logValue}>{log.mmsi}</Text>
+                </View>
 
-              <View style={styles.logRow}>
-                <Text style={styles.logLabel}>Endpoint</Text>
-                <Text style={[styles.logValue, { fontSize: 12 }]} numberOfLines={3}>
-                  {log.api_url}
-                </Text>
-              </View>
-
-              <View style={[
-                styles.authBadge,
-                log.authentication_status !== 'success' && styles.authBadgeError
-              ]}>
-                <Text style={[
-                  styles.authLabel,
-                  log.authentication_status !== 'success' && styles.authLabelError
+                <View style={[
+                  styles.authBadge,
+                  log.authentication_status !== 'success' && styles.authBadgeError
                 ]}>
-                  AUTH:
-                </Text>
-                <Text style={styles.authText}>
-                  {formatAuthStatus(log.authentication_status)}
-                </Text>
+                  <Text style={[
+                    styles.authLabel,
+                    log.authentication_status !== 'success' && styles.authLabelError
+                  ]}>
+                    AUTH:
+                  </Text>
+                  <Text style={styles.authText}>
+                    {formatAuthStatus(log.authentication_status)}
+                  </Text>
+                </View>
+
+                {log.error_message && (
+                  <View style={styles.errorContainer}>
+                    <Text style={styles.errorLabel}>⚠️ Error</Text>
+                    <Text style={styles.errorText}>{log.error_message}</Text>
+                  </View>
+                )}
+
+                {log.response_body && (
+                  <>
+                    <TouchableOpacity
+                      style={styles.expandButton}
+                      onPress={() => toggleExpanded(log.id)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.expandButtonText}>
+                        {isExpanded ? 'Hide Response Data' : 'Show Response Data'}
+                      </Text>
+                      <IconSymbol
+                        ios_icon_name={isExpanded ? "chevron.up" : "chevron.down"}
+                        android_material_icon_name={isExpanded ? "expand-less" : "expand-more"}
+                        size={20}
+                        color={colors.primary}
+                      />
+                    </TouchableOpacity>
+
+                    {isExpanded && (
+                      <ScrollView 
+                        style={styles.codeBlock}
+                        nestedScrollEnabled
+                        showsVerticalScrollIndicator={true}
+                      >
+                        <Text style={styles.codeText}>
+                          {parseResponseBody(log.response_body)}
+                        </Text>
+                      </ScrollView>
+                    )}
+                  </>
+                )}
               </View>
-
-              {log.error_message && (
-                <View style={styles.errorContainer}>
-                  <Text style={styles.errorLabel}>⚠️ Error</Text>
-                  <Text style={styles.errorText}>{log.error_message}</Text>
-                </View>
-              )}
-
-              {log.response_body && (
-                <View style={styles.codeBlock}>
-                  <Text style={styles.codeHeader}>Response Data</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <Text style={styles.codeText}>
-                      {parseResponseBody(log.response_body)}
-                    </Text>
-                  </ScrollView>
-                </View>
-              )}
-            </View>
-          ))
+            );
+          })
         )}
       </ScrollView>
     </View>
