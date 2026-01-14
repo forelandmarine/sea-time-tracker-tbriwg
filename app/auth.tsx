@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import {
   View,
@@ -28,6 +29,7 @@ export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleEmailAuth = async () => {
+    console.log('User attempting email authentication', { mode, email });
     if (!email || !password) {
       Alert.alert("Error", "Please enter email and password");
       return;
@@ -36,9 +38,11 @@ export default function AuthScreen() {
     setLoading(true);
     try {
       if (mode === "signin") {
+        console.log('Signing in with email');
         await signInWithEmail(email, password);
         router.replace("/");
       } else {
+        console.log('Signing up with email');
         await signUpWithEmail(email, password, name);
         Alert.alert(
           "Success",
@@ -47,6 +51,7 @@ export default function AuthScreen() {
         router.replace("/");
       }
     } catch (error: any) {
+      console.error('Email authentication error:', error);
       Alert.alert("Error", error.message || "Authentication failed");
     } finally {
       setLoading(false);
@@ -54,6 +59,7 @@ export default function AuthScreen() {
   };
 
   const handleSocialAuth = async (provider: "google" | "apple" | "github") => {
+    console.log('User attempting social authentication', { provider });
     setLoading(true);
     try {
       if (provider === "google") {
@@ -65,6 +71,7 @@ export default function AuthScreen() {
       }
       router.replace("/");
     } catch (error: any) {
+      console.error('Social authentication error:', error);
       Alert.alert("Error", error.message || "Authentication failed");
     } finally {
       setLoading(false);
@@ -78,6 +85,15 @@ export default function AuthScreen() {
     >
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.content}>
+          {/* Lighthouse Logo and Welcome Message */}
+          <View style={styles.headerContainer}>
+            <Text style={styles.lighthouseIcon}>🗼</Text>
+            <Text style={styles.appName}>SeaTime Tracker</Text>
+            <Text style={styles.welcomeMessage}>
+              Welcome aboard! Track your sea time and manage your maritime service records with ease.
+            </Text>
+          </View>
+
           <Text style={styles.title}>
             {mode === "signin" ? "Sign In" : "Sign Up"}
           </Text>
@@ -180,10 +196,32 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: "center",
   },
-  title: {
-    fontSize: 32,
-    fontWeight: "bold",
+  headerContainer: {
+    alignItems: "center",
     marginBottom: 32,
+  },
+  lighthouseIcon: {
+    fontSize: 72,
+    marginBottom: 16,
+  },
+  appName: {
+    fontSize: 28,
+    fontWeight: "bold",
+    color: "#007AFF",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  welcomeMessage: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    lineHeight: 22,
+    paddingHorizontal: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: 24,
     textAlign: "center",
     color: "#000",
   },
