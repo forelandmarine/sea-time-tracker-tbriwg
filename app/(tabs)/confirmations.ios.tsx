@@ -292,121 +292,152 @@ export default function ConfirmationsScreen() {
 
               return (
                 <React.Fragment key={index}>
-                  <TouchableOpacity 
-                    style={styles.entryCard}
-                    onPress={() => toggleExpanded(entry.id)}
-                    activeOpacity={0.7}
-                  >
-                    {!hasVesselData && (
-                      <View style={styles.warningBanner}>
-                        <IconSymbol
-                          ios_icon_name="exclamationmark.triangle.fill"
-                          android_material_icon_name="warning"
-                          size={16}
-                          color={colors.warning}
-                        />
-                        <Text style={styles.warningText}>
-                          Vessel information unavailable
-                        </Text>
-                      </View>
-                    )}
-
-                    {/* Vessel Name Header */}
-                    <View style={styles.entryHeader}>
-                      <View style={styles.vesselInfo}>
-                        <IconSymbol
-                          ios_icon_name="ferry"
-                          android_material_icon_name="directions-boat"
-                          size={24}
-                          color={colors.primary}
-                        />
-                        <View style={styles.vesselTextInfo}>
-                          <Text style={styles.vesselName}>{vesselName}</Text>
-                          <Text style={styles.vesselMmsi}>MMSI: {vesselMmsi}</Text>
-                        </View>
-                      </View>
-                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(entry.status) + '20' }]}>
-                        <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
-                          {entry.status.toUpperCase()}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Time Information */}
-                    <View style={styles.timeSection}>
-                      <View style={styles.timeRow}>
-                        <View style={styles.timeLabel}>
+                  <View style={styles.entryCard}>
+                    {/* Tappable area for expansion */}
+                    <TouchableOpacity 
+                      onPress={() => toggleExpanded(entry.id)}
+                      activeOpacity={0.7}
+                    >
+                      {!hasVesselData && (
+                        <View style={styles.warningBanner}>
                           <IconSymbol
-                            ios_icon_name="clock"
-                            android_material_icon_name="schedule"
+                            ios_icon_name="exclamationmark.triangle.fill"
+                            android_material_icon_name="warning"
                             size={16}
-                            color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                            color={colors.warning}
                           />
-                          <Text style={styles.timeLabelText}>Start</Text>
+                          <Text style={styles.warningText}>
+                            Vessel information unavailable
+                          </Text>
                         </View>
-                        <View style={styles.timeValue}>
-                          <Text style={styles.timeDate}>{formatDate(entry.start_time)}</Text>
-                          <Text style={styles.timeTime}>{formatTime(entry.start_time)}</Text>
+                      )}
+
+                      {/* Vessel Name Header */}
+                      <View style={styles.entryHeader}>
+                        <View style={styles.vesselInfo}>
+                          <IconSymbol
+                            ios_icon_name="ferry"
+                            android_material_icon_name="directions-boat"
+                            size={24}
+                            color={colors.primary}
+                          />
+                          <View style={styles.vesselTextInfo}>
+                            <Text style={styles.vesselName}>{vesselName}</Text>
+                            <Text style={styles.vesselMmsi}>MMSI: {vesselMmsi}</Text>
+                          </View>
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(entry.status) + '20' }]}>
+                          <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
+                            {entry.status.toUpperCase()}
+                          </Text>
                         </View>
                       </View>
 
-                      {entry.end_time && (
+                      {/* Time Information */}
+                      <View style={styles.timeSection}>
                         <View style={styles.timeRow}>
                           <View style={styles.timeLabel}>
                             <IconSymbol
-                              ios_icon_name="clock.fill"
+                              ios_icon_name="clock"
                               android_material_icon_name="schedule"
                               size={16}
                               color={isDark ? colors.textSecondary : colors.textSecondaryLight}
                             />
-                            <Text style={styles.timeLabelText}>End</Text>
+                            <Text style={styles.timeLabelText}>Start</Text>
                           </View>
                           <View style={styles.timeValue}>
-                            <Text style={styles.timeDate}>{formatDate(entry.end_time)}</Text>
-                            <Text style={styles.timeTime}>{formatTime(entry.end_time)}</Text>
+                            <Text style={styles.timeDate}>{formatDate(entry.start_time)}</Text>
+                            <Text style={styles.timeTime}>{formatTime(entry.start_time)}</Text>
                           </View>
                         </View>
-                      )}
-                    </View>
 
-                    {/* GPS Coordinates Section */}
-                    {hasAnyCoords && (
-                      <View style={styles.coordinatesSection}>
-                        <View style={styles.coordinatesHeader}>
-                          <IconSymbol
-                            ios_icon_name="location.fill"
-                            android_material_icon_name="location-on"
-                            size={16}
-                            color={colors.primary}
-                          />
-                          <Text style={styles.coordinatesHeaderText}>GPS Coordinates</Text>
-                          <IconSymbol
-                            ios_icon_name={isExpanded ? "chevron.up" : "chevron.down"}
-                            android_material_icon_name={isExpanded ? "expand-less" : "expand-more"}
-                            size={16}
-                            color={colors.primary}
-                          />
-                        </View>
-                        
-                        {hasStartCoords && (
-                          <View style={styles.coordinateRow}>
-                            <Text style={styles.coordinateLabel}>Start Position:</Text>
-                            <Text style={styles.coordinateValue}>
-                              {formatCoordinate(entry.start_latitude)}°, {formatCoordinate(entry.start_longitude)}°
-                            </Text>
-                          </View>
-                        )}
-                        
-                        {hasEndCoords && (
-                          <View style={styles.coordinateRow}>
-                            <Text style={styles.coordinateLabel}>End Position:</Text>
-                            <Text style={styles.coordinateValue}>
-                              {formatCoordinate(entry.end_latitude)}°, {formatCoordinate(entry.end_longitude)}°
-                            </Text>
+                        {entry.end_time && (
+                          <View style={styles.timeRow}>
+                            <View style={styles.timeLabel}>
+                              <IconSymbol
+                                ios_icon_name="clock.fill"
+                                android_material_icon_name="schedule"
+                                size={16}
+                                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                              />
+                              <Text style={styles.timeLabelText}>End</Text>
+                            </View>
+                            <View style={styles.timeValue}>
+                              <Text style={styles.timeDate}>{formatDate(entry.end_time)}</Text>
+                              <Text style={styles.timeTime}>{formatTime(entry.end_time)}</Text>
+                            </View>
                           </View>
                         )}
                       </View>
-                    )}
+
+                      {/* GPS Coordinates Section */}
+                      {hasAnyCoords && (
+                        <View style={styles.coordinatesSection}>
+                          <View style={styles.coordinatesHeader}>
+                            <IconSymbol
+                              ios_icon_name="location.fill"
+                              android_material_icon_name="location-on"
+                              size={16}
+                              color={colors.primary}
+                            />
+                            <Text style={styles.coordinatesHeaderText}>GPS Coordinates</Text>
+                            <IconSymbol
+                              ios_icon_name={isExpanded ? "chevron.up" : "chevron.down"}
+                              android_material_icon_name={isExpanded ? "expand-less" : "expand-more"}
+                              size={16}
+                              color={colors.primary}
+                            />
+                          </View>
+                          
+                          {hasStartCoords && (
+                            <View style={styles.coordinateRow}>
+                              <Text style={styles.coordinateLabel}>Start Position:</Text>
+                              <Text style={styles.coordinateValue}>
+                                {formatCoordinate(entry.start_latitude)}°, {formatCoordinate(entry.start_longitude)}°
+                              </Text>
+                            </View>
+                          )}
+                          
+                          {hasEndCoords && (
+                            <View style={styles.coordinateRow}>
+                              <Text style={styles.coordinateLabel}>End Position:</Text>
+                              <Text style={styles.coordinateValue}>
+                                {formatCoordinate(entry.end_latitude)}°, {formatCoordinate(entry.end_longitude)}°
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+
+                      {/* Duration - Always show, even if 0 */}
+                      <View style={styles.durationSection}>
+                        <View style={styles.durationCard}>
+                          <IconSymbol
+                            ios_icon_name="timer"
+                            android_material_icon_name="access-time"
+                            size={20}
+                            color={colors.primary}
+                          />
+                          <View style={styles.durationInfo}>
+                            <Text style={styles.durationLabel}>Total Duration</Text>
+                            <Text style={styles.durationValue}>
+                              {formatDuration(entry.duration_hours)} hours
+                            </Text>
+                            <Text style={styles.durationDays}>
+                              ({formatDays(entry.duration_hours)} days)
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Notes */}
+                      {entry.notes && (
+                        <View style={styles.notesSection}>
+                          <Text style={styles.notesLabel}>Notes:</Text>
+                          <Text style={styles.notesText}>{entry.notes}</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
 
                     {/* Expanded DMS Coordinates Section */}
                     {isExpanded && hasAnyCoords && (
@@ -453,36 +484,7 @@ export default function ConfirmationsScreen() {
                       </View>
                     )}
 
-                    {/* Duration - Always show, even if 0 */}
-                    <View style={styles.durationSection}>
-                      <View style={styles.durationCard}>
-                        <IconSymbol
-                          ios_icon_name="timer"
-                          android_material_icon_name="access-time"
-                          size={20}
-                          color={colors.primary}
-                        />
-                        <View style={styles.durationInfo}>
-                          <Text style={styles.durationLabel}>Total Duration</Text>
-                          <Text style={styles.durationValue}>
-                            {formatDuration(entry.duration_hours)} hours
-                          </Text>
-                          <Text style={styles.durationDays}>
-                            ({formatDays(entry.duration_hours)} days)
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    {/* Notes */}
-                    {entry.notes && (
-                      <View style={styles.notesSection}>
-                        <Text style={styles.notesLabel}>Notes:</Text>
-                        <Text style={styles.notesText}>{entry.notes}</Text>
-                      </View>
-                    )}
-
-                    {/* Action Buttons */}
+                    {/* Action Buttons - Outside the TouchableOpacity */}
                     <View style={styles.actionButtons}>
                       <TouchableOpacity
                         style={[styles.actionButton, styles.confirmButton]}
@@ -509,7 +511,7 @@ export default function ConfirmationsScreen() {
                         <Text style={styles.actionButtonText}>Reject</Text>
                       </TouchableOpacity>
                     </View>
-                  </TouchableOpacity>
+                  </View>
                 </React.Fragment>
               );
             })}
