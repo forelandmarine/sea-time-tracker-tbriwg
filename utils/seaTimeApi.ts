@@ -534,3 +534,45 @@ export async function downloadCSVReport(startDate?: string, endDate?: string): P
   }
   return response.text();
 }
+
+// Test Endpoint - Create test sea day entry from specific position records
+export async function createTestSeaDayEntry(): Promise<SeaTimeEntry> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/sea-time/test-entry`;
+  console.log('[API] Creating test sea day entry from Norwegian position records (2026-01-14T11:01:07.055Z and 2026-01-14T11:46:09.390Z)');
+  const headers = getApiHeaders();
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({}),
+  });
+  
+  if (!response.ok) {
+    let errorMessage = 'Failed to create test sea day entry';
+    
+    try {
+      const errorData = await response.json();
+      console.error('[API] Test entry creation failed:', response.status, errorData);
+      
+      if (errorData.error) {
+        errorMessage = errorData.error;
+      }
+    } catch (parseError) {
+      try {
+        const errorText = await response.text();
+        console.error('[API] Test entry creation failed (text):', response.status, errorText);
+        if (errorText) {
+          errorMessage = errorText;
+        }
+      } catch (textError) {
+        console.error('[API] Could not parse error response:', textError);
+      }
+    }
+    
+    throw new Error(errorMessage);
+  }
+  
+  const data = await response.json();
+  console.log('[API] Test sea day entry created successfully:', data);
+  return data;
+}

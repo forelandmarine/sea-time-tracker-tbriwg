@@ -178,6 +178,40 @@ export default function SeaTimeScreen() {
     router.push(`/vessel/${vesselId}` as any);
   };
 
+  const handleCreateTestEntry = async () => {
+    Alert.alert(
+      'Create Test Sea Day',
+      'This will create a test sea day entry for the Norwegian vessel using position records from:\n\n• Start: 2026-01-14 11:01:07 UTC\n• End: 2026-01-14 11:46:09 UTC\n\nThe entry will appear in the Confirmations tab for review.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Create',
+          onPress: async () => {
+            try {
+              console.log('Creating test sea day entry...');
+              const entry = await seaTimeApi.createTestSeaDayEntry();
+              console.log('Test entry created:', entry);
+              Alert.alert(
+                'Test Entry Created',
+                `A test sea day entry has been created for ${entry.vessel?.vessel_name || 'Norwegian'}.\n\nStart: ${new Date(entry.start_time).toLocaleString()}\nEnd: ${entry.end_time ? new Date(entry.end_time).toLocaleString() : 'N/A'}\n\nCheck the Confirmations tab to review it.`,
+                [
+                  {
+                    text: 'View Confirmations',
+                    onPress: () => router.push('/(tabs)/confirmations' as any),
+                  },
+                  { text: 'OK' },
+                ]
+              );
+            } catch (error: any) {
+              console.error('Failed to create test entry:', error);
+              Alert.alert('Error', 'Failed to create test entry: ' + error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -200,10 +234,22 @@ export default function SeaTimeScreen() {
               style={styles.appIcon}
               resizeMode="contain"
             />
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.headerTitle}>SeaTime Tracker</Text>
               <Text style={styles.headerSubtitle}>Track your days at sea</Text>
             </View>
+            <TouchableOpacity
+              style={styles.testButton}
+              onPress={handleCreateTestEntry}
+            >
+              <IconSymbol
+                ios_icon_name="flask"
+                android_material_icon_name="science"
+                size={20}
+                color="#fff"
+              />
+              <Text style={styles.testButtonText}>Test</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -412,6 +458,20 @@ function createStyles(isDark: boolean) {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
+    },
+    testButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primary,
+      paddingHorizontal: 12,
+      paddingVertical: 8,
+      borderRadius: 8,
+      gap: 6,
+    },
+    testButtonText: {
+      color: '#fff',
+      fontSize: 14,
+      fontWeight: '600',
     },
     appIcon: {
       width: 53,
