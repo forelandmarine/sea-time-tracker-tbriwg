@@ -809,4 +809,139 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     }
   );
+
+  // POST /api/users/ensure-test-user - Ensure test user exists (for development)
+  fastify.post(
+    '/api/users/ensure-test-user',
+    {
+      schema: {
+        description: 'Ensure test user exists in database for development (creates if missing)',
+        tags: ['users'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              created: { type: 'boolean' },
+              user: { type: 'object' },
+              message: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const email = 'test@seatime.com';
+      const name = 'Test User';
+
+      app.logger.info({ email }, 'Ensuring test user exists');
+
+      try {
+        // Check if user already exists
+        const [existingUser] = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email));
+
+        if (existingUser) {
+          app.logger.info({ email }, 'Test user already exists');
+          return reply.code(200).send({
+            created: false,
+            user: existingUser,
+            message: 'Test user already exists',
+          });
+        }
+
+        // Create test user using Better Auth sign-up endpoint
+        let betterAuthUrl = process.env.BETTER_AUTH_URL ||
+                            process.env.API_URL ||
+                            process.env.BACKEND_URL;
+
+        if (!betterAuthUrl) {
+          const protocol = request.headers['x-forwarded-proto'] || 'http';
+          const host = request.headers['x-forwarded-host'] || request.headers.host || 'localhost:3000';
+          betterAuthUrl = `${protocol}://${host}`;
+        }
+
+        // Ensure URL has protocol
+        if (!betterAuthUrl.startsWith('http')) {
+          betterAuthUrl = `http://${betterAuthUrl}`;
+        }
+
+        const signupUrl = `${betterAuthUrl}/api/auth/sign-up/email`;
+
+        app.logger.info({ email, signupUrl }, 'Calling Better Auth sign-up');
+
+        const response = await fetch(signupUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            email,
+            password: 'testpassword123',
+            name,
+          }),
+        });
+
+        const responseText = await response.text();
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = { message: responseText };
+        }
+
+        if (!response.ok) {
+          app.logger.error(
+            { email, status: response.status, error: data },
+            'Better Auth sign-up failed'
+          );
+
+          return reply.code(200).send({
+            created: false,
+            user: null,
+            message: `Failed to create test user: ${data.message || 'Unknown error'}`,
+          });
+        }
+
+        if (!data.user) {
+          app.logger.warn({ email, data }, 'Better Auth created user but returned no user data');
+
+          // Try to fetch the user from database
+          const [newUser] = await app.db
+            .select()
+            .from(authSchema.user)
+            .where(eq(authSchema.user.email, email));
+
+          if (newUser) {
+            return reply.code(200).send({
+              created: true,
+              user: newUser,
+              message: 'Test user created successfully',
+            });
+          }
+
+          return reply.code(200).send({
+            created: false,
+            user: null,
+            message: 'Sign-up succeeded but user not found in database',
+          });
+        }
+
+        return reply.code(200).send({
+          created: true,
+          user: data.user,
+          message: 'Test user created successfully',
+        });
+      } catch (error) {
+        app.logger.error({ err: error, email }, 'Error ensuring test user');
+
+        return reply.code(200).send({
+          created: false,
+          user: null,
+          message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+  );
 }

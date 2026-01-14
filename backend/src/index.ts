@@ -89,6 +89,20 @@ app.fastify.addHook('onError', async (request, reply, error) => {
 
     // Also log to stdout for visibility during debugging
     console.error('[AUTH ERROR]', errorDetails.url, errorDetails.errorMessage);
+    if (error instanceof Error && error.stack) {
+      console.error('[AUTH STACK]', error.stack);
+    }
+  }
+});
+
+// Add a catch-all response hook to catch any unhandled errors
+app.fastify.addHook('onResponse', async (request, reply) => {
+  if (request.url.includes('/api/auth/') && reply.statusCode === 500) {
+    app.logger.warn({
+      url: request.url,
+      method: request.method,
+      statusCode: reply.statusCode,
+    }, 'Auth endpoint returned 500');
   }
 });
 
