@@ -36,24 +36,49 @@ export default function AuthScreen() {
       return;
     }
 
+    if (password.length < 8) {
+      Alert.alert("Error", "Password must be at least 8 characters long");
+      return;
+    }
+
     setLoading(true);
     try {
       if (mode === "signin") {
         console.log('Signing in with email');
         await signInWithEmail(email, password);
+        console.log('Sign in successful, navigating to home');
         router.replace("/");
       } else {
         console.log('Signing up with email');
         await signUpWithEmail(email, password, name);
         Alert.alert(
           "Success",
-          "Account created! Please check your email to verify your account."
+          "Account created successfully! You can now sign in."
         );
-        router.replace("/");
+        setMode("signin");
       }
     } catch (error: any) {
       console.error('Email authentication error:', error);
-      Alert.alert("Error", error.message || "Authentication failed");
+      
+      // Provide more helpful error messages
+      let errorMessage = "Authentication failed";
+      
+      if (error.message) {
+        errorMessage = error.message;
+      } else if (error.error) {
+        errorMessage = error.error;
+      }
+      
+      // Handle specific error cases
+      if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
+        errorMessage = "Invalid email or password. Please check your credentials and try again.";
+      } else if (errorMessage.includes("409") || errorMessage.includes("already exists")) {
+        errorMessage = "An account with this email already exists. Please sign in instead.";
+      } else if (errorMessage.includes("network") || errorMessage.includes("fetch")) {
+        errorMessage = "Network error. Please check your internet connection and try again.";
+      }
+      
+      Alert.alert("Authentication Error", errorMessage);
     } finally {
       setLoading(false);
     }
@@ -70,6 +95,7 @@ export default function AuthScreen() {
       } else if (provider === "github") {
         await signInWithGitHub();
       }
+      console.log('Social auth successful, navigating to home');
       router.replace("/");
     } catch (error: any) {
       console.error('Social authentication error:', error);
@@ -125,7 +151,7 @@ export default function AuthScreen() {
 
           <TextInput
             style={styles.input}
-            placeholder="Password"
+            placeholder="Password (min 8 characters)"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
