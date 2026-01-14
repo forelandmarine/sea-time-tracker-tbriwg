@@ -125,7 +125,7 @@ export default function ReportsScreen() {
                 ios_icon_name="clock"
                 android_material_icon_name="schedule"
                 size={32}
-                color={colors.card}
+                color="#FFFFFF"
               />
               <Text style={styles.summaryValue}>
                 {summary?.total_hours.toFixed(1) || '0.0'}
@@ -138,7 +138,7 @@ export default function ReportsScreen() {
                 ios_icon_name="calendar"
                 android_material_icon_name="calendar-today"
                 size={32}
-                color={colors.card}
+                color="#FFFFFF"
               />
               <Text style={styles.summaryValue}>
                 {summary?.total_days.toFixed(1) || '0.0'}
@@ -195,7 +195,7 @@ export default function ReportsScreen() {
               ios_icon_name="document"
               android_material_icon_name="description"
               size={20}
-              color={colors.card}
+              color="#FFFFFF"
             />
             <Text style={styles.buttonText}>
               {loading ? 'Exporting...' : 'Export CSV Report'}
@@ -210,7 +210,7 @@ export default function ReportsScreen() {
               ios_icon_name="share"
               android_material_icon_name="share"
               size={20}
-              color={colors.card}
+              color="#FFFFFF"
             />
             <Text style={styles.buttonText}>Share Summary</Text>
           </TouchableOpacity>
@@ -239,26 +239,26 @@ const createStyles = (isDark: boolean) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? colors.backgroundDark : colors.background,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
       paddingTop: Platform.OS === 'android' ? 48 : 0,
     },
     header: {
       padding: 20,
       paddingTop: Platform.OS === 'ios' ? 60 : 20,
-      backgroundColor: isDark ? colors.cardDark : colors.card,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.borderDark : colors.border,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
       boxShadow: '0px 2px 8px rgba(0, 119, 190, 0.1)',
       elevation: 3,
     },
     headerTitle: {
       fontSize: 28,
       fontWeight: '700',
-      color: isDark ? colors.textDark : colors.text,
+      color: isDark ? colors.text : colors.textLight,
     },
     headerSubtitle: {
       fontSize: 14,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondary,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginTop: 4,
     },
     scrollView: {
@@ -274,7 +274,7 @@ const createStyles = (isDark: boolean) =>
     sectionTitle: {
       fontSize: 20,
       fontWeight: '700',
-      color: isDark ? colors.textDark : colors.text,
+      color: isDark ? colors.text : colors.textLight,
       marginBottom: 12,
     },
     summaryGrid: {
@@ -298,22 +298,22 @@ const createStyles = (isDark: boolean) =>
     summaryValue: {
       fontSize: 32,
       fontWeight: '700',
-      color: colors.card,
+      color: '#FFFFFF',
       marginTop: 12,
     },
     summaryLabel: {
       fontSize: 14,
       fontWeight: '600',
-      color: colors.card,
+      color: '#FFFFFF',
       marginTop: 4,
     },
     card: {
-      backgroundColor: isDark ? colors.cardDark : colors.card,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
       padding: 16,
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: isDark ? colors.borderDark : colors.border,
+      borderColor: isDark ? colors.border : colors.borderLight,
       boxShadow: '0px 2px 8px rgba(0, 119, 190, 0.1)',
       elevation: 2,
     },
@@ -325,7 +325,7 @@ const createStyles = (isDark: boolean) =>
     cardTitle: {
       fontSize: 16,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.text,
+      color: isDark ? colors.text : colors.textLight,
     },
     cardValue: {
       fontSize: 18,
@@ -349,13 +349,13 @@ const createStyles = (isDark: boolean) =>
       backgroundColor: colors.accent,
     },
     buttonText: {
-      color: colors.card,
+      color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '600',
     },
     infoCard: {
       flexDirection: 'row',
-      backgroundColor: isDark ? colors.cardDark : colors.card,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
       padding: 16,
       gap: 12,
@@ -366,7 +366,7 @@ const createStyles = (isDark: boolean) =>
     infoText: {
       flex: 1,
       fontSize: 14,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondary,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       lineHeight: 20,
     },
   });

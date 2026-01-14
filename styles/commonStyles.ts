@@ -1,25 +1,42 @@
 
 import { StyleSheet, ViewStyle, TextStyle } from 'react-native';
 
+// Maritime Color Palette
 export const colors = {
-  primary: '#0077BE',      // Ocean Blue
-  secondary: '#003D5C',    // Deep Sea Blue
-  accent: '#00A8E8',       // Bright Cyan
-  background: '#0A1929',   // Dark Navy (dark mode default)
-  backgroundLight: '#F0F8FF', // Alice Blue (light mode)
-  cardBackground: '#1A2332', // Dark cards
-  card: '#FFFFFF',         // White cards (light mode)
-  text: '#E8F1F5',         // Light text (dark mode default)
-  textLight: '#1A1A1A',    // Dark text (light mode)
-  textSecondary: '#8B9DAF', // Muted text (dark mode default)
+  // Primary Maritime Blues
+  primary: '#0077BE',           // Ocean Blue - main brand color
+  secondary: '#003D5C',         // Deep Sea Blue - darker accent
+  accent: '#00A8E8',            // Bright Cyan - highlights
+  
+  // Backgrounds
+  background: '#0A1929',        // Dark Navy (dark mode)
+  backgroundLight: '#F0F8FF',   // Alice Blue (light mode)
+  cardBackground: '#1A2332',    // Dark cards (dark mode)
+  card: '#FFFFFF',              // White cards (light mode)
+  
+  // Text Colors
+  text: '#E8F1F5',              // Light text (dark mode)
+  textLight: '#1A1A1A',         // Dark text (light mode)
+  textSecondary: '#8B9DAF',     // Muted text (dark mode)
   textSecondaryLight: '#5A6C7D', // Muted text (light mode)
-  success: '#00C853',      // Green for confirmed
-  warning: '#FFB300',      // Amber for pending
-  error: '#D32F2F',        // Red for rejected/danger
-  danger: '#D32F2F',       // Red for rejected
-  border: '#2A3F54',       // Dark border (dark mode default)
-  borderLight: '#D1E3F0',  // Light border (light mode)
-  highlight: '#FFD54F',    // Gold highlight
+  
+  // Status Colors
+  success: '#00C853',           // Green for confirmed
+  warning: '#FFB300',           // Amber for pending
+  error: '#D32F2F',             // Red for rejected/danger
+  danger: '#D32F2F',            // Red for rejected
+  
+  // Borders
+  border: '#2A3F54',            // Dark border (dark mode)
+  borderLight: '#D1E3F0',       // Light border (light mode)
+  
+  // Special
+  highlight: '#FFD54F',         // Gold highlight
+  
+  // Maritime Accents
+  wave: '#4FC3F7',              // Light wave blue
+  foam: '#B3E5FC',              // Sea foam
+  lighthouse: '#FF6F00',        // Lighthouse beacon orange
 };
 
 export const buttonStyles = StyleSheet.create({

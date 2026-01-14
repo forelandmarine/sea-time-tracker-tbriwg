@@ -10,6 +10,7 @@ import {
   useColorScheme,
   RefreshControl,
   Switch,
+  Platform,
 } from 'react-native';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
@@ -30,22 +31,28 @@ function createStyles(isDark: boolean) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+    },
+    header: {
+      padding: 20,
+      paddingTop: Platform.OS === 'ios' ? 60 : Platform.OS === 'android' ? 48 : 20,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
+    },
+    headerTitle: {
+      fontSize: 28,
+      fontWeight: '700',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    headerSubtitle: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 4,
     },
     scrollContent: {
       padding: 20,
       paddingBottom: 100,
-    },
-    header: {
-      fontSize: 32,
-      fontWeight: 'bold',
-      color: isDark ? colors.textDark : colors.textLight,
-      marginBottom: 8,
-    },
-    subtitle: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
-      marginBottom: 24,
     },
     section: {
       marginBottom: 32,
@@ -53,18 +60,17 @@ function createStyles(isDark: boolean) {
     sectionTitle: {
       fontSize: 20,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       marginBottom: 12,
     },
     card: {
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
-      borderRadius: 16,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 12,
       padding: 16,
       marginBottom: 12,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+      boxShadow: '0px 2px 8px rgba(0, 119, 190, 0.1)',
       elevation: 3,
     },
     taskHeader: {
@@ -76,11 +82,11 @@ function createStyles(isDark: boolean) {
     taskType: {
       fontSize: 16,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
     },
     taskInfo: {
       fontSize: 14,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginBottom: 4,
     },
     button: {
@@ -101,7 +107,7 @@ function createStyles(isDark: boolean) {
     },
     emptyText: {
       fontSize: 16,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
       marginTop: 12,
     },
@@ -118,7 +124,7 @@ function createStyles(isDark: boolean) {
       color: '#FFFFFF',
     },
     infoBox: {
-      backgroundColor: isDark ? 'rgba(59, 130, 246, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+      backgroundColor: isDark ? 'rgba(0, 119, 190, 0.15)' : 'rgba(0, 119, 190, 0.1)',
       borderRadius: 12,
       padding: 16,
       marginBottom: 16,
@@ -127,7 +133,7 @@ function createStyles(isDark: boolean) {
     },
     infoText: {
       fontSize: 14,
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       lineHeight: 20,
     },
   });
@@ -232,9 +238,9 @@ export default function SettingsScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.scrollContent}>
-          <Text style={styles.header}>Settings</Text>
-          <Text style={styles.subtitle}>Loading...</Text>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Settings</Text>
+          <Text style={styles.headerSubtitle}>Loading...</Text>
         </View>
       </View>
     );
@@ -242,6 +248,11 @@ export default function SettingsScreen() {
 
   return (
     <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={styles.headerSubtitle}>Manage scheduled tasks and system configuration</Text>
+      </View>
+      
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
@@ -249,9 +260,6 @@ export default function SettingsScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
       >
-        <Text style={styles.header}>Settings</Text>
-        <Text style={styles.subtitle}>Manage scheduled tasks and system configuration</Text>
-
         <View style={styles.infoBox}>
           <Text style={styles.infoText}>
             🔐 Security: All API calls to MyShipTracking are authenticated with a secure API key stored on the backend.
@@ -272,7 +280,7 @@ export default function SettingsScreen() {
                   ios_icon_name="clock"
                   android_material_icon_name="schedule"
                   size={48}
-                  color={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+                  color={isDark ? colors.textSecondary : colors.textSecondaryLight}
                 />
                 <Text style={styles.emptyText}>
                   No scheduled tasks configured.

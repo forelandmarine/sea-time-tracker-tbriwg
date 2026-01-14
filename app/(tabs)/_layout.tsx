@@ -15,9 +15,9 @@ export default function TabLayout() {
   const tabs: TabBarItem[] = [
     {
       route: '/(tabs)/(home)' as Href,
-      label: 'Home',
-      ios_icon_name: 'house.fill',
-      android_material_icon_name: 'home',
+      label: 'Sea Time',
+      ios_icon_name: 'sailboat.fill',
+      android_material_icon_name: 'directions-boat',
     },
     {
       route: '/(tabs)/profile' as Href,
@@ -44,7 +44,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="(home)"
           options={{
-            title: 'Home',
+            title: 'Sea Time',
           }}
         />
         <Tabs.Screen
