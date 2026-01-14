@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
+import { useAuth } from '@/contexts/AuthContext';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -33,6 +34,7 @@ interface ReportSummary {
 export default function ReportsScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const { user, signOut } = useAuth();
   
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(false);
@@ -101,14 +103,67 @@ export default function ReportsScreen() {
     }
   };
 
+  const handleSignOut = async () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('[Profile] User signing out');
+              await signOut();
+              console.log('[Profile] Sign out successful');
+            } catch (error) {
+              console.error('[Profile] Error signing out:', error);
+              Alert.alert('Error', 'Failed to sign out. Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const styles = createStyles(isDark);
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Reports</Text>
-        <Text style={styles.headerSubtitle}>MCA Compliant Sea Service Records</Text>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.headerTitle}>Reports</Text>
+            <Text style={styles.headerSubtitle}>MCA Compliant Sea Service Records</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.signOutButton}
+            onPress={handleSignOut}
+          >
+            <IconSymbol
+              ios_icon_name="rectangle.portrait.and.arrow.right"
+              android_material_icon_name="logout"
+              size={20}
+              color={colors.error}
+            />
+          </TouchableOpacity>
+        </View>
+        {user && (
+          <View style={styles.userInfo}>
+            <IconSymbol
+              ios_icon_name="person.circle.fill"
+              android_material_icon_name="account-circle"
+              size={16}
+              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+            />
+            <Text style={styles.userEmail}>{user.email}</Text>
+          </View>
+        )}
       </View>
 
       <ScrollView
@@ -248,6 +303,11 @@ const createStyles = (isDark: boolean) =>
       borderBottomWidth: 1,
       borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
+    headerTop: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+    },
     headerTitle: {
       fontSize: 28,
       fontWeight: '700',
@@ -257,6 +317,25 @@ const createStyles = (isDark: boolean) =>
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginTop: 4,
+    },
+    signOutButton: {
+      padding: 8,
+      borderRadius: 8,
+      backgroundColor: isDark ? 'rgba(255, 59, 48, 0.1)' : 'rgba(255, 59, 48, 0.1)',
+    },
+    userInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: isDark ? colors.border : colors.borderLight,
+    },
+    userEmail: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      fontWeight: '500',
     },
     scrollView: {
       flex: 1,

@@ -88,7 +88,7 @@ function checkBackendConfigured() {
   }
 }
 
-// Helper function to get API headers
+// Helper function to get API headers with authentication
 function getApiHeaders(): HeadersInit {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -97,13 +97,27 @@ function getApiHeaders(): HeadersInit {
   return headers;
 }
 
+// Helper function to get fetch options with credentials
+function getFetchOptions(method: string = 'GET', body?: any): RequestInit {
+  const options: RequestInit = {
+    method,
+    headers: getApiHeaders(),
+    credentials: 'include', // Include cookies for Better Auth session
+  };
+  
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+  
+  return options;
+}
+
 // Vessel Management
 export async function getVessels(): Promise<Vessel[]> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels`;
   console.log('[API] Fetching vessels:', url);
-  const headers = getApiHeaders();
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to fetch vessels:', response.status, errorText);
@@ -118,12 +132,7 @@ export async function createVessel(mmsi: string, vessel_name: string, is_active?
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels`;
   console.log('[API] Creating vessel:', { mmsi, vessel_name, is_active });
-  const headers = getApiHeaders();
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ mmsi, vessel_name, is_active }),
-  });
+  const response = await fetch(url, getFetchOptions('POST', { mmsi, vessel_name, is_active }));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to create vessel:', response.status, errorText);
@@ -138,12 +147,7 @@ export async function activateVessel(vesselId: string): Promise<Vessel> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels/${vesselId}/activate`;
   console.log('[API] Activating vessel:', vesselId);
-  const headers = getApiHeaders();
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({}),
-  });
+  const response = await fetch(url, getFetchOptions('PUT', {}));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to activate vessel:', response.status, errorText);
@@ -158,9 +162,7 @@ export async function deleteVessel(vesselId: string): Promise<{ success: boolean
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels/${vesselId}`;
   console.log('[API] Deleting vessel:', vesselId);
-  const response = await fetch(url, {
-    method: 'DELETE',
-  });
+  const response = await fetch(url, getFetchOptions('DELETE'));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to delete vessel:', response.status, errorText);
@@ -174,8 +176,7 @@ export async function getVesselSeaTime(vesselId: string): Promise<SeaTimeEntry[]
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels/${vesselId}/sea-time`;
   console.log('[API] Fetching sea time for vessel:', vesselId);
-  const headers = getApiHeaders();
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to fetch vessel sea time:', response.status, errorText);
@@ -191,12 +192,7 @@ export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> 
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/check/${vesselId}`;
   console.log('[API] Checking vessel AIS with secure authentication:', vesselId);
-  const headers = getApiHeaders();
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({}),
-  });
+  const response = await fetch(url, getFetchOptions('POST', {}));
   
   if (!response.ok) {
     let errorMessage = 'Failed to check vessel AIS';
@@ -243,8 +239,7 @@ export async function getVesselAISStatus(vesselId: string): Promise<AISStatus> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/status/${vesselId}`;
   console.log('[API] Getting vessel AIS status:', vesselId);
-  const headers = getApiHeaders();
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to get vessel AIS status:', response.status, errorText);
@@ -275,8 +270,7 @@ export async function getVesselAISLocation(vesselId: string, extended: boolean =
   const params = extended ? '?extended=true' : '';
   const url = `${API_BASE_URL}/api/ais/check/${vesselId}${params}`;
   console.log('[API] Getting vessel AIS location data:', vesselId, 'extended:', extended);
-  const headers = getApiHeaders();
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, getFetchOptions());
   
   if (!response.ok) {
     let errorMessage = 'Failed to get vessel AIS location';
@@ -321,12 +315,7 @@ export async function scheduleAISChecks(vesselId: string, intervalHours: number 
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/schedule-check`;
   console.log('[API] Scheduling AIS checks for vessel:', vesselId, 'every', intervalHours, 'hours');
-  const headers = getApiHeaders();
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ vessel_id: vesselId, interval_hours: intervalHours }),
-  });
+  const response = await fetch(url, getFetchOptions('POST', { vessel_id: vesselId, interval_hours: intervalHours }));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to schedule AIS checks:', response.status, errorText);
@@ -341,10 +330,9 @@ export async function getScheduledTasks(): Promise<ScheduledTask[]> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/scheduled-tasks`;
   console.log('[API] Fetching scheduled tasks');
-  const headers = getApiHeaders();
   
   try {
-    const response = await fetch(url, { headers });
+    const response = await fetch(url, getFetchOptions());
     if (!response.ok) {
       // If endpoint doesn't exist (404), return empty array
       if (response.status === 404) {
@@ -372,12 +360,7 @@ export async function toggleScheduledTask(taskId: string, isActive: boolean): Pr
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/scheduled-tasks/${taskId}/toggle`;
   console.log('[API] Toggling scheduled task:', taskId, isActive);
-  const headers = getApiHeaders();
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({ is_active: isActive }),
-  });
+  const response = await fetch(url, getFetchOptions('PUT', { is_active: isActive }));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to toggle scheduled task:', response.status, errorText);
@@ -393,8 +376,7 @@ export async function getAISDebugLogs(vesselId: string): Promise<AISDebugLog[]> 
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/debug/${vesselId}`;
   console.log('[API] Fetching AIS debug logs for vessel:', vesselId);
-  const headers = getApiHeaders();
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to fetch debug logs:', response.status, errorText);
@@ -410,8 +392,7 @@ export async function getSeaTimeEntries(): Promise<SeaTimeEntry[]> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time`;
   console.log('[API] Fetching sea time entries:', url);
-  const headers = getApiHeaders();
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to fetch sea time entries:', response.status, errorText);
@@ -426,8 +407,7 @@ export async function getPendingEntries(): Promise<SeaTimeEntry[]> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/pending`;
   console.log('[API] Fetching pending entries:', url);
-  const headers = getApiHeaders();
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to fetch pending entries:', response.status, errorText);
@@ -442,12 +422,7 @@ export async function confirmSeaTimeEntry(entryId: string, notes?: string): Prom
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/${entryId}/confirm`;
   console.log('[API] Confirming sea time entry:', entryId, notes);
-  const headers = getApiHeaders();
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({ notes: notes || undefined }),
-  });
+  const response = await fetch(url, getFetchOptions('PUT', { notes: notes || undefined }));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to confirm entry:', response.status, errorText);
@@ -462,12 +437,7 @@ export async function rejectSeaTimeEntry(entryId: string, notes?: string): Promi
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/${entryId}/reject`;
   console.log('[API] Rejecting sea time entry:', entryId, notes);
-  const headers = getApiHeaders();
-  const response = await fetch(url, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({ notes: notes || undefined }),
-  });
+  const response = await fetch(url, getFetchOptions('PUT', { notes: notes || undefined }));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to reject entry:', response.status, errorText);
@@ -482,12 +452,7 @@ export async function deleteSeaTimeEntry(entryId: string): Promise<{ success: bo
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/${entryId}`;
   console.log('[API] Deleting sea time entry:', entryId);
-  const headers = getApiHeaders();
-  const response = await fetch(url, {
-    method: 'DELETE',
-    headers,
-    body: JSON.stringify({}),
-  });
+  const response = await fetch(url, getFetchOptions('DELETE', {}));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to delete entry:', response.status, errorText);
@@ -507,8 +472,7 @@ export async function getReportSummary(startDate?: string, endDate?: string): Pr
   
   const url = `${API_BASE_URL}/api/reports/summary${params.toString() ? '?' + params.toString() : ''}`;
   console.log('[API] Fetching report summary:', url);
-  const headers = getApiHeaders();
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to fetch report summary:', response.status, errorText);
@@ -525,8 +489,7 @@ export async function downloadCSVReport(startDate?: string, endDate?: string): P
   
   const url = `${API_BASE_URL}/api/reports/csv${params.toString() ? '?' + params.toString() : ''}`;
   console.log('[API] Downloading CSV report:', url);
-  const headers = getApiHeaders();
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to download CSV report:', response.status, errorText);
@@ -540,12 +503,7 @@ export async function createTestSeaDayEntry(): Promise<SeaTimeEntry> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/test-entry`;
   console.log('[API] Creating test sea day entry from Norwegian position records (2026-01-14T11:01:07.055Z and 2026-01-14T11:46:09.390Z)');
-  const headers = getApiHeaders();
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({}),
-  });
+  const response = await fetch(url, getFetchOptions('POST', {}));
   
   if (!response.ok) {
     let errorMessage = 'Failed to create test sea day entry';

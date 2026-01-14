@@ -1,25 +1,7 @@
-/**
- * Authentication Context Template
- *
- * Provides authentication state and methods throughout the app.
- * Supports:
- * - Email/password authentication
- * - Social auth (Google, Apple, GitHub) with popup flow for web
- * - Session management
- * - User state
- *
- * Usage:
- * 1. Update imports to match your auth-client.ts path
- * 2. Wrap your app with <AuthProvider>
- * 3. Use useAuth() hook in components to access auth methods
- * 4. Customize user type and auth methods as needed
- */
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { Platform } from "react-native";
 import { authClient, storeWebBearerToken } from "@/lib/auth";
 
-// User type - customize based on your backend
 interface User {
   id: string;
   email: string;
@@ -41,10 +23,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/**
- * Opens OAuth popup for web-based social authentication
- * Returns a promise that resolves with the token
- */
 function openOAuthPopup(provider: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const popupUrl = `${window.location.origin}/auth-popup?provider=${provider}`;
@@ -78,7 +56,6 @@ function openOAuthPopup(provider: string): Promise<string> {
 
     window.addEventListener("message", handleMessage);
 
-    // Check if popup was closed manually
     const checkClosed = setInterval(() => {
       if (popup.closed) {
         clearInterval(checkClosed);
@@ -93,7 +70,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch current user on mount
   useEffect(() => {
     fetchUser();
   }, []);
@@ -102,8 +78,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       const session = await authClient.getSession();
-      if (session?.user) {
-        setUser(session.user as User);
+      if (session?.data?.user) {
+        setUser(session.data.user as User);
       } else {
         setUser(null);
       }
@@ -131,7 +107,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
         name,
-        callbackURL: "/profile", // TODO: Update redirect URL
       });
       await fetchUser();
     } catch (error) {
@@ -143,15 +118,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle = async () => {
     try {
       if (Platform.OS === "web") {
-        // Web: Use popup flow to avoid cross-origin issues
         const token = await openOAuthPopup("google");
         storeWebBearerToken(token);
         await fetchUser();
       } else {
-        // Native: Use deep linking (handled by Better Auth)
         await authClient.signIn.social({
           provider: "google",
-          callbackURL: "/profile", // TODO: Update redirect URL
+          callbackURL: "/",
         });
         await fetchUser();
       }
@@ -164,15 +137,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithApple = async () => {
     try {
       if (Platform.OS === "web") {
-        // Web: Use popup flow
         const token = await openOAuthPopup("apple");
         storeWebBearerToken(token);
         await fetchUser();
       } else {
-        // Native: Use deep linking
         await authClient.signIn.social({
           provider: "apple",
-          callbackURL: "/profile", // TODO: Update redirect URL
+          callbackURL: "/",
         });
         await fetchUser();
       }
@@ -185,15 +156,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGitHub = async () => {
     try {
       if (Platform.OS === "web") {
-        // Web: Use popup flow
         const token = await openOAuthPopup("github");
         storeWebBearerToken(token);
         await fetchUser();
       } else {
-        // Native: Use deep linking
         await authClient.signIn.social({
           provider: "github",
-          callbackURL: "/profile", // TODO: Update redirect URL
+          callbackURL: "/",
         });
         await fetchUser();
       }
@@ -232,10 +201,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * Hook to access auth context
- * Must be used within AuthProvider
- */
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
