@@ -46,7 +46,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="confirmations"
         options={{
-          title: 'Confirmations',
+          title: 'Review',
           tabBarIcon: ({ color, focused }) => (
             <IconSymbol
               ios_icon_name="checkmark.circle.fill"

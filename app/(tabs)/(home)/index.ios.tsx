@@ -27,21 +27,9 @@ interface Vessel {
   created_at: string;
 }
 
-interface SeaTimeEntry {
-  id: string;
-  vessel: Vessel | null;
-  start_time: string;
-  end_time: string | null;
-  duration_hours: number | null;
-  status: 'pending' | 'confirmed' | 'rejected';
-  notes: string | null;
-  created_at: string;
-}
-
 export default function SeaTimeScreen() {
   const router = useRouter();
   const [vessels, setVessels] = useState<Vessel[]>([]);
-  const [pendingEntries, setPendingEntries] = useState<SeaTimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -61,13 +49,9 @@ export default function SeaTimeScreen() {
 
   const loadData = async () => {
     try {
-      console.log('Loading vessels and pending entries...');
-      const [vesselsData, entriesData] = await Promise.all([
-        seaTimeApi.getVessels(),
-        seaTimeApi.getPendingEntries(),
-      ]);
+      console.log('Loading vessels...');
+      const vesselsData = await seaTimeApi.getVessels();
       setVessels(vesselsData);
-      setPendingEntries(entriesData);
       console.log('Data loaded successfully - Active vessels:', vesselsData.filter(v => v.is_active).length, 'Historic vessels:', vesselsData.filter(v => !v.is_active).length);
     } catch (error: any) {
       console.error('Failed to load data:', error);
@@ -164,55 +148,6 @@ export default function SeaTimeScreen() {
     }
   };
 
-  const handleConfirmEntry = async (entryId: string) => {
-    Alert.alert(
-      'Confirm Sea Time',
-      'Confirm this sea time entry?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            try {
-              console.log('Confirming entry:', entryId);
-              await seaTimeApi.confirmSeaTimeEntry(entryId);
-              await loadData();
-              Alert.alert('Success', 'Sea time entry confirmed');
-            } catch (error: any) {
-              console.error('Failed to confirm entry:', error);
-              Alert.alert('Error', 'Failed to confirm entry: ' + error.message);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleRejectEntry = async (entryId: string) => {
-    Alert.alert(
-      'Reject Sea Time',
-      'Reject this sea time entry?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('Rejecting entry:', entryId);
-              await seaTimeApi.rejectSeaTimeEntry(entryId);
-              await loadData();
-              Alert.alert('Success', 'Sea time entry rejected');
-            } catch (error: any) {
-              console.error('Failed to reject entry:', error);
-              Alert.alert('Error', 'Failed to reject entry: ' + error.message);
-            }
-          },
-        },
-      ]
-    );
-  };
-
   const handleDeleteVessel = async (vesselId: string, vesselName: string) => {
     Alert.alert(
       'Delete Vessel',
@@ -241,24 +176,6 @@ export default function SeaTimeScreen() {
   const handleVesselPress = (vesselId: string) => {
     console.log('Navigating to vessel detail:', vesselId);
     router.push(`/vessel/${vesselId}` as any);
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return colors.success;
-      case 'rejected':
-        return colors.error;
-      case 'pending':
-        return colors.warning;
-      default:
-        return isDark ? colors.textSecondary : colors.textSecondaryLight;
-    }
   };
 
   if (loading) {
@@ -302,68 +219,6 @@ export default function SeaTimeScreen() {
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Pending Entries */}
-        {pendingEntries.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Pending Confirmations</Text>
-            {pendingEntries.map((entry, index) => {
-              // Check if vessel exists before rendering
-              if (!entry.vessel) {
-                console.warn('Entry has no vessel data:', entry.id);
-                return null;
-              }
-              
-              return (
-                <View key={entry.id} style={styles.pendingCard}>
-                  <View style={styles.pendingHeader}>
-                    <Text style={styles.pendingVessel}>{entry.vessel.vessel_name}</Text>
-                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(entry.status) + '20' }]}>
-                      <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
-                        {entry.status}
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={styles.pendingDate}>
-                    {formatDate(entry.start_time)}
-                    {entry.end_time && ` - ${formatDate(entry.end_time)}`}
-                  </Text>
-                  {entry.duration_hours && (
-                    <Text style={styles.pendingDuration}>
-                      Duration: {entry.duration_hours.toFixed(1)} hours
-                    </Text>
-                  )}
-                  <View style={styles.pendingActions}>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.confirmButton]}
-                      onPress={() => handleConfirmEntry(entry.id)}
-                    >
-                      <IconSymbol
-                        ios_icon_name="checkmark.circle"
-                        android_material_icon_name="check-circle"
-                        size={20}
-                        color="#fff"
-                      />
-                      <Text style={styles.actionButtonText}>Confirm</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.actionButton, styles.rejectButton]}
-                      onPress={() => handleRejectEntry(entry.id)}
-                    >
-                      <IconSymbol
-                        ios_icon_name="xmark.circle"
-                        android_material_icon_name="cancel"
-                        size={20}
-                        color="#fff"
-                      />
-                      <Text style={styles.actionButtonText}>Reject</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-        )}
 
         {/* Active Vessel Section */}
         <View style={styles.section}>
@@ -616,71 +471,6 @@ function createStyles(isDark: boolean) {
     },
     addButton: {
       padding: 4,
-    },
-    pendingCard: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 12,
-      borderLeftWidth: 4,
-      borderLeftColor: colors.warning,
-      borderWidth: 1,
-      borderColor: isDark ? colors.border : colors.borderLight,
-    },
-    pendingHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 8,
-    },
-    pendingVessel: {
-      fontSize: 16,
-      fontWeight: 'bold',
-      color: isDark ? colors.text : colors.textLight,
-    },
-    statusBadge: {
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 4,
-    },
-    statusText: {
-      fontSize: 12,
-      fontWeight: 'bold',
-      textTransform: 'uppercase',
-    },
-    pendingDate: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 4,
-    },
-    pendingDuration: {
-      fontSize: 14,
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 12,
-    },
-    pendingActions: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    actionButton: {
-      flex: 1,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 12,
-      borderRadius: 8,
-      gap: 6,
-    },
-    confirmButton: {
-      backgroundColor: colors.success,
-    },
-    rejectButton: {
-      backgroundColor: colors.error,
-    },
-    actionButtonText: {
-      color: '#fff',
-      fontWeight: 'bold',
-      fontSize: 14,
     },
     vesselCard: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
