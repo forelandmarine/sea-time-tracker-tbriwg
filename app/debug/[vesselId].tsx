@@ -7,7 +7,7 @@ import {
   ScrollView,
   useColorScheme,
   RefreshControl,
-  TouchableOpacity,
+  Platform,
 } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -27,76 +27,164 @@ function createStyles(isDark: boolean) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      paddingTop: Platform.OS === 'android' ? 0 : 0,
     },
     scrollContent: {
       padding: 20,
       paddingBottom: 100,
     },
     header: {
-      fontSize: 24,
+      fontSize: 28,
       fontWeight: 'bold',
-      color: isDark ? colors.textDark : colors.textLight,
-      marginBottom: 16,
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 8,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 24,
     },
     logCard: {
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 12,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 16,
+      padding: 18,
+      marginBottom: 16,
       borderLeftWidth: 4,
+      borderColor: isDark ? colors.border : colors.borderLight,
+      shadowColor: colors.primary,
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 8,
+      elevation: 3,
+    },
+    logHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
     logTimestamp: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    },
+    statusBadge: {
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 12,
+      backgroundColor: colors.primary,
+    },
+    statusText: {
       fontSize: 12,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
-      marginBottom: 8,
+      fontWeight: 'bold',
+      color: '#FFFFFF',
     },
     logRow: {
       flexDirection: 'row',
-      marginBottom: 4,
+      marginBottom: 8,
+      alignItems: 'flex-start',
     },
     logLabel: {
       fontSize: 14,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
-      width: 80,
+      color: colors.primary,
+      width: 70,
+      marginRight: 8,
     },
     logValue: {
       fontSize: 14,
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       flex: 1,
+      lineHeight: 20,
     },
-    codeBlock: {
-      backgroundColor: isDark ? '#1e1e1e' : '#f5f5f5',
+    errorContainer: {
+      backgroundColor: isDark ? 'rgba(211, 47, 47, 0.1)' : 'rgba(211, 47, 47, 0.05)',
       borderRadius: 8,
       padding: 12,
       marginTop: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.error,
+    },
+    errorLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.error,
+      marginBottom: 4,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    errorText: {
+      fontSize: 13,
+      color: colors.error,
+      lineHeight: 18,
+    },
+    codeBlock: {
+      backgroundColor: isDark ? '#0D1B2A' : '#F5F9FC',
+      borderRadius: 8,
+      padding: 12,
+      marginTop: 12,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    codeHeader: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.primary,
+      marginBottom: 8,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     codeText: {
-      fontSize: 12,
-      fontFamily: 'monospace',
-      color: isDark ? '#d4d4d4' : '#333333',
+      fontSize: 11,
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      lineHeight: 16,
     },
     emptyState: {
       alignItems: 'center',
-      padding: 32,
+      justifyContent: 'center',
+      padding: 48,
+      marginTop: 60,
+    },
+    emptyIconContainer: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 20,
+      borderWidth: 2,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    emptyTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: isDark ? colors.text : colors.textLight,
+      textAlign: 'center',
+      marginBottom: 8,
     },
     emptyText: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
-      marginTop: 12,
+      lineHeight: 20,
+      maxWidth: 280,
     },
-    backButton: {
-      flexDirection: 'row',
+    loadingContainer: {
       alignItems: 'center',
-      padding: 12,
-      marginBottom: 16,
+      justifyContent: 'center',
+      padding: 48,
+      marginTop: 60,
     },
-    backButtonText: {
+    loadingText: {
       fontSize: 16,
-      color: colors.primary,
-      marginLeft: 8,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 16,
     },
   });
 }
@@ -144,7 +232,24 @@ export default function DebugScreen() {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleString();
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   return (
@@ -154,6 +259,13 @@ export default function DebugScreen() {
           headerShown: true,
           title: 'AIS Debug Logs',
           headerBackTitle: 'Back',
+          headerStyle: {
+            backgroundColor: isDark ? colors.background : colors.backgroundLight,
+          },
+          headerTintColor: colors.primary,
+          headerTitleStyle: {
+            color: isDark ? colors.text : colors.textLight,
+          },
         }}
       />
       
@@ -161,25 +273,42 @@ export default function DebugScreen() {
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl 
+            refreshing={refreshing} 
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
         }
       >
-        <Text style={styles.header}>🐛 AIS API Debug Logs</Text>
+        <Text style={styles.header}>🐛 Debug Logs</Text>
+        <Text style={styles.subtitle}>
+          API call history and diagnostic information
+        </Text>
 
         {loading ? (
-          <Text style={styles.emptyText}>Loading debug logs...</Text>
+          <View style={styles.loadingContainer}>
+            <IconSymbol
+              ios_icon_name="arrow.clockwise"
+              android_material_icon_name="refresh"
+              size={48}
+              color={colors.primary}
+            />
+            <Text style={styles.loadingText}>Loading debug logs...</Text>
+          </View>
         ) : logs.length === 0 ? (
           <View style={styles.emptyState}>
-            <IconSymbol
-              ios_icon_name="exclamationmark.triangle"
-              android_material_icon_name="warning"
-              size={48}
-              color={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
-            />
+            <View style={styles.emptyIconContainer}>
+              <IconSymbol
+                ios_icon_name="doc.text.magnifyingglass"
+                android_material_icon_name="search"
+                size={40}
+                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+              />
+            </View>
+            <Text style={styles.emptyTitle}>No Debug Logs Yet</Text>
             <Text style={styles.emptyText}>
-              No debug logs available for this vessel yet.
-              {'\n\n'}
-              Check AIS data to generate logs.
+              Debug logs will appear here after AIS data checks are performed. Pull down to refresh.
             </Text>
           </View>
         ) : (
@@ -191,48 +320,42 @@ export default function DebugScreen() {
                 { borderLeftColor: getStatusColor(log.status) },
               ]}
             >
-              <Text style={styles.logTimestamp}>
-                {formatDate(log.timestamp)}
-              </Text>
+              <View style={styles.logHeader}>
+                <Text style={styles.logTimestamp}>
+                  {formatDate(log.timestamp)}
+                </Text>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(log.status) }]}>
+                  <Text style={styles.statusText}>{log.status}</Text>
+                </View>
+              </View>
 
               <View style={styles.logRow}>
-                <Text style={styles.logLabel}>MMSI:</Text>
+                <Text style={styles.logLabel}>MMSI</Text>
                 <Text style={styles.logValue}>{log.mmsi}</Text>
               </View>
 
               <View style={styles.logRow}>
-                <Text style={styles.logLabel}>Status:</Text>
-                <Text
-                  style={[
-                    styles.logValue,
-                    { color: getStatusColor(log.status), fontWeight: '600' },
-                  ]}
-                >
-                  {log.status}
-                </Text>
-              </View>
-
-              <View style={styles.logRow}>
-                <Text style={styles.logLabel}>URL:</Text>
-                <Text style={[styles.logValue, { fontSize: 12 }]} numberOfLines={2}>
+                <Text style={styles.logLabel}>Endpoint</Text>
+                <Text style={[styles.logValue, { fontSize: 12 }]} numberOfLines={3}>
                   {log.url}
                 </Text>
               </View>
 
               {log.error && (
-                <View style={styles.logRow}>
-                  <Text style={styles.logLabel}>Error:</Text>
-                  <Text style={[styles.logValue, { color: colors.error }]}>
-                    {log.error}
-                  </Text>
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorLabel}>⚠️ Error</Text>
+                  <Text style={styles.errorText}>{log.error}</Text>
                 </View>
               )}
 
               {log.response && (
                 <View style={styles.codeBlock}>
-                  <Text style={styles.codeText}>
-                    {JSON.stringify(log.response, null, 2)}
-                  </Text>
+                  <Text style={styles.codeHeader}>Response Data</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <Text style={styles.codeText}>
+                      {JSON.stringify(log.response, null, 2)}
+                    </Text>
+                  </ScrollView>
                 </View>
               )}
             </View>
