@@ -15,12 +15,13 @@ import {
   Platform,
   Image,
   KeyboardAvoidingView,
-  TouchableWithoutFeedback,
-  Keyboard,
+  Dimensions,
 } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 import { useRouter } from 'expo-router';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 interface Vessel {
   id: string;
@@ -82,7 +83,6 @@ export default function SeaTimeScreen() {
       setModalVisible(false);
       setNewMMSI('');
       setNewVesselName('');
-      Keyboard.dismiss();
       await loadData();
       Alert.alert('Success', 'Vessel added successfully');
     } catch (error: any) {
@@ -339,70 +339,68 @@ export default function SeaTimeScreen() {
 
       {/* Add Vessel Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View style={styles.modalOverlay}>
-              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-                <View style={styles.modalContent}>
-                  <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>Add New Vessel</Text>
-                    <TouchableOpacity onPress={() => {
-                      setModalVisible(false);
-                      Keyboard.dismiss();
-                    }}>
-                      <IconSymbol
-                        ios_icon_name="xmark.circle.fill"
-                        android_material_icon_name="cancel"
-                        size={28}
-                        color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                      />
-                    </TouchableOpacity>
-                  </View>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop} 
+            activeOpacity={1} 
+            onPress={() => setModalVisible(false)}
+          />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalKeyboardView}
+          >
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add New Vessel</Text>
+                <TouchableOpacity onPress={() => setModalVisible(false)}>
+                  <IconSymbol
+                    ios_icon_name="xmark.circle.fill"
+                    android_material_icon_name="cancel"
+                    size={28}
+                    color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  />
+                </TouchableOpacity>
+              </View>
 
-                  <ScrollView
-                    style={styles.modalScrollView}
-                    contentContainerStyle={styles.modalScrollContent}
-                    keyboardShouldPersistTaps="handled"
-                    showsVerticalScrollIndicator={true}
-                  >
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>Vessel Name</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="e.g., MV Serenity"
-                        placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                        value={newVesselName}
-                        onChangeText={setNewVesselName}
-                        returnKeyType="next"
-                      />
-                    </View>
-
-                    <View style={styles.inputGroup}>
-                      <Text style={styles.inputLabel}>MMSI Number</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="e.g., 235012345"
-                        placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                        value={newMMSI}
-                        onChangeText={setNewMMSI}
-                        keyboardType="numeric"
-                        returnKeyType="done"
-                        onSubmitEditing={handleAddVessel}
-                      />
-                    </View>
-
-                    <TouchableOpacity style={styles.submitButton} onPress={handleAddVessel}>
-                      <Text style={styles.submitButtonText}>Add Vessel</Text>
-                    </TouchableOpacity>
-                  </ScrollView>
+              <ScrollView
+                style={styles.modalScrollView}
+                contentContainerStyle={styles.modalScrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={true}
+              >
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Vessel Name</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., MV Serenity"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newVesselName}
+                    onChangeText={setNewVesselName}
+                    returnKeyType="next"
+                  />
                 </View>
-              </TouchableWithoutFeedback>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>MMSI Number</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 235012345"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newMMSI}
+                    onChangeText={setNewMMSI}
+                    keyboardType="numeric"
+                    returnKeyType="done"
+                    onSubmitEditing={handleAddVessel}
+                  />
+                </View>
+
+                <TouchableOpacity style={styles.submitButton} onPress={handleAddVessel}>
+                  <Text style={styles.submitButtonText}>Add Vessel</Text>
+                </TouchableOpacity>
+              </ScrollView>
             </View>
-          </TouchableWithoutFeedback>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
     </View>
   );
@@ -594,11 +592,22 @@ function createStyles(isDark: boolean) {
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'flex-end',
     },
+    modalBackdrop: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+    },
+    modalKeyboardView: {
+      justifyContent: 'flex-end',
+      maxHeight: SCREEN_HEIGHT * 0.7,
+    },
     modalContent: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
-      maxHeight: '80%',
+      height: SCREEN_HEIGHT * 0.6,
     },
     modalHeader: {
       flexDirection: 'row',
@@ -622,7 +631,7 @@ function createStyles(isDark: boolean) {
       paddingBottom: 40,
     },
     inputGroup: {
-      marginBottom: 16,
+      marginBottom: 20,
     },
     inputLabel: {
       fontSize: 14,
@@ -633,7 +642,7 @@ function createStyles(isDark: boolean) {
     input: {
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
       borderRadius: 8,
-      padding: 12,
+      padding: 14,
       fontSize: 16,
       color: isDark ? colors.text : colors.textLight,
       borderWidth: 1,
@@ -644,7 +653,7 @@ function createStyles(isDark: boolean) {
       padding: 16,
       borderRadius: 8,
       alignItems: 'center',
-      marginTop: 8,
+      marginTop: 12,
     },
     submitButtonText: {
       color: '#fff',
