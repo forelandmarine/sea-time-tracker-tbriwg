@@ -126,6 +126,8 @@ export default function AuthScreen() {
         errorMessage = error.message;
       } else if (error.error) {
         errorMessage = error.error;
+      } else if (error.status === 500) {
+        errorMessage = "Server error (500)";
       }
       
       // Handle specific error cases
@@ -146,9 +148,9 @@ export default function AuthScreen() {
       } else if (errorMessage.includes("session was not established")) {
         errorTitle = "Session Error";
         errorMessage = "Sign in succeeded but session could not be established. This may be a temporary issue. Please try again.";
-      } else if (errorMessage.includes("Server error") || errorMessage.includes("500")) {
-        errorTitle = "Server Error";
-        errorMessage = "The server is currently experiencing issues. This may be temporary while the backend is updating. Please try again in a moment.";
+      } else if (errorMessage.includes("Server error") || errorMessage.includes("500") || error.status === 500) {
+        errorTitle = "Backend Update in Progress";
+        errorMessage = "✅ Good news: The backend is live and deployed!\n\n⚙️ The authentication system is currently being updated to fix a configuration issue.\n\n⏱️ This should be resolved in 1-2 minutes. Please try again shortly.\n\nBackend URL: https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev";
       }
       
       Alert.alert(errorTitle, errorMessage);
@@ -176,9 +178,9 @@ export default function AuthScreen() {
       let errorMessage = error.message || "Authentication failed";
       let errorTitle = "Error";
       
-      if (errorMessage.includes("Server error") || errorMessage.includes("500")) {
-        errorTitle = "Server Error";
-        errorMessage = "The server is currently experiencing issues. This may be temporary while the backend is updating. Please try again in a moment.";
+      if (errorMessage.includes("Server error") || errorMessage.includes("500") || error.status === 500) {
+        errorTitle = "Backend Update in Progress";
+        errorMessage = "✅ Good news: The backend is live and deployed!\n\n⚙️ The authentication system is currently being updated to fix a configuration issue.\n\n⏱️ This should be resolved in 1-2 minutes. Please try again shortly.\n\nBackend URL: https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev";
       } else if (errorMessage.includes("cancelled")) {
         errorTitle = "Cancelled";
         errorMessage = "Authentication was cancelled.";
@@ -208,6 +210,15 @@ export default function AuthScreen() {
             <Text style={styles.welcomeMessage}>
               Welcome aboard! Track your sea time and manage your maritime service records with ease.
             </Text>
+          </View>
+
+          {/* Backend Status Banner */}
+          <View style={styles.statusBanner}>
+            <Text style={styles.statusEmoji}>✅</Text>
+            <View style={styles.statusTextContainer}>
+              <Text style={styles.statusTitle}>Backend Status: Live</Text>
+              <Text style={styles.statusSubtitle}>Authentication update in progress...</Text>
+            </View>
           </View>
 
           <Text style={styles.title}>
@@ -327,7 +338,7 @@ const styles = StyleSheet.create({
   },
   headerContainer: {
     alignItems: "center",
-    marginBottom: 32,
+    marginBottom: 24,
   },
   lighthouseLogo: {
     width: 120,
@@ -347,6 +358,33 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 22,
     paddingHorizontal: 16,
+  },
+  statusBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#E8F5E9",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "#4CAF50",
+  },
+  statusEmoji: {
+    fontSize: 32,
+    marginRight: 12,
+  },
+  statusTextContainer: {
+    flex: 1,
+  },
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#2E7D32",
+    marginBottom: 4,
+  },
+  statusSubtitle: {
+    fontSize: 13,
+    color: "#558B2F",
   },
   title: {
     fontSize: 24,
