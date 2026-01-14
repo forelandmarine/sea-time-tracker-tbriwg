@@ -20,6 +20,10 @@ export const sea_time_entries = pgTable('sea_time_entries', {
   duration_hours: decimal('duration_hours', { precision: 10, scale: 2 }),
   status: text('status').notNull().default('pending'),
   notes: text('notes'),
+  start_latitude: decimal('start_latitude', { precision: 9, scale: 6 }),
+  start_longitude: decimal('start_longitude', { precision: 10, scale: 6 }),
+  end_latitude: decimal('end_latitude', { precision: 9, scale: 6 }),
+  end_longitude: decimal('end_longitude', { precision: 10, scale: 6 }),
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('sea_time_entries_vessel_id_idx').on(table.vessel_id),

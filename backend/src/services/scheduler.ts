@@ -1,12 +1,10 @@
-import { eq, and, lte, desc, isNotNull, gte } from 'drizzle-orm';
+import { eq, and, desc, isNotNull, lte } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { App } from '../index.js';
 import { fetchVesselAISData } from '../routes/ais.js';
 
 const SCHEDULER_CHECK_INTERVAL_MS = 60 * 1000; // Check every minute
-const MOVING_SPEED_THRESHOLD = 2; // knots
-const MIN_SEA_TIME_HOURS = 2; // Minimum cumulative moving time to create a sea time entry
-const MOVEMENT_ANALYSIS_WINDOW_HOURS = 24; // Analyze last 24 hours of movement data
+const LOCATION_CHANGE_THRESHOLD = 0.1; // degrees (latitude/longitude)
 
 let schedulerInterval: NodeJS.Timeout | null = null;
 let isSchedulerRunning = false;
@@ -189,8 +187,9 @@ async function processScheduledTask(
 }
 
 /**
- * Handle sea time entry lifecycle based on vessel movement patterns
- * Analyzes last 24 hours of movement, creates entries for >= 2 hours of cumulative moving time
+ * Handle sea time entry creation based on location changes
+ * First AIS location: log it, don't create entry
+ * Second location with >0.1 degree change: create pending sea day entry
  */
 async function handleSeaTimeEntries(
   app: App,
@@ -201,192 +200,128 @@ async function handleSeaTimeEntries(
   check_time: Date,
   taskId: string
 ): Promise<void> {
-  // Get open pending sea time entry
-  const open_entry = await app.db
+  // Get the two most recent AIS checks for this vessel
+  const recentChecks = await app.db
     .select()
-    .from(schema.sea_time_entries)
-    .where(
-      and(
-        eq(schema.sea_time_entries.vessel_id, vesselId),
-        isNotNull(schema.sea_time_entries.start_time),
-        eq(schema.sea_time_entries.status, 'pending')
-      )
-    )
-    .orderBy(desc(schema.sea_time_entries.created_at))
-    .limit(1);
+    .from(schema.ais_checks)
+    .where(eq(schema.ais_checks.vessel_id, vesselId))
+    .orderBy(desc(schema.ais_checks.check_time))
+    .limit(2);
 
-  if (is_moving) {
-    // Vessel is currently moving
-    if (open_entry.length === 0) {
-      // Analyze last 24 hours of AIS checks to calculate cumulative moving time
-      const analysisStart = new Date(check_time.getTime() - MOVEMENT_ANALYSIS_WINDOW_HOURS * 60 * 60 * 1000);
+  app.logger.debug(
+    { vesselId, mmsi, recentChecksCount: recentChecks.length },
+    `Found ${recentChecks.length} recent AIS check(s) for vessel ${vessel_name}`
+  );
 
-      const aisChecks = await app.db
-        .select()
-        .from(schema.ais_checks)
-        .where(
-          and(
-            eq(schema.ais_checks.vessel_id, vesselId),
-            gte(schema.ais_checks.check_time, analysisStart),
-            lte(schema.ais_checks.check_time, check_time)
-          )
+  // Need at least 2 checks to determine movement
+  if (recentChecks.length < 2) {
+    app.logger.debug(
+      { vesselId, mmsi },
+      `Vessel ${vessel_name} has fewer than 2 AIS checks, logging current position only`
+    );
+    return;
+  }
+
+  // Checks are ordered newest first, so [0] is current, [1] is previous
+  const currentCheck = recentChecks[0];
+  const previousCheck = recentChecks[1];
+
+  // Both checks need valid position data
+  if (!currentCheck.latitude || !currentCheck.longitude || !previousCheck.latitude || !previousCheck.longitude) {
+    app.logger.debug(
+      { vesselId, mmsi },
+      `Vessel ${vessel_name} missing position data in recent checks`
+    );
+    return;
+  }
+
+  const currentLat = parseFloat(String(currentCheck.latitude));
+  const currentLng = parseFloat(String(currentCheck.longitude));
+  const previousLat = parseFloat(String(previousCheck.latitude));
+  const previousLng = parseFloat(String(previousCheck.longitude));
+
+  // Calculate coordinate difference
+  const latDiff = Math.abs(currentLat - previousLat);
+  const lngDiff = Math.abs(currentLng - previousLng);
+  const maxDiff = Math.max(latDiff, lngDiff);
+
+  app.logger.debug(
+    {
+      vesselId,
+      mmsi,
+      previousLat,
+      previousLng,
+      currentLat,
+      currentLng,
+      latDiff: Math.round(latDiff * 10000) / 10000,
+      lngDiff: Math.round(lngDiff * 10000) / 10000,
+      maxDiff: Math.round(maxDiff * 10000) / 10000,
+    },
+    `Vessel ${vessel_name} location change: lat Δ=${Math.round(latDiff * 10000) / 10000}°, lng Δ=${Math.round(lngDiff * 10000) / 10000}°`
+  );
+
+  // Check if location has changed significantly (more than threshold)
+  if (maxDiff > LOCATION_CHANGE_THRESHOLD) {
+    // Check if there's already an open pending sea time entry
+    const openEntry = await app.db
+      .select()
+      .from(schema.sea_time_entries)
+      .where(
+        and(
+          eq(schema.sea_time_entries.vessel_id, vesselId),
+          isNotNull(schema.sea_time_entries.start_time),
+          eq(schema.sea_time_entries.status, 'pending')
         )
-        .orderBy(desc(schema.ais_checks.check_time));
+      )
+      .orderBy(desc(schema.sea_time_entries.created_at))
+      .limit(1);
 
-      app.logger.debug(
-        { vesselId, mmsi, checksCount: aisChecks.length },
-        `Analyzing ${aisChecks.length} AIS checks from last 24 hours for vessel ${vessel_name}`
-      );
-
-      // Calculate movement periods and cumulative moving time
-      const movementPeriods = identifyMovementPeriods(aisChecks);
-
-      app.logger.debug(
-        { vesselId, mmsi, periodsCount: movementPeriods.length },
-        `Identified ${movementPeriods.length} movement period(s) for vessel ${vessel_name}`
-      );
-
-      // Check if cumulative moving time >= MIN_SEA_TIME_HOURS
-      let totalMovingHours = 0;
-      let oldestMovingCheckTime: Date | null = null;
-
-      for (const period of movementPeriods) {
-        const periodDurationHours = (period.endTime.getTime() - period.startTime.getTime()) / (1000 * 60 * 60);
-        totalMovingHours += periodDurationHours;
-
-        if (!oldestMovingCheckTime || period.startTime < oldestMovingCheckTime) {
-          oldestMovingCheckTime = period.startTime;
-        }
-      }
-
-      app.logger.info(
-        { vesselId, mmsi, totalMovingHours: Math.round(totalMovingHours * 100) / 100, periodsCount: movementPeriods.length },
-        `Vessel ${vessel_name} cumulative moving time: ${Math.round(totalMovingHours * 100) / 100} hours across ${movementPeriods.length} period(s)`
-      );
-
-      // Create a sea time entry if cumulative moving time >= MIN_SEA_TIME_HOURS
-      if (totalMovingHours >= MIN_SEA_TIME_HOURS && oldestMovingCheckTime) {
-        const [new_entry] = await app.db
-          .insert(schema.sea_time_entries)
-          .values({
-            vessel_id: vesselId,
-            start_time: oldestMovingCheckTime,
-            status: 'pending',
-          })
-          .returning();
-
-        app.logger.info(
-          {
-            taskId,
-            vesselId,
-            mmsi,
-            entryId: new_entry.id,
-            totalMovingHours: Math.round(totalMovingHours * 100) / 100,
-            startTime: oldestMovingCheckTime.toISOString(),
-          },
-          `Auto-created sea time entry for vessel ${vessel_name}: ${Math.round(totalMovingHours * 100) / 100} hours of cumulative movement`
-        );
-      } else if (totalMovingHours > 0) {
-        app.logger.debug(
-          { vesselId, mmsi, totalMovingHours: Math.round(totalMovingHours * 100) / 100, threshold: MIN_SEA_TIME_HOURS },
-          `Vessel ${vessel_name} has ${Math.round(totalMovingHours * 100) / 100} hours of movement (below ${MIN_SEA_TIME_HOURS} hour threshold)`
-        );
-      }
-    } else {
-      app.logger.debug(
-        { taskId, vesselId, mmsi, entryId: open_entry[0].id },
-        `Vessel ${vessel_name} still moving, keeping open sea time entry`
-      );
-    }
-  } else {
-    // Vessel is not moving
-    if (open_entry.length > 0) {
-      // End the sea time entry and calculate duration
-      const start_time = open_entry[0].start_time;
-      const duration_ms = check_time.getTime() - start_time.getTime();
-      const duration_hours = Math.round((duration_ms / (1000 * 60 * 60)) * 100) / 100;
-
-      const [ended_entry] = await app.db
-        .update(schema.sea_time_entries)
-        .set({
-          end_time: check_time,
-          duration_hours: String(duration_hours),
+    if (openEntry.length === 0) {
+      // Create new sea time entry with coordinates from both checks
+      const [new_entry] = await app.db
+        .insert(schema.sea_time_entries)
+        .values({
+          vessel_id: vesselId,
+          start_time: previousCheck.check_time,
+          end_time: currentCheck.check_time,
+          start_latitude: String(previousLat),
+          start_longitude: String(previousLng),
+          end_latitude: String(currentLat),
+          end_longitude: String(currentLng),
+          status: 'pending',
         })
-        .where(eq(schema.sea_time_entries.id, open_entry[0].id))
         .returning();
+
+      const duration_ms = currentCheck.check_time.getTime() - previousCheck.check_time.getTime();
+      const duration_hours = Math.round((duration_ms / (1000 * 60 * 60)) * 100) / 100;
 
       app.logger.info(
         {
           taskId,
           vesselId,
           mmsi,
-          entryId: ended_entry.id,
+          entryId: new_entry.id,
+          startTime: previousCheck.check_time.toISOString(),
+          startLat: previousLat,
+          startLng: previousLng,
+          endTime: currentCheck.check_time.toISOString(),
+          endLat: currentLat,
+          endLng: currentLng,
+          locationDelta: Math.round(maxDiff * 10000) / 10000,
           durationHours: duration_hours,
-          startTime: start_time.toISOString(),
-          endTime: check_time.toISOString(),
         },
-        `Ended sea time entry for vessel ${vessel_name}: duration=${duration_hours} hours`
+        `Created sea day entry for vessel ${vessel_name}: location changed ${Math.round(maxDiff * 10000) / 10000}° (threshold: ${LOCATION_CHANGE_THRESHOLD}°), duration: ${duration_hours} hours`
       );
     } else {
       app.logger.debug(
-        { taskId, vesselId, mmsi },
-        `Vessel ${vessel_name} not moving, no open sea time entry to close`
+        { vesselId, mmsi, entryId: openEntry[0].id },
+        `Vessel ${vessel_name} location has changed but pending entry already exists, skipping creation`
       );
     }
+  } else {
+    app.logger.debug(
+      { vesselId, mmsi, maxDiff: Math.round(maxDiff * 10000) / 10000, threshold: LOCATION_CHANGE_THRESHOLD },
+      `Vessel ${vessel_name} location change of ${Math.round(maxDiff * 10000) / 10000}° is below threshold of ${LOCATION_CHANGE_THRESHOLD}°`
+    );
   }
-}
-
-/**
- * Identify consecutive movement periods from AIS check data
- * A movement period is a sequence of consecutive is_moving=true checks
- * Returns array of { startTime, endTime } for each continuous movement period
- */
-function identifyMovementPeriods(
-  aisChecks: Array<typeof schema.ais_checks.$inferSelect>
-): Array<{ startTime: Date; endTime: Date }> {
-  if (aisChecks.length === 0) {
-    return [];
-  }
-
-  // Sort by check_time ascending (oldest first)
-  const sortedChecks = aisChecks.sort((a, b) => a.check_time.getTime() - b.check_time.getTime());
-
-  const periods: Array<{ startTime: Date; endTime: Date }> = [];
-  let currentPeriodStart: Date | null = null;
-
-  for (const check of sortedChecks) {
-    if (check.is_moving) {
-      // Vessel is moving
-      if (currentPeriodStart === null) {
-        // Start a new movement period
-        currentPeriodStart = check.check_time;
-      }
-      // Update end time to current check time (will be overwritten if more moving checks follow)
-    } else {
-      // Vessel is not moving
-      if (currentPeriodStart !== null) {
-        // End the current movement period
-        const previousCheck = sortedChecks[sortedChecks.indexOf(check) - 1];
-        const periodEndTime = previousCheck ? previousCheck.check_time : currentPeriodStart;
-
-        periods.push({
-          startTime: currentPeriodStart,
-          endTime: periodEndTime,
-        });
-
-        currentPeriodStart = null;
-      }
-    }
-  }
-
-  // If there's an ongoing movement period, add it with check_time as end time
-  if (currentPeriodStart !== null) {
-    const lastCheck = sortedChecks[sortedChecks.length - 1];
-    periods.push({
-      startTime: currentPeriodStart,
-      endTime: lastCheck.check_time,
-    });
-  }
-
-  return periods;
 }
