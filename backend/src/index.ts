@@ -1,5 +1,6 @@
 import { createApplication } from "@specific-dev/framework";
-import * as schema from './db/schema.js';
+import * as appSchema from './db/schema.js';
+import * as authSchema from './db/auth-schema.js';
 
 // Import route registration functions
 import * as vesselsRoutes from './routes/vessels.js';
@@ -7,12 +8,19 @@ import * as aisRoutes from './routes/ais.js';
 import * as seaTimeRoutes from './routes/sea-time.js';
 import * as reportsRoutes from './routes/reports.js';
 import * as trackingRoutes from './routes/tracking.js';
+import * as usersRoutes from './routes/users.js';
 
 // Import scheduler service
 import { startScheduler } from './services/scheduler.js';
 
-// Create application with schema for full database type support
+// Combine schemas for full database type support (app + auth)
+const schema = { ...appSchema, ...authSchema };
+
+// Create application with combined schema
 export const app = await createApplication(schema);
+
+// Enable authentication
+app.withAuth();
 
 // Export App type for use in route files
 export type App = typeof app;
@@ -24,6 +32,7 @@ aisRoutes.register(app, app.fastify);
 seaTimeRoutes.register(app, app.fastify);
 reportsRoutes.register(app, app.fastify);
 trackingRoutes.register(app, app.fastify);
+usersRoutes.register(app, app.fastify);
 
 // Log API configuration status
 const aisApiKey = process.env.MYSHIPTRACKING_API_KEY;
