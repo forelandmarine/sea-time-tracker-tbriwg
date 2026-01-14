@@ -53,6 +53,7 @@ export default function ConfirmationsScreen() {
     try {
       console.log('Fetching pending entries from API...');
       const entriesData = await seaTimeApi.getPendingEntries();
+      console.log('Raw pending entries data:', JSON.stringify(entriesData, null, 2));
       setPendingEntries(entriesData);
       console.log('Pending entries loaded:', entriesData.length);
     } catch (error: any) {
@@ -188,15 +189,33 @@ export default function ConfirmationsScreen() {
         ) : (
           <View style={styles.entriesContainer}>
             {pendingEntries.map((entry, index) => {
-              // Check if vessel exists before rendering
-              if (!entry.vessel) {
-                console.warn('Entry has no vessel data:', entry.id);
-                return null;
+              // Show entry even if vessel is missing, but with a warning
+              const vesselName = entry.vessel?.vessel_name || 'Unknown Vessel';
+              const vesselMmsi = entry.vessel?.mmsi || 'N/A';
+              const hasVesselData = !!entry.vessel;
+
+              if (!hasVesselData) {
+                console.warn('Entry missing vessel data:', entry.id, 'Full entry:', JSON.stringify(entry, null, 2));
               }
 
               return (
                 <React.Fragment key={index}>
                   <View key={entry.id} style={styles.entryCard}>
+                    {/* Warning banner if vessel data is missing */}
+                    {!hasVesselData && (
+                      <View style={styles.warningBanner}>
+                        <IconSymbol
+                          ios_icon_name="exclamationmark.triangle.fill"
+                          android_material_icon_name="warning"
+                          size={16}
+                          color={colors.warning}
+                        />
+                        <Text style={styles.warningText}>
+                          Vessel information unavailable
+                        </Text>
+                      </View>
+                    )}
+
                     {/* Vessel Name Header */}
                     <View style={styles.entryHeader}>
                       <View style={styles.vesselInfo}>
@@ -207,8 +226,8 @@ export default function ConfirmationsScreen() {
                           color={colors.primary}
                         />
                         <View style={styles.vesselTextInfo}>
-                          <Text style={styles.vesselName}>{entry.vessel.vessel_name}</Text>
-                          <Text style={styles.vesselMmsi}>MMSI: {entry.vessel.mmsi}</Text>
+                          <Text style={styles.vesselName}>{vesselName}</Text>
+                          <Text style={styles.vesselMmsi}>MMSI: {vesselMmsi}</Text>
                         </View>
                       </View>
                       <View style={[styles.statusBadge, { backgroundColor: getStatusColor(entry.status) + '20' }]}>
@@ -380,6 +399,20 @@ function createStyles(isDark: boolean) {
       shadowOpacity: 0.1,
       shadowRadius: 4,
       elevation: 3,
+    },
+    warningBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.warning + '20',
+      borderRadius: 8,
+      padding: 10,
+      marginBottom: 12,
+      gap: 8,
+    },
+    warningText: {
+      fontSize: 13,
+      color: colors.warning,
+      fontWeight: '600',
     },
     entryHeader: {
       flexDirection: 'row',
