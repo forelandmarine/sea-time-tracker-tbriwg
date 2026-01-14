@@ -165,6 +165,13 @@ export default function ConfirmationsScreen() {
     }
   };
 
+  const formatCoordinate = (value: number | null | undefined): string => {
+    if (typeof value === 'number' && !isNaN(value)) {
+      return value.toFixed(6);
+    }
+    return 'N/A';
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -212,10 +219,10 @@ export default function ConfirmationsScreen() {
                 console.warn('[ConfirmationsScreen] Entry missing vessel data:', entry.id);
               }
 
-              const hasStartCoords = entry.start_latitude !== null && entry.start_latitude !== undefined && 
-                                     entry.start_longitude !== null && entry.start_longitude !== undefined;
-              const hasEndCoords = entry.end_latitude !== null && entry.end_latitude !== undefined && 
-                                   entry.end_longitude !== null && entry.end_longitude !== undefined;
+              const hasStartCoords = typeof entry.start_latitude === 'number' && !isNaN(entry.start_latitude) &&
+                                     typeof entry.start_longitude === 'number' && !isNaN(entry.start_longitude);
+              const hasEndCoords = typeof entry.end_latitude === 'number' && !isNaN(entry.end_latitude) &&
+                                   typeof entry.end_longitude === 'number' && !isNaN(entry.end_longitude);
               const hasAnyCoords = hasStartCoords || hasEndCoords;
 
               console.log(`[ConfirmationsScreen] Rendering entry ${entry.id} coordinates:`, {
@@ -319,7 +326,7 @@ export default function ConfirmationsScreen() {
                           <View style={styles.coordinateRow}>
                             <Text style={styles.coordinateLabel}>Start Position:</Text>
                             <Text style={styles.coordinateValue}>
-                              {entry.start_latitude!.toFixed(6)}°, {entry.start_longitude!.toFixed(6)}°
+                              {formatCoordinate(entry.start_latitude)}°, {formatCoordinate(entry.start_longitude)}°
                             </Text>
                           </View>
                         )}
@@ -328,7 +335,7 @@ export default function ConfirmationsScreen() {
                           <View style={styles.coordinateRow}>
                             <Text style={styles.coordinateLabel}>End Position:</Text>
                             <Text style={styles.coordinateValue}>
-                              {entry.end_latitude!.toFixed(6)}°, {entry.end_longitude!.toFixed(6)}°
+                              {formatCoordinate(entry.end_latitude)}°, {formatCoordinate(entry.end_longitude)}°
                             </Text>
                           </View>
                         )}
