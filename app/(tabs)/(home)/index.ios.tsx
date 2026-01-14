@@ -137,8 +137,8 @@ export default function SeaTimeScreen() {
           : 'Unknown';
 
       const message = result.is_moving
-        ? `✅ Vessel is moving\n\nSpeed: ${speedText}\nPosition: ${positionText}`
-        : `⚓ Vessel is not moving\n\nSpeed: ${speedText}\nPosition: ${positionText}`;
+        ? `Vessel is moving\n\nSpeed: ${speedText}\nPosition: ${positionText}`
+        : `Vessel is not moving\n\nSpeed: ${speedText}\nPosition: ${positionText}`;
 
       Alert.alert(`AIS Check - ${vesselName}`, message);
       await loadData();

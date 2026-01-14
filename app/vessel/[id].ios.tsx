@@ -325,7 +325,7 @@ export default function VesselDetailScreen() {
         </View>
 
         <TouchableOpacity style={styles.debugButton} onPress={handleViewDebugLogs}>
-          <Text style={styles.debugButtonText}>🐛 View AIS Debug Logs</Text>
+          <Text style={styles.debugButtonText}>View AIS Debug Logs</Text>
         </TouchableOpacity>
 
         <Text style={styles.sectionTitle}>Sea Time History</Text>
@@ -370,18 +370,18 @@ export default function VesselDetailScreen() {
                     <View style={styles.entryDetails}>
                       {entry.end_time && (
                         <Text style={styles.entryDetailText}>
-                          ⏱️ End: {formatDateTime(entry.end_time)}
+                          End: {formatDateTime(entry.end_time)}
                         </Text>
                       )}
                       {entry.duration_hours && (
                         <Text style={styles.entryDetailText}>
-                          ⏰ Duration: {entry.duration_hours} hours (
+                          Duration: {entry.duration_hours} hours (
                           {(entry.duration_hours / 24).toFixed(2)} days)
                         </Text>
                       )}
                       {entry.notes && (
                         <Text style={styles.entryDetailText}>
-                          📝 Notes: {entry.notes}
+                          Notes: {entry.notes}
                         </Text>
                       )}
                     </View>

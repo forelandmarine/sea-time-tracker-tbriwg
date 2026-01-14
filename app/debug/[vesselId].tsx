@@ -330,13 +330,13 @@ export default function DebugScreen() {
   const formatAuthStatus = (status: string) => {
     switch (status) {
       case 'success':
-        return '✓ Authenticated';
+        return 'Authenticated';
       case 'authentication_failed':
-        return '✗ Auth Failed';
+        return 'Auth Failed';
       case 'connection_error':
-        return '✗ Connection Error';
+        return 'Connection Error';
       case 'rate_limited':
-        return '⚠ Rate Limited';
+        return 'Rate Limited';
       default:
         return status;
     }
@@ -381,7 +381,7 @@ export default function DebugScreen() {
           />
         }
       >
-        <Text style={styles.header}>🐛 Debug Logs</Text>
+        <Text style={styles.header}>Debug Logs</Text>
         <Text style={styles.subtitle}>
           API call history and diagnostic information
         </Text>
@@ -453,7 +453,7 @@ export default function DebugScreen() {
 
                 {log.error_message && (
                   <View style={styles.errorContainer}>
-                    <Text style={styles.errorLabel}>⚠️ Error</Text>
+                    <Text style={styles.errorLabel}>Error</Text>
                     <Text style={styles.errorText}>{log.error_message}</Text>
                   </View>
                 )}
