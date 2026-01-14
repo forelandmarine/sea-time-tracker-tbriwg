@@ -5,7 +5,7 @@ const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || '';
 
 // Log the backend URL for debugging
 console.log('[SeaTimeAPI] Backend URL configured:', API_BASE_URL);
-console.log('[SeaTimeAPI] API authentication is handled securely by the backend');
+console.log('[SeaTimeAPI] No authentication required - all endpoints are public');
 
 export interface Vessel {
   id: string;
@@ -88,7 +88,7 @@ function checkBackendConfigured() {
   }
 }
 
-// Helper function to get API headers with authentication
+// Helper function to get API headers
 function getApiHeaders(): HeadersInit {
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
@@ -97,12 +97,11 @@ function getApiHeaders(): HeadersInit {
   return headers;
 }
 
-// Helper function to get fetch options with credentials
+// Helper function to get fetch options
 function getFetchOptions(method: string = 'GET', body?: any): RequestInit {
   const options: RequestInit = {
     method,
     headers: getApiHeaders(),
-    credentials: 'include', // Include cookies for Better Auth session
   };
   
   if (body) {
@@ -191,7 +190,7 @@ export async function getVesselSeaTime(vesselId: string): Promise<SeaTimeEntry[]
 export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/check/${vesselId}`;
-  console.log('[API] Checking vessel AIS with secure authentication:', vesselId);
+  console.log('[API] Checking vessel AIS:', vesselId);
   const response = await fetch(url, getFetchOptions('POST', {}));
   
   if (!response.ok) {
@@ -201,7 +200,6 @@ export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> 
       const errorData = await response.json();
       console.error('[API] AIS check failed:', response.status, errorData);
       
-      // Provide specific error messages based on the backend response
       if (errorData.error) {
         if (errorData.error.includes('API key') || errorData.error.includes('authentication failed')) {
           errorMessage = '🔐 Authentication Error\n\nThe MyShipTracking API authentication failed. The API key may be invalid or expired.\n\nThis is a backend configuration issue. Please contact support.';
@@ -334,7 +332,6 @@ export async function getScheduledTasks(): Promise<ScheduledTask[]> {
   try {
     const response = await fetch(url, getFetchOptions());
     if (!response.ok) {
-      // If endpoint doesn't exist (404), return empty array
       if (response.status === 404) {
         console.warn('[API] Scheduled tasks endpoint not found (404) - feature may not be implemented yet');
         return [];
@@ -347,7 +344,6 @@ export async function getScheduledTasks(): Promise<ScheduledTask[]> {
     console.log('[API] Scheduled tasks fetched:', data.length);
     return data;
   } catch (error: any) {
-    // If network error or endpoint doesn't exist, return empty array
     if (error.message?.includes('fetch') || error.message?.includes('Network')) {
       console.warn('[API] Scheduled tasks endpoint may not be available:', error.message);
       return [];
@@ -502,7 +498,7 @@ export async function downloadCSVReport(startDate?: string, endDate?: string): P
 export async function createTestSeaDayEntry(): Promise<SeaTimeEntry> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/test-entry`;
-  console.log('[API] Creating test sea day entry from Norwegian position records (2026-01-14T11:01:07.055Z and 2026-01-14T11:46:09.390Z)');
+  console.log('[API] Creating test sea day entry from Norwegian position records');
   const response = await fetch(url, getFetchOptions('POST', {}));
   
   if (!response.ok) {
@@ -533,69 +529,4 @@ export async function createTestSeaDayEntry(): Promise<SeaTimeEntry> {
   const data = await response.json();
   console.log('[API] Test sea day entry created successfully:', data);
   return data;
-}
-
-// Authentication - Create Test User
-export interface CreateTestUserResponse {
-  success: boolean;
-  user?: {
-    id: string;
-    email: string;
-    name: string;
-  };
-  message?: string;
-  error?: string;
-}
-
-export async function createTestUser(email: string, password: string, name: string): Promise<CreateTestUserResponse> {
-  checkBackendConfigured();
-  const url = `${API_BASE_URL}/api/users/test`;
-  console.log('[API] Creating test user:', email, name);
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password, name }),
-  });
-  
-  if (!response.ok) {
-    let errorMessage = 'Failed to create test user';
-    
-    try {
-      const errorData = await response.json();
-      console.error('[API] Test user creation failed:', response.status, errorData);
-      
-      if (errorData.error) {
-        errorMessage = errorData.error;
-      }
-    } catch (parseError) {
-      try {
-        const errorText = await response.text();
-        console.error('[API] Test user creation failed (text):', response.status, errorText);
-        if (errorText) {
-          errorMessage = errorText;
-        }
-      } catch (textError) {
-        console.error('[API] Could not parse error response:', textError);
-      }
-    }
-    
-    throw new Error(errorMessage);
-  }
-  
-  const data = await response.json();
-  console.log('[API] Test user creation response:', data);
-  
-  // Transform the response to match our interface
-  return {
-    success: true,
-    user: {
-      id: data.id,
-      email: data.email,
-      name: data.name,
-    },
-    message: data.message || 'Test user created successfully',
-  };
 }

@@ -1,5 +1,9 @@
 
+import { IconSymbol } from '@/components/IconSymbol';
+import * as seaTimeApi from '@/utils/seaTimeApi';
 import React, { useState, useEffect } from 'react';
+import { colors } from '@/styles/commonStyles';
+import * as FileSystem from 'expo-file-system/legacy';
 import {
   View,
   Text,
@@ -10,14 +14,7 @@ import {
   useColorScheme,
   Platform,
   Share,
-  TextInput,
-  Modal,
 } from 'react-native';
-import { colors } from '@/styles/commonStyles';
-import { IconSymbol } from '@/components/IconSymbol';
-import { useAuth } from '@/contexts/AuthContext';
-import * as seaTimeApi from '@/utils/seaTimeApi';
-import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 interface ReportSummary {
@@ -33,618 +30,319 @@ interface ReportSummary {
   }[];
 }
 
+function createStyles(isDark: boolean) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+    },
+    scrollContent: {
+      padding: 16,
+      paddingTop: Platform.OS === 'android' ? 48 : 16,
+    },
+    header: {
+      marginBottom: 24,
+      alignItems: 'center',
+    },
+    headerIcon: {
+      marginBottom: 12,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: isDark ? colors.textDark : colors.textLight,
+      marginBottom: 8,
+    },
+    subtitle: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      textAlign: 'center',
+    },
+    summaryCard: {
+      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      borderRadius: 12,
+      padding: 20,
+      marginBottom: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    summaryTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: isDark ? colors.textDark : colors.textLight,
+      marginBottom: 16,
+    },
+    summaryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.borderDark : colors.borderLight,
+    },
+    summaryRowLast: {
+      borderBottomWidth: 0,
+    },
+    summaryLabel: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+    },
+    summaryValue: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: colors.primary,
+    },
+    sectionCard: {
+      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    sectionTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? colors.textDark : colors.textLight,
+      marginBottom: 12,
+    },
+    listItem: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 8,
+    },
+    listItemText: {
+      fontSize: 14,
+      color: isDark ? colors.textDark : colors.textLight,
+      flex: 1,
+    },
+    listItemValue: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.primary,
+      marginLeft: 12,
+    },
+    button: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+      marginBottom: 12,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    buttonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    emptyState: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 40,
+    },
+    emptyStateText: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      textAlign: 'center',
+      marginTop: 12,
+    },
+    infoCard: {
+      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+    },
+    infoText: {
+      fontSize: 14,
+      color: isDark ? colors.textDark : colors.textLight,
+      lineHeight: 20,
+    },
+  });
+}
+
 export default function ReportsScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { user, signOut } = useAuth();
-  
+  const styles = createStyles(isDark);
+
   const [summary, setSummary] = useState<ReportSummary | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [showTestUserModal, setShowTestUserModal] = useState(false);
-  const [testUserEmail, setTestUserEmail] = useState('test@seatime.com');
-  const [testUserPassword, setTestUserPassword] = useState('TestPassword123!');
-  const [testUserName, setTestUserName] = useState('Test User');
-  const [creatingUser, setCreatingUser] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     loadSummary();
   }, []);
 
   const loadSummary = async () => {
+    console.log('User viewing Reports screen');
     try {
-      console.log('[Reports] Loading summary from backend...');
-      
-      const summaryData = await seaTimeApi.getReportSummary();
-      console.log('[Reports] Loaded summary:', summaryData);
-      
-      setSummary(summaryData);
+      setLoading(true);
+      const data = await seaTimeApi.getReportSummary();
+      console.log('Report summary loaded:', data);
+      setSummary(data);
     } catch (error) {
-      console.error('[Reports] Error loading summary:', error);
-      Alert.alert('Error', 'Failed to load report summary. Please try again.');
-    }
-  };
-
-  const handleExportCSV = async () => {
-    setLoading(true);
-    try {
-      console.log('[Reports] Exporting CSV report...');
-      
-      const csvContent = await seaTimeApi.downloadCSVReport();
-      console.log('[Reports] CSV downloaded, length:', csvContent.length);
-      
-      // Save CSV to file system
-      const fileName = `seatime_report_${new Date().toISOString().split('T')[0]}.csv`;
-      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
-      
-      await FileSystem.writeAsStringAsync(fileUri, csvContent, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-      
-      console.log('[Reports] CSV saved to:', fileUri);
-      
-      // Share the file
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(fileUri, {
-          mimeType: 'text/csv',
-          dialogTitle: 'Export SeaTime Report',
-          UTI: 'public.comma-separated-values-text',
-        });
-      } else {
-        Alert.alert('Success', `Report saved to: ${fileName}`);
-      }
-    } catch (error) {
-      console.error('[Reports] Error exporting CSV:', error);
-      Alert.alert('Error', 'Failed to export report. Please try again.');
+      console.error('Failed to load report summary:', error);
+      Alert.alert('Error', 'Failed to load report summary');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleExportCSV = async () => {
+    console.log('User tapped Export CSV button');
+    try {
+      const csvData = await seaTimeApi.downloadCSVReport();
+      
+      const fileName = `seatime_report_${new Date().toISOString().split('T')[0]}.csv`;
+      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+      
+      await FileSystem.writeAsStringAsync(fileUri, csvData, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      
+      console.log('CSV file saved:', fileUri);
+      
+      if (Platform.OS === 'ios' || Platform.OS === 'android') {
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'text/csv',
+            dialogTitle: 'Export Sea Time Report',
+          });
+        } else {
+          Alert.alert('Success', `Report saved to: ${fileUri}`);
+        }
+      } else {
+        Alert.alert('Success', `Report saved to: ${fileUri}`);
+      }
+    } catch (error) {
+      console.error('Failed to export CSV:', error);
+      Alert.alert('Error', 'Failed to export report');
+    }
+  };
+
   const handleShareReport = async () => {
+    console.log('User tapped Share Report button');
+    if (!summary) return;
+
+    const message = `Sea Time Report\n\nTotal Hours: ${summary.total_hours.toFixed(1)}\nTotal Days: ${summary.total_days.toFixed(1)}\n\nGenerated by SeaTime Tracker`;
+
     try {
       await Share.share({
-        message: `SeaTime Tracker Report\n\nTotal Sea Time: ${summary?.total_hours.toFixed(1)} hours (${summary?.total_days.toFixed(1)} days)\n\nGenerated by SeaTime Tracker`,
+        message,
+        title: 'Sea Time Report',
       });
     } catch (error) {
-      console.error('Error sharing report:', error);
+      console.error('Failed to share report:', error);
     }
   };
 
-  const handleSignOut = async () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('[Profile] User signing out');
-              await signOut();
-              console.log('[Profile] Sign out successful');
-            } catch (error) {
-              console.error('[Profile] Error signing out:', error);
-              Alert.alert('Error', 'Failed to sign out. Please try again.');
-            }
-          },
-        },
-      ]
+  if (loading) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateText}>Loading report...</Text>
+        </View>
+      </View>
     );
-  };
-
-  const handleCreateTestUser = async () => {
-    if (!testUserEmail || !testUserPassword || !testUserName) {
-      Alert.alert('Error', 'Please fill in all fields');
-      return;
-    }
-
-    setCreatingUser(true);
-    try {
-      console.log('[Profile] Creating test user:', testUserEmail);
-      const result = await seaTimeApi.createTestUser(testUserEmail, testUserPassword, testUserName);
-      
-      if (result.success) {
-        Alert.alert(
-          'Success',
-          `Test user created successfully!\n\nEmail: ${testUserEmail}\nPassword: ${testUserPassword}\n\nYou can now sign in with these credentials.`,
-          [
-            {
-              text: 'OK',
-              onPress: () => setShowTestUserModal(false),
-            },
-          ]
-        );
-      } else {
-        Alert.alert('Error', result.error || 'Failed to create test user');
-      }
-    } catch (error: any) {
-      console.error('[Profile] Error creating test user:', error);
-      Alert.alert('Error', error.message || 'Failed to create test user. Please try again.');
-    } finally {
-      setCreatingUser(false);
-    }
-  };
-
-  const styles = createStyles(isDark);
+  }
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
+    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text style={styles.headerTitle}>Reports</Text>
-            <Text style={styles.headerSubtitle}>MCA Compliant Sea Service Records</Text>
-          </View>
-          <View style={styles.headerButtons}>
-            <TouchableOpacity
-              style={styles.devButton}
-              onPress={() => setShowTestUserModal(true)}
-            >
-              <IconSymbol
-                ios_icon_name="person.badge.plus"
-                android_material_icon_name="person-add"
-                size={20}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.signOutButton}
-              onPress={handleSignOut}
-            >
-              <IconSymbol
-                ios_icon_name="rectangle.portrait.and.arrow.right"
-                android_material_icon_name="logout"
-                size={20}
-                color={colors.error}
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-        {user && (
-          <View style={styles.userInfo}>
-            <IconSymbol
-              ios_icon_name="person.circle.fill"
-              android_material_icon_name="account-circle"
-              size={16}
-              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-            />
-            <Text style={styles.userEmail}>{user.email}</Text>
-          </View>
-        )}
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* Summary Cards */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Summary</Text>
-          
-          <View style={styles.summaryGrid}>
-            <View style={[styles.summaryCard, styles.primaryCard]}>
-              <IconSymbol
-                ios_icon_name="clock"
-                android_material_icon_name="schedule"
-                size={32}
-                color="#FFFFFF"
-              />
-              <Text style={styles.summaryValue}>
-                {summary?.total_hours.toFixed(1) || '0.0'}
-              </Text>
-              <Text style={styles.summaryLabel}>Total Hours</Text>
-            </View>
-            
-            <View style={[styles.summaryCard, styles.accentCard]}>
-              <IconSymbol
-                ios_icon_name="calendar"
-                android_material_icon_name="calendar-today"
-                size={32}
-                color="#FFFFFF"
-              />
-              <Text style={styles.summaryValue}>
-                {summary?.total_days.toFixed(1) || '0.0'}
-              </Text>
-              <Text style={styles.summaryLabel}>Total Days</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* By Vessel */}
-        {summary && summary.entries_by_vessel.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>By Vessel</Text>
-            {summary.entries_by_vessel.map((item, index) => (
-              <View key={index} style={styles.card}>
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardTitle}>{item.vessel_name}</Text>
-                  <Text style={styles.cardValue}>
-                    {item.total_hours.toFixed(1)} hrs
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* By Month */}
-        {summary && summary.entries_by_month.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>By Month</Text>
-            {summary.entries_by_month.map((item, index) => (
-              <View key={index} style={styles.card}>
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardTitle}>{item.month}</Text>
-                  <Text style={styles.cardValue}>
-                    {item.total_hours.toFixed(1)} hrs
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Export Actions */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Export</Text>
-          
-          <TouchableOpacity
-            style={[styles.button, styles.primaryButton]}
-            onPress={handleExportCSV}
-            disabled={loading}
-          >
-            <IconSymbol
-              ios_icon_name="document"
-              android_material_icon_name="description"
-              size={20}
-              color="#FFFFFF"
-            />
-            <Text style={styles.buttonText}>
-              {loading ? 'Exporting...' : 'Export CSV Report'}
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton]}
-            onPress={handleShareReport}
-          >
-            <IconSymbol
-              ios_icon_name="share"
-              android_material_icon_name="share"
-              size={20}
-              color="#FFFFFF"
-            />
-            <Text style={styles.buttonText}>Share Summary</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Info */}
-        <View style={styles.infoCard}>
+        <View style={styles.headerIcon}>
           <IconSymbol
-            ios_icon_name="info.circle"
-            android_material_icon_name="info"
-            size={24}
+            ios_icon_name="chart.bar.fill"
+            android_material_icon_name="assessment"
+            size={48}
             color={colors.primary}
           />
-          <Text style={styles.infoText}>
-            Reports are generated in MCA-compliant format for sea service testimonials. 
-            CSV exports include all confirmed sea time entries with vessel details, dates, 
-            and duration.
-          </Text>
         </View>
-      </ScrollView>
+        <Text style={styles.title}>Reports & Export</Text>
+        <Text style={styles.subtitle}>
+          View your sea time summary and export records
+        </Text>
+      </View>
 
-      {/* Test User Creation Modal */}
-      <Modal
-        visible={showTestUserModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowTestUserModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: isDark ? colors.cardBackground : colors.card }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create Test User</Text>
-              <TouchableOpacity
-                onPress={() => setShowTestUserModal(false)}
-                style={styles.modalCloseButton}
-              >
-                <IconSymbol
-                  ios_icon_name="xmark"
-                  android_material_icon_name="close"
-                  size={24}
-                  color={isDark ? colors.text : colors.textLight}
-                />
-              </TouchableOpacity>
+      <View style={styles.infoCard}>
+        <Text style={styles.infoText}>
+          📊 No authentication required - all your data is stored locally and accessible anytime.
+        </Text>
+      </View>
+
+      {summary && (
+        <>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>Total Sea Time</Text>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total Hours</Text>
+              <Text style={styles.summaryValue}>{summary.total_hours.toFixed(1)} hrs</Text>
             </View>
-
-            <View style={styles.modalBody}>
-              <Text style={styles.inputLabel}>Email</Text>
-              <TextInput
-                style={styles.input}
-                value={testUserEmail}
-                onChangeText={setTestUserEmail}
-                placeholder="test@seatime.com"
-                placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-
-              <Text style={styles.inputLabel}>Password</Text>
-              <TextInput
-                style={styles.input}
-                value={testUserPassword}
-                onChangeText={setTestUserPassword}
-                placeholder="TestPassword123!"
-                placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                secureTextEntry
-              />
-
-              <Text style={styles.inputLabel}>Name</Text>
-              <TextInput
-                style={styles.input}
-                value={testUserName}
-                onChangeText={setTestUserName}
-                placeholder="Test User"
-                placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-              />
-
-              <TouchableOpacity
-                style={[styles.button, styles.primaryButton, creatingUser && styles.buttonDisabled]}
-                onPress={handleCreateTestUser}
-                disabled={creatingUser}
-              >
-                <IconSymbol
-                  ios_icon_name="person.badge.plus"
-                  android_material_icon_name="person-add"
-                  size={20}
-                  color="#FFFFFF"
-                />
-                <Text style={styles.buttonText}>
-                  {creatingUser ? 'Creating...' : 'Create Test User'}
-                </Text>
-              </TouchableOpacity>
-
-              <View style={styles.infoCard}>
-                <IconSymbol
-                  ios_icon_name="info.circle"
-                  android_material_icon_name="info"
-                  size={20}
-                  color={colors.primary}
-                />
-                <Text style={styles.infoText}>
-                  This will create a test user account that you can use to sign in and test the app. 
-                  Save the credentials to sign in later.
-                </Text>
-              </View>
+            <View style={[styles.summaryRow, styles.summaryRowLast]}>
+              <Text style={styles.summaryLabel}>Total Days</Text>
+              <Text style={styles.summaryValue}>{summary.total_days.toFixed(1)} days</Text>
             </View>
           </View>
+
+          {summary.entries_by_vessel.length > 0 && (
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitle}>By Vessel</Text>
+              {summary.entries_by_vessel.map((vessel, index) => (
+                <View key={index} style={styles.listItem}>
+                  <Text style={styles.listItemText}>{vessel.vessel_name}</Text>
+                  <Text style={styles.listItemValue}>{vessel.total_hours.toFixed(1)} hrs</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {summary.entries_by_month.length > 0 && (
+            <View style={styles.sectionCard}>
+              <Text style={styles.sectionTitle}>By Month</Text>
+              {summary.entries_by_month.map((month, index) => (
+                <View key={index} style={styles.listItem}>
+                  <Text style={styles.listItemText}>{month.month}</Text>
+                  <Text style={styles.listItemValue}>{month.total_hours.toFixed(1)} hrs</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <TouchableOpacity style={styles.button} onPress={handleExportCSV}>
+            <Text style={styles.buttonText}>📄 Export CSV Report</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.button} onPress={handleShareReport}>
+            <Text style={styles.buttonText}>📤 Share Report Summary</Text>
+          </TouchableOpacity>
+        </>
+      )}
+
+      {!summary && (
+        <View style={styles.emptyState}>
+          <IconSymbol
+            ios_icon_name="chart.bar"
+            android_material_icon_name="assessment"
+            size={64}
+            color={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+          />
+          <Text style={styles.emptyStateText}>
+            No sea time entries yet.{'\n'}Start tracking vessels to generate reports.
+          </Text>
         </View>
-      </Modal>
-    </View>
+      )}
+    </ScrollView>
   );
 }
-
-const createStyles = (isDark: boolean) =>
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
-    },
-    header: {
-      padding: 20,
-      paddingTop: Platform.OS === 'android' ? 48 : 20,
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.border : colors.borderLight,
-    },
-    headerTop: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-    },
-    headerTitle: {
-      fontSize: 28,
-      fontWeight: '700',
-      color: isDark ? colors.text : colors.textLight,
-    },
-    headerSubtitle: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 4,
-    },
-    headerButtons: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    devButton: {
-      padding: 8,
-      borderRadius: 8,
-      backgroundColor: isDark ? 'rgba(0, 119, 190, 0.1)' : 'rgba(0, 119, 190, 0.1)',
-    },
-    signOutButton: {
-      padding: 8,
-      borderRadius: 8,
-      backgroundColor: isDark ? 'rgba(255, 59, 48, 0.1)' : 'rgba(255, 59, 48, 0.1)',
-    },
-    userInfo: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      marginTop: 12,
-      paddingTop: 12,
-      borderTopWidth: 1,
-      borderTopColor: isDark ? colors.border : colors.borderLight,
-    },
-    userEmail: {
-      fontSize: 13,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      fontWeight: '500',
-    },
-    scrollView: {
-      flex: 1,
-    },
-    scrollContent: {
-      padding: 16,
-      paddingBottom: 100,
-    },
-    section: {
-      marginBottom: 24,
-    },
-    sectionTitle: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 12,
-    },
-    summaryGrid: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    summaryCard: {
-      flex: 1,
-      borderRadius: 12,
-      padding: 20,
-      alignItems: 'center',
-      boxShadow: '0px 2px 8px rgba(0, 119, 190, 0.15)',
-      elevation: 3,
-    },
-    primaryCard: {
-      backgroundColor: colors.primary,
-    },
-    accentCard: {
-      backgroundColor: colors.accent,
-    },
-    summaryValue: {
-      fontSize: 32,
-      fontWeight: '700',
-      color: '#FFFFFF',
-      marginTop: 12,
-    },
-    summaryLabel: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: '#FFFFFF',
-      marginTop: 4,
-    },
-    card: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: isDark ? colors.border : colors.borderLight,
-      boxShadow: '0px 2px 8px rgba(0, 119, 190, 0.1)',
-      elevation: 2,
-    },
-    cardRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    cardTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-    },
-    cardValue: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: colors.primary,
-    },
-    button: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 14,
-      paddingHorizontal: 20,
-      borderRadius: 10,
-      gap: 8,
-      marginBottom: 12,
-    },
-    primaryButton: {
-      backgroundColor: colors.primary,
-    },
-    secondaryButton: {
-      backgroundColor: colors.accent,
-    },
-    buttonText: {
-      color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    infoCard: {
-      flexDirection: 'row',
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 12,
-      padding: 16,
-      gap: 12,
-      borderWidth: 1,
-      borderColor: colors.primary,
-      marginTop: 8,
-    },
-    infoText: {
-      flex: 1,
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      lineHeight: 20,
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 20,
-    },
-    modalContent: {
-      width: '100%',
-      maxWidth: 500,
-      borderRadius: 16,
-      boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.2)',
-      elevation: 5,
-    },
-    modalHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: 20,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.border : colors.borderLight,
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: isDark ? colors.text : colors.textLight,
-    },
-    modalCloseButton: {
-      padding: 4,
-    },
-    modalBody: {
-      padding: 20,
-    },
-    inputLabel: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 8,
-      marginTop: 12,
-    },
-    input: {
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
-      borderWidth: 1,
-      borderColor: isDark ? colors.border : colors.borderLight,
-      borderRadius: 10,
-      padding: 14,
-      fontSize: 16,
-      color: isDark ? colors.text : colors.textLight,
-    },
-    buttonDisabled: {
-      opacity: 0.5,
-    },
-  });
