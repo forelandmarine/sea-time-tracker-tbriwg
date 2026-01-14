@@ -1,11 +1,17 @@
 /**
  * SeaTime Tracker Backend
  *
- * Public API without authentication
+ * Authentication Configuration:
+ * - Uses Better Auth for user authentication with email/password and Apple Sign-In
+ * - Sessions stored in PostgreSQL with secure tokens
  *
  * Required Environment Variables:
  * - DATABASE_URL: PostgreSQL connection string (Neon in production, PGlite locally)
  * - MYSHIPTRACKING_API_KEY: API key for MyShipTracking AIS vessel tracking
+ * - APPLE_CLIENT_ID: Apple Sign-In client ID (optional)
+ * - APPLE_TEAM_ID: Apple team ID (optional)
+ * - APPLE_KEY_ID: Apple key ID (optional)
+ * - APPLE_PRIVATE_KEY: Apple private key (optional)
  *
  * Core Endpoints:
  * - Vessel Management: GET/POST /api/vessels, GET/PUT /api/vessels/:id
@@ -13,10 +19,12 @@
  * - Sea Time Entries: GET/POST /api/sea-time, PUT /api/sea-time/:id/confirm
  * - Reports: GET /api/reports/sea-time-summary
  * - Tracking: GET /api/tracking/vessel/:vesselId
+ * - Authentication: Email/password, Apple Sign-In, profile, logout
  */
 
 import { createApplication } from "@specific-dev/framework";
 import * as appSchema from './db/schema.js';
+import * as authSchema from './db/auth-schema.js';
 
 // Import route registration functions
 import * as vesselsRoutes from './routes/vessels.js';
@@ -24,21 +32,31 @@ import * as aisRoutes from './routes/ais.js';
 import * as seaTimeRoutes from './routes/sea-time.js';
 import * as reportsRoutes from './routes/reports.js';
 import * as trackingRoutes from './routes/tracking.js';
+import * as authRoutes from './routes/auth.js';
 
 // Import scheduler service
 import { startScheduler } from './services/scheduler.js';
 
-// Create application with app schema only (no auth)
-export const app = await createApplication(appSchema);
+// Combine schemas for full database type support (app + auth)
+const schema = { ...appSchema, ...authSchema };
 
-// Configure CORS for all origins (public API)
+// Create application with combined schema
+export const app = await createApplication(schema);
+
+// Enable authentication with Better Auth
+app.withAuth({
+  socialProviders: {},
+});
+
+// Configure CORS for all origins (support authentication)
 app.fastify.addHook('onRequest', async (request, reply) => {
   const origin = request.headers.origin;
 
-  // Allow all origins for public API
+  // Allow all origins with credentials support for authentication
   reply.header('Access-Control-Allow-Origin', origin || '*');
+  reply.header('Access-Control-Allow-Credentials', 'true');
   reply.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH,HEAD');
-  reply.header('Access-Control-Allow-Headers', 'Content-Type,X-Requested-With,Accept');
+  reply.header('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With,Accept');
   reply.header('Access-Control-Max-Age', '3600');
 
   // Handle preflight requests
@@ -78,6 +96,7 @@ aisRoutes.register(app, app.fastify);
 seaTimeRoutes.register(app, app.fastify);
 reportsRoutes.register(app, app.fastify);
 trackingRoutes.register(app, app.fastify);
+authRoutes.register(app, app.fastify);
 
 // Log API configuration status
 const aisApiKey = process.env.MYSHIPTRACKING_API_KEY;
