@@ -31,7 +31,7 @@ function createStyles(isDark: boolean) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
     scrollContent: {
       padding: 16,
@@ -42,20 +42,20 @@ function createStyles(isDark: boolean) {
     title: {
       fontSize: 24,
       fontWeight: 'bold',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       marginBottom: 8,
     },
     subtitle: {
       fontSize: 14,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
     logCard: {
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
       padding: 16,
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: isDark ? colors.borderDark : colors.borderLight,
+      borderColor: isDark ? colors.border : colors.borderLight,
     },
     logHeader: {
       flexDirection: 'row',
@@ -65,7 +65,7 @@ function createStyles(isDark: boolean) {
     },
     logTime: {
       fontSize: 12,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
     statusBadge: {
       paddingHorizontal: 8,
@@ -84,12 +84,12 @@ function createStyles(isDark: boolean) {
     logLabel: {
       fontSize: 13,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       width: 100,
     },
     logValue: {
       fontSize: 13,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       flex: 1,
     },
     expandButton: {
@@ -111,7 +111,7 @@ function createStyles(isDark: boolean) {
     responseBodyText: {
       fontSize: 12,
       fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
     },
     emptyState: {
       alignItems: 'center',
@@ -120,7 +120,7 @@ function createStyles(isDark: boolean) {
     },
     emptyStateText: {
       fontSize: 16,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
       marginTop: 16,
     },
@@ -157,7 +157,6 @@ export default function DebugScreen() {
   const [loading, setLoading] = useState(true);
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
 
-  // ✅ FIXED: Added vesselId to dependency array
   const loadLogs = useCallback(async () => {
     console.log('Loading AIS debug logs for vessel:', vesselId);
     try {
@@ -196,9 +195,9 @@ export default function DebugScreen() {
 
   const getStatusColor = (statusString: string): string => {
     const status = parseInt(statusString);
-    if (status >= 200 && status < 300) return '#4caf50';
-    if (status >= 400 && status < 500) return '#ff9800';
-    if (status >= 500) return '#f44336';
+    if (status >= 200 && status < 300) return colors.success;
+    if (status >= 400 && status < 500) return colors.warning;
+    if (status >= 500) return colors.error;
     return '#9e9e9e';
   };
 
@@ -244,9 +243,9 @@ export default function DebugScreen() {
         options={{
           title: 'AIS Debug Logs',
           headerStyle: {
-            backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+            backgroundColor: isDark ? colors.background : colors.backgroundLight,
           },
-          headerTintColor: isDark ? colors.textDark : colors.textLight,
+          headerTintColor: isDark ? colors.text : colors.textLight,
           headerLeft: () => (
             <TouchableOpacity
               onPress={() => {
@@ -259,7 +258,7 @@ export default function DebugScreen() {
                 ios_icon_name="chevron.left"
                 android_material_icon_name="arrow-back"
                 size={24}
-                color={isDark ? colors.textDark : colors.textLight}
+                color={isDark ? colors.text : colors.textLight}
               />
             </TouchableOpacity>
           ),
@@ -286,7 +285,7 @@ export default function DebugScreen() {
               ios_icon_name="doc.text.magnifyingglass"
               android_material_icon_name="search"
               size={64}
-              color={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
             />
             <Text style={styles.emptyStateText}>
               No debug logs found for this vessel.{'\n'}
@@ -325,7 +324,7 @@ export default function DebugScreen() {
                 {log.error_message && (
                   <View style={styles.logRow}>
                     <Text style={styles.logLabel}>Error:</Text>
-                    <Text style={[styles.logValue, { color: '#f44336' }]}>
+                    <Text style={[styles.logValue, { color: colors.error }]}>
                       {log.error_message}
                     </Text>
                   </View>
