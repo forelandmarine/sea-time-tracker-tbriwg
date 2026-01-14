@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "expo-router";
+import * as seaTimeApi from "@/utils/seaTimeApi";
 
 type Mode = "signin" | "signup";
 
@@ -28,6 +29,57 @@ export default function AuthScreen() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const handleCreateTestAccount = async () => {
+    console.log('Creating test account');
+    setLoading(true);
+    try {
+      await seaTimeApi.createTestUser(
+        "test@seatime.com",
+        "testpassword123",
+        "Test User"
+      );
+      
+      Alert.alert(
+        "Test Account Created",
+        "Email: test@seatime.com\nPassword: testpassword123\n\nYou can now sign in with these credentials.",
+        [
+          {
+            text: "OK",
+            onPress: () => {
+              setEmail("test@seatime.com");
+              setPassword("testpassword123");
+              setMode("signin");
+            }
+          }
+        ]
+      );
+    } catch (error: any) {
+      console.error('Failed to create test account:', error);
+      
+      // Check if account already exists
+      if (error.message && error.message.includes("already exists")) {
+        Alert.alert(
+          "Test Account Already Exists",
+          "Email: test@seatime.com\nPassword: testpassword123\n\nYou can sign in with these credentials.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                setEmail("test@seatime.com");
+                setPassword("testpassword123");
+                setMode("signin");
+              }
+            }
+          ]
+        );
+      } else {
+        Alert.alert("Error", "Failed to create test account. Please try signing up manually.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEmailAuth = async () => {
     console.log('User attempting email authentication', { mode, email });
@@ -53,15 +105,21 @@ export default function AuthScreen() {
         await signUpWithEmail(email, password, name);
         Alert.alert(
           "Success",
-          "Account created successfully! You can now sign in."
+          "Account created successfully! You can now sign in.",
+          [
+            {
+              text: "OK",
+              onPress: () => setMode("signin")
+            }
+          ]
         );
-        setMode("signin");
       }
     } catch (error: any) {
       console.error('Email authentication error:', error);
       
       // Provide more helpful error messages
       let errorMessage = "Authentication failed";
+      let errorTitle = "Error";
       
       if (error.message) {
         errorMessage = error.message;
@@ -70,17 +128,26 @@ export default function AuthScreen() {
       }
       
       // Handle specific error cases
-      if (errorMessage.includes("401") || errorMessage.includes("Unauthorized")) {
-        errorMessage = "Invalid email or password. Please check your credentials and try again.";
+      if (errorMessage.includes("INVALID_EMAIL_OR_PASSWORD") || 
+          errorMessage.includes("Invalid email or password") ||
+          errorMessage.includes("401") || 
+          errorMessage.includes("Unauthorized")) {
+        errorTitle = "Invalid Credentials";
+        errorMessage = mode === "signin" 
+          ? "The email or password you entered is incorrect.\n\nIf you don't have an account yet, please tap 'Sign Up' below."
+          : "Invalid email or password format.";
       } else if (errorMessage.includes("409") || errorMessage.includes("already exists")) {
+        errorTitle = "Account Exists";
         errorMessage = "An account with this email already exists. Please sign in instead.";
       } else if (errorMessage.includes("network") || errorMessage.includes("fetch")) {
-        errorMessage = "Network error. Please check your internet connection and try again.";
+        errorTitle = "Network Error";
+        errorMessage = "Please check your internet connection and try again.";
       } else if (errorMessage.includes("session was not established")) {
+        errorTitle = "Session Error";
         errorMessage = "Sign in succeeded but session could not be established. This may be a temporary issue. Please try again.";
       }
       
-      Alert.alert("Authentication Error", errorMessage);
+      Alert.alert(errorTitle, errorMessage);
     } finally {
       setLoading(false);
     }
@@ -184,6 +251,19 @@ export default function AuthScreen() {
                 : "Already have an account? Sign In"}
             </Text>
           </TouchableOpacity>
+
+          {/* Test Account Button - Only show in sign in mode */}
+          {mode === "signin" && (
+            <TouchableOpacity
+              style={styles.testAccountButton}
+              onPress={handleCreateTestAccount}
+              disabled={loading}
+            >
+              <Text style={styles.testAccountText}>
+                Create Test Account
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <View style={styles.divider}>
             <View style={styles.dividerLine} />
@@ -292,6 +372,16 @@ const styles = StyleSheet.create({
   switchModeText: {
     color: "#007AFF",
     fontSize: 14,
+  },
+  testAccountButton: {
+    marginTop: 12,
+    alignItems: "center",
+    paddingVertical: 8,
+  },
+  testAccountText: {
+    color: "#FF9500",
+    fontSize: 14,
+    fontWeight: "600",
   },
   divider: {
     flexDirection: "row",

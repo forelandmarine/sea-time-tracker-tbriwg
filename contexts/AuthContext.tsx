@@ -119,6 +119,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log("[AuthContext] Sign in result:", result);
       
+      // Check if there was an error in the result
+      if (result.error) {
+        console.error("[AuthContext] Sign in returned error:", result.error);
+        throw result.error;
+      }
+      
       // Wait a bit for the session to be established
       await new Promise(resolve => setTimeout(resolve, 1000));
       
@@ -134,6 +140,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[AuthContext] Sign in complete, user:", session.data.user.email);
     } catch (error: any) {
       console.error("[AuthContext] Email sign in failed:", error);
+      
+      // Re-throw with a more user-friendly message
+      if (error.code === "INVALID_EMAIL_OR_PASSWORD" || error.message?.includes("Invalid email or password")) {
+        throw new Error("INVALID_EMAIL_OR_PASSWORD");
+      }
+      
       throw error;
     }
   };
@@ -142,7 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log("[AuthContext] Signing up with email:", email);
       
-      await authClient.signUp.email({
+      const result = await authClient.signUp.email({
         email,
         password,
         name,
@@ -155,6 +167,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
       });
+      
+      console.log("[AuthContext] Sign up result:", result);
+      
+      // Check if there was an error in the result
+      if (result.error) {
+        console.error("[AuthContext] Sign up returned error:", result.error);
+        throw result.error;
+      }
       
       console.log("[AuthContext] Sign up complete");
       
