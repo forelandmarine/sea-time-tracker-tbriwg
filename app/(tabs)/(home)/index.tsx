@@ -194,29 +194,16 @@ export default function SeaTimeScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <View style={styles.headerTitleContainer}>
-              <Image
-                source={require('@/assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png')}
-                style={styles.appIcon}
-                resizeMode="contain"
-              />
-              <View>
-                <Text style={styles.headerTitle}>SeaTime Tracker</Text>
-                <Text style={styles.headerSubtitle}>Track your days at sea</Text>
-              </View>
+          <View style={styles.headerTitleContainer}>
+            <Image
+              source={require('@/assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png')}
+              style={styles.appIcon}
+              resizeMode="contain"
+            />
+            <View>
+              <Text style={styles.headerTitle}>SeaTime Tracker</Text>
+              <Text style={styles.headerSubtitle}>Track your days at sea</Text>
             </View>
-            <TouchableOpacity
-              style={styles.diagnosticButton}
-              onPress={() => router.push('/ais-diagnostic' as any)}
-            >
-              <IconSymbol
-                ios_icon_name="stethoscope"
-                android_material_icon_name="medical-services"
-                size={24}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
           </View>
         </View>
 
@@ -419,11 +406,6 @@ function createStyles(isDark: boolean) {
       borderBottomWidth: 1,
       borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
-    headerTop: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
     headerTitleContainer: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -443,11 +425,6 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginTop: 4,
-    },
-    diagnosticButton: {
-      padding: 8,
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
-      borderRadius: 8,
     },
     section: {
       padding: 16,
