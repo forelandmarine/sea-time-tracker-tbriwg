@@ -96,6 +96,12 @@ app.fastify.addHook('onError', async (request, reply, error) => {
     if (errorDetails.causePath) {
       console.error('[AUTH CAUSE]', errorDetails.causePath);
     }
+
+    // Set error response with detailed information for debugging
+    if (reply.statusCode === 500) {
+      reply.header('X-Auth-Error', 'true');
+      reply.header('X-Auth-Error-Message', errorDetails.errorMessage);
+    }
   }
 });
 
