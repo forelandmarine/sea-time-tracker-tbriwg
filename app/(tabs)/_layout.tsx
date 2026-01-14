@@ -25,12 +25,6 @@ export default function TabLayout() {
       ios_icon_name: 'doc.text.fill',
       android_material_icon_name: 'description',
     },
-    {
-      route: '/(tabs)/settings' as Href,
-      label: 'Settings',
-      ios_icon_name: 'gear',
-      android_material_icon_name: 'settings',
-    },
   ];
 
   return (
@@ -51,12 +45,6 @@ export default function TabLayout() {
           name="profile"
           options={{
             title: 'Reports',
-          }}
-        />
-        <Tabs.Screen
-          name="settings"
-          options={{
-            title: 'Settings',
           }}
         />
       </Tabs>
