@@ -114,20 +114,27 @@ export function register(app: App, fastify: FastifyInstance) {
       app.logger.info({ email }, 'Debug sign-in attempt');
 
       try {
-        // Check if user exists
+        // Step 1: Check if user exists
         const [user] = await app.db
           .select()
           .from(authSchema.user)
           .where(eq(authSchema.user.email, email));
 
         if (!user) {
-          app.logger.warn({ email }, 'User not found');
+          app.logger.warn({ email }, 'User not found in database');
           return reply.code(401).send({
             error: 'Invalid email or password',
+            debug: {
+              step: 'user_lookup',
+              issue: 'User not found in database',
+              suggestion: 'Create user with POST /api/users/ensure-test-user',
+            },
           });
         }
 
-        // Check if account exists
+        app.logger.info({ email, userId: user.id }, 'User found in database');
+
+        // Step 2: Check if account exists
         const [account] = await app.db
           .select()
           .from(authSchema.account)
@@ -137,13 +144,30 @@ export function register(app: App, fastify: FastifyInstance) {
           app.logger.error({ email, userId: user.id }, 'No account found for user');
           return reply.code(500).send({
             error: 'User authentication configuration error',
+            debug: {
+              step: 'account_lookup',
+              issue: 'No account found for user',
+              userId: user.id,
+            },
           });
         }
 
+        app.logger.info(
+          { email, accountId: account.id, providerId: account.providerId },
+          'Account found'
+        );
+
+        // Step 3: Check if password exists
         if (!account.password) {
           app.logger.error({ email, accountId: account.id }, 'No password hash in account');
           return reply.code(500).send({
             error: 'User password not configured',
+            debug: {
+              step: 'password_check',
+              issue: 'No password hash stored in account',
+              accountId: account.id,
+              providerId: account.providerId,
+            },
           });
         }
 
@@ -152,13 +176,13 @@ export function register(app: App, fastify: FastifyInstance) {
             email,
             userId: user.id,
             accountId: account.id,
-            hasPassword: !!account.password,
+            providerId: account.providerId,
             passwordHashLength: account.password.length,
           },
-          'Account verified, password hash present'
+          'Account verified with password hash'
         );
 
-        // Try to call the actual Better Auth sign-in endpoint
+        // Step 4: Attempt Better Auth sign-in
         const betterAuthUrl = process.env.BETTER_AUTH_URL ||
                               process.env.API_URL ||
                               process.env.BACKEND_URL ||
@@ -166,7 +190,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
         const signInUrl = `${betterAuthUrl}/api/auth/sign-in/email`;
 
-        app.logger.info({ email, signInUrl }, 'Forwarding to Better Auth sign-in');
+        app.logger.info({ email, signInUrl }, 'Attempting Better Auth sign-in');
 
         const response = await fetch(signInUrl, {
           method: 'POST',
@@ -186,7 +210,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
         app.logger.info(
           { email, status: response.status, responseLength: responseText.length },
-          'Better Auth sign-in response'
+          'Better Auth sign-in response received'
         );
 
         if (!response.ok) {
@@ -195,8 +219,22 @@ export function register(app: App, fastify: FastifyInstance) {
             'Better Auth sign-in failed'
           );
 
-          return reply.code(response.status).send(responseData);
+          return reply.code(response.status).send({
+            ...responseData,
+            debug: {
+              step: 'better_auth_signin',
+              status: response.status,
+              userExists: true,
+              accountExists: true,
+              hasPassword: true,
+            },
+          });
         }
+
+        app.logger.info(
+          { email, status: response.status },
+          'Sign-in successful'
+        );
 
         return reply.code(response.status).send(responseData);
       } catch (error) {
@@ -212,6 +250,10 @@ export function register(app: App, fastify: FastifyInstance) {
 
         return reply.code(500).send({
           error: error instanceof Error ? error.message : 'Unknown error',
+          debug: {
+            step: 'exception',
+            exception: error instanceof Error ? error.name : typeof error,
+          },
         });
       }
     }
@@ -579,6 +621,7 @@ export function register(app: App, fastify: FastifyInstance) {
               message: { type: 'string' },
               user: { type: 'object' },
               account: { type: 'object' },
+              passwordHashInfo: { type: 'object' },
             },
           },
           400: {
@@ -629,6 +672,18 @@ export function register(app: App, fastify: FastifyInstance) {
           });
         }
 
+        // Analyze password hash format
+        const passwordHash = account.password;
+        const hashInfo = {
+          length: passwordHash.length,
+          startsWithDollar: passwordHash.startsWith('$'),
+          startsWithScrypt: passwordHash.startsWith('$scrypt$'),
+          startsWithArgon2: passwordHash.startsWith('$argon2'),
+          startsWithBcrypt: passwordHash.startsWith('$2a$') || passwordHash.startsWith('$2b$'),
+          firstChars: passwordHash.substring(0, 20),
+          lastChars: passwordHash.substring(Math.max(0, passwordHash.length - 20)),
+        };
+
         app.logger.info(
           {
             email,
@@ -637,6 +692,7 @@ export function register(app: App, fastify: FastifyInstance) {
             accountProviderId: account.providerId,
             hasPassword: !!account.password,
             passwordLength: account.password.length,
+            hashInfo,
           },
           'Account details for sign-in test'
         );
@@ -654,6 +710,7 @@ export function register(app: App, fastify: FastifyInstance) {
             providerId: account.providerId,
             passwordHashLength: account.password.length,
           },
+          passwordHashInfo: hashInfo,
         });
       } catch (error) {
         app.logger.error(
@@ -1067,6 +1124,132 @@ export function register(app: App, fastify: FastifyInstance) {
           created: false,
           user: null,
           message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+  );
+
+  // POST /api/auth/verify-password - Verify password without signing in
+  // This is a debug endpoint to test if password verification works at all
+  fastify.post<{ Body: { email: string; password: string } }>(
+    '/api/auth/verify-password',
+    {
+      schema: {
+        description: 'Verify a password without signing in (debug only)',
+        tags: ['auth'],
+        body: {
+          type: 'object',
+          required: ['email', 'password'],
+          properties: {
+            email: { type: 'string' },
+            password: { type: 'string' },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { email, password } = request.body;
+
+      app.logger.info({ email }, 'Verifying password');
+
+      try {
+        // Find user and account
+        const [user] = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email));
+
+        if (!user) {
+          return reply.code(401).send({
+            verified: false,
+            reason: 'User not found',
+          });
+        }
+
+        const [account] = await app.db
+          .select()
+          .from(authSchema.account)
+          .where(eq(authSchema.account.userId, user.id));
+
+        if (!account || !account.password) {
+          return reply.code(401).send({
+            verified: false,
+            reason: 'No account or password configured',
+          });
+        }
+
+        // Log what we found
+        app.logger.info(
+          {
+            email,
+            userId: user.id,
+            providerId: account.providerId,
+            passwordHashLength: account.password.length,
+            passwordHashPrefix: account.password.substring(0, 30),
+          },
+          'Account found - attempting verification'
+        );
+
+        // Now try the actual sign-in using Better Auth to get the actual error
+        const betterAuthUrl = process.env.BETTER_AUTH_URL ||
+                              process.env.API_URL ||
+                              process.env.BACKEND_URL ||
+                              'http://localhost:3001';
+
+        const signInUrl = `${betterAuthUrl}/api/auth/sign-in/email`;
+
+        app.logger.info({ email, signInUrl }, 'Calling Better Auth sign-in');
+
+        const signInResponse = await fetch(signInUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const signInText = await signInResponse.text();
+        let signInData;
+        try {
+          signInData = JSON.parse(signInText);
+        } catch {
+          signInData = { message: signInText };
+        }
+
+        app.logger.info(
+          {
+            email,
+            status: signInResponse.status,
+            responseLength: signInText.length,
+            responseData: signInData,
+          },
+          'Better Auth sign-in response'
+        );
+
+        if (signInResponse.ok) {
+          return reply.code(200).send({
+            verified: true,
+            reason: 'Password verified successfully',
+            signInResponse: signInData,
+          });
+        } else {
+          return reply.code(401).send({
+            verified: false,
+            reason: 'Password verification failed',
+            status: signInResponse.status,
+            error: signInData,
+          });
+        }
+      } catch (error) {
+        app.logger.error(
+          { err: error, email },
+          'Error verifying password'
+        );
+
+        return reply.code(500).send({
+          verified: false,
+          reason: 'Internal error during password verification',
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
       }
     }

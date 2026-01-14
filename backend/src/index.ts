@@ -83,6 +83,7 @@ app.fastify.addHook('onError', async (request, reply, error) => {
       errorName: error instanceof Error ? error.name : 'Unknown',
       errorStack: error instanceof Error ? error.stack : undefined,
       requestBody: request.body ? JSON.stringify(request.body) : 'no body',
+      causePath: error instanceof Error && 'cause' in error ? String(error.cause) : undefined,
     };
 
     app.logger.error(errorDetails, 'Auth endpoint error');
@@ -92,17 +93,23 @@ app.fastify.addHook('onError', async (request, reply, error) => {
     if (error instanceof Error && error.stack) {
       console.error('[AUTH STACK]', error.stack);
     }
+    if (errorDetails.causePath) {
+      console.error('[AUTH CAUSE]', errorDetails.causePath);
+    }
   }
 });
 
-// Add a catch-all response hook to catch any unhandled errors
+// Add hook to capture auth endpoint responses for debugging
 app.fastify.addHook('onResponse', async (request, reply) => {
-  if (request.url.includes('/api/auth/') && reply.statusCode === 500) {
-    app.logger.warn({
-      url: request.url,
-      method: request.method,
-      statusCode: reply.statusCode,
-    }, 'Auth endpoint returned 500');
+  if (request.url.includes('/api/auth/')) {
+    if (reply.statusCode >= 400) {
+      app.logger.warn({
+        url: request.url,
+        method: request.method,
+        statusCode: reply.statusCode,
+        requestBody: request.body ? JSON.stringify(request.body) : 'no body',
+      }, 'Auth endpoint returned error status');
+    }
   }
 });
 
