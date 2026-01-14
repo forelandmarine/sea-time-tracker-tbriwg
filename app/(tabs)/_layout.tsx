@@ -1,53 +1,62 @@
 
 import { Tabs } from 'expo-router';
 import React from 'react';
-import FloatingTabBar from '@/components/FloatingTabBar';
-import { Href } from 'expo-router';
-
-interface TabBarItem {
-  route: Href;
-  label: string;
-  ios_icon_name: string;
-  android_material_icon_name: string;
-}
+import { IconSymbol } from '@/components/IconSymbol';
+import { colors } from '@/styles/commonStyles';
+import { useColorScheme } from 'react-native';
 
 export default function TabLayout() {
-  const tabs: TabBarItem[] = [
-    {
-      route: '/(tabs)/(home)' as Href,
-      label: 'Sea Time',
-      ios_icon_name: 'sailboat.fill',
-      android_material_icon_name: 'directions-boat',
-    },
-    {
-      route: '/(tabs)/profile' as Href,
-      label: 'Reports',
-      ios_icon_name: 'doc.text.fill',
-      android_material_icon_name: 'description',
-    },
-  ];
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
 
   return (
-    <>
-      <Tabs
-        tabBar={() => <FloatingTabBar tabs={tabs} />}
-        screenOptions={{
-          headerShown: false,
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: isDark ? '#98989D' : '#8E8E93',
+        tabBarStyle: {
+          backgroundColor: isDark ? '#1C1C1E' : '#FFFFFF',
+          borderTopWidth: 1,
+          borderTopColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+          height: 85,
+          paddingBottom: 25,
+          paddingTop: 10,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '500',
+        },
+      }}
+    >
+      <Tabs.Screen
+        name="(home)"
+        options={{
+          title: 'Sea Time',
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol
+              ios_icon_name="sailboat.fill"
+              android_material_icon_name="directions-boat"
+              size={24}
+              color={color}
+            />
+          ),
         }}
-      >
-        <Tabs.Screen
-          name="(home)"
-          options={{
-            title: 'Sea Time',
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: 'Reports',
-          }}
-        />
-      </Tabs>
-    </>
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Reports',
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol
+              ios_icon_name="doc.text.fill"
+              android_material_icon_name="description"
+              size={24}
+              color={color}
+            />
+          ),
+        }}
+      />
+    </Tabs>
   );
 }
