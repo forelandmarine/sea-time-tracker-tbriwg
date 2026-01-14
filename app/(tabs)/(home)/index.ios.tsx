@@ -283,10 +283,12 @@ export default function SeaTimeScreen() {
         {/* Historic Vessels Section */}
         {historicVessels.length > 0 && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Historic Vessels</Text>
-            <Text style={styles.sectionSubtitle}>
-              Tap a vessel to view its history or activate it for tracking
-            </Text>
+            <View style={styles.historicHeader}>
+              <Text style={styles.sectionTitle}>Historic Vessels</Text>
+              <Text style={styles.sectionSubtitle}>
+                Tap a vessel to view its history or activate it for tracking
+              </Text>
+            </View>
             {historicVessels.map((vessel, index) => (
               <TouchableOpacity
                 key={vessel.id}
@@ -435,16 +437,19 @@ function createStyles(isDark: boolean) {
       alignItems: 'center',
       marginBottom: 12,
     },
+    historicHeader: {
+      marginBottom: 12,
+    },
     sectionTitle: {
       fontSize: 20,
       fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
+      marginBottom: 4,
     },
     sectionSubtitle: {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 12,
-      marginTop: -8,
+      marginTop: 4,
     },
     addButton: {
       padding: 4,

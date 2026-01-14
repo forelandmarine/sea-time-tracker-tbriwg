@@ -161,9 +161,9 @@ export default function ConfirmationsScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Pending Confirmations</Text>
+        <Text style={styles.headerTitle}>Review</Text>
         <Text style={styles.headerSubtitle}>
-          Review and confirm your sea time entries
+          Confirm your sea time entries
         </Text>
       </View>
 

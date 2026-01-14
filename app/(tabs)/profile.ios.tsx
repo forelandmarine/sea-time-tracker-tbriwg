@@ -240,16 +240,13 @@ const createStyles = (isDark: boolean) =>
     container: {
       flex: 1,
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
-      paddingTop: Platform.OS === 'android' ? 48 : 0,
     },
     header: {
       padding: 20,
-      paddingTop: Platform.OS === 'ios' ? 60 : 20,
+      paddingTop: Platform.OS === 'android' ? 48 : 20,
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderBottomWidth: 1,
       borderBottomColor: isDark ? colors.border : colors.borderLight,
-      boxShadow: '0px 2px 8px rgba(0, 119, 190, 0.1)',
-      elevation: 3,
     },
     headerTitle: {
       fontSize: 28,
