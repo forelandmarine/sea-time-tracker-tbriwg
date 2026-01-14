@@ -33,6 +33,10 @@ interface SeaTimeEntry {
   status: 'pending' | 'confirmed' | 'rejected';
   notes: string | null;
   created_at: string;
+  start_latitude?: number | null;
+  start_longitude?: number | null;
+  end_latitude?: number | null;
+  end_longitude?: number | null;
 }
 
 function createStyles(isDark: boolean) {
@@ -135,6 +139,44 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginBottom: 4,
+    },
+    coordinatesSection: {
+      backgroundColor: isDark ? 'rgba(0, 122, 255, 0.1)' : 'rgba(0, 122, 255, 0.05)',
+      borderRadius: 8,
+      padding: 10,
+      marginTop: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.primary,
+    },
+    coordinatesHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 6,
+    },
+    coordinatesHeaderText: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.primary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    coordinateRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 3,
+    },
+    coordinateLabel: {
+      fontSize: 12,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      fontWeight: '500',
+    },
+    coordinateValue: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
     emptyState: {
       alignItems: 'center',
@@ -385,6 +427,44 @@ export default function VesselDetailScreen() {
                         </Text>
                       )}
                     </View>
+
+                    {/* GPS Coordinates Section */}
+                    {((entry.start_latitude !== null && entry.start_latitude !== undefined && 
+                       entry.start_longitude !== null && entry.start_longitude !== undefined) ||
+                      (entry.end_latitude !== null && entry.end_latitude !== undefined && 
+                       entry.end_longitude !== null && entry.end_longitude !== undefined)) && (
+                      <View style={styles.coordinatesSection}>
+                        <View style={styles.coordinatesHeader}>
+                          <IconSymbol
+                            ios_icon_name="location.fill"
+                            android_material_icon_name="location-on"
+                            size={14}
+                            color={colors.primary}
+                          />
+                          <Text style={styles.coordinatesHeaderText}>GPS Coordinates</Text>
+                        </View>
+                        
+                        {entry.start_latitude !== null && entry.start_latitude !== undefined && 
+                         entry.start_longitude !== null && entry.start_longitude !== undefined && (
+                          <View style={styles.coordinateRow}>
+                            <Text style={styles.coordinateLabel}>Start:</Text>
+                            <Text style={styles.coordinateValue}>
+                              {entry.start_latitude.toFixed(6)}°, {entry.start_longitude.toFixed(6)}°
+                            </Text>
+                          </View>
+                        )}
+                        
+                        {entry.end_latitude !== null && entry.end_latitude !== undefined && 
+                         entry.end_longitude !== null && entry.end_longitude !== undefined && (
+                          <View style={styles.coordinateRow}>
+                            <Text style={styles.coordinateLabel}>End:</Text>
+                            <Text style={styles.coordinateValue}>
+                              {entry.end_latitude.toFixed(6)}°, {entry.end_longitude.toFixed(6)}°
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
                   </View>
                 ))}
               </React.Fragment>
