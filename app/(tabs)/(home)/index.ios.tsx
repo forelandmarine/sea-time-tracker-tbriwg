@@ -270,9 +270,16 @@ export default function SeaTimeScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.headerTitle}>SeaTime Tracker</Text>
-              <Text style={styles.headerSubtitle}>Track your days at sea</Text>
+            <View style={styles.headerTitleContainer}>
+              <Image
+                source={require('@/assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png')}
+                style={styles.appIcon}
+                resizeMode="contain"
+              />
+              <View>
+                <Text style={styles.headerTitle}>SeaTime Tracker</Text>
+                <Text style={styles.headerSubtitle}>Track your days at sea</Text>
+              </View>
             </View>
             <TouchableOpacity
               style={styles.diagnosticButton}
@@ -506,6 +513,16 @@ function createStyles(isDark: boolean) {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
+    },
+    headerTitleContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    appIcon: {
+      width: 48,
+      height: 48,
+      borderRadius: 12,
     },
     headerTitle: {
       fontSize: 28,
