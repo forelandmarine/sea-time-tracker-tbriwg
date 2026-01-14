@@ -52,8 +52,26 @@ export function register(app: App, fastify: FastifyInstance) {
           200: {
             type: 'object',
             properties: {
-              user: { type: 'object' },
-              session: { type: 'object' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  email: { type: 'string' },
+                  name: { type: 'string' },
+                  emailVerified: { type: 'boolean' },
+                  image: { type: ['string', 'null'] },
+                  createdAt: { type: 'string' },
+                  updatedAt: { type: 'string' },
+                },
+              },
+              session: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  token: { type: 'string' },
+                  expiresAt: { type: 'string' },
+                },
+              },
             },
           },
           400: { type: 'object', properties: { error: { type: 'string' } } },
@@ -169,8 +187,26 @@ export function register(app: App, fastify: FastifyInstance) {
           200: {
             type: 'object',
             properties: {
-              user: { type: 'object' },
-              session: { type: 'object' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  email: { type: 'string' },
+                  name: { type: 'string' },
+                  emailVerified: { type: 'boolean' },
+                  image: { type: ['string', 'null'] },
+                  createdAt: { type: 'string' },
+                  updatedAt: { type: 'string' },
+                },
+              },
+              session: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  token: { type: 'string' },
+                  expiresAt: { type: 'string' },
+                },
+              },
             },
           },
           401: { type: 'object', properties: { error: { type: 'string' } } },
@@ -284,8 +320,26 @@ export function register(app: App, fastify: FastifyInstance) {
           200: {
             type: 'object',
             properties: {
-              user: { type: 'object' },
-              session: { type: 'object' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  email: { type: 'string' },
+                  name: { type: 'string' },
+                  emailVerified: { type: 'boolean' },
+                  image: { type: ['string', 'null'] },
+                  createdAt: { type: 'string' },
+                  updatedAt: { type: 'string' },
+                },
+              },
+              session: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  token: { type: 'string' },
+                  expiresAt: { type: 'string' },
+                },
+              },
               isNewUser: { type: 'boolean' },
             },
           },
@@ -453,7 +507,18 @@ export function register(app: App, fastify: FastifyInstance) {
           200: {
             type: 'object',
             properties: {
-              user: { type: 'object' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  email: { type: 'string' },
+                  name: { type: 'string' },
+                  emailVerified: { type: 'boolean' },
+                  image: { type: ['string', 'null'] },
+                  createdAt: { type: 'string' },
+                  updatedAt: { type: 'string' },
+                },
+              },
             },
           },
           401: { type: 'object', properties: { error: { type: 'string' } } },
@@ -598,8 +663,26 @@ export function register(app: App, fastify: FastifyInstance) {
           200: {
             type: 'object',
             properties: {
-              user: { type: 'object' },
-              session: { type: 'object' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  email: { type: 'string' },
+                  name: { type: 'string' },
+                  emailVerified: { type: 'boolean' },
+                  image: { type: ['string', 'null'] },
+                  createdAt: { type: 'string' },
+                  updatedAt: { type: 'string' },
+                },
+              },
+              session: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  token: { type: 'string' },
+                  expiresAt: { type: 'string' },
+                },
+              },
               message: { type: 'string' },
             },
           },
