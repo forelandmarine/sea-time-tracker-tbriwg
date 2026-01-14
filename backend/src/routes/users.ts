@@ -1,28 +1,17 @@
 import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
 import * as crypto from "crypto";
+import { promisify } from "util";
 import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
 
-// Hash password using Better Auth's scrypt implementation
-async function hashPassword(password: string): Promise<string> {
-  // Use Node's built-in crypto for password hashing
-  // Better Auth uses scrypt, but we can use PBKDF2 as a simple alternative
-  const salt = crypto.randomBytes(16).toString('hex');
-  const iterations = 100000;
-  const hash = crypto
-    .pbkdf2Sync(password, salt, iterations, 64, 'sha256')
-    .toString('hex');
-  return `${hash}.${salt}.${iterations}`;
-}
+const scrypt = promisify(crypto.scrypt);
 
-// Verify password
-async function verifyPassword(password: string, hashed: string): Promise<boolean> {
-  const [hash, salt, iterations] = hashed.split('.');
-  const hashToCompare = crypto
-    .pbkdf2Sync(password, salt, parseInt(iterations), 64, 'sha256')
-    .toString('hex');
-  return hash === hashToCompare;
+// Hash password using scrypt (same algorithm Better Auth uses)
+async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derivedKey = (await scrypt(password, salt, 32)) as Buffer;
+  return `${derivedKey.toString('hex')}.${salt}`;
 }
 
 export function register(app: App, fastify: FastifyInstance) {
@@ -86,7 +75,7 @@ export function register(app: App, fastify: FastifyInstance) {
           });
         }
 
-        // Hash the password
+        // Hash the password using scrypt
         const hashedPassword = await hashPassword(password);
 
         // Create user in Better Auth user table
@@ -105,7 +94,7 @@ export function register(app: App, fastify: FastifyInstance) {
           })
           .returning();
 
-        // Create account record with hashed password
+        // Create account record with hashed password for credential provider
         await app.db
           .insert(authSchema.account)
           .values({
