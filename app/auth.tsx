@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import Constants from 'expo-constants';
 
 export default function AuthScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -84,6 +85,61 @@ export default function AuthScreen() {
         console.error('[AuthScreen] Apple sign in failed:', error);
         Alert.alert('Error', 'Apple sign in failed');
       }
+    }
+  };
+
+  const handleCreateTestUser = async () => {
+    setLoading(true);
+    try {
+      console.log('[AuthScreen] User tapped Create Test Account button');
+      const API_URL = Constants.expoConfig?.extra?.backendUrl || '';
+      
+      // Create test user via backend endpoint
+      const response = await fetch(`${API_URL}/api/auth/create-test-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Failed to create test user');
+      }
+
+      const data = await response.json();
+      console.log('[AuthScreen] Test user created:', data.message);
+      
+      // Now sign in with the test credentials
+      await signIn('test@seatime.com', 'testpassword123');
+      
+      Alert.alert(
+        'Test Account Created',
+        'Email: test@seatime.com\nPassword: testpassword123\n\nYou are now signed in!',
+        [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+      );
+    } catch (error: any) {
+      console.error('[AuthScreen] Create test user failed:', error);
+      
+      // If user already exists, try to sign in
+      if (error.message?.includes('already exists') || error.message?.includes('unique')) {
+        console.log('[AuthScreen] Test user already exists, attempting sign in');
+        try {
+          await signIn('test@seatime.com', 'testpassword123');
+          Alert.alert(
+            'Test Account',
+            'Signed in with existing test account\n\nEmail: test@seatime.com\nPassword: testpassword123',
+            [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
+          );
+        } catch (signInError) {
+          Alert.alert('Error', 'Failed to sign in with test account');
+        }
+      } else {
+        Alert.alert('Error', error.message || 'Failed to create test user');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -170,6 +226,33 @@ export default function AuthScreen() {
               ? 'Already have an account? Sign In'
               : "Don't have an account? Sign Up"}
           </Text>
+        </TouchableOpacity>
+
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>OR</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <TouchableOpacity
+          style={[styles.button, styles.testButton]}
+          onPress={handleCreateTestUser}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : (
+            <>
+              <IconSymbol
+                ios_icon_name="person.badge.key"
+                android_material_icon_name="person"
+                size={20}
+                color={colors.primary}
+                style={styles.testButtonIcon}
+              />
+              <Text style={styles.testButtonText}>Create Test Account</Text>
+            </>
+          )}
         </TouchableOpacity>
 
         {Platform.OS === 'ios' && (
@@ -298,6 +381,22 @@ function createStyles(isDark: boolean) {
     appleButton: {
       width: '100%',
       height: 50,
+    },
+    testButton: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderWidth: 2,
+      borderColor: colors.primary,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    testButtonIcon: {
+      marginRight: 8,
+    },
+    testButtonText: {
+      color: colors.primary,
+      fontSize: 16,
+      fontWeight: '600',
     },
     footer: {
       marginTop: 40,
