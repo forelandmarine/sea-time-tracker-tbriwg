@@ -24,6 +24,10 @@ export interface SeaTimeEntry {
   status: 'pending' | 'confirmed' | 'rejected';
   notes: string | null;
   created_at: string;
+  start_latitude?: number | null;
+  start_longitude?: number | null;
+  end_latitude?: number | null;
+  end_longitude?: number | null;
 }
 
 export interface AISCheckResult {
