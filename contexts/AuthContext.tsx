@@ -35,11 +35,13 @@ const tokenStorage = {
   },
   
   async setToken(token: string): Promise<void> {
+    console.log('[Auth] Storing token, length:', token?.length);
     if (Platform.OS === 'web') {
       localStorage.setItem(TOKEN_KEY, token);
     } else {
       await SecureStore.setItemAsync(TOKEN_KEY, token);
     }
+    console.log('[Auth] Token stored successfully');
   },
   
   async removeToken(): Promise<void> {
@@ -71,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      console.log('[Auth] Token found, verifying with backend...');
       // Verify token with backend
       const response = await fetch(`${API_URL}/api/auth/user`, {
         headers: {
@@ -83,7 +86,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('[Auth] User authenticated:', data.user.email);
         setUser(data.user);
       } else {
-        console.log('[Auth] Token invalid, clearing...');
+        console.log('[Auth] Token invalid, clearing... Status:', response.status);
         await tokenStorage.removeToken();
         setUser(null);
       }
@@ -99,6 +102,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string) => {
     try {
       console.log('[Auth] Signing in:', email);
+      console.log('[Auth] API URL:', API_URL);
+      
       const response = await fetch(`${API_URL}/api/auth/sign-in/email`, {
         method: 'POST',
         headers: {
@@ -107,17 +112,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password }),
       });
 
+      console.log('[Auth] Sign in response status:', response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('[Auth] Sign in failed with error:', errorData);
         throw new Error(errorData.error || 'Login failed');
       }
 
       const data = await response.json();
+      console.log('[Auth] Sign in response received, user:', data.user?.email);
+      console.log('[Auth] Session data:', { 
+        hasSession: !!data.session, 
+        hasToken: !!data.session?.token,
+        tokenLength: data.session?.token?.length 
+      });
+
+      if (!data.session || !data.session.token) {
+        throw new Error('No session token received from server');
+      }
+
       await tokenStorage.setToken(data.session.token);
       setUser(data.user);
-      console.log('[Auth] Sign in successful');
-    } catch (error) {
-      console.error('[Auth] Sign in failed:', error);
+      console.log('[Auth] Sign in successful, user state updated');
+    } catch (error: any) {
+      console.error('[Auth] Sign in failed:', {
+        message: error?.message,
+        name: error?.name,
+        stack: error?.stack,
+        error: error
+      });
       throw error;
     }
   };
@@ -133,17 +157,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({ email, password, name: name || 'User' }),
       });
 
+      console.log('[Auth] Sign up response status:', response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('[Auth] Sign up failed with error:', errorData);
         throw new Error(errorData.error || 'Registration failed');
       }
 
       const data = await response.json();
+      console.log('[Auth] Sign up response received, user:', data.user?.email);
+
+      if (!data.session || !data.session.token) {
+        throw new Error('No session token received from server');
+      }
+
       await tokenStorage.setToken(data.session.token);
       setUser(data.user);
       console.log('[Auth] Sign up successful');
-    } catch (error) {
-      console.error('[Auth] Sign up failed:', error);
+    } catch (error: any) {
+      console.error('[Auth] Sign up failed:', {
+        message: error?.message,
+        name: error?.name,
+        error: error
+      });
       throw error;
     }
   };
@@ -162,17 +199,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }),
       });
 
+      console.log('[Auth] Apple sign in response status:', response.status);
+
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('[Auth] Apple sign in failed with error:', errorData);
         throw new Error(errorData.error || 'Apple sign in failed');
       }
 
       const data = await response.json();
+      console.log('[Auth] Apple sign in response received');
+
+      if (!data.session || !data.session.token) {
+        throw new Error('No session token received from server');
+      }
+
       await tokenStorage.setToken(data.session.token);
       setUser(data.user);
       console.log('[Auth] Apple sign in successful');
-    } catch (error) {
-      console.error('[Auth] Apple sign in failed:', error);
+    } catch (error: any) {
+      console.error('[Auth] Apple sign in failed:', {
+        message: error?.message,
+        name: error?.name,
+        error: error
+      });
       throw error;
     }
   };
