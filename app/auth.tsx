@@ -119,7 +119,6 @@ export default function AuthScreen() {
     }
   };
 
-  // ✅ FIXED: Moved useAuth hook to component level and pass functions as parameters
   const runStressTest = async () => {
     console.log('🧪 Starting authentication stress test');
     setStressTestRunning(true);
@@ -252,7 +251,7 @@ export default function AuthScreen() {
         errorMessage = "Sign in succeeded but session could not be established. This may be a temporary issue. Please try again.";
       } else if (errorMessage.includes("Server error") || errorMessage.includes("500") || error.status === 500) {
         errorTitle = "Backend Error";
-        errorMessage = "⚠️ The backend is experiencing issues with authentication.\n\n🔧 Try running diagnostics below to identify the issue.";
+        errorMessage = "⚠️ The backend is experiencing issues with email authentication.\n\n✅ Try using Google or Apple sign-in instead (see options below).\n\n🔧 The backend is being fixed now. Please wait a moment and try again.";
       }
       
       Alert.alert(errorTitle, errorMessage);
@@ -282,7 +281,7 @@ export default function AuthScreen() {
       
       if (errorMessage.includes("Server error") || errorMessage.includes("500") || error.status === 500) {
         errorTitle = "Backend Error";
-        errorMessage = "⚠️ The backend is experiencing issues with authentication.\n\n🔧 Try running diagnostics below to identify the issue.";
+        errorMessage = "⚠️ The backend is experiencing issues with authentication.\n\n🔧 The backend is being fixed now. Please wait a moment and try again.";
       } else if (errorMessage.includes("cancelled")) {
         errorTitle = "Cancelled";
         errorMessage = "Authentication was cancelled.";
@@ -311,6 +310,20 @@ export default function AuthScreen() {
             <Text style={styles.appName}>SeaTime Tracker</Text>
             <Text style={styles.welcomeMessage}>
               Welcome aboard! Track your sea time and manage your service records automatically.{'\n\n'}By Foreland Marine
+            </Text>
+          </View>
+
+          {/* Authentication Options Info Banner */}
+          <View style={styles.infoBanner}>
+            <Text style={styles.infoBannerTitle}>🔐 Authentication Options</Text>
+            <Text style={styles.infoBannerText}>
+              - Email & Password (traditional sign-in){'\n'}
+              - Google Sign-In (recommended){'\n'}
+              - Apple Sign-In (iOS users){'\n'}
+              - GitHub Sign-In (developers)
+            </Text>
+            <Text style={styles.infoBannerNote}>
+              💡 If email sign-in isn't working, try Google or Apple sign-in below.
             </Text>
           </View>
 
@@ -394,7 +407,7 @@ export default function AuthScreen() {
               <ActivityIndicator color="#fff" />
             ) : (
               <Text style={styles.primaryButtonText}>
-                {mode === "signin" ? "Sign In" : "Sign Up"}
+                {mode === "signin" ? "Sign In with Email" : "Sign Up with Email"}
               </Text>
             )}
           </TouchableOpacity>
@@ -467,12 +480,13 @@ export default function AuthScreen() {
             <View style={styles.dividerLine} />
           </View>
 
+          {/* Social Authentication Buttons - Highlighted as alternatives */}
           <TouchableOpacity
-            style={styles.socialButton}
+            style={[styles.socialButton, styles.googleButton]}
             onPress={() => handleSocialAuth("google")}
             disabled={loading}
           >
-            <Text style={styles.socialButtonText}>Continue with Google</Text>
+            <Text style={styles.socialButtonText}>✅ Continue with Google (Recommended)</Text>
           </TouchableOpacity>
 
           {Platform.OS === "ios" && (
@@ -482,10 +496,18 @@ export default function AuthScreen() {
               disabled={loading}
             >
               <Text style={[styles.socialButtonText, styles.appleButtonText]}>
-                Continue with Apple
+                ✅ Continue with Apple
               </Text>
             </TouchableOpacity>
           )}
+
+          <TouchableOpacity
+            style={[styles.socialButton, styles.githubButton]}
+            onPress={() => handleSocialAuth("github")}
+            disabled={loading}
+          >
+            <Text style={styles.socialButtonText}>Continue with GitHub</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -527,6 +549,32 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 22,
     paddingHorizontal: 16,
+  },
+  infoBanner: {
+    backgroundColor: "#E3F2FD",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#2196F3",
+  },
+  infoBannerTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#1565C0",
+    marginBottom: 8,
+  },
+  infoBannerText: {
+    fontSize: 14,
+    color: "#1976D2",
+    lineHeight: 20,
+    marginBottom: 8,
+  },
+  infoBannerNote: {
+    fontSize: 13,
+    color: "#1976D2",
+    fontStyle: "italic",
+    marginTop: 4,
   },
   diagnosticsContainer: {
     backgroundColor: "#F5F5F5",
@@ -704,11 +752,20 @@ const styles = StyleSheet.create({
     color: "#000",
     fontWeight: "500",
   },
+  googleButton: {
+    backgroundColor: "#F8F9FA",
+    borderColor: "#4285F4",
+    borderWidth: 2,
+  },
   appleButton: {
     backgroundColor: "#000",
     borderColor: "#000",
   },
   appleButtonText: {
     color: "#fff",
+  },
+  githubButton: {
+    backgroundColor: "#24292E",
+    borderColor: "#24292E",
   },
 });
