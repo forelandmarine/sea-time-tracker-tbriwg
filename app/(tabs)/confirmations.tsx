@@ -59,9 +59,11 @@ export default function ConfirmationsScreen() {
       const entriesData = await seaTimeApi.getPendingEntries();
       console.log('[ConfirmationsScreen] Raw pending entries data:', JSON.stringify(entriesData, null, 2));
       
-      // Log each entry's coordinates
+      // Log each entry's coordinates and duration
       entriesData.forEach((entry: SeaTimeEntry, index: number) => {
-        console.log(`[ConfirmationsScreen] Entry ${index} (${entry.id}) coordinates:`, {
+        console.log(`[ConfirmationsScreen] Entry ${index} (${entry.id}):`, {
+          duration_hours: entry.duration_hours,
+          duration_type: typeof entry.duration_hours,
           start_latitude: entry.start_latitude,
           start_longitude: entry.start_longitude,
           end_latitude: entry.end_latitude,
@@ -172,6 +174,20 @@ export default function ConfirmationsScreen() {
     return 'N/A';
   };
 
+  const formatDuration = (hours: number | null | undefined): string => {
+    if (typeof hours === 'number' && !isNaN(hours)) {
+      return hours.toFixed(1);
+    }
+    return '0.0';
+  };
+
+  const formatDays = (hours: number | null | undefined): string => {
+    if (typeof hours === 'number' && !isNaN(hours)) {
+      return (hours / 24).toFixed(2);
+    }
+    return '0.00';
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -224,10 +240,13 @@ export default function ConfirmationsScreen() {
               const hasEndCoords = typeof entry.end_latitude === 'number' && !isNaN(entry.end_latitude) &&
                                    typeof entry.end_longitude === 'number' && !isNaN(entry.end_longitude);
               const hasAnyCoords = hasStartCoords || hasEndCoords;
+              const hasDuration = typeof entry.duration_hours === 'number' && !isNaN(entry.duration_hours);
 
-              console.log(`[ConfirmationsScreen] Rendering entry ${entry.id} coordinates:`, {
+              console.log(`[ConfirmationsScreen] Rendering entry ${entry.id}:`, {
                 hasStartCoords,
                 hasEndCoords,
+                hasDuration,
+                duration_hours: entry.duration_hours,
                 start_latitude: entry.start_latitude,
                 start_longitude: entry.start_longitude,
                 end_latitude: entry.end_latitude,
@@ -342,28 +361,26 @@ export default function ConfirmationsScreen() {
                       </View>
                     )}
 
-                    {/* Duration */}
-                    {entry.duration_hours !== null && (
-                      <View style={styles.durationSection}>
-                        <View style={styles.durationCard}>
-                          <IconSymbol
-                            ios_icon_name="timer"
-                            android_material_icon_name="access-time"
-                            size={20}
-                            color={colors.primary}
-                          />
-                          <View style={styles.durationInfo}>
-                            <Text style={styles.durationLabel}>Total Duration</Text>
-                            <Text style={styles.durationValue}>
-                              {entry.duration_hours.toFixed(1)} hours
-                            </Text>
-                            <Text style={styles.durationDays}>
-                              ({(entry.duration_hours / 24).toFixed(2)} days)
-                            </Text>
-                          </View>
+                    {/* Duration - Always show, even if 0 */}
+                    <View style={styles.durationSection}>
+                      <View style={styles.durationCard}>
+                        <IconSymbol
+                          ios_icon_name="timer"
+                          android_material_icon_name="access-time"
+                          size={20}
+                          color={colors.primary}
+                        />
+                        <View style={styles.durationInfo}>
+                          <Text style={styles.durationLabel}>Total Duration</Text>
+                          <Text style={styles.durationValue}>
+                            {formatDuration(entry.duration_hours)} hours
+                          </Text>
+                          <Text style={styles.durationDays}>
+                            ({formatDays(entry.duration_hours)} days)
+                          </Text>
                         </View>
                       </View>
-                    )}
+                    </View>
 
                     {/* Notes */}
                     {entry.notes && (
