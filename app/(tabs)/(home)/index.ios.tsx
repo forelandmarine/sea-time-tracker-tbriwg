@@ -249,7 +249,7 @@ export default function SeaTimeScreen() {
       case 'pending':
         return colors.warning;
       default:
-        return colors.textSecondary;
+        return isDark ? colors.textSecondary : colors.textSecondaryLight;
     }
   };
 
@@ -362,7 +362,7 @@ export default function SeaTimeScreen() {
                 ios_icon_name="ferry"
                 android_material_icon_name="directions-boat"
                 size={64}
-                color={colors.textSecondary}
+                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
               />
               <Text style={styles.emptyText}>No vessels added yet</Text>
               <Text style={styles.emptySubtext}>Tap the + button to add your first vessel</Text>
@@ -438,7 +438,7 @@ export default function SeaTimeScreen() {
                   ios_icon_name="xmark.circle.fill"
                   android_material_icon_name="cancel"
                   size={28}
-                  color={colors.textSecondary}
+                  color={isDark ? colors.textSecondary : colors.textSecondaryLight}
                 />
               </TouchableOpacity>
             </View>
@@ -448,7 +448,7 @@ export default function SeaTimeScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="e.g., MV Serenity"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
                 value={newVesselName}
                 onChangeText={setNewVesselName}
               />
@@ -459,7 +459,7 @@ export default function SeaTimeScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="e.g., 235012345"
-                placeholderTextColor={colors.textSecondary}
+                placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
                 value={newMMSI}
                 onChangeText={setNewMMSI}
                 keyboardType="numeric"
@@ -480,7 +480,7 @@ function createStyles(isDark: boolean) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? colors.background : '#f5f5f5',
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
     scrollView: {
       flex: 1,
@@ -489,16 +489,18 @@ function createStyles(isDark: boolean) {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: isDark ? colors.background : '#f5f5f5',
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
     loadingText: {
       fontSize: 16,
-      color: colors.textSecondary,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
     header: {
       padding: 20,
       paddingTop: Platform.OS === 'android' ? 48 : 20,
-      backgroundColor: isDark ? colors.cardBackground : '#fff',
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
     headerTop: {
       flexDirection: 'row',
@@ -508,16 +510,16 @@ function createStyles(isDark: boolean) {
     headerTitle: {
       fontSize: 28,
       fontWeight: 'bold',
-      color: colors.text,
+      color: isDark ? colors.text : colors.textLight,
     },
     headerSubtitle: {
       fontSize: 14,
-      color: colors.textSecondary,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginTop: 4,
     },
     diagnosticButton: {
       padding: 8,
-      backgroundColor: isDark ? colors.background : '#f5f5f5',
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
       borderRadius: 8,
     },
     section: {
@@ -532,18 +534,20 @@ function createStyles(isDark: boolean) {
     sectionTitle: {
       fontSize: 20,
       fontWeight: 'bold',
-      color: colors.text,
+      color: isDark ? colors.text : colors.textLight,
     },
     addButton: {
       padding: 4,
     },
     pendingCard: {
-      backgroundColor: isDark ? colors.cardBackground : '#fff',
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
       padding: 16,
       marginBottom: 12,
       borderLeftWidth: 4,
       borderLeftColor: colors.warning,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
     },
     pendingHeader: {
       flexDirection: 'row',
@@ -554,7 +558,7 @@ function createStyles(isDark: boolean) {
     pendingVessel: {
       fontSize: 16,
       fontWeight: 'bold',
-      color: colors.text,
+      color: isDark ? colors.text : colors.textLight,
     },
     statusBadge: {
       paddingHorizontal: 8,
@@ -568,12 +572,12 @@ function createStyles(isDark: boolean) {
     },
     pendingDate: {
       fontSize: 14,
-      color: colors.textSecondary,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginBottom: 4,
     },
     pendingDuration: {
       fontSize: 14,
-      color: colors.text,
+      color: isDark ? colors.text : colors.textLight,
       marginBottom: 12,
     },
     pendingActions: {
@@ -601,10 +605,12 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
     },
     vesselCard: {
-      backgroundColor: isDark ? colors.cardBackground : '#fff',
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
       padding: 16,
       marginBottom: 12,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
     },
     vesselHeader: {
       flexDirection: 'row',
@@ -618,18 +624,18 @@ function createStyles(isDark: boolean) {
     vesselName: {
       fontSize: 18,
       fontWeight: 'bold',
-      color: colors.text,
+      color: isDark ? colors.text : colors.textLight,
       marginBottom: 4,
     },
     vesselMmsi: {
       fontSize: 14,
-      color: colors.textSecondary,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
     statusIndicator: {
       width: 12,
       height: 12,
       borderRadius: 6,
-      backgroundColor: colors.textSecondary,
+      backgroundColor: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
     statusActive: {
       backgroundColor: colors.success,
@@ -670,12 +676,12 @@ function createStyles(isDark: boolean) {
     emptyText: {
       fontSize: 18,
       fontWeight: 'bold',
-      color: colors.text,
+      color: isDark ? colors.text : colors.textLight,
       marginTop: 16,
     },
     emptySubtext: {
       fontSize: 14,
-      color: colors.textSecondary,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginTop: 8,
       textAlign: 'center',
     },
@@ -685,7 +691,7 @@ function createStyles(isDark: boolean) {
       justifyContent: 'flex-end',
     },
     modalContent: {
-      backgroundColor: isDark ? colors.cardBackground : '#fff',
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
       padding: 20,
@@ -700,7 +706,7 @@ function createStyles(isDark: boolean) {
     modalTitle: {
       fontSize: 20,
       fontWeight: 'bold',
-      color: colors.text,
+      color: isDark ? colors.text : colors.textLight,
     },
     inputGroup: {
       marginBottom: 16,
@@ -708,15 +714,17 @@ function createStyles(isDark: boolean) {
     inputLabel: {
       fontSize: 14,
       fontWeight: '600',
-      color: colors.text,
+      color: isDark ? colors.text : colors.textLight,
       marginBottom: 8,
     },
     input: {
-      backgroundColor: isDark ? colors.background : '#f5f5f5',
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
       borderRadius: 8,
       padding: 12,
       fontSize: 16,
-      color: colors.text,
+      color: isDark ? colors.text : colors.textLight,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
     },
     submitButton: {
       backgroundColor: colors.primary,

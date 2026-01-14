@@ -5,19 +5,20 @@ export const colors = {
   primary: '#0077BE',      // Ocean Blue
   secondary: '#003D5C',    // Deep Sea Blue
   accent: '#00A8E8',       // Bright Cyan
-  background: '#F0F8FF',   // Alice Blue (light)
-  backgroundDark: '#0A1929', // Dark Navy
-  card: '#FFFFFF',         // White cards
-  cardDark: '#1A2332',     // Dark cards
-  text: '#1A1A1A',         // Dark text
-  textDark: '#E8F1F5',     // Light text for dark mode
-  textSecondary: '#5A6C7D', // Muted text
-  textSecondaryDark: '#8B9DAF', // Muted text dark
+  background: '#0A1929',   // Dark Navy (dark mode default)
+  backgroundLight: '#F0F8FF', // Alice Blue (light mode)
+  cardBackground: '#1A2332', // Dark cards
+  card: '#FFFFFF',         // White cards (light mode)
+  text: '#E8F1F5',         // Light text (dark mode default)
+  textLight: '#1A1A1A',    // Dark text (light mode)
+  textSecondary: '#8B9DAF', // Muted text (dark mode default)
+  textSecondaryLight: '#5A6C7D', // Muted text (light mode)
   success: '#00C853',      // Green for confirmed
   warning: '#FFB300',      // Amber for pending
+  error: '#D32F2F',        // Red for rejected/danger
   danger: '#D32F2F',       // Red for rejected
-  border: '#D1E3F0',       // Light border
-  borderDark: '#2A3F54',   // Dark border
+  border: '#2A3F54',       // Dark border (dark mode default)
+  borderLight: '#D1E3F0',  // Light border (light mode)
   highlight: '#FFD54F',    // Gold highlight
 };
 
@@ -81,7 +82,7 @@ export const commonStyles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   card: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.cardBackground,
     borderColor: colors.border,
     borderWidth: 1,
     borderRadius: 12,
