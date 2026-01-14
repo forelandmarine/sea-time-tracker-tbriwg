@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, isNull, desc, gte, lte } from "drizzle-orm";
 import * as schema from "../db/schema.js";
 import type { App } from "../index.js";
 
@@ -118,6 +118,10 @@ export function register(app: App, fastify: FastifyInstance) {
               status: { type: 'string' },
               notes: { type: ['string', 'null'] },
               created_at: { type: 'string', format: 'date-time' },
+              start_latitude: { type: ['number', 'null'] },
+              start_longitude: { type: ['number', 'null'] },
+              end_latitude: { type: ['number', 'null'] },
+              end_longitude: { type: ['number', 'null'] },
               vessel: {
                 type: 'object',
                 properties: {
@@ -144,8 +148,82 @@ export function register(app: App, fastify: FastifyInstance) {
       orderBy: desc(schema.sea_time_entries.start_time),
     });
 
-    app.logger.info(`Retrieved ${entries.length} pending sea time entries`);
-    return reply.code(200).send(entries);
+    // Enrich entries with position data from AIS checks
+    const enrichedEntries = await Promise.all(
+      entries.map(async (entry) => {
+        let start_latitude: number | null = null;
+        let start_longitude: number | null = null;
+        let end_latitude: number | null = null;
+        let end_longitude: number | null = null;
+
+        // Get AIS checks near start_time (within 1 hour before and after)
+        const startChecks = await app.db
+          .select()
+          .from(schema.ais_checks)
+          .where(
+            and(
+              eq(schema.ais_checks.vessel_id, entry.vessel_id),
+              gte(schema.ais_checks.check_time, new Date(entry.start_time.getTime() - 60 * 60 * 1000)), // Look back up to 1 hour
+              lte(schema.ais_checks.check_time, new Date(entry.start_time.getTime() + 60 * 60 * 1000)) // Look ahead up to 1 hour
+            )
+          )
+          .orderBy(desc(schema.ais_checks.check_time));
+
+        // Find the closest check to start_time
+        if (startChecks.length > 0) {
+          const closestStartCheck = startChecks.reduce((closest, current) => {
+            const currentDiff = Math.abs(current.check_time.getTime() - entry.start_time.getTime());
+            const closestDiff = Math.abs(closest.check_time.getTime() - entry.start_time.getTime());
+            return currentDiff < closestDiff ? current : closest;
+          });
+
+          if (closestStartCheck.latitude && closestStartCheck.longitude) {
+            start_latitude = parseFloat(String(closestStartCheck.latitude));
+            start_longitude = parseFloat(String(closestStartCheck.longitude));
+          }
+        }
+
+        // Get AIS checks near end_time (if entry has ended)
+        if (entry.end_time) {
+          const endChecks = await app.db
+            .select()
+            .from(schema.ais_checks)
+            .where(
+              and(
+                eq(schema.ais_checks.vessel_id, entry.vessel_id),
+                gte(schema.ais_checks.check_time, new Date(entry.end_time.getTime() - 60 * 60 * 1000)), // Look back up to 1 hour
+                lte(schema.ais_checks.check_time, new Date(entry.end_time.getTime() + 60 * 60 * 1000)) // Look ahead up to 1 hour
+              )
+            )
+            .orderBy(desc(schema.ais_checks.check_time));
+
+          // Find the closest check to end_time
+          if (endChecks.length > 0) {
+            const closestEndCheck = endChecks.reduce((closest, current) => {
+              const currentDiff = Math.abs(current.check_time.getTime() - entry.end_time!.getTime());
+              const closestDiff = Math.abs(closest.check_time.getTime() - entry.end_time!.getTime());
+              return currentDiff < closestDiff ? current : closest;
+            });
+
+            if (closestEndCheck.latitude && closestEndCheck.longitude) {
+              end_latitude = parseFloat(String(closestEndCheck.latitude));
+              end_longitude = parseFloat(String(closestEndCheck.longitude));
+            }
+          }
+        }
+
+        return {
+          ...entry,
+          start_latitude,
+          start_longitude,
+          end_latitude,
+          end_longitude,
+        };
+      })
+    );
+
+    app.logger.info(`Retrieved ${enrichedEntries.length} pending sea time entries with position data`);
+    return reply.code(200).send(enrichedEntries);
   });
 
   // PUT /api/sea-time/:id/confirm - Confirm pending entry with optional notes
