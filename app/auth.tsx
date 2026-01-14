@@ -16,12 +16,13 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "expo-router";
 import * as seaTimeApi from "@/utils/seaTimeApi";
+import { runAuthDiagnostics, DiagnosticResult } from "@/utils/authDiagnostics";
 
 type Mode = "signin" | "signup";
 
 export default function AuthScreen() {
   const router = useRouter();
-  const { signInWithEmail, signUpWithEmail, signInWithGoogle, signInWithApple, signInWithGitHub } =
+  const { signInWithEmail, signUpWithEmail, signInWithGoogle, signInWithApple, signInWithGitHub, signOut } =
     useAuth();
 
   const [mode, setMode] = useState<Mode>("signin");
@@ -29,6 +30,15 @@ export default function AuthScreen() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [stressTestRunning, setStressTestRunning] = useState(false);
+  const [diagnosticsRunning, setDiagnosticsRunning] = useState(false);
+  const [stressTestResults, setStressTestResults] = useState<{
+    total: number;
+    successful: number;
+    failed: number;
+    errors: string[];
+  } | null>(null);
+  const [diagnosticsResults, setDiagnosticsResults] = useState<DiagnosticResult[] | null>(null);
 
   const handleCreateTestAccount = async () => {
     console.log('User tapped Create Test Account button');
@@ -81,6 +91,98 @@ export default function AuthScreen() {
     }
   };
 
+  const handleRunDiagnostics = async () => {
+    console.log('🔍 Running authentication diagnostics');
+    setDiagnosticsRunning(true);
+    setDiagnosticsResults(null);
+
+    try {
+      const results = await runAuthDiagnostics();
+      setDiagnosticsResults(results);
+
+      const failedTests = results.filter(r => r.status === 'fail').length;
+      const warningTests = results.filter(r => r.status === 'warning').length;
+      const passedTests = results.filter(r => r.status === 'pass').length;
+
+      console.log('🔍 Diagnostics complete:', { passed: passedTests, warnings: warningTests, failed: failedTests });
+
+      Alert.alert(
+        "Diagnostics Complete",
+        `Passed: ${passedTests}\nWarnings: ${warningTests}\nFailed: ${failedTests}\n\nCheck the results below for details.`,
+        [{ text: "OK" }]
+      );
+    } catch (error: any) {
+      console.error('❌ Diagnostics failed:', error);
+      Alert.alert("Error", "Failed to run diagnostics: " + error.message);
+    } finally {
+      setDiagnosticsRunning(false);
+    }
+  };
+
+  // ✅ FIXED: Moved useAuth hook to component level and pass functions as parameters
+  const runStressTest = async () => {
+    console.log('🧪 Starting authentication stress test');
+    setStressTestRunning(true);
+    setStressTestResults(null);
+    
+    const results = {
+      total: 0,
+      successful: 0,
+      failed: 0,
+      errors: [] as string[],
+    };
+
+    const testCases = [
+      { email: "test@seatime.com", password: "testpassword123", description: "Valid credentials (test 1)", shouldSucceed: true },
+      { email: "test@seatime.com", password: "testpassword123", description: "Valid credentials (test 2)", shouldSucceed: true },
+      { email: "test@seatime.com", password: "wrongpassword", description: "Wrong password", shouldSucceed: false },
+      { email: "nonexistent@test.com", password: "testpassword123", description: "Non-existent user", shouldSucceed: false },
+      { email: "test@seatime.com", password: "testpassword123", description: "Valid credentials (test 3)", shouldSucceed: true },
+    ];
+
+    for (const testCase of testCases) {
+      results.total++;
+      console.log(`🧪 Test ${results.total}/${testCases.length}: ${testCase.description}`);
+      
+      try {
+        await signInWithEmail(testCase.email, testCase.password);
+        results.successful++;
+        console.log(`✅ Test ${results.total} passed: ${testCase.description}`);
+        
+        // If successful, sign out for next test
+        await signOut();
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error: any) {
+        // Check if this was expected to fail
+        if (!testCase.shouldSucceed) {
+          console.log(`✅ Test ${results.total} correctly failed: ${testCase.description}`);
+          results.successful++;
+        } else {
+          results.failed++;
+          const errorMsg = error.message || error.toString();
+          results.errors.push(`Test ${results.total} (${testCase.description}): ${errorMsg}`);
+          console.error(`❌ Test ${results.total} failed unexpectedly: ${testCase.description}`, errorMsg);
+        }
+      }
+      
+      // Wait between tests
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+
+    setStressTestResults(results);
+    setStressTestRunning(false);
+    
+    console.log('🧪 Stress test complete:', results);
+    
+    const passRate = ((results.successful / results.total) * 100).toFixed(1);
+    
+    Alert.alert(
+      "Stress Test Complete",
+      `Total Tests: ${results.total}\nPassed: ${results.successful}\nFailed: ${results.failed}\nPass Rate: ${passRate}%\n\n${results.failed > 0 ? '⚠️ Some tests failed. Check console for details.' : '✅ All tests passed!'}`,
+      [{ text: "OK" }]
+    );
+  };
+
   const handleEmailAuth = async () => {
     console.log('User tapped email authentication button', { mode, email });
     
@@ -99,7 +201,7 @@ export default function AuthScreen() {
       if (mode === "signin") {
         console.log('Attempting to sign in with email:', email);
         await signInWithEmail(email, password);
-        console.log('Sign in successful, navigating to home');
+        console.log('✅ Sign in successful, navigating to home');
         router.replace("/");
       } else {
         console.log('Attempting to sign up with email:', email);
@@ -116,7 +218,7 @@ export default function AuthScreen() {
         );
       }
     } catch (error: any) {
-      console.error('Email authentication error:', error);
+      console.error('❌ Email authentication error:', error);
       
       // Provide more helpful error messages
       let errorMessage = "Authentication failed";
@@ -149,8 +251,8 @@ export default function AuthScreen() {
         errorTitle = "Session Error";
         errorMessage = "Sign in succeeded but session could not be established. This may be a temporary issue. Please try again.";
       } else if (errorMessage.includes("Server error") || errorMessage.includes("500") || error.status === 500) {
-        errorTitle = "Backend Update in Progress";
-        errorMessage = "✅ Good news: The backend is live and deployed!\n\n⚙️ The authentication system is currently being updated to fix a configuration issue.\n\n⏱️ This should be resolved in 1-2 minutes. Please try again shortly.\n\nBackend URL: https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev";
+        errorTitle = "Backend Error";
+        errorMessage = "⚠️ The backend is experiencing issues with authentication.\n\n🔧 Try running diagnostics below to identify the issue.";
       }
       
       Alert.alert(errorTitle, errorMessage);
@@ -170,17 +272,17 @@ export default function AuthScreen() {
       } else if (provider === "github") {
         await signInWithGitHub();
       }
-      console.log('Social auth successful, navigating to home');
+      console.log('✅ Social auth successful, navigating to home');
       router.replace("/");
     } catch (error: any) {
-      console.error('Social authentication error:', error);
+      console.error('❌ Social authentication error:', error);
       
       let errorMessage = error.message || "Authentication failed";
       let errorTitle = "Error";
       
       if (errorMessage.includes("Server error") || errorMessage.includes("500") || error.status === 500) {
-        errorTitle = "Backend Update in Progress";
-        errorMessage = "✅ Good news: The backend is live and deployed!\n\n⚙️ The authentication system is currently being updated to fix a configuration issue.\n\n⏱️ This should be resolved in 1-2 minutes. Please try again shortly.\n\nBackend URL: https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev";
+        errorTitle = "Backend Error";
+        errorMessage = "⚠️ The backend is experiencing issues with authentication.\n\n🔧 Try running diagnostics below to identify the issue.";
       } else if (errorMessage.includes("cancelled")) {
         errorTitle = "Cancelled";
         errorMessage = "Authentication was cancelled.";
@@ -212,14 +314,43 @@ export default function AuthScreen() {
             </Text>
           </View>
 
-          {/* Backend Status Banner */}
-          <View style={styles.statusBanner}>
-            <Text style={styles.statusEmoji}>✅</Text>
-            <View style={styles.statusTextContainer}>
-              <Text style={styles.statusTitle}>Backend Status: Live</Text>
-              <Text style={styles.statusSubtitle}>Authentication update in progress...</Text>
+          {/* Diagnostics Results */}
+          {diagnosticsResults && (
+            <View style={styles.diagnosticsContainer}>
+              <Text style={styles.diagnosticsTitle}>🔍 Diagnostics Results</Text>
+              {diagnosticsResults.map((result, index) => (
+                <View key={index} style={styles.diagnosticItem}>
+                  <Text style={styles.diagnosticTest}>
+                    {result.status === 'pass' ? '✅' : result.status === 'warning' ? '⚠️' : '❌'} {result.test}
+                  </Text>
+                  <Text style={styles.diagnosticMessage}>{result.message}</Text>
+                </View>
+              ))}
             </View>
-          </View>
+          )}
+
+          {/* Stress Test Results */}
+          {stressTestResults && (
+            <View style={[
+              styles.testResultsBanner,
+              stressTestResults.failed === 0 ? styles.testResultsSuccess : styles.testResultsWarning
+            ]}>
+              <Text style={styles.testResultsTitle}>
+                {stressTestResults.failed === 0 ? '✅ Stress Test Passed' : '⚠️ Stress Test Results'}
+              </Text>
+              <Text style={styles.testResultsText}>
+                Total: {stressTestResults.total} | Passed: {stressTestResults.successful} | Failed: {stressTestResults.failed}
+              </Text>
+              <Text style={styles.testResultsText}>
+                Pass Rate: {((stressTestResults.successful / stressTestResults.total) * 100).toFixed(1)}%
+              </Text>
+              {stressTestResults.errors.length > 0 && (
+                <Text style={styles.testResultsErrors}>
+                  {stressTestResults.errors.length} error(s) - check console for details
+                </Text>
+              )}
+            </View>
+          )}
 
           <Text style={styles.title}>
             {mode === "signin" ? "Sign In" : "Sign Up"}
@@ -281,15 +412,53 @@ export default function AuthScreen() {
 
           {/* Test Account Button - Only show in sign in mode */}
           {mode === "signin" && (
-            <TouchableOpacity
-              style={styles.testAccountButton}
-              onPress={handleCreateTestAccount}
-              disabled={loading}
-            >
-              <Text style={styles.testAccountText}>
-                Create Test Account
-              </Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={styles.testAccountButton}
+                onPress={handleCreateTestAccount}
+                disabled={loading}
+              >
+                <Text style={styles.testAccountText}>
+                  Create Test Account
+                </Text>
+              </TouchableOpacity>
+
+              {/* Diagnostics Button */}
+              <TouchableOpacity
+                style={[styles.diagnosticsButton, diagnosticsRunning && styles.buttonDisabled]}
+                onPress={handleRunDiagnostics}
+                disabled={loading || diagnosticsRunning}
+              >
+                {diagnosticsRunning ? (
+                  <View style={styles.stressTestLoadingContainer}>
+                    <ActivityIndicator color="#fff" size="small" />
+                    <Text style={styles.stressTestLoadingText}>Running diagnostics...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.diagnosticsButtonText}>
+                    🔍 Run Authentication Diagnostics
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Stress Test Button */}
+              <TouchableOpacity
+                style={[styles.stressTestButton, stressTestRunning && styles.buttonDisabled]}
+                onPress={runStressTest}
+                disabled={loading || stressTestRunning}
+              >
+                {stressTestRunning ? (
+                  <View style={styles.stressTestLoadingContainer}>
+                    <ActivityIndicator color="#fff" size="small" />
+                    <Text style={styles.stressTestLoadingText}>Running tests...</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.stressTestButtonText}>
+                    🧪 Run Authentication Stress Test
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </>
           )}
 
           <View style={styles.divider}>
@@ -359,32 +528,63 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     paddingHorizontal: 16,
   },
-  statusBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#E8F5E9",
+  diagnosticsContainer: {
+    backgroundColor: "#F5F5F5",
     borderRadius: 12,
     padding: 16,
-    marginBottom: 24,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#4CAF50",
+    borderColor: "#E0E0E0",
   },
-  statusEmoji: {
-    fontSize: 32,
-    marginRight: 12,
-  },
-  statusTextContainer: {
-    flex: 1,
-  },
-  statusTitle: {
+  diagnosticsTitle: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#2E7D32",
+    color: "#333",
+    marginBottom: 12,
+  },
+  diagnosticItem: {
+    marginBottom: 8,
+  },
+  diagnosticTest: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#333",
+    marginBottom: 2,
+  },
+  diagnosticMessage: {
+    fontSize: 12,
+    color: "#666",
+    marginLeft: 20,
+  },
+  testResultsBanner: {
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  testResultsSuccess: {
+    backgroundColor: "#D4EDDA",
+    borderColor: "#28A745",
+  },
+  testResultsWarning: {
+    backgroundColor: "#E3F2FD",
+    borderColor: "#2196F3",
+  },
+  testResultsTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#1565C0",
+    marginBottom: 8,
+  },
+  testResultsText: {
+    fontSize: 14,
+    color: "#1976D2",
     marginBottom: 4,
   },
-  statusSubtitle: {
+  testResultsErrors: {
     fontSize: 13,
-    color: "#558B2F",
+    color: "#D32F2F",
+    marginTop: 4,
   },
   title: {
     fontSize: 24,
@@ -436,6 +636,43 @@ const styles = StyleSheet.create({
     color: "#FF9500",
     fontSize: 14,
     fontWeight: "600",
+  },
+  diagnosticsButton: {
+    marginTop: 12,
+    backgroundColor: "#FF9800",
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  diagnosticsButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  stressTestButton: {
+    marginTop: 12,
+    backgroundColor: "#9C27B0",
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  stressTestButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  stressTestLoadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  stressTestLoadingText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+    marginLeft: 8,
   },
   divider: {
     flexDirection: "row",

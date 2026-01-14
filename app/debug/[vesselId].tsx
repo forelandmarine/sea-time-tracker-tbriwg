@@ -1,6 +1,5 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -11,9 +10,10 @@ import {
   Platform,
   TouchableOpacity,
 } from 'react-native';
-import { colors } from '@/styles/commonStyles';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import * as seaTimeApi from '@/utils/seaTimeApi';
+import { colors } from '@/styles/commonStyles';
 
 interface AISDebugLog {
   id: string;
@@ -31,287 +31,158 @@ function createStyles(isDark: boolean) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
-      paddingTop: Platform.OS === 'android' ? 0 : 0,
+      backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
     },
     scrollContent: {
-      padding: 20,
-      paddingBottom: 100,
+      padding: 16,
     },
     header: {
-      fontSize: 28,
+      marginBottom: 16,
+    },
+    title: {
+      fontSize: 24,
       fontWeight: 'bold',
-      color: isDark ? colors.text : colors.textLight,
+      color: isDark ? colors.textDark : colors.textLight,
       marginBottom: 8,
     },
     subtitle: {
       fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 24,
+      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
     },
     logCard: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 16,
-      padding: 18,
-      marginBottom: 16,
-      borderLeftWidth: 4,
-      borderColor: isDark ? colors.border : colors.borderLight,
-      shadowColor: colors.primary,
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 8,
-      elevation: 3,
+      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: isDark ? colors.borderDark : colors.borderLight,
     },
     logHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
       marginBottom: 12,
-      paddingBottom: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
-    logTimestamp: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    logTime: {
+      fontSize: 12,
+      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
     },
     statusBadge: {
-      paddingHorizontal: 12,
+      paddingHorizontal: 8,
       paddingVertical: 4,
-      borderRadius: 12,
-      backgroundColor: colors.primary,
+      borderRadius: 4,
     },
     statusText: {
       fontSize: 12,
-      fontWeight: 'bold',
-      color: '#FFFFFF',
+      fontWeight: '600',
+      color: '#fff',
     },
     logRow: {
       flexDirection: 'row',
       marginBottom: 8,
-      alignItems: 'flex-start',
     },
     logLabel: {
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: '600',
-      color: colors.primary,
-      width: 90,
-      marginRight: 8,
+      color: isDark ? colors.textDark : colors.textLight,
+      width: 100,
     },
     logValue: {
-      fontSize: 14,
-      color: isDark ? colors.text : colors.textLight,
+      fontSize: 13,
+      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
       flex: 1,
-      lineHeight: 20,
-    },
-    coordinatesSection: {
-      backgroundColor: isDark ? 'rgba(0, 122, 255, 0.1)' : 'rgba(0, 122, 255, 0.05)',
-      borderRadius: 8,
-      padding: 12,
-      marginTop: 8,
-      marginBottom: 8,
-      borderLeftWidth: 3,
-      borderLeftColor: colors.primary,
-    },
-    coordinatesHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 8,
-      gap: 6,
-    },
-    coordinatesHeaderText: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: colors.primary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
-    coordinateRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 4,
-    },
-    coordinateLabel: {
-      fontSize: 13,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      fontWeight: '500',
-    },
-    coordinateValue: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    },
-    authBadge: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: isDark ? 'rgba(76, 175, 80, 0.1)' : 'rgba(76, 175, 80, 0.05)',
-      borderRadius: 8,
-      padding: 8,
-      marginTop: 8,
-      borderLeftWidth: 3,
-      borderLeftColor: colors.success,
-    },
-    authBadgeError: {
-      backgroundColor: isDark ? 'rgba(211, 47, 47, 0.1)' : 'rgba(211, 47, 47, 0.05)',
-      borderLeftColor: colors.error,
-    },
-    authLabel: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: colors.success,
-      marginRight: 6,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
-    authLabelError: {
-      color: colors.error,
-    },
-    authText: {
-      fontSize: 12,
-      color: isDark ? colors.text : colors.textLight,
-      flex: 1,
-    },
-    errorContainer: {
-      backgroundColor: isDark ? 'rgba(211, 47, 47, 0.1)' : 'rgba(211, 47, 47, 0.05)',
-      borderRadius: 8,
-      padding: 12,
-      marginTop: 8,
-      borderLeftWidth: 3,
-      borderLeftColor: colors.error,
-    },
-    errorLabel: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: colors.error,
-      marginBottom: 4,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
-    errorText: {
-      fontSize: 13,
-      color: colors.error,
-      lineHeight: 18,
     },
     expandButton: {
-      flexDirection: 'row',
+      marginTop: 8,
+      paddingVertical: 8,
       alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: isDark ? 'rgba(0, 122, 255, 0.1)' : 'rgba(0, 122, 255, 0.05)',
-      borderRadius: 8,
-      padding: 12,
-      marginTop: 12,
-      borderWidth: 1,
-      borderColor: isDark ? colors.border : colors.borderLight,
     },
     expandButtonText: {
       fontSize: 13,
-      fontWeight: '600',
       color: colors.primary,
-      flex: 1,
+      fontWeight: '600',
     },
-    codeBlock: {
-      backgroundColor: isDark ? '#0D1B2A' : '#F5F9FC',
-      borderRadius: 8,
+    responseBody: {
+      marginTop: 12,
       padding: 12,
-      marginTop: 8,
-      borderWidth: 1,
-      borderColor: isDark ? colors.border : colors.borderLight,
-      maxHeight: 300,
+      backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
+      borderRadius: 8,
     },
-    codeText: {
-      fontSize: 11,
-      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      lineHeight: 16,
+    responseBodyText: {
+      fontSize: 12,
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+      color: isDark ? colors.textDark : colors.textLight,
     },
     emptyState: {
       alignItems: 'center',
       justifyContent: 'center',
-      padding: 48,
-      marginTop: 60,
+      paddingVertical: 48,
     },
-    emptyIconContainer: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 20,
-      borderWidth: 2,
-      borderColor: isDark ? colors.border : colors.borderLight,
-    },
-    emptyTitle: {
-      fontSize: 18,
-      fontWeight: 'bold',
-      color: isDark ? colors.text : colors.textLight,
+    emptyStateText: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
       textAlign: 'center',
+      marginTop: 16,
+    },
+    coordinatesContainer: {
+      marginTop: 8,
+      padding: 12,
+      backgroundColor: isDark ? '#1a3a1a' : '#e8f5e9',
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: isDark ? '#2e7d32' : '#4caf50',
+    },
+    coordinatesTitle: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: isDark ? '#81c784' : '#2e7d32',
       marginBottom: 8,
     },
-    emptyText: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      textAlign: 'center',
-      lineHeight: 20,
-      maxWidth: 280,
-    },
-    loadingContainer: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: 48,
-      marginTop: 60,
-    },
-    loadingText: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 16,
+    coordinatesText: {
+      fontSize: 12,
+      color: isDark ? '#a5d6a7' : '#388e3c',
+      marginBottom: 4,
     },
   });
 }
 
 export default function DebugScreen() {
   const { vesselId } = useLocalSearchParams<{ vesselId: string }>();
-  const [logs, setLogs] = useState<AISDebugLog[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
-  const router = useRouter();
 
+  const [logs, setLogs] = useState<AISDebugLog[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
+
+  // ✅ FIXED: Added vesselId to dependency array
   const loadLogs = useCallback(async () => {
+    console.log('Loading AIS debug logs for vessel:', vesselId);
     try {
-      const debugLogs = await seaTimeApi.getAISDebugLogs(vesselId);
-      console.log('[DebugScreen] Debug logs loaded:', debugLogs.length);
-      if (debugLogs.length > 0) {
-        console.log('[DebugScreen] First log sample:', JSON.stringify(debugLogs[0], null, 2));
-      }
-      setLogs(debugLogs);
+      setLoading(true);
+      const data = await seaTimeApi.getAISDebugLogs(vesselId);
+      console.log('Loaded', data.length, 'debug logs');
+      setLogs(data);
     } catch (error) {
-      console.error('[DebugScreen] Error loading debug logs:', error);
+      console.error('Failed to load debug logs:', error);
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   }, [vesselId]);
 
   useEffect(() => {
-    console.log('[DebugScreen] Loading debug logs for vessel:', vesselId);
     loadLogs();
   }, [loadLogs]);
 
   const onRefresh = () => {
-    console.log('[DebugScreen] User initiated refresh');
-    setRefreshing(true);
+    console.log('User pulled to refresh debug logs');
     loadLogs();
   };
 
   const toggleExpanded = (logId: string) => {
-    console.log('[DebugScreen] User toggled expand for log:', logId);
+    console.log('User toggled log expansion:', logId);
     setExpandedLogs(prev => {
       const newSet = new Set(prev);
       if (newSet.has(logId)) {
@@ -323,306 +194,177 @@ export default function DebugScreen() {
     });
   };
 
-  const getStatusColor = (statusString: string) => {
+  const getStatusColor = (statusString: string): string => {
     const status = parseInt(statusString);
-    if (isNaN(status)) {
-      if (statusString.includes('error') || statusString.includes('failed')) {
-        return colors.error;
-      }
-      return colors.textSecondary;
-    }
-    if (status >= 200 && status < 300) return colors.success;
-    if (status >= 400 && status < 500) return colors.warning;
-    if (status >= 500) return colors.error;
-    return colors.primary;
+    if (status >= 200 && status < 300) return '#4caf50';
+    if (status >= 400 && status < 500) return '#ff9800';
+    if (status >= 500) return '#f44336';
+    return '#9e9e9e';
   };
 
-  const formatDate = (dateString: string) => {
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) {
-        return 'Invalid Date';
-      }
-      const now = new Date();
-      const diffMs = now.getTime() - date.getTime();
-      const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMs / 3600000);
-      const diffDays = Math.floor(diffMs / 86400000);
-
-      if (diffMins < 1) return 'Just now';
-      if (diffMins < 60) return `${diffMins}m ago`;
-      if (diffHours < 24) return `${diffHours}h ago`;
-      if (diffDays < 7) return `${diffDays}d ago`;
-      
-      return date.toLocaleDateString('en-GB', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-    } catch (error) {
-      console.error('[DebugScreen] Error formatting date:', dateString, error);
-      return 'Invalid Date';
-    }
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleString();
   };
 
-  const formatAuthStatus = (status: string) => {
-    switch (status) {
-      case 'success':
-        return 'Authenticated';
-      case 'authentication_failed':
-        return 'Auth Failed';
-      case 'connection_error':
-        return 'Connection Error';
-      case 'rate_limited':
-        return 'Rate Limited';
-      default:
-        return status;
-    }
+  const formatAuthStatus = (status: string): string => {
+    if (status === 'authenticated') return '✅ Authenticated';
+    if (status === 'unauthenticated') return '❌ Unauthenticated';
+    if (status === 'api_key_masked') return '🔒 API Key Masked';
+    return status;
   };
 
-  const parseResponseBody = (body: string | null) => {
+  const parseResponseBody = (body: string | null): any => {
     if (!body) return null;
     try {
-      const parsed = JSON.parse(body);
-      return JSON.stringify(parsed, null, 2);
-    } catch (error) {
+      return JSON.parse(body);
+    } catch {
       return body;
     }
   };
 
-  const extractCoordinates = (body: string | null): { latitude: number | null; longitude: number | null } => {
-    if (!body) {
-      console.log('[DebugScreen] No response body to extract coordinates from');
-      return { latitude: null, longitude: null };
-    }
-    
+  const extractCoordinates = (body: string | null): { lat: number; lon: number } | null => {
+    if (!body) return null;
     try {
-      const parsed = JSON.parse(body);
-      console.log('[DebugScreen] Parsing response body for coordinates:', parsed);
-      
-      let latitude = null;
-      let longitude = null;
-      
-      // Try different possible locations for coordinates in the response
-      // First check root level
-      if (parsed.latitude !== undefined && parsed.longitude !== undefined) {
-        latitude = parsed.latitude;
-        longitude = parsed.longitude;
-        console.log('[DebugScreen] Found coordinates at root level:', { latitude, longitude });
-      } else if (parsed.lat !== undefined && parsed.lng !== undefined) {
-        latitude = parsed.lat;
-        longitude = parsed.lng;
-        console.log('[DebugScreen] Found coordinates as lat/lng at root level:', { latitude, longitude });
-      } 
-      // Check inside 'data' object (MyShipTracking API format)
-      else if (parsed.data) {
-        if (parsed.data.latitude !== undefined && parsed.data.longitude !== undefined) {
-          latitude = parsed.data.latitude;
-          longitude = parsed.data.longitude;
-          console.log('[DebugScreen] Found coordinates in data.latitude/longitude:', { latitude, longitude });
-        } else if (parsed.data.lat !== undefined && parsed.data.lng !== undefined) {
-          latitude = parsed.data.lat;
-          longitude = parsed.data.lng;
-          console.log('[DebugScreen] Found coordinates in data.lat/lng:', { latitude, longitude });
-        }
+      const data = JSON.parse(body);
+      const lat = data.latitude || data.lat || data.position?.latitude;
+      const lon = data.longitude || data.lng || data.position?.longitude;
+      if (lat && lon) {
+        return { lat, lon };
       }
-      // Check inside 'position' object
-      else if (parsed.position) {
-        if (parsed.position.latitude !== undefined && parsed.position.longitude !== undefined) {
-          latitude = parsed.position.latitude;
-          longitude = parsed.position.longitude;
-          console.log('[DebugScreen] Found coordinates in position object:', { latitude, longitude });
-        } else if (parsed.position.lat !== undefined && parsed.position.lng !== undefined) {
-          latitude = parsed.position.lat;
-          longitude = parsed.position.lng;
-          console.log('[DebugScreen] Found coordinates as lat/lng in position object:', { latitude, longitude });
-        }
-      }
-      
-      // Ensure they are numbers
-      if (latitude !== null && typeof latitude !== 'number') {
-        latitude = parseFloat(latitude);
-      }
-      if (longitude !== null && typeof longitude !== 'number') {
-        longitude = parseFloat(longitude);
-      }
-      
-      console.log('[DebugScreen] Final extracted coordinates:', { latitude, longitude });
-      return { latitude, longitude };
-    } catch (error) {
-      console.error('[DebugScreen] Error extracting coordinates:', error);
-      return { latitude: null, longitude: null };
+    } catch {
+      // Ignore parse errors
     }
+    return null;
   };
 
   return (
     <View style={styles.container}>
       <Stack.Screen
         options={{
-          headerShown: true,
           title: 'AIS Debug Logs',
-          headerBackTitle: 'Back',
           headerStyle: {
-            backgroundColor: isDark ? colors.background : colors.backgroundLight,
+            backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
           },
-          headerTintColor: colors.primary,
-          headerTitleStyle: {
-            color: isDark ? colors.text : colors.textLight,
-          },
+          headerTintColor: isDark ? colors.textDark : colors.textLight,
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => {
+                console.log('User tapped back button');
+                router.back();
+              }}
+              style={{ marginLeft: 8 }}
+            >
+              <IconSymbol
+                ios_icon_name="chevron.left"
+                android_material_icon_name="arrow-back"
+                size={24}
+                color={isDark ? colors.textDark : colors.textLight}
+              />
+            </TouchableOpacity>
+          ),
         }}
       />
-      
+
       <ScrollView
         style={styles.container}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl 
-            refreshing={refreshing} 
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-            colors={[colors.primary]}
-          />
+          <RefreshControl refreshing={loading} onRefresh={onRefresh} />
         }
       >
-        <Text style={styles.header}>Debug Logs</Text>
-        <Text style={styles.subtitle}>
-          API call history and diagnostic information
-        </Text>
+        <View style={styles.header}>
+          <Text style={styles.title}>AIS API Debug Logs</Text>
+          <Text style={styles.subtitle}>
+            Showing API calls and responses for vessel {vesselId}
+          </Text>
+        </View>
 
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <IconSymbol
-              ios_icon_name="arrow.clockwise"
-              android_material_icon_name="refresh"
-              size={48}
-              color={colors.primary}
-            />
-            <Text style={styles.loadingText}>Loading debug logs...</Text>
-          </View>
-        ) : logs.length === 0 ? (
+        {logs.length === 0 && !loading ? (
           <View style={styles.emptyState}>
-            <View style={styles.emptyIconContainer}>
-              <IconSymbol
-                ios_icon_name="doc.text.magnifyingglass"
-                android_material_icon_name="search"
-                size={40}
-                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-              />
-            </View>
-            <Text style={styles.emptyTitle}>No Debug Logs Yet</Text>
-            <Text style={styles.emptyText}>
-              Debug logs will appear here after AIS data checks are performed. Pull down to refresh.
+            <IconSymbol
+              ios_icon_name="doc.text.magnifyingglass"
+              android_material_icon_name="search"
+              size={64}
+              color={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+            />
+            <Text style={styles.emptyStateText}>
+              No debug logs found for this vessel.{'\n'}
+              Try checking the vessel's AIS data to generate logs.
             </Text>
           </View>
         ) : (
-          logs.map((log, index) => {
+          logs.map((log) => {
             const isExpanded = expandedLogs.has(log.id);
             const coordinates = extractCoordinates(log.response_body);
-            const hasCoordinates = coordinates.latitude !== null && coordinates.longitude !== null;
-            
-            console.log(`[DebugScreen] Rendering log ${log.id}, hasCoordinates:`, hasCoordinates, coordinates);
-            
+
             return (
-              <View
-                key={log.id || index}
-                style={[
-                  styles.logCard,
-                  { borderLeftColor: getStatusColor(log.response_status) },
-                ]}
-              >
+              <View key={log.id} style={styles.logCard}>
                 <View style={styles.logHeader}>
-                  <Text style={styles.logTimestamp}>
-                    {formatDate(log.request_time)}
-                  </Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(log.response_status) }]}>
+                  <Text style={styles.logTime}>{formatDate(log.request_time)}</Text>
+                  <View
+                    style={[
+                      styles.statusBadge,
+                      { backgroundColor: getStatusColor(log.response_status) },
+                    ]}
+                  >
                     <Text style={styles.statusText}>{log.response_status}</Text>
                   </View>
                 </View>
 
                 <View style={styles.logRow}>
-                  <Text style={styles.logLabel}>MMSI</Text>
+                  <Text style={styles.logLabel}>MMSI:</Text>
                   <Text style={styles.logValue}>{log.mmsi}</Text>
                 </View>
 
-                {/* GPS Coordinates Section - ALWAYS VISIBLE IF COORDINATES EXIST */}
-                {hasCoordinates && (
-                  <View style={styles.coordinatesSection}>
-                    <View style={styles.coordinatesHeader}>
-                      <IconSymbol
-                        ios_icon_name="location.fill"
-                        android_material_icon_name="location-on"
-                        size={16}
-                        color={colors.primary}
-                      />
-                      <Text style={styles.coordinatesHeaderText}>GPS Position</Text>
-                    </View>
-                    <View style={styles.coordinateRow}>
-                      <Text style={styles.coordinateLabel}>Latitude:</Text>
-                      <Text style={styles.coordinateValue}>
-                        {coordinates.latitude?.toFixed(6)}°
-                      </Text>
-                    </View>
-                    <View style={styles.coordinateRow}>
-                      <Text style={styles.coordinateLabel}>Longitude:</Text>
-                      <Text style={styles.coordinateValue}>
-                        {coordinates.longitude?.toFixed(6)}°
-                      </Text>
-                    </View>
-                  </View>
-                )}
-
-                <View style={[
-                  styles.authBadge,
-                  log.authentication_status !== 'success' && styles.authBadgeError
-                ]}>
-                  <Text style={[
-                    styles.authLabel,
-                    log.authentication_status !== 'success' && styles.authLabelError
-                  ]}>
-                    AUTH:
-                  </Text>
-                  <Text style={styles.authText}>
-                    {formatAuthStatus(log.authentication_status)}
-                  </Text>
+                <View style={styles.logRow}>
+                  <Text style={styles.logLabel}>Auth Status:</Text>
+                  <Text style={styles.logValue}>{formatAuthStatus(log.authentication_status)}</Text>
                 </View>
 
                 {log.error_message && (
-                  <View style={styles.errorContainer}>
-                    <Text style={styles.errorLabel}>Error</Text>
-                    <Text style={styles.errorText}>{log.error_message}</Text>
+                  <View style={styles.logRow}>
+                    <Text style={styles.logLabel}>Error:</Text>
+                    <Text style={[styles.logValue, { color: '#f44336' }]}>
+                      {log.error_message}
+                    </Text>
                   </View>
                 )}
 
-                {log.response_body && (
-                  <>
-                    <TouchableOpacity
-                      style={styles.expandButton}
-                      onPress={() => toggleExpanded(log.id)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.expandButtonText}>
-                        {isExpanded ? 'Hide Response Data' : 'Show Response Data'}
-                      </Text>
-                      <IconSymbol
-                        ios_icon_name={isExpanded ? "chevron.up" : "chevron.down"}
-                        android_material_icon_name={isExpanded ? "expand-less" : "expand-more"}
-                        size={20}
-                        color={colors.primary}
-                      />
-                    </TouchableOpacity>
+                {coordinates && (
+                  <View style={styles.coordinatesContainer}>
+                    <Text style={styles.coordinatesTitle}>📍 Vessel Position</Text>
+                    <Text style={styles.coordinatesText}>
+                      Latitude: {coordinates.lat.toFixed(6)}°
+                    </Text>
+                    <Text style={styles.coordinatesText}>
+                      Longitude: {coordinates.lon.toFixed(6)}°
+                    </Text>
+                  </View>
+                )}
 
-                    {isExpanded && (
-                      <ScrollView 
-                        style={styles.codeBlock}
-                        nestedScrollEnabled
-                        showsVerticalScrollIndicator={true}
-                      >
-                        <Text style={styles.codeText}>
-                          {parseResponseBody(log.response_body)}
+                <TouchableOpacity
+                  style={styles.expandButton}
+                  onPress={() => toggleExpanded(log.id)}
+                >
+                  <Text style={styles.expandButtonText}>
+                    {isExpanded ? '▼ Hide Details' : '▶ Show Details'}
+                  </Text>
+                </TouchableOpacity>
+
+                {isExpanded && (
+                  <>
+                    <View style={styles.logRow}>
+                      <Text style={styles.logLabel}>API URL:</Text>
+                      <Text style={[styles.logValue, { fontSize: 11 }]}>{log.api_url}</Text>
+                    </View>
+
+                    {log.response_body && (
+                      <View style={styles.responseBody}>
+                        <Text style={styles.responseBodyText}>
+                          {JSON.stringify(parseResponseBody(log.response_body), null, 2)}
                         </Text>
-                      </ScrollView>
+                      </View>
                     )}
                   </>
                 )}
