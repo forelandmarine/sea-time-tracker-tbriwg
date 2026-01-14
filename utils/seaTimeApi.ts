@@ -66,12 +66,15 @@ export interface ScheduledTask {
 }
 
 export interface AISDebugLog {
-  timestamp: string;
+  id: string;
   mmsi: string;
-  url: string;
-  status: number;
-  response: any;
-  error: string | null;
+  api_url: string;
+  request_time: string;
+  response_status: string;
+  response_body: string | null;
+  authentication_status: string;
+  error_message: string | null;
+  created_at: string;
 }
 
 // Helper function to check if backend is configured

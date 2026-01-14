@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   View,
   Text,
@@ -9,18 +10,20 @@ import {
   RefreshControl,
   Platform,
 } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 
 interface AISDebugLog {
-  timestamp: string;
+  id: string;
   mmsi: string;
-  url: string;
-  status: number;
-  response: any;
-  error: string | null;
+  api_url: string;
+  request_time: string;
+  response_status: string;
+  response_body: string | null;
+  authentication_status: string;
+  error_message: string | null;
+  created_at: string;
 }
 
 function createStyles(isDark: boolean) {
@@ -92,7 +95,7 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       fontWeight: '600',
       color: colors.primary,
-      width: 70,
+      width: 90,
       marginRight: 8,
     },
     logValue: {
@@ -100,6 +103,36 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.text : colors.textLight,
       flex: 1,
       lineHeight: 20,
+    },
+    authBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: isDark ? 'rgba(76, 175, 80, 0.1)' : 'rgba(76, 175, 80, 0.05)',
+      borderRadius: 8,
+      padding: 8,
+      marginTop: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.success,
+    },
+    authBadgeError: {
+      backgroundColor: isDark ? 'rgba(211, 47, 47, 0.1)' : 'rgba(211, 47, 47, 0.05)',
+      borderLeftColor: colors.error,
+    },
+    authLabel: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.success,
+      marginRight: 6,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    authLabelError: {
+      color: colors.error,
+    },
+    authText: {
+      fontSize: 12,
+      color: isDark ? colors.text : colors.textLight,
+      flex: 1,
     },
     errorContainer: {
       backgroundColor: isDark ? 'rgba(211, 47, 47, 0.1)' : 'rgba(211, 47, 47, 0.05)',
@@ -208,6 +241,7 @@ export default function DebugScreen() {
     try {
       const debugLogs = await seaTimeApi.getAISDebugLogs(vesselId);
       console.log('[DebugScreen] Debug logs loaded:', debugLogs.length);
+      console.log('[DebugScreen] First log sample:', debugLogs[0]);
       setLogs(debugLogs);
     } catch (error) {
       console.error('[DebugScreen] Error loading debug logs:', error);
@@ -223,7 +257,15 @@ export default function DebugScreen() {
     loadLogs();
   };
 
-  const getStatusColor = (status: number) => {
+  const getStatusColor = (statusString: string) => {
+    const status = parseInt(statusString);
+    if (isNaN(status)) {
+      // Handle non-numeric status strings like "connection_error"
+      if (statusString.includes('error') || statusString.includes('failed')) {
+        return colors.error;
+      }
+      return colors.textSecondary;
+    }
     if (status >= 200 && status < 300) return colors.success;
     if (status >= 400 && status < 500) return colors.warning;
     if (status >= 500) return colors.error;
@@ -231,25 +273,58 @@ export default function DebugScreen() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        return 'Invalid Date';
+      }
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+      if (diffMins < 1) return 'Just now';
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      
+      return date.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (error) {
+      console.error('[DebugScreen] Error formatting date:', dateString, error);
+      return 'Invalid Date';
+    }
+  };
+
+  const formatAuthStatus = (status: string) => {
+    switch (status) {
+      case 'success':
+        return '✓ Authenticated';
+      case 'authentication_failed':
+        return '✗ Auth Failed';
+      case 'connection_error':
+        return '✗ Connection Error';
+      case 'rate_limited':
+        return '⚠ Rate Limited';
+      default:
+        return status;
+    }
+  };
+
+  const parseResponseBody = (body: string | null) => {
+    if (!body) return null;
+    try {
+      const parsed = JSON.parse(body);
+      return JSON.stringify(parsed, null, 2);
+    } catch (error) {
+      return body;
+    }
   };
 
   return (
@@ -314,18 +389,18 @@ export default function DebugScreen() {
         ) : (
           logs.map((log, index) => (
             <View
-              key={index}
+              key={log.id || index}
               style={[
                 styles.logCard,
-                { borderLeftColor: getStatusColor(log.status) },
+                { borderLeftColor: getStatusColor(log.response_status) },
               ]}
             >
               <View style={styles.logHeader}>
                 <Text style={styles.logTimestamp}>
-                  {formatDate(log.timestamp)}
+                  {formatDate(log.request_time)}
                 </Text>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(log.status) }]}>
-                  <Text style={styles.statusText}>{log.status}</Text>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(log.response_status) }]}>
+                  <Text style={styles.statusText}>{log.response_status}</Text>
                 </View>
               </View>
 
@@ -337,23 +412,38 @@ export default function DebugScreen() {
               <View style={styles.logRow}>
                 <Text style={styles.logLabel}>Endpoint</Text>
                 <Text style={[styles.logValue, { fontSize: 12 }]} numberOfLines={3}>
-                  {log.url}
+                  {log.api_url}
                 </Text>
               </View>
 
-              {log.error && (
+              <View style={[
+                styles.authBadge,
+                log.authentication_status !== 'success' && styles.authBadgeError
+              ]}>
+                <Text style={[
+                  styles.authLabel,
+                  log.authentication_status !== 'success' && styles.authLabelError
+                ]}>
+                  AUTH:
+                </Text>
+                <Text style={styles.authText}>
+                  {formatAuthStatus(log.authentication_status)}
+                </Text>
+              </View>
+
+              {log.error_message && (
                 <View style={styles.errorContainer}>
                   <Text style={styles.errorLabel}>⚠️ Error</Text>
-                  <Text style={styles.errorText}>{log.error}</Text>
+                  <Text style={styles.errorText}>{log.error_message}</Text>
                 </View>
               )}
 
-              {log.response && (
+              {log.response_body && (
                 <View style={styles.codeBlock}>
                   <Text style={styles.codeHeader}>Response Data</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <Text style={styles.codeText}>
-                      {JSON.stringify(log.response, null, 2)}
+                      {parseResponseBody(log.response_body)}
                     </Text>
                   </ScrollView>
                 </View>
