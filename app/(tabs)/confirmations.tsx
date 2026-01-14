@@ -44,6 +44,7 @@ export default function ConfirmationsScreen() {
   const [pendingEntries, setPendingEntries] = useState<SeaTimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
@@ -137,6 +138,11 @@ export default function ConfirmationsScreen() {
     );
   };
 
+  const toggleExpanded = (entryId: string) => {
+    console.log('[ConfirmationsScreen] User toggling expanded view for entry:', entryId);
+    setExpandedEntryId(expandedEntryId === entryId ? null : entryId);
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -172,6 +178,33 @@ export default function ConfirmationsScreen() {
       return value.toFixed(6);
     }
     return 'N/A';
+  };
+
+  const convertToDMS = (decimal: number, isLatitude: boolean): string => {
+    const absolute = Math.abs(decimal);
+    const degrees = Math.floor(absolute);
+    const minutesDecimal = (absolute - degrees) * 60;
+    const minutes = Math.floor(minutesDecimal);
+    const seconds = ((minutesDecimal - minutes) * 60).toFixed(2);
+    
+    let direction = '';
+    if (isLatitude) {
+      direction = decimal >= 0 ? 'N' : 'S';
+    } else {
+      direction = decimal >= 0 ? 'E' : 'W';
+    }
+    
+    return `${degrees}° ${minutes}' ${seconds}" ${direction}`;
+  };
+
+  const formatCoordinateDMS = (lat: number | null | undefined, lon: number | null | undefined): { lat: string; lon: string } => {
+    if (typeof lat === 'number' && !isNaN(lat) && typeof lon === 'number' && !isNaN(lon)) {
+      return {
+        lat: convertToDMS(lat, true),
+        lon: convertToDMS(lon, false),
+      };
+    }
+    return { lat: 'N/A', lon: 'N/A' };
   };
 
   const formatDuration = (hours: number | null | undefined): string => {
@@ -230,6 +263,7 @@ export default function ConfirmationsScreen() {
               const vesselName = entry.vessel?.vessel_name || 'Unknown Vessel';
               const vesselMmsi = entry.vessel?.mmsi || 'N/A';
               const hasVesselData = !!entry.vessel;
+              const isExpanded = expandedEntryId === entry.id;
 
               if (!hasVesselData) {
                 console.warn('[ConfirmationsScreen] Entry missing vessel data:', entry.id);
@@ -253,9 +287,16 @@ export default function ConfirmationsScreen() {
                 end_longitude: entry.end_longitude,
               });
 
+              const startDMS = formatCoordinateDMS(entry.start_latitude, entry.start_longitude);
+              const endDMS = formatCoordinateDMS(entry.end_latitude, entry.end_longitude);
+
               return (
                 <React.Fragment key={index}>
-                  <View style={styles.entryCard}>
+                  <TouchableOpacity 
+                    style={styles.entryCard}
+                    onPress={() => toggleExpanded(entry.id)}
+                    activeOpacity={0.7}
+                  >
                     {!hasVesselData && (
                       <View style={styles.warningBanner}>
                         <IconSymbol
@@ -339,6 +380,12 @@ export default function ConfirmationsScreen() {
                             color={colors.primary}
                           />
                           <Text style={styles.coordinatesHeaderText}>GPS Coordinates</Text>
+                          <IconSymbol
+                            ios_icon_name={isExpanded ? "chevron.up" : "chevron.down"}
+                            android_material_icon_name={isExpanded ? "expand-less" : "expand-more"}
+                            size={16}
+                            color={colors.primary}
+                          />
                         </View>
                         
                         {hasStartCoords && (
@@ -356,6 +403,51 @@ export default function ConfirmationsScreen() {
                             <Text style={styles.coordinateValue}>
                               {formatCoordinate(entry.end_latitude)}°, {formatCoordinate(entry.end_longitude)}°
                             </Text>
+                          </View>
+                        )}
+                      </View>
+                    )}
+
+                    {/* Expanded DMS Coordinates Section */}
+                    {isExpanded && hasAnyCoords && (
+                      <View style={styles.dmsSection}>
+                        <View style={styles.dmsSectionHeader}>
+                          <IconSymbol
+                            ios_icon_name="map.fill"
+                            android_material_icon_name="map"
+                            size={16}
+                            color={colors.success}
+                          />
+                          <Text style={styles.dmsSectionHeaderText}>
+                            Degrees, Minutes, Seconds
+                          </Text>
+                        </View>
+                        
+                        {hasStartCoords && (
+                          <View style={styles.dmsBlock}>
+                            <Text style={styles.dmsBlockTitle}>Start Position</Text>
+                            <View style={styles.dmsRow}>
+                              <Text style={styles.dmsLabel}>Latitude:</Text>
+                              <Text style={styles.dmsValue}>{startDMS.lat}</Text>
+                            </View>
+                            <View style={styles.dmsRow}>
+                              <Text style={styles.dmsLabel}>Longitude:</Text>
+                              <Text style={styles.dmsValue}>{startDMS.lon}</Text>
+                            </View>
+                          </View>
+                        )}
+                        
+                        {hasEndCoords && (
+                          <View style={styles.dmsBlock}>
+                            <Text style={styles.dmsBlockTitle}>End Position</Text>
+                            <View style={styles.dmsRow}>
+                              <Text style={styles.dmsLabel}>Latitude:</Text>
+                              <Text style={styles.dmsValue}>{endDMS.lat}</Text>
+                            </View>
+                            <View style={styles.dmsRow}>
+                              <Text style={styles.dmsLabel}>Longitude:</Text>
+                              <Text style={styles.dmsValue}>{endDMS.lon}</Text>
+                            </View>
                           </View>
                         )}
                       </View>
@@ -417,7 +509,7 @@ export default function ConfirmationsScreen() {
                         <Text style={styles.actionButtonText}>Reject</Text>
                       </TouchableOpacity>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 </React.Fragment>
               );
             })}
@@ -590,6 +682,7 @@ function createStyles(isDark: boolean) {
       color: colors.primary,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
+      flex: 1,
     },
     coordinateRow: {
       flexDirection: 'row',
@@ -605,6 +698,58 @@ function createStyles(isDark: boolean) {
     coordinateValue: {
       fontSize: 13,
       fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    },
+    dmsSection: {
+      backgroundColor: isDark ? 'rgba(76, 175, 80, 0.1)' : 'rgba(76, 175, 80, 0.05)',
+      borderRadius: 12,
+      padding: 14,
+      marginBottom: 12,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.success,
+    },
+    dmsSectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 12,
+    },
+    dmsSectionHeaderText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.success,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    dmsBlock: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 8,
+      padding: 10,
+      marginBottom: 8,
+    },
+    dmsBlockTitle: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 6,
+    },
+    dmsRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 3,
+    },
+    dmsLabel: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      fontWeight: '500',
+    },
+    dmsValue: {
+      fontSize: 14,
+      fontWeight: '700',
       color: isDark ? colors.text : colors.textLight,
       fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
