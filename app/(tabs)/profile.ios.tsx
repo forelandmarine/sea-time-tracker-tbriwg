@@ -34,7 +34,7 @@ function createStyles(isDark: boolean) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
     scrollContent: {
       padding: 16,
@@ -49,16 +49,16 @@ function createStyles(isDark: boolean) {
     title: {
       fontSize: 28,
       fontWeight: 'bold',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       marginBottom: 8,
     },
     subtitle: {
       fontSize: 16,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
     },
     summaryCard: {
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
       padding: 20,
       marginBottom: 16,
@@ -71,7 +71,7 @@ function createStyles(isDark: boolean) {
     summaryTitle: {
       fontSize: 18,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       marginBottom: 16,
     },
     summaryRow: {
@@ -80,14 +80,14 @@ function createStyles(isDark: boolean) {
       alignItems: 'center',
       paddingVertical: 12,
       borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.borderDark : colors.borderLight,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
     summaryRowLast: {
       borderBottomWidth: 0,
     },
     summaryLabel: {
       fontSize: 16,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
     summaryValue: {
       fontSize: 20,
@@ -95,7 +95,7 @@ function createStyles(isDark: boolean) {
       color: colors.primary,
     },
     sectionCard: {
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
       padding: 16,
       marginBottom: 16,
@@ -108,7 +108,7 @@ function createStyles(isDark: boolean) {
     sectionTitle: {
       fontSize: 16,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       marginBottom: 12,
     },
     listItem: {
@@ -119,7 +119,7 @@ function createStyles(isDark: boolean) {
     },
     listItemText: {
       fontSize: 14,
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       flex: 1,
     },
     listItemValue: {
@@ -152,12 +152,12 @@ function createStyles(isDark: boolean) {
     },
     emptyStateText: {
       fontSize: 16,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
       marginTop: 12,
     },
     infoCard: {
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
       padding: 16,
       marginBottom: 16,
@@ -166,7 +166,7 @@ function createStyles(isDark: boolean) {
     },
     infoText: {
       fontSize: 14,
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       lineHeight: 20,
     },
   });
@@ -335,7 +335,7 @@ export default function ReportsScreen() {
             ios_icon_name="chart.bar"
             android_material_icon_name="assessment"
             size={64}
-            color={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+            color={isDark ? colors.textSecondary : colors.textSecondaryLight}
           />
           <Text style={styles.emptyStateText}>
             No sea time entries yet.{'\n'}Start tracking vessels to generate reports.
