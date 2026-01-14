@@ -310,7 +310,7 @@ export default function AuthScreen() {
             />
             <Text style={styles.appName}>SeaTime Tracker</Text>
             <Text style={styles.welcomeMessage}>
-              Welcome aboard! Track your sea time and manage your maritime service records with ease.
+              Welcome aboard! Track your sea time and manage your service records automatically.{'\n\n'}By Foreland Marine
             </Text>
           </View>
 
