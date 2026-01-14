@@ -128,7 +128,7 @@ interface AISVesselData {
   error: string | null;
 }
 
-async function fetchVesselAISData(
+export async function fetchVesselAISData(
   mmsi: string,
   apiKey: string,
   logger: any,
@@ -987,5 +987,154 @@ export function register(app: App, fastify: FastifyInstance) {
     app.logger.info(`Retrieved ${logs.length} debug logs for vessel ${vesselId}`);
 
     return reply.code(200).send(logs);
+  });
+
+  // GET /api/ais/scheduled-tasks - Get all scheduled tasks with vessel information
+  fastify.get('/api/ais/scheduled-tasks', {
+    schema: {
+      description: 'Get all scheduled AIS check tasks',
+      tags: ['ais'],
+      response: {
+        200: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              vessel_id: { type: 'string' },
+              vessel_name: { type: 'string' },
+              mmsi: { type: 'string' },
+              task_type: { type: 'string' },
+              interval_hours: { type: 'number' },
+              last_run: { type: ['string', 'null'] },
+              next_run: { type: 'string' },
+              is_active: { type: 'boolean' },
+              created_at: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    app.logger.info('Retrieving all scheduled AIS check tasks');
+
+    const tasks = await app.db
+      .select({
+        id: schema.scheduled_tasks.id,
+        vessel_id: schema.scheduled_tasks.vessel_id,
+        vessel_name: schema.vessels.vessel_name,
+        mmsi: schema.vessels.mmsi,
+        task_type: schema.scheduled_tasks.task_type,
+        interval_hours: schema.scheduled_tasks.interval_hours,
+        last_run: schema.scheduled_tasks.last_run,
+        next_run: schema.scheduled_tasks.next_run,
+        is_active: schema.scheduled_tasks.is_active,
+        created_at: schema.scheduled_tasks.created_at,
+      })
+      .from(schema.scheduled_tasks)
+      .innerJoin(schema.vessels, eq(schema.vessels.id, schema.scheduled_tasks.vessel_id))
+      .orderBy(desc(schema.scheduled_tasks.next_run));
+
+    const formattedTasks = tasks.map((task) => ({
+      id: task.id,
+      vessel_id: task.vessel_id,
+      vessel_name: task.vessel_name,
+      mmsi: task.mmsi,
+      task_type: task.task_type,
+      interval_hours: parseInt(task.interval_hours),
+      last_run: task.last_run ? task.last_run.toISOString() : null,
+      next_run: task.next_run.toISOString(),
+      is_active: task.is_active,
+      created_at: task.created_at.toISOString(),
+    }));
+
+    app.logger.info(`Retrieved ${formattedTasks.length} scheduled tasks`);
+    return reply.code(200).send(formattedTasks);
+  });
+
+  // PUT /api/ais/scheduled-tasks/:taskId - Toggle scheduled task active status
+  fastify.put<{ Params: { taskId: string }; Body: { is_active: boolean } }>('/api/ais/scheduled-tasks/:taskId', {
+    schema: {
+      description: 'Toggle scheduled AIS check task active status',
+      tags: ['ais'],
+      params: {
+        type: 'object',
+        required: ['taskId'],
+        properties: { taskId: { type: 'string' } },
+      },
+      body: {
+        type: 'object',
+        required: ['is_active'],
+        properties: { is_active: { type: 'boolean' } },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            vessel_id: { type: 'string' },
+            vessel_name: { type: 'string' },
+            mmsi: { type: 'string' },
+            task_type: { type: 'string' },
+            interval_hours: { type: 'number' },
+            is_active: { type: 'boolean' },
+            next_run: { type: 'string' },
+          },
+        },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const { taskId } = request.params;
+    const { is_active } = request.body;
+
+    app.logger.info(`Updating scheduled task ${taskId}: is_active=${is_active}`);
+
+    // Find the task
+    const existingTask = await app.db
+      .select()
+      .from(schema.scheduled_tasks)
+      .where(eq(schema.scheduled_tasks.id, taskId));
+
+    if (existingTask.length === 0) {
+      app.logger.warn(`Scheduled task not found: ${taskId}`);
+      return reply.code(404).send({ error: 'Scheduled task not found' });
+    }
+
+    // Update task status
+    const [updatedTask] = await app.db
+      .update(schema.scheduled_tasks)
+      .set({ is_active })
+      .where(eq(schema.scheduled_tasks.id, taskId))
+      .returning();
+
+    // Get vessel information
+    const vessel = await app.db
+      .select()
+      .from(schema.vessels)
+      .where(eq(schema.vessels.id, updatedTask.vessel_id));
+
+    if (vessel.length === 0) {
+      app.logger.error(`Vessel not found for task ${taskId}`);
+      return reply.code(500).send({ error: 'Associated vessel not found' });
+    }
+
+    const response = {
+      id: updatedTask.id,
+      vessel_id: updatedTask.vessel_id,
+      vessel_name: vessel[0].vessel_name,
+      mmsi: vessel[0].mmsi,
+      task_type: updatedTask.task_type,
+      interval_hours: parseInt(updatedTask.interval_hours),
+      is_active: updatedTask.is_active,
+      next_run: updatedTask.next_run.toISOString(),
+    };
+
+    app.logger.info(
+      { taskId, vesselId: updatedTask.vessel_id, mmsi: vessel[0].mmsi, isActive: is_active },
+      `Updated scheduled task status: vessel=${vessel[0].vessel_name}, is_active=${is_active}`
+    );
+
+    return reply.code(200).send(response);
   });
 }

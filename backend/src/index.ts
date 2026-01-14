@@ -8,6 +8,9 @@ import * as seaTimeRoutes from './routes/sea-time.js';
 import * as reportsRoutes from './routes/reports.js';
 import * as trackingRoutes from './routes/tracking.js';
 
+// Import scheduler service
+import { startScheduler } from './services/scheduler.js';
+
 // Create application with schema for full database type support
 export const app = await createApplication(schema);
 
@@ -32,3 +35,6 @@ if (aisApiKey) {
 
 await app.run();
 app.logger.info('Application running');
+
+// Start the background scheduler for periodic vessel position checks
+await startScheduler(app);
