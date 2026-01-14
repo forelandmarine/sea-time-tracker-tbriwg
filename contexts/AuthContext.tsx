@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(true);
       
       const session = await authClient.getSession();
-      console.log("[AuthContext] Session response:", session);
+      console.log("[AuthContext] Session response:", JSON.stringify(session, null, 2));
       
       if (session?.data?.user) {
         console.log("[AuthContext] User found:", session.data.user.email);
@@ -90,8 +90,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("[AuthContext] No user in session");
         setUser(null);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("[AuthContext] Failed to fetch user:", error);
+      console.error("[AuthContext] Error details:", JSON.stringify(error, null, 2));
       setUser(null);
     } finally {
       setLoading(false);
@@ -100,50 +101,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithEmail = async (email: string, password: string) => {
     try {
-      console.log("[AuthContext] Signing in with email:", email);
+      console.log("[AuthContext] ========================================");
+      console.log("[AuthContext] Starting email sign-in for:", email);
+      console.log("[AuthContext] ========================================");
       
       const result = await authClient.signIn.email({ 
         email, 
         password,
         fetchOptions: {
           onSuccess: async (context) => {
-            console.log("[AuthContext] Sign in API call successful");
+            console.log("[AuthContext] ✅ Sign in API call successful");
+            console.log("[AuthContext] Response status:", context.response.status);
+            console.log("[AuthContext] Response headers:", JSON.stringify(Object.fromEntries(context.response.headers.entries()), null, 2));
+            
             // Give the backend a moment to set the session cookie
             await new Promise(resolve => setTimeout(resolve, 500));
           },
           onError: (context) => {
-            console.error("[AuthContext] Sign in API call failed:", context.error);
+            console.error("[AuthContext] ❌ Sign in API call failed");
+            console.error("[AuthContext] Error:", context.error);
+            console.error("[AuthContext] Error details:", JSON.stringify(context.error, null, 2));
           }
         }
       });
       
-      console.log("[AuthContext] Sign in result:", result);
+      console.log("[AuthContext] Sign in result:", JSON.stringify(result, null, 2));
       
       // Check if there was an error in the result
       if (result.error) {
-        console.error("[AuthContext] Sign in returned error:", result.error);
+        console.error("[AuthContext] ❌ Sign in returned error:", result.error);
+        
+        // Provide more specific error messages
+        if (result.error.message?.includes("Invalid") || result.error.message?.includes("401")) {
+          throw new Error("INVALID_EMAIL_OR_PASSWORD");
+        }
+        
         throw result.error;
       }
       
       // Wait a bit for the session to be established
+      console.log("[AuthContext] Waiting for session to be established...");
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Fetch the user session
+      console.log("[AuthContext] Fetching user session after sign-in...");
       await fetchUser();
       
       // Verify we got the user
       const session = await authClient.getSession();
+      console.log("[AuthContext] Session after sign-in:", JSON.stringify(session, null, 2));
+      
       if (!session?.data?.user) {
+        console.error("[AuthContext] ❌ Session was not established after sign-in");
         throw new Error("Sign in succeeded but session was not established. Please try again.");
       }
       
-      console.log("[AuthContext] Sign in complete, user:", session.data.user.email);
+      console.log("[AuthContext] ✅ Sign in complete, user:", session.data.user.email);
+      console.log("[AuthContext] ========================================");
     } catch (error: any) {
-      console.error("[AuthContext] Email sign in failed:", error);
+      console.error("[AuthContext] ========================================");
+      console.error("[AuthContext] ❌ Email sign in failed");
+      console.error("[AuthContext] Error:", error);
+      console.error("[AuthContext] Error message:", error.message);
+      console.error("[AuthContext] Error code:", error.code);
+      console.error("[AuthContext] Full error:", JSON.stringify(error, null, 2));
+      console.error("[AuthContext] ========================================");
       
       // Re-throw with a more user-friendly message
-      if (error.code === "INVALID_EMAIL_OR_PASSWORD" || error.message?.includes("Invalid email or password")) {
+      if (error.code === "INVALID_EMAIL_OR_PASSWORD" || 
+          error.message?.includes("INVALID_EMAIL_OR_PASSWORD") ||
+          error.message?.includes("Invalid email or password")) {
         throw new Error("INVALID_EMAIL_OR_PASSWORD");
+      }
+      
+      // If it's a 500 error, provide a helpful message
+      if (error.message?.includes("500") || error.status === 500) {
+        throw new Error("Server error during sign-in. The backend may be updating. Please try again in a moment.");
       }
       
       throw error;
@@ -152,7 +185,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUpWithEmail = async (email: string, password: string, name?: string) => {
     try {
-      console.log("[AuthContext] Signing up with email:", email);
+      console.log("[AuthContext] ========================================");
+      console.log("[AuthContext] Starting email sign-up for:", email);
+      console.log("[AuthContext] ========================================");
       
       const result = await authClient.signUp.email({
         email,
@@ -160,34 +195,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name,
         fetchOptions: {
           onSuccess: async (context) => {
-            console.log("[AuthContext] Sign up API call successful");
+            console.log("[AuthContext] ✅ Sign up API call successful");
+            console.log("[AuthContext] Response status:", context.response.status);
           },
           onError: (context) => {
-            console.error("[AuthContext] Sign up API call failed:", context.error);
+            console.error("[AuthContext] ❌ Sign up API call failed");
+            console.error("[AuthContext] Error:", context.error);
           }
         }
       });
       
-      console.log("[AuthContext] Sign up result:", result);
+      console.log("[AuthContext] Sign up result:", JSON.stringify(result, null, 2));
       
       // Check if there was an error in the result
       if (result.error) {
-        console.error("[AuthContext] Sign up returned error:", result.error);
+        console.error("[AuthContext] ❌ Sign up returned error:", result.error);
         throw result.error;
       }
       
-      console.log("[AuthContext] Sign up complete");
+      console.log("[AuthContext] ✅ Sign up complete");
+      console.log("[AuthContext] ========================================");
       
       // Don't auto-fetch user after signup - let them sign in
     } catch (error: any) {
-      console.error("[AuthContext] Email sign up failed:", error);
+      console.error("[AuthContext] ========================================");
+      console.error("[AuthContext] ❌ Email sign up failed");
+      console.error("[AuthContext] Error:", error);
+      console.error("[AuthContext] Full error:", JSON.stringify(error, null, 2));
+      console.error("[AuthContext] ========================================");
       throw error;
     }
   };
 
   const signInWithGoogle = async () => {
     try {
-      console.log("[AuthContext] Signing in with Google");
+      console.log("[AuthContext] ========================================");
+      console.log("[AuthContext] Starting Google sign-in");
+      console.log("[AuthContext] Platform:", Platform.OS);
+      console.log("[AuthContext] ========================================");
       
       if (Platform.OS === "web") {
         const token = await openOAuthPopup("google");
@@ -201,37 +246,66 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         await fetchUser();
       }
-    } catch (error) {
-      console.error("[AuthContext] Google sign in failed:", error);
+      
+      console.log("[AuthContext] ✅ Google sign-in complete");
+      console.log("[AuthContext] ========================================");
+    } catch (error: any) {
+      console.error("[AuthContext] ========================================");
+      console.error("[AuthContext] ❌ Google sign in failed");
+      console.error("[AuthContext] Error:", error);
+      console.error("[AuthContext] Full error:", JSON.stringify(error, null, 2));
+      console.error("[AuthContext] ========================================");
       throw error;
     }
   };
 
   const signInWithApple = async () => {
     try {
-      console.log("[AuthContext] Signing in with Apple");
+      console.log("[AuthContext] ========================================");
+      console.log("[AuthContext] Starting Apple sign-in");
+      console.log("[AuthContext] Platform:", Platform.OS);
+      console.log("[AuthContext] ========================================");
       
       if (Platform.OS === "web") {
         const token = await openOAuthPopup("apple");
         storeWebBearerToken(token);
         await fetchUser();
       } else {
+        console.log("[AuthContext] Initiating Apple OAuth flow...");
         await authClient.signIn.social({
           provider: "apple",
           callbackURL: "/",
         });
+        console.log("[AuthContext] Apple OAuth initiated, waiting for callback...");
         await new Promise(resolve => setTimeout(resolve, 1000));
         await fetchUser();
       }
-    } catch (error) {
-      console.error("[AuthContext] Apple sign in failed:", error);
+      
+      console.log("[AuthContext] ✅ Apple sign-in complete");
+      console.log("[AuthContext] ========================================");
+    } catch (error: any) {
+      console.error("[AuthContext] ========================================");
+      console.error("[AuthContext] ❌ Apple sign in failed");
+      console.error("[AuthContext] Error:", error);
+      console.error("[AuthContext] Error message:", error.message);
+      console.error("[AuthContext] Full error:", JSON.stringify(error, null, 2));
+      console.error("[AuthContext] ========================================");
+      
+      // Provide a more helpful error message
+      if (error.message?.includes("500")) {
+        throw new Error("Server error during Apple sign-in. The backend may be updating. Please try again in a moment.");
+      }
+      
       throw error;
     }
   };
 
   const signInWithGitHub = async () => {
     try {
-      console.log("[AuthContext] Signing in with GitHub");
+      console.log("[AuthContext] ========================================");
+      console.log("[AuthContext] Starting GitHub sign-in");
+      console.log("[AuthContext] Platform:", Platform.OS);
+      console.log("[AuthContext] ========================================");
       
       if (Platform.OS === "web") {
         const token = await openOAuthPopup("github");
@@ -245,8 +319,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         await fetchUser();
       }
-    } catch (error) {
-      console.error("[AuthContext] GitHub sign in failed:", error);
+      
+      console.log("[AuthContext] ✅ GitHub sign-in complete");
+      console.log("[AuthContext] ========================================");
+    } catch (error: any) {
+      console.error("[AuthContext] ========================================");
+      console.error("[AuthContext] ❌ GitHub sign in failed");
+      console.error("[AuthContext] Error:", error);
+      console.error("[AuthContext] Full error:", JSON.stringify(error, null, 2));
+      console.error("[AuthContext] ========================================");
       throw error;
     }
   };
@@ -256,8 +337,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log("[AuthContext] Signing out");
       await authClient.signOut();
       setUser(null);
-    } catch (error) {
-      console.error("[AuthContext] Sign out failed:", error);
+      console.log("[AuthContext] ✅ Sign out complete");
+    } catch (error: any) {
+      console.error("[AuthContext] ❌ Sign out failed:", error);
       throw error;
     }
   };

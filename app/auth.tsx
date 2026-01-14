@@ -31,7 +31,7 @@ export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleCreateTestAccount = async () => {
-    console.log('Creating test account');
+    console.log('User tapped Create Test Account button');
     setLoading(true);
     try {
       await seaTimeApi.createTestUser(
@@ -82,7 +82,8 @@ export default function AuthScreen() {
   };
 
   const handleEmailAuth = async () => {
-    console.log('User attempting email authentication', { mode, email });
+    console.log('User tapped email authentication button', { mode, email });
+    
     if (!email || !password) {
       Alert.alert("Error", "Please enter email and password");
       return;
@@ -96,12 +97,12 @@ export default function AuthScreen() {
     setLoading(true);
     try {
       if (mode === "signin") {
-        console.log('Signing in with email');
+        console.log('Attempting to sign in with email:', email);
         await signInWithEmail(email, password);
         console.log('Sign in successful, navigating to home');
         router.replace("/");
       } else {
-        console.log('Signing up with email');
+        console.log('Attempting to sign up with email:', email);
         await signUpWithEmail(email, password, name);
         Alert.alert(
           "Success",
@@ -145,6 +146,9 @@ export default function AuthScreen() {
       } else if (errorMessage.includes("session was not established")) {
         errorTitle = "Session Error";
         errorMessage = "Sign in succeeded but session could not be established. This may be a temporary issue. Please try again.";
+      } else if (errorMessage.includes("Server error") || errorMessage.includes("500")) {
+        errorTitle = "Server Error";
+        errorMessage = "The server is currently experiencing issues. This may be temporary while the backend is updating. Please try again in a moment.";
       }
       
       Alert.alert(errorTitle, errorMessage);
@@ -154,7 +158,7 @@ export default function AuthScreen() {
   };
 
   const handleSocialAuth = async (provider: "google" | "apple" | "github") => {
-    console.log('User attempting social authentication', { provider });
+    console.log('User tapped social authentication button', { provider });
     setLoading(true);
     try {
       if (provider === "google") {
@@ -168,7 +172,19 @@ export default function AuthScreen() {
       router.replace("/");
     } catch (error: any) {
       console.error('Social authentication error:', error);
-      Alert.alert("Error", error.message || "Authentication failed");
+      
+      let errorMessage = error.message || "Authentication failed";
+      let errorTitle = "Error";
+      
+      if (errorMessage.includes("Server error") || errorMessage.includes("500")) {
+        errorTitle = "Server Error";
+        errorMessage = "The server is currently experiencing issues. This may be temporary while the backend is updating. Please try again in a moment.";
+      } else if (errorMessage.includes("cancelled")) {
+        errorTitle = "Cancelled";
+        errorMessage = "Authentication was cancelled.";
+      }
+      
+      Alert.alert(errorTitle, errorMessage);
     } finally {
       setLoading(false);
     }
