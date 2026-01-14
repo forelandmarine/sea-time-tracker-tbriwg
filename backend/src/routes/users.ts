@@ -51,12 +51,31 @@ async function createUserViaAuth(
       data = { message: responseText };
     }
 
+    logger.info(
+      { email, status: response.status, responseLength: responseText.length },
+      `Better Auth sign-up response received`
+    );
+
     if (!response.ok) {
       logger.warn(
-        { email, status: response.status, error: data },
+        { email, status: response.status, error: data, responseText },
         'Better Auth sign-up failed'
       );
-      return { user: null, error: data.message || 'Sign-up failed' };
+
+      // If it's a duplicate email error
+      if (response.status === 400 || response.status === 409) {
+        return { user: null, error: 'User with this email already exists' };
+      }
+
+      return { user: null, error: data.message || data.error || 'Sign-up failed' };
+    }
+
+    if (!data.user) {
+      logger.warn(
+        { email, data },
+        'Better Auth sign-up succeeded but no user in response'
+      );
+      return { user: null, error: 'User created but no user data returned' };
     }
 
     logger.info({ email, userId: data.user?.id }, 'User created via Better Auth');
@@ -66,7 +85,7 @@ async function createUserViaAuth(
       { err: error, email },
       'Error calling Better Auth sign-up endpoint'
     );
-    return { user: null, error: 'Failed to contact auth service' };
+    return { user: null, error: error instanceof Error ? error.message : 'Failed to contact auth service' };
   }
 }
 
@@ -167,8 +186,26 @@ export function register(app: App, fastify: FastifyInstance) {
           });
         }
 
+        // Verify the user and account were created correctly
+        const [createdUser] = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email));
+
+        const [createdAccount] = await app.db
+          .select()
+          .from(authSchema.account)
+          .where(eq(authSchema.account.userId, user.id));
+
         app.logger.info(
-          { userId: user.id, email, name },
+          {
+            userId: user.id,
+            email,
+            name,
+            userExists: !!createdUser,
+            accountExists: !!createdAccount,
+            accountProviderId: createdAccount?.providerId,
+          },
           'Test user account created successfully'
         );
 
@@ -386,6 +423,156 @@ export function register(app: App, fastify: FastifyInstance) {
           accountCount: 0,
           users: [],
           message: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        });
+      }
+    }
+  );
+
+  // GET /api/users/debug/user/:email - Debug a specific user's authentication setup
+  fastify.get(
+    '/api/users/debug/user/:email',
+    {
+      schema: {
+        description: 'Debug a specific user to check if they can sign in',
+        tags: ['users'],
+        params: {
+          type: 'object',
+          properties: {
+            email: { type: 'string' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              user: {
+                type: 'object',
+                nullable: true,
+              },
+              accounts: {
+                type: 'array',
+                items: { type: 'object' },
+              },
+              sessions: {
+                type: 'array',
+                items: { type: 'object' },
+              },
+              canSignIn: { type: 'boolean' },
+              issues: {
+                type: 'array',
+                items: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { email } = request.params as { email: string };
+
+      app.logger.info({ email }, 'Debug: Checking user authentication setup');
+
+      try {
+        // Get user
+        const [user] = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email));
+
+        if (!user) {
+          return reply.code(200).send({
+            user: null,
+            accounts: [],
+            sessions: [],
+            canSignIn: false,
+            issues: ['User not found'],
+          });
+        }
+
+        // Get accounts for this user
+        const accountsRaw = await app.db
+          .select()
+          .from(authSchema.account)
+          .where(eq(authSchema.account.userId, user.id));
+
+        const accounts = accountsRaw.map((a) => ({
+          id: a.id,
+          providerId: a.providerId,
+          accountId: a.accountId,
+          hasPassword: a.password ? 'yes' : 'no',
+        }));
+
+        // Get sessions for this user
+        const sessionsRaw = await app.db
+          .select()
+          .from(authSchema.session)
+          .where(eq(authSchema.session.userId, user.id));
+
+        const sessions = sessionsRaw.map((s) => ({
+          id: s.id,
+          expiresAt: s.expiresAt,
+        }));
+
+        // Check for issues
+        const issues: string[] = [];
+        if (!accounts.length) {
+          issues.push('No accounts configured for this user');
+        }
+
+        const credentialAccount = accounts.find((a) => a.providerId === 'credential');
+        if (!credentialAccount) {
+          issues.push('No credential (email/password) account configured');
+        } else if (credentialAccount.hasPassword === 'no') {
+          issues.push('Credential account has no password stored');
+        }
+
+        const now = new Date();
+        const validSessions = sessions.filter((s) => {
+          const expiresAt = s.expiresAt instanceof Date ? s.expiresAt : new Date(s.expiresAt as string);
+          return expiresAt > now;
+        });
+
+        if (!validSessions.length && sessions.length > 0) {
+          issues.push('All sessions are expired');
+        }
+
+        const canSignIn = !!credentialAccount && credentialAccount.hasPassword === 'yes';
+
+        app.logger.info(
+          { email, canSignIn, issuesCount: issues.length, issues },
+          'User debug info retrieved'
+        );
+
+        return reply.code(200).send({
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+          },
+          accounts: accounts.map((a) => ({
+            providerId: a.providerId,
+            accountId: a.accountId,
+            hasPassword: a.hasPassword,
+          })),
+          sessions: sessions.map((s) => ({
+            expiresAt: s.expiresAt,
+            isExpired: (() => {
+              const expiresAt = s.expiresAt instanceof Date ? s.expiresAt : new Date(s.expiresAt as string);
+              return expiresAt < now;
+            })(),
+          })),
+          canSignIn,
+          issues,
+        });
+      } catch (error) {
+        app.logger.error({ err: error, email }, 'Failed to retrieve user debug info');
+
+        return reply.code(200).send({
+          user: null,
+          accounts: [],
+          sessions: [],
+          canSignIn: false,
+          issues: [`Error: ${error instanceof Error ? error.message : 'Unknown error'}`],
         });
       }
     }

@@ -71,6 +71,24 @@ app.fastify.addHook('onRequest', async (request, reply) => {
   }
 });
 
+// Add error handling for auth endpoints
+app.fastify.addHook('onError', async (request, reply, error) => {
+  // Log all errors for debugging
+  if (request.url.includes('/api/auth/')) {
+    app.logger.error(
+      {
+        err: error,
+        path: request.url,
+        method: request.method,
+        statusCode: reply.statusCode,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        errorStack: error instanceof Error ? error.stack : undefined,
+      },
+      'Auth endpoint error'
+    );
+  }
+});
+
 // Export App type for use in route files
 export type App = typeof app;
 
