@@ -121,7 +121,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      console.log('[Auth] Sign in response received, user:', data.user?.email);
+      console.log('[Auth] Sign in response received, full data:', JSON.stringify(data));
+      console.log('[Auth] User:', data.user?.email);
+      console.log('[Auth] Session object:', JSON.stringify(data.session));
       console.log('[Auth] Session data:', { 
         hasSession: !!data.session, 
         hasToken: !!data.session?.token,
@@ -129,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!data.session || !data.session.token) {
+        console.error('[Auth] Missing session or token. Full response:', JSON.stringify(data));
         throw new Error('No session token received from server');
       }
 
@@ -166,9 +169,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      console.log('[Auth] Sign up response received, user:', data.user?.email);
+      console.log('[Auth] Sign up response received, full data:', JSON.stringify(data));
+      console.log('[Auth] User:', data.user?.email);
+      console.log('[Auth] Session object:', JSON.stringify(data.session));
 
       if (!data.session || !data.session.token) {
+        console.error('[Auth] Missing session or token. Full response:', JSON.stringify(data));
         throw new Error('No session token received from server');
       }
 
@@ -208,9 +214,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      console.log('[Auth] Apple sign in response received');
+      console.log('[Auth] Apple sign in response received, full data:', JSON.stringify(data));
+      console.log('[Auth] Session object:', JSON.stringify(data.session));
 
       if (!data.session || !data.session.token) {
+        console.error('[Auth] Missing session or token. Full response:', JSON.stringify(data));
         throw new Error('No session token received from server');
       }
 
