@@ -406,6 +406,7 @@ export default function DebugScreen() {
       let longitude = null;
       
       // Try different possible locations for coordinates in the response
+      // First check root level
       if (parsed.latitude !== undefined && parsed.longitude !== undefined) {
         latitude = parsed.latitude;
         longitude = parsed.longitude;
@@ -414,7 +415,21 @@ export default function DebugScreen() {
         latitude = parsed.lat;
         longitude = parsed.lng;
         console.log('[DebugScreen] Found coordinates as lat/lng at root level:', { latitude, longitude });
-      } else if (parsed.position) {
+      } 
+      // Check inside 'data' object (MyShipTracking API format)
+      else if (parsed.data) {
+        if (parsed.data.latitude !== undefined && parsed.data.longitude !== undefined) {
+          latitude = parsed.data.latitude;
+          longitude = parsed.data.longitude;
+          console.log('[DebugScreen] Found coordinates in data.latitude/longitude:', { latitude, longitude });
+        } else if (parsed.data.lat !== undefined && parsed.data.lng !== undefined) {
+          latitude = parsed.data.lat;
+          longitude = parsed.data.lng;
+          console.log('[DebugScreen] Found coordinates in data.lat/lng:', { latitude, longitude });
+        }
+      }
+      // Check inside 'position' object
+      else if (parsed.position) {
         if (parsed.position.latitude !== undefined && parsed.position.longitude !== undefined) {
           latitude = parsed.position.latitude;
           longitude = parsed.position.longitude;
