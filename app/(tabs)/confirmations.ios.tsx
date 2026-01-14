@@ -33,6 +33,10 @@ interface SeaTimeEntry {
   status: 'pending' | 'confirmed' | 'rejected';
   notes: string | null;
   created_at: string;
+  start_latitude?: number | null;
+  start_longitude?: number | null;
+  end_latitude?: number | null;
+  end_longitude?: number | null;
 }
 
 export default function ConfirmationsScreen() {
@@ -274,6 +278,40 @@ export default function ConfirmationsScreen() {
                       )}
                     </View>
 
+                    {/* Coordinates */}
+                    {(entry.start_latitude !== null && entry.start_latitude !== undefined) || 
+                     (entry.end_latitude !== null && entry.end_latitude !== undefined) ? (
+                      <View style={styles.coordinatesSection}>
+                        <View style={styles.coordinatesHeader}>
+                          <IconSymbol
+                            ios_icon_name="location.fill"
+                            android_material_icon_name="location-on"
+                            size={16}
+                            color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                          />
+                          <Text style={styles.coordinatesHeaderText}>GPS Coordinates</Text>
+                        </View>
+                        
+                        {entry.start_latitude !== null && entry.start_latitude !== undefined && (
+                          <View style={styles.coordinateRow}>
+                            <Text style={styles.coordinateLabel}>Start Position:</Text>
+                            <Text style={styles.coordinateValue}>
+                              {entry.start_latitude.toFixed(6)}°, {entry.start_longitude?.toFixed(6)}°
+                            </Text>
+                          </View>
+                        )}
+                        
+                        {entry.end_latitude !== null && entry.end_latitude !== undefined && (
+                          <View style={styles.coordinateRow}>
+                            <Text style={styles.coordinateLabel}>End Position:</Text>
+                            <Text style={styles.coordinateValue}>
+                              {entry.end_latitude.toFixed(6)}°, {entry.end_longitude?.toFixed(6)}°
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    ) : null}
+
                     {/* Duration */}
                     {entry.duration_hours !== null && (
                       <View style={styles.durationSection}>
@@ -484,6 +522,40 @@ function createStyles(isDark: boolean) {
       fontSize: 12,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginTop: 2,
+    },
+    coordinatesSection: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 12,
+    },
+    coordinatesHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginBottom: 8,
+    },
+    coordinatesHeaderText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    },
+    coordinateRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 4,
+    },
+    coordinateLabel: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      fontWeight: '500',
+    },
+    coordinateValue: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
     durationSection: {
       marginBottom: 12,

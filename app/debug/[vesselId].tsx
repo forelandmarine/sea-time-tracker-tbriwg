@@ -105,6 +105,44 @@ function createStyles(isDark: boolean) {
       flex: 1,
       lineHeight: 20,
     },
+    coordinatesSection: {
+      backgroundColor: isDark ? 'rgba(0, 122, 255, 0.1)' : 'rgba(0, 122, 255, 0.05)',
+      borderRadius: 8,
+      padding: 12,
+      marginTop: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.primary,
+    },
+    coordinatesHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 8,
+      gap: 6,
+    },
+    coordinatesHeaderText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.primary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    coordinateRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 4,
+    },
+    coordinateLabel: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      fontWeight: '500',
+    },
+    coordinateValue: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    },
     authBadge: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -352,6 +390,42 @@ export default function DebugScreen() {
     }
   };
 
+  const extractCoordinates = (body: string | null): { latitude: number | null; longitude: number | null } => {
+    if (!body) return { latitude: null, longitude: null };
+    
+    try {
+      const parsed = JSON.parse(body);
+      
+      // Try different possible locations for coordinates in the response
+      let latitude = null;
+      let longitude = null;
+      
+      // Direct properties
+      if (parsed.latitude !== undefined && parsed.longitude !== undefined) {
+        latitude = parsed.latitude;
+        longitude = parsed.longitude;
+      } else if (parsed.lat !== undefined && parsed.lng !== undefined) {
+        latitude = parsed.lat;
+        longitude = parsed.lng;
+      }
+      // Nested in position object
+      else if (parsed.position) {
+        if (parsed.position.latitude !== undefined && parsed.position.longitude !== undefined) {
+          latitude = parsed.position.latitude;
+          longitude = parsed.position.longitude;
+        } else if (parsed.position.lat !== undefined && parsed.position.lng !== undefined) {
+          latitude = parsed.position.lat;
+          longitude = parsed.position.lng;
+        }
+      }
+      
+      return { latitude, longitude };
+    } catch (error) {
+      console.error('[DebugScreen] Error extracting coordinates:', error);
+      return { latitude: null, longitude: null };
+    }
+  };
+
   return (
     <View style={styles.container}>
       <Stack.Screen
@@ -414,6 +488,9 @@ export default function DebugScreen() {
         ) : (
           logs.map((log, index) => {
             const isExpanded = expandedLogs.has(log.id);
+            const coordinates = extractCoordinates(log.response_body);
+            const hasCoordinates = coordinates.latitude !== null && coordinates.longitude !== null;
+            
             return (
               <View
                 key={log.id || index}
@@ -435,6 +512,33 @@ export default function DebugScreen() {
                   <Text style={styles.logLabel}>MMSI</Text>
                   <Text style={styles.logValue}>{log.mmsi}</Text>
                 </View>
+
+                {/* GPS Coordinates Section */}
+                {hasCoordinates && (
+                  <View style={styles.coordinatesSection}>
+                    <View style={styles.coordinatesHeader}>
+                      <IconSymbol
+                        ios_icon_name="location.fill"
+                        android_material_icon_name="location-on"
+                        size={16}
+                        color={colors.primary}
+                      />
+                      <Text style={styles.coordinatesHeaderText}>GPS Position</Text>
+                    </View>
+                    <View style={styles.coordinateRow}>
+                      <Text style={styles.coordinateLabel}>Latitude:</Text>
+                      <Text style={styles.coordinateValue}>
+                        {coordinates.latitude?.toFixed(6)}°
+                      </Text>
+                    </View>
+                    <View style={styles.coordinateRow}>
+                      <Text style={styles.coordinateLabel}>Longitude:</Text>
+                      <Text style={styles.coordinateValue}>
+                        {coordinates.longitude?.toFixed(6)}°
+                      </Text>
+                    </View>
+                  </View>
+                )}
 
                 <View style={[
                   styles.authBadge,
