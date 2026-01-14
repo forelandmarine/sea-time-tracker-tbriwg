@@ -21,12 +21,17 @@ export function register(app: App, fastify: FastifyInstance) {
         },
       },
     },
-  }, async () => {
-    return app.db.query.sea_time_entries.findMany({
+  }, async (request, reply) => {
+    app.logger.info('Retrieving all sea time entries');
+
+    const entries = await app.db.query.sea_time_entries.findMany({
       with: {
         vessel: true,
       },
     });
+
+    app.logger.info(`Retrieved ${entries.length} sea time entries`);
+    return reply.code(200).send(entries);
   });
 
   // GET /api/vessels/:vesselId/sea-time - Return sea time entries for a specific vessel
@@ -102,17 +107,45 @@ export function register(app: App, fastify: FastifyInstance) {
       response: {
         200: {
           type: 'array',
-          items: { type: 'object' },
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              vessel_id: { type: 'string' },
+              start_time: { type: 'string', format: 'date-time' },
+              end_time: { type: ['string', 'null'], format: 'date-time' },
+              duration_hours: { type: ['string', 'null'] },
+              status: { type: 'string' },
+              notes: { type: ['string', 'null'] },
+              created_at: { type: 'string', format: 'date-time' },
+              vessel: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  mmsi: { type: 'string' },
+                  vessel_name: { type: 'string' },
+                  is_active: { type: 'boolean' },
+                  created_at: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
+          },
         },
       },
     },
-  }, async () => {
-    return app.db.query.sea_time_entries.findMany({
+  }, async (request, reply) => {
+    app.logger.info('Retrieving pending sea time entries');
+
+    const entries = await app.db.query.sea_time_entries.findMany({
       where: eq(schema.sea_time_entries.status, 'pending'),
       with: {
         vessel: true,
       },
+      orderBy: desc(schema.sea_time_entries.start_time),
     });
+
+    app.logger.info(`Retrieved ${entries.length} pending sea time entries`);
+    return reply.code(200).send(entries);
   });
 
   // PUT /api/sea-time/:id/confirm - Confirm pending entry with optional notes
@@ -138,6 +171,8 @@ export function register(app: App, fastify: FastifyInstance) {
     const { id } = request.params;
     const { notes } = request.body;
 
+    app.logger.info({ entryId: id, notes }, `Confirming sea time entry: ${id}`);
+
     // Get the entry
     const entry = await app.db
       .select()
@@ -145,6 +180,7 @@ export function register(app: App, fastify: FastifyInstance) {
       .where(eq(schema.sea_time_entries.id, id));
 
     if (entry.length === 0) {
+      app.logger.warn(`Sea time entry not found: ${id}`);
       return reply.code(404).send({ error: 'Sea time entry not found' });
     }
 
@@ -164,6 +200,18 @@ export function register(app: App, fastify: FastifyInstance) {
       })
       .where(eq(schema.sea_time_entries.id, id))
       .returning();
+
+    app.logger.info(
+      {
+        entryId: id,
+        vesselId: current_entry.vessel_id,
+        startTime: current_entry.start_time.toISOString(),
+        endTime: end_time.toISOString(),
+        durationHours: duration_hours,
+        status: 'confirmed',
+      },
+      `Sea time entry confirmed: ${duration_hours} hours`
+    );
 
     return reply.code(200).send(updated);
   });
@@ -191,6 +239,8 @@ export function register(app: App, fastify: FastifyInstance) {
     const { id } = request.params;
     const { notes } = request.body;
 
+    app.logger.info({ entryId: id, notes }, `Rejecting sea time entry: ${id}`);
+
     // Get the entry
     const entry = await app.db
       .select()
@@ -198,6 +248,7 @@ export function register(app: App, fastify: FastifyInstance) {
       .where(eq(schema.sea_time_entries.id, id));
 
     if (entry.length === 0) {
+      app.logger.warn(`Sea time entry not found: ${id}`);
       return reply.code(404).send({ error: 'Sea time entry not found' });
     }
 
@@ -209,6 +260,15 @@ export function register(app: App, fastify: FastifyInstance) {
       })
       .where(eq(schema.sea_time_entries.id, id))
       .returning();
+
+    app.logger.info(
+      {
+        entryId: id,
+        vesselId: entry[0].vessel_id,
+        status: 'rejected',
+      },
+      `Sea time entry rejected`
+    );
 
     return reply.code(200).send(updated);
   });
@@ -231,14 +291,22 @@ export function register(app: App, fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { id } = request.params;
 
+    app.logger.info(`Deleting sea time entry: ${id}`);
+
     const [deleted] = await app.db
       .delete(schema.sea_time_entries)
       .where(eq(schema.sea_time_entries.id, id))
       .returning();
 
     if (!deleted) {
+      app.logger.warn(`Sea time entry not found: ${id}`);
       return reply.code(404).send({ error: 'Sea time entry not found' });
     }
+
+    app.logger.info(
+      { entryId: deleted.id, vesselId: deleted.vessel_id },
+      `Sea time entry deleted`
+    );
 
     return reply.code(200).send({ id: deleted.id });
   });
