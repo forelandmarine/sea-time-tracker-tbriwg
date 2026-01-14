@@ -10,6 +10,8 @@ import {
   useColorScheme,
   Platform,
   Share,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -38,6 +40,11 @@ export default function ReportsScreen() {
   
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showTestUserModal, setShowTestUserModal] = useState(false);
+  const [testUserEmail, setTestUserEmail] = useState('test@seatime.com');
+  const [testUserPassword, setTestUserPassword] = useState('TestPassword123!');
+  const [testUserName, setTestUserName] = useState('Test User');
+  const [creatingUser, setCreatingUser] = useState(false);
 
   useEffect(() => {
     loadSummary();
@@ -130,6 +137,39 @@ export default function ReportsScreen() {
     );
   };
 
+  const handleCreateTestUser = async () => {
+    if (!testUserEmail || !testUserPassword || !testUserName) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    setCreatingUser(true);
+    try {
+      console.log('[Profile] Creating test user:', testUserEmail);
+      const result = await seaTimeApi.createTestUser(testUserEmail, testUserPassword, testUserName);
+      
+      if (result.success) {
+        Alert.alert(
+          'Success',
+          `Test user created successfully!\n\nEmail: ${testUserEmail}\nPassword: ${testUserPassword}\n\nYou can now sign in with these credentials.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => setShowTestUserModal(false),
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Error', result.error || 'Failed to create test user');
+      }
+    } catch (error: any) {
+      console.error('[Profile] Error creating test user:', error);
+      Alert.alert('Error', error.message || 'Failed to create test user. Please try again.');
+    } finally {
+      setCreatingUser(false);
+    }
+  };
+
   const styles = createStyles(isDark);
 
   return (
@@ -141,17 +181,30 @@ export default function ReportsScreen() {
             <Text style={styles.headerTitle}>Reports</Text>
             <Text style={styles.headerSubtitle}>MCA Compliant Sea Service Records</Text>
           </View>
-          <TouchableOpacity
-            style={styles.signOutButton}
-            onPress={handleSignOut}
-          >
-            <IconSymbol
-              ios_icon_name="rectangle.portrait.and.arrow.right"
-              android_material_icon_name="logout"
-              size={20}
-              color={colors.error}
-            />
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              style={styles.devButton}
+              onPress={() => setShowTestUserModal(true)}
+            >
+              <IconSymbol
+                ios_icon_name="person.badge.plus"
+                android_material_icon_name="person-add"
+                size={20}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.signOutButton}
+              onPress={handleSignOut}
+            >
+              <IconSymbol
+                ios_icon_name="rectangle.portrait.and.arrow.right"
+                android_material_icon_name="logout"
+                size={20}
+                color={colors.error}
+              />
+            </TouchableOpacity>
+          </View>
         </View>
         {user && (
           <View style={styles.userInfo}>
@@ -286,6 +339,94 @@ export default function ReportsScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Test User Creation Modal */}
+      <Modal
+        visible={showTestUserModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowTestUserModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { backgroundColor: isDark ? colors.cardBackground : colors.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Create Test User</Text>
+              <TouchableOpacity
+                onPress={() => setShowTestUserModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <IconSymbol
+                  ios_icon_name="xmark"
+                  android_material_icon_name="close"
+                  size={24}
+                  color={isDark ? colors.text : colors.textLight}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.inputLabel}>Email</Text>
+              <TextInput
+                style={styles.input}
+                value={testUserEmail}
+                onChangeText={setTestUserEmail}
+                placeholder="test@seatime.com"
+                placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+
+              <Text style={styles.inputLabel}>Password</Text>
+              <TextInput
+                style={styles.input}
+                value={testUserPassword}
+                onChangeText={setTestUserPassword}
+                placeholder="TestPassword123!"
+                placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                secureTextEntry
+              />
+
+              <Text style={styles.inputLabel}>Name</Text>
+              <TextInput
+                style={styles.input}
+                value={testUserName}
+                onChangeText={setTestUserName}
+                placeholder="Test User"
+                placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+              />
+
+              <TouchableOpacity
+                style={[styles.button, styles.primaryButton, creatingUser && styles.buttonDisabled]}
+                onPress={handleCreateTestUser}
+                disabled={creatingUser}
+              >
+                <IconSymbol
+                  ios_icon_name="person.badge.plus"
+                  android_material_icon_name="person-add"
+                  size={20}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.buttonText}>
+                  {creatingUser ? 'Creating...' : 'Create Test User'}
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.infoCard}>
+                <IconSymbol
+                  ios_icon_name="info.circle"
+                  android_material_icon_name="info"
+                  size={20}
+                  color={colors.primary}
+                />
+                <Text style={styles.infoText}>
+                  This will create a test user account that you can use to sign in and test the app. 
+                  Save the credentials to sign in later.
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -317,6 +458,15 @@ const createStyles = (isDark: boolean) =>
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginTop: 4,
+    },
+    headerButtons: {
+      flexDirection: 'row',
+      gap: 8,
+    },
+    devButton: {
+      padding: 8,
+      borderRadius: 8,
+      backgroundColor: isDark ? 'rgba(0, 119, 190, 0.1)' : 'rgba(0, 119, 190, 0.1)',
     },
     signOutButton: {
       padding: 8,
@@ -444,5 +594,57 @@ const createStyles = (isDark: boolean) =>
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       lineHeight: 20,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      width: '100%',
+      maxWidth: 500,
+      borderRadius: 16,
+      boxShadow: '0px 4px 16px rgba(0, 0, 0, 0.2)',
+      elevation: 5,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    modalCloseButton: {
+      padding: 4,
+    },
+    modalBody: {
+      padding: 20,
+    },
+    inputLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 8,
+      marginTop: 12,
+    },
+    input: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+      borderRadius: 10,
+      padding: 14,
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
+    },
+    buttonDisabled: {
+      opacity: 0.5,
     },
   });

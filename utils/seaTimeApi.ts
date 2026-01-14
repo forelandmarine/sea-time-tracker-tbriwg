@@ -534,3 +534,68 @@ export async function createTestSeaDayEntry(): Promise<SeaTimeEntry> {
   console.log('[API] Test sea day entry created successfully:', data);
   return data;
 }
+
+// Authentication - Create Test User
+export interface CreateTestUserResponse {
+  success: boolean;
+  user?: {
+    id: string;
+    email: string;
+    name: string;
+  };
+  message?: string;
+  error?: string;
+}
+
+export async function createTestUser(email: string, password: string, name: string): Promise<CreateTestUserResponse> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/users/test`;
+  console.log('[API] Creating test user:', email, name);
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password, name }),
+  });
+  
+  if (!response.ok) {
+    let errorMessage = 'Failed to create test user';
+    
+    try {
+      const errorData = await response.json();
+      console.error('[API] Test user creation failed:', response.status, errorData);
+      
+      if (errorData.error) {
+        errorMessage = errorData.error;
+      }
+    } catch (parseError) {
+      try {
+        const errorText = await response.text();
+        console.error('[API] Test user creation failed (text):', response.status, errorText);
+        if (errorText) {
+          errorMessage = errorText;
+        }
+      } catch (textError) {
+        console.error('[API] Could not parse error response:', textError);
+      }
+    }
+    
+    throw new Error(errorMessage);
+  }
+  
+  const data = await response.json();
+  console.log('[API] Test user creation response:', data);
+  
+  // Transform the response to match our interface
+  return {
+    success: true,
+    user: {
+      id: data.id,
+      email: data.email,
+      name: data.name,
+    },
+    message: data.message || 'Test user created successfully',
+  };
+}
