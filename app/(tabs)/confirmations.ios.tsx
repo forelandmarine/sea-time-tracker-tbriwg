@@ -29,14 +29,14 @@ interface SeaTimeEntry {
   vessel: Vessel | null;
   start_time: string;
   end_time: string | null;
-  duration_hours: number | null;
+  duration_hours: number | string | null;
   status: 'pending' | 'confirmed' | 'rejected';
   notes: string | null;
   created_at: string;
-  start_latitude?: number | null;
-  start_longitude?: number | null;
-  end_latitude?: number | null;
-  end_longitude?: number | null;
+  start_latitude?: number | string | null;
+  start_longitude?: number | string | null;
+  end_latitude?: number | string | null;
+  end_longitude?: number | string | null;
 }
 
 export default function ConfirmationsScreen() {
@@ -66,6 +66,7 @@ export default function ConfirmationsScreen() {
           duration_hours: entry.duration_hours,
           duration_type: typeof entry.duration_hours,
           start_latitude: entry.start_latitude,
+          start_latitude_type: typeof entry.start_latitude,
           start_longitude: entry.start_longitude,
           end_latitude: entry.end_latitude,
           end_longitude: entry.end_longitude,
@@ -173,9 +174,25 @@ export default function ConfirmationsScreen() {
     }
   };
 
-  const formatCoordinate = (value: number | null | undefined): string => {
-    if (typeof value === 'number' && !isNaN(value)) {
-      return value.toFixed(6);
+  // Helper to convert string or number to number
+  const toNumber = (value: number | string | null | undefined): number | null => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (typeof value === 'number') {
+      return isNaN(value) ? null : value;
+    }
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value);
+      return isNaN(parsed) ? null : parsed;
+    }
+    return null;
+  };
+
+  const formatCoordinate = (value: number | string | null | undefined): string => {
+    const num = toNumber(value);
+    if (num !== null) {
+      return num.toFixed(6);
     }
     return 'N/A';
   };
@@ -197,26 +214,31 @@ export default function ConfirmationsScreen() {
     return `${degrees}° ${minutes}' ${seconds}" ${direction}`;
   };
 
-  const formatCoordinateDMS = (lat: number | null | undefined, lon: number | null | undefined): { lat: string; lon: string } => {
-    if (typeof lat === 'number' && !isNaN(lat) && typeof lon === 'number' && !isNaN(lon)) {
+  const formatCoordinateDMS = (lat: number | string | null | undefined, lon: number | string | null | undefined): { lat: string; lon: string } => {
+    const latNum = toNumber(lat);
+    const lonNum = toNumber(lon);
+    
+    if (latNum !== null && lonNum !== null) {
       return {
-        lat: convertToDMS(lat, true),
-        lon: convertToDMS(lon, false),
+        lat: convertToDMS(latNum, true),
+        lon: convertToDMS(lonNum, false),
       };
     }
     return { lat: 'N/A', lon: 'N/A' };
   };
 
-  const formatDuration = (hours: number | null | undefined): string => {
-    if (typeof hours === 'number' && !isNaN(hours)) {
-      return hours.toFixed(1);
+  const formatDuration = (hours: number | string | null | undefined): string => {
+    const num = toNumber(hours);
+    if (num !== null) {
+      return num.toFixed(1);
     }
     return '0.0';
   };
 
-  const formatDays = (hours: number | null | undefined): string => {
-    if (typeof hours === 'number' && !isNaN(hours)) {
-      return (hours / 24).toFixed(2);
+  const formatDays = (hours: number | string | null | undefined): string => {
+    const num = toNumber(hours);
+    if (num !== null) {
+      return (num / 24).toFixed(2);
     }
     return '0.00';
   };
@@ -269,12 +291,17 @@ export default function ConfirmationsScreen() {
                 console.warn('[ConfirmationsScreen] Entry missing vessel data:', entry.id);
               }
 
-              const hasStartCoords = typeof entry.start_latitude === 'number' && !isNaN(entry.start_latitude) &&
-                                     typeof entry.start_longitude === 'number' && !isNaN(entry.start_longitude);
-              const hasEndCoords = typeof entry.end_latitude === 'number' && !isNaN(entry.end_latitude) &&
-                                   typeof entry.end_longitude === 'number' && !isNaN(entry.end_longitude);
+              // Convert to numbers for validation
+              const startLat = toNumber(entry.start_latitude);
+              const startLon = toNumber(entry.start_longitude);
+              const endLat = toNumber(entry.end_latitude);
+              const endLon = toNumber(entry.end_longitude);
+              const durationHours = toNumber(entry.duration_hours);
+
+              const hasStartCoords = startLat !== null && startLon !== null;
+              const hasEndCoords = endLat !== null && endLon !== null;
               const hasAnyCoords = hasStartCoords || hasEndCoords;
-              const hasDuration = typeof entry.duration_hours === 'number' && !isNaN(entry.duration_hours);
+              const hasDuration = durationHours !== null;
 
               console.log(`[ConfirmationsScreen] Rendering entry ${entry.id}:`, {
                 hasStartCoords,
