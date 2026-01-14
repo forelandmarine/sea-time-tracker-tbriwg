@@ -356,10 +356,10 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    app.logger.info('Test endpoint: Creating sea day entry from specific position records');
+    app.logger.info('Test endpoint: Creating sea day entry from most recent position records');
 
     try {
-      // Find the Norwegian vessel
+      // Find the Norwegian vessel (case-insensitive)
       const vessels = await app.db
         .select()
         .from(schema.vessels)
@@ -367,109 +367,78 @@ export function register(app: App, fastify: FastifyInstance) {
 
       if (vessels.length === 0) {
         app.logger.warn('Test endpoint: Norwegian vessel not found');
-        return reply.code(404).send({ error: 'Vessel "Norwegian" not found' });
+        return reply.code(404).send({ error: "Vessel 'Norwegian' not found" });
       }
 
       const vessel = vessels[0];
       app.logger.debug({ vesselId: vessel.id, vesselName: vessel.vessel_name }, 'Found Norwegian vessel');
 
-      // Define the two specific timestamps
-      const startTimestamp = new Date('2026-01-14T11:01:07.055Z');
-      const endTimestamp = new Date('2026-01-14T11:46:09.390Z');
-
-      app.logger.debug(
-        { startTime: startTimestamp.toISOString(), endTime: endTimestamp.toISOString() },
-        'Test endpoint: Looking for AIS checks at specific timestamps'
-      );
-
-      // Fetch AIS checks around the specific times (with 5 minute tolerance)
-      const tolerance = 5 * 60 * 1000; // 5 minutes in milliseconds
-
-      const startChecks = await app.db
+      // Get the two most recent position records for this vessel
+      const positionRecords = await app.db
         .select()
         .from(schema.ais_checks)
-        .where(
-          and(
-            eq(schema.ais_checks.vessel_id, vessel.id),
-            lte(schema.ais_checks.check_time, new Date(startTimestamp.getTime() + tolerance)),
-            gte(schema.ais_checks.check_time, new Date(startTimestamp.getTime() - tolerance))
-          )
-        );
+        .where(eq(schema.ais_checks.vessel_id, vessel.id))
+        .orderBy(desc(schema.ais_checks.check_time))
+        .limit(2);
 
-      if (startChecks.length === 0) {
+      if (positionRecords.length < 2) {
         app.logger.warn(
-          { vesselId: vessel.id, timestamp: startTimestamp.toISOString() },
-          'Test endpoint: No AIS check found near start timestamp'
+          { vesselId: vessel.id, recordsCount: positionRecords.length },
+          'Test endpoint: Not enough position records'
         );
-        return reply.code(404).send({ error: `No position record found near ${startTimestamp.toISOString()}` });
+        return reply.code(404).send({
+          error: `Not enough position records found for vessel ${vessel.vessel_name} (need at least 2)`,
+        });
       }
 
-      const endChecks = await app.db
-        .select()
-        .from(schema.ais_checks)
-        .where(
-          and(
-            eq(schema.ais_checks.vessel_id, vessel.id),
-            lte(schema.ais_checks.check_time, new Date(endTimestamp.getTime() + tolerance)),
-            gte(schema.ais_checks.check_time, new Date(endTimestamp.getTime() - tolerance))
-          )
-        );
-
-      if (endChecks.length === 0) {
-        app.logger.warn(
-          { vesselId: vessel.id, timestamp: endTimestamp.toISOString() },
-          'Test endpoint: No AIS check found near end timestamp'
-        );
-        return reply.code(404).send({ error: `No position record found near ${endTimestamp.toISOString()}` });
-      }
-
-      // Use the closest check to each timestamp
-      const startCheck = startChecks.reduce((closest, current) => {
-        const currentDiff = Math.abs(current.check_time.getTime() - startTimestamp.getTime());
-        const closestDiff = Math.abs(closest.check_time.getTime() - startTimestamp.getTime());
-        return currentDiff < closestDiff ? current : closest;
-      });
-
-      const endCheck = endChecks.reduce((closest, current) => {
-        const currentDiff = Math.abs(current.check_time.getTime() - endTimestamp.getTime());
-        const closestDiff = Math.abs(closest.check_time.getTime() - endTimestamp.getTime());
-        return currentDiff < closestDiff ? current : closest;
-      });
+      // Records are ordered newest first, so [0] is newest, [1] is older
+      const newestRecord = positionRecords[0];
+      const olderRecord = positionRecords[1];
 
       app.logger.debug(
-        { startCheckTime: startCheck.check_time.toISOString(), endCheckTime: endCheck.check_time.toISOString() },
-        'Test endpoint: Selected AIS checks'
+        {
+          olderRecordTime: olderRecord.check_time.toISOString(),
+          newestRecordTime: newestRecord.check_time.toISOString(),
+        },
+        'Test endpoint: Selected two most recent position records'
       );
 
-      // Extract coordinates
-      if (!startCheck.latitude || !startCheck.longitude || !endCheck.latitude || !endCheck.longitude) {
+      // Validate that both records have position data
+      if (
+        !olderRecord.latitude ||
+        !olderRecord.longitude ||
+        !newestRecord.latitude ||
+        !newestRecord.longitude
+      ) {
         app.logger.error(
-          { startCheckId: startCheck.id, endCheckId: endCheck.id },
-          'Test endpoint: Missing position data in AIS checks'
+          { olderRecordId: olderRecord.id, newestRecordId: newestRecord.id },
+          'Test endpoint: Position records missing latitude/longitude data'
         );
         return reply.code(500).send({ error: 'Position records missing latitude/longitude data' });
       }
 
-      const startLat = parseFloat(String(startCheck.latitude));
-      const startLng = parseFloat(String(startCheck.longitude));
-      const endLat = parseFloat(String(endCheck.latitude));
-      const endLng = parseFloat(String(endCheck.longitude));
+      const startLat = parseFloat(String(olderRecord.latitude));
+      const startLng = parseFloat(String(olderRecord.longitude));
+      const endLat = parseFloat(String(newestRecord.latitude));
+      const endLng = parseFloat(String(newestRecord.longitude));
 
-      // Calculate duration
-      const duration_ms = endCheck.check_time.getTime() - startCheck.check_time.getTime();
+      // Calculate duration in hours
+      const duration_ms = newestRecord.check_time.getTime() - olderRecord.check_time.getTime();
       const duration_hours = Math.round((duration_ms / (1000 * 60 * 60)) * 100) / 100;
 
       app.logger.info(
         {
           vesselId: vessel.id,
           vesselName: vessel.vessel_name,
+          startTime: olderRecord.check_time.toISOString(),
           startLat,
           startLng,
+          endTime: newestRecord.check_time.toISOString(),
           endLat,
           endLng,
           durationHours: duration_hours,
         },
-        `Test endpoint: Creating sea day entry with coordinates and duration`
+        `Test endpoint: Creating sea day entry from two most recent positions`
       );
 
       // Create the sea time entry
@@ -477,20 +446,20 @@ export function register(app: App, fastify: FastifyInstance) {
         .insert(schema.sea_time_entries)
         .values({
           vessel_id: vessel.id,
-          start_time: startCheck.check_time,
-          end_time: endCheck.check_time,
+          start_time: olderRecord.check_time,
+          end_time: newestRecord.check_time,
           start_latitude: String(startLat),
           start_longitude: String(startLng),
           end_latitude: String(endLat),
           end_longitude: String(endLng),
           duration_hours: String(duration_hours),
           status: 'pending',
-          notes: 'Test entry created from specific position records',
+          notes: 'Test entry created from two most recent position records',
         })
         .returning();
 
       app.logger.info(
-        { entryId: new_entry.id, vesselId: vessel.id, vesselName: vessel.vessel_name },
+        { entryId: new_entry.id, vesselId: vessel.id, vesselName: vessel.vessel_name, durationHours: duration_hours },
         `Test endpoint: Sea day entry created successfully`
       );
 
