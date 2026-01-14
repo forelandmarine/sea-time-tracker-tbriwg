@@ -520,8 +520,8 @@ function createStyles(isDark: boolean) {
       gap: 12,
     },
     appIcon: {
-      width: 48,
-      height: 48,
+      width: 53,
+      height: 53,
       borderRadius: 12,
     },
     headerTitle: {
