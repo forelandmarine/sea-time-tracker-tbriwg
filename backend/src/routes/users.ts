@@ -90,6 +90,133 @@ async function createUserViaAuth(
 }
 
 export function register(app: App, fastify: FastifyInstance) {
+  // POST /api/auth/sign-in/email-debug - Debug sign-in endpoint
+  // This wraps the Better Auth sign-in with detailed error logging
+  fastify.post<{ Body: { email: string; password: string } }>(
+    '/api/auth/sign-in/email-debug',
+    {
+      schema: {
+        description: 'Debug email/password sign-in with detailed error logging',
+        tags: ['auth'],
+        body: {
+          type: 'object',
+          required: ['email', 'password'],
+          properties: {
+            email: { type: 'string' },
+            password: { type: 'string' },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { email, password } = request.body;
+
+      app.logger.info({ email }, 'Debug sign-in attempt');
+
+      try {
+        // Check if user exists
+        const [user] = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email));
+
+        if (!user) {
+          app.logger.warn({ email }, 'User not found');
+          return reply.code(401).send({
+            error: 'Invalid email or password',
+          });
+        }
+
+        // Check if account exists
+        const [account] = await app.db
+          .select()
+          .from(authSchema.account)
+          .where(eq(authSchema.account.userId, user.id));
+
+        if (!account) {
+          app.logger.error({ email, userId: user.id }, 'No account found for user');
+          return reply.code(500).send({
+            error: 'User authentication configuration error',
+          });
+        }
+
+        if (!account.password) {
+          app.logger.error({ email, accountId: account.id }, 'No password hash in account');
+          return reply.code(500).send({
+            error: 'User password not configured',
+          });
+        }
+
+        app.logger.info(
+          {
+            email,
+            userId: user.id,
+            accountId: account.id,
+            hasPassword: !!account.password,
+            passwordHashLength: account.password.length,
+          },
+          'Account verified, password hash present'
+        );
+
+        // Try to call the actual Better Auth sign-in endpoint
+        const betterAuthUrl = process.env.BETTER_AUTH_URL ||
+                              process.env.API_URL ||
+                              process.env.BACKEND_URL ||
+                              'http://localhost:3001';
+
+        const signInUrl = `${betterAuthUrl}/api/auth/sign-in/email`;
+
+        app.logger.info({ email, signInUrl }, 'Forwarding to Better Auth sign-in');
+
+        const response = await fetch(signInUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const responseText = await response.text();
+        let responseData;
+        try {
+          responseData = JSON.parse(responseText);
+        } catch {
+          responseData = { message: responseText };
+        }
+
+        app.logger.info(
+          { email, status: response.status, responseLength: responseText.length },
+          'Better Auth sign-in response'
+        );
+
+        if (!response.ok) {
+          app.logger.warn(
+            { email, status: response.status, error: responseData },
+            'Better Auth sign-in failed'
+          );
+
+          return reply.code(response.status).send(responseData);
+        }
+
+        return reply.code(response.status).send(responseData);
+      } catch (error) {
+        app.logger.error(
+          {
+            err: error,
+            email,
+            errorMessage: error instanceof Error ? error.message : String(error),
+            errorStack: error instanceof Error ? error.stack : undefined,
+          },
+          'Debug sign-in error'
+        );
+
+        return reply.code(500).send({
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+  );
+
   // POST /api/users/test - Create a test user account
   fastify.post<{ Body: { email: string; name: string; password: string } }>(
     '/api/users/test',

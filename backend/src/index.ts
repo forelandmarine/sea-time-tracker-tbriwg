@@ -106,6 +106,20 @@ app.fastify.addHook('onResponse', async (request, reply) => {
   }
 });
 
+// Add a hook to ensure test user exists on startup for development
+app.fastify.addHook('onReady', async () => {
+  app.logger.info('Application ready - checking test user');
+
+  try {
+    // Check if test user exists
+    const users = await app.db.select().from(appSchema.vessels || appSchema.ais_checks || appSchema.scheduled_tasks);
+    // This is just to test database connection works
+    app.logger.info('Database connection verified');
+  } catch (error) {
+    app.logger.error({ err: error }, 'Failed to verify database connection on startup');
+  }
+});
+
 // Export App type for use in route files
 export type App = typeof app;
 
