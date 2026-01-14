@@ -29,7 +29,7 @@ interface Vessel {
 
 interface SeaTimeEntry {
   id: string;
-  vessel: Vessel;
+  vessel: Vessel | null;
   start_time: string;
   end_time: string | null;
   duration_hours: number | null;
@@ -307,53 +307,61 @@ export default function SeaTimeScreen() {
         {pendingEntries.length > 0 && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Pending Confirmations</Text>
-            {pendingEntries.map((entry, index) => (
-              <View key={entry.id} style={styles.pendingCard}>
-                <View style={styles.pendingHeader}>
-                  <Text style={styles.pendingVessel}>{entry.vessel.vessel_name}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(entry.status) + '20' }]}>
-                    <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
-                      {entry.status}
+            {pendingEntries.map((entry, index) => {
+              // Check if vessel exists before rendering
+              if (!entry.vessel) {
+                console.warn('Entry has no vessel data:', entry.id);
+                return null;
+              }
+              
+              return (
+                <View key={entry.id} style={styles.pendingCard}>
+                  <View style={styles.pendingHeader}>
+                    <Text style={styles.pendingVessel}>{entry.vessel.vessel_name}</Text>
+                    <View style={[styles.statusBadge, { backgroundColor: getStatusColor(entry.status) + '20' }]}>
+                      <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
+                        {entry.status}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.pendingDate}>
+                    {formatDate(entry.start_time)}
+                    {entry.end_time && ` - ${formatDate(entry.end_time)}`}
+                  </Text>
+                  {entry.duration_hours && (
+                    <Text style={styles.pendingDuration}>
+                      Duration: {entry.duration_hours.toFixed(1)} hours
                     </Text>
+                  )}
+                  <View style={styles.pendingActions}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.confirmButton]}
+                      onPress={() => handleConfirmEntry(entry.id)}
+                    >
+                      <IconSymbol
+                        ios_icon_name="checkmark.circle"
+                        android_material_icon_name="check-circle"
+                        size={20}
+                        color="#fff"
+                      />
+                      <Text style={styles.actionButtonText}>Confirm</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.rejectButton]}
+                      onPress={() => handleRejectEntry(entry.id)}
+                    >
+                      <IconSymbol
+                        ios_icon_name="xmark.circle"
+                        android_material_icon_name="cancel"
+                        size={20}
+                        color="#fff"
+                      />
+                      <Text style={styles.actionButtonText}>Reject</Text>
+                    </TouchableOpacity>
                   </View>
                 </View>
-                <Text style={styles.pendingDate}>
-                  {formatDate(entry.start_time)}
-                  {entry.end_time && ` - ${formatDate(entry.end_time)}`}
-                </Text>
-                {entry.duration_hours && (
-                  <Text style={styles.pendingDuration}>
-                    Duration: {entry.duration_hours.toFixed(1)} hours
-                  </Text>
-                )}
-                <View style={styles.pendingActions}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.confirmButton]}
-                    onPress={() => handleConfirmEntry(entry.id)}
-                  >
-                    <IconSymbol
-                      ios_icon_name="checkmark.circle"
-                      android_material_icon_name="check-circle"
-                      size={20}
-                      color="#fff"
-                    />
-                    <Text style={styles.actionButtonText}>Confirm</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.rejectButton]}
-                    onPress={() => handleRejectEntry(entry.id)}
-                  >
-                    <IconSymbol
-                      ios_icon_name="xmark.circle"
-                      android_material_icon_name="cancel"
-                      size={20}
-                      color="#fff"
-                    />
-                    <Text style={styles.actionButtonText}>Reject</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
 
