@@ -14,6 +14,9 @@ import {
   RefreshControl,
   Platform,
   Image,
+  KeyboardAvoidingView,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import React, { useState, useEffect } from 'react';
 import * as seaTimeApi from '@/utils/seaTimeApi';
@@ -79,6 +82,7 @@ export default function SeaTimeScreen() {
       setModalVisible(false);
       setNewMMSI('');
       setNewVesselName('');
+      Keyboard.dismiss();
       await loadData();
       Alert.alert('Success', 'Vessel added successfully');
     } catch (error: any) {
@@ -335,48 +339,70 @@ export default function SeaTimeScreen() {
 
       {/* Add Vessel Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add New Vessel</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <IconSymbol
-                  ios_icon_name="xmark.circle.fill"
-                  android_material_icon_name="cancel"
-                  size={28}
-                  color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                />
-              </TouchableOpacity>
-            </View>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View style={styles.modalOverlay}>
+              <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+                <View style={styles.modalContent}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>Add New Vessel</Text>
+                    <TouchableOpacity onPress={() => {
+                      setModalVisible(false);
+                      Keyboard.dismiss();
+                    }}>
+                      <IconSymbol
+                        ios_icon_name="xmark.circle.fill"
+                        android_material_icon_name="cancel"
+                        size={28}
+                        color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                      />
+                    </TouchableOpacity>
+                  </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Vessel Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., MV Serenity"
-                placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                value={newVesselName}
-                onChangeText={setNewVesselName}
-              />
-            </View>
+                  <ScrollView
+                    style={styles.modalScrollView}
+                    contentContainerStyle={styles.modalScrollContent}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={true}
+                  >
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Vessel Name</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g., MV Serenity"
+                        placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                        value={newVesselName}
+                        onChangeText={setNewVesselName}
+                        returnKeyType="next"
+                      />
+                    </View>
 
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>MMSI Number</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., 235012345"
-                placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                value={newMMSI}
-                onChangeText={setNewMMSI}
-                keyboardType="numeric"
-              />
-            </View>
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>MMSI Number</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g., 235012345"
+                        placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                        value={newMMSI}
+                        onChangeText={setNewMMSI}
+                        keyboardType="numeric"
+                        returnKeyType="done"
+                        onSubmitEditing={handleAddVessel}
+                      />
+                    </View>
 
-            <TouchableOpacity style={styles.submitButton} onPress={handleAddVessel}>
-              <Text style={styles.submitButtonText}>Add Vessel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+                    <TouchableOpacity style={styles.submitButton} onPress={handleAddVessel}>
+                      <Text style={styles.submitButtonText}>Add Vessel</Text>
+                    </TouchableOpacity>
+                  </ScrollView>
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -572,19 +598,28 @@ function createStyles(isDark: boolean) {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
-      padding: 20,
-      paddingBottom: 40,
+      maxHeight: '80%',
     },
     modalHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 20,
+      padding: 20,
+      paddingBottom: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
     modalTitle: {
       fontSize: 20,
       fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
+    },
+    modalScrollView: {
+      flex: 1,
+    },
+    modalScrollContent: {
+      padding: 20,
+      paddingBottom: 40,
     },
     inputGroup: {
       marginBottom: 16,
