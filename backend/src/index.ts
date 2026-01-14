@@ -71,21 +71,24 @@ app.fastify.addHook('onRequest', async (request, reply) => {
   }
 });
 
-// Add error handling for auth endpoints
+// Add error handling for auth endpoints - more detailed logging
 app.fastify.addHook('onError', async (request, reply, error) => {
   // Log all errors for debugging
   if (request.url.includes('/api/auth/')) {
-    app.logger.error(
-      {
-        err: error,
-        path: request.url,
-        method: request.method,
-        statusCode: reply.statusCode,
-        errorMessage: error instanceof Error ? error.message : String(error),
-        errorStack: error instanceof Error ? error.stack : undefined,
-      },
-      'Auth endpoint error'
-    );
+    const errorDetails = {
+      url: request.url,
+      method: request.method,
+      statusCode: reply.statusCode,
+      errorMessage: error instanceof Error ? error.message : String(error),
+      errorName: error instanceof Error ? error.name : 'Unknown',
+      errorStack: error instanceof Error ? error.stack : undefined,
+      requestBody: request.body ? JSON.stringify(request.body) : 'no body',
+    };
+
+    app.logger.error(errorDetails, 'Auth endpoint error');
+
+    // Also log to stdout for visibility during debugging
+    console.error('[AUTH ERROR]', errorDetails.url, errorDetails.errorMessage);
   }
 });
 

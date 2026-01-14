@@ -428,6 +428,119 @@ export function register(app: App, fastify: FastifyInstance) {
     }
   );
 
+  // POST /api/users/test-sign-in - Test sign-in without using Better Auth
+  // This helps debug authentication issues
+  fastify.post<{ Body: { email: string; password: string } }>(
+    '/api/users/test-sign-in',
+    {
+      schema: {
+        description: 'Test sign-in endpoint for debugging authentication',
+        tags: ['users'],
+        body: {
+          type: 'object',
+          required: ['email', 'password'],
+          properties: {
+            email: { type: 'string' },
+            password: { type: 'string' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              user: { type: 'object' },
+              account: { type: 'object' },
+            },
+          },
+          400: {
+            type: 'object',
+            properties: {
+              error: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { email, password } = request.body;
+
+      app.logger.info({ email }, 'Testing sign-in process');
+
+      try {
+        // Find user
+        const [user] = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email));
+
+        if (!user) {
+          app.logger.warn({ email }, 'User not found for sign-in test');
+          return reply.code(400).send({
+            error: 'User not found',
+          });
+        }
+
+        // Find credential account
+        const [account] = await app.db
+          .select()
+          .from(authSchema.account)
+          .where(eq(authSchema.account.userId, user.id));
+
+        if (!account) {
+          app.logger.warn({ email, userId: user.id }, 'No account found for user');
+          return reply.code(400).send({
+            error: 'No account configured for this user',
+          });
+        }
+
+        if (!account.password) {
+          app.logger.warn({ email, accountId: account.id }, 'No password stored in account');
+          return reply.code(400).send({
+            error: 'No password stored in account',
+          });
+        }
+
+        app.logger.info(
+          {
+            email,
+            userId: user.id,
+            accountId: account.id,
+            accountProviderId: account.providerId,
+            hasPassword: !!account.password,
+            passwordLength: account.password.length,
+          },
+          'Account details for sign-in test'
+        );
+
+        return reply.code(200).send({
+          success: true,
+          message: 'User and account found. Password verification would happen next.',
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+          },
+          account: {
+            id: account.id,
+            providerId: account.providerId,
+            passwordHashLength: account.password.length,
+          },
+        });
+      } catch (error) {
+        app.logger.error(
+          { err: error, email },
+          'Error in test sign-in'
+        );
+
+        return reply.code(400).send({
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+  );
+
   // GET /api/users/debug/user/:email - Debug a specific user's authentication setup
   fastify.get(
     '/api/users/debug/user/:email',
@@ -573,6 +686,125 @@ export function register(app: App, fastify: FastifyInstance) {
           sessions: [],
           canSignIn: false,
           issues: [`Error: ${error instanceof Error ? error.message : 'Unknown error'}`],
+        });
+      }
+    }
+  );
+
+  // GET /api/users/diagnostics - Comprehensive authentication diagnostics
+  fastify.get(
+    '/api/users/diagnostics',
+    {
+      schema: {
+        description: 'Comprehensive authentication diagnostics',
+        tags: ['users'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              status: { type: 'string' },
+              database: {
+                type: 'object',
+                properties: {
+                  connected: { type: 'boolean' },
+                  tables: {
+                    type: 'object',
+                    properties: {
+                      users: { type: 'number' },
+                      accounts: { type: 'number' },
+                      sessions: { type: 'number' },
+                    },
+                  },
+                },
+              },
+              configuration: {
+                type: 'object',
+                properties: {
+                  emailPasswordEnabled: { type: 'boolean' },
+                  betterAuthConfigured: { type: 'boolean' },
+                },
+              },
+              testUser: {
+                type: 'object',
+                nullable: true,
+              },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      app.logger.info({}, 'Running authentication diagnostics');
+
+      try {
+        // Check database connection and table counts
+        const users = await app.db.select().from(authSchema.user);
+        const accounts = await app.db.select().from(authSchema.account);
+        const sessions = await app.db.select().from(authSchema.session);
+
+        // Find test user
+        const [testUser] = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, 'test@seatime.com'));
+
+        let testUserInfo = null;
+        if (testUser) {
+          const [testAccount] = await app.db
+            .select()
+            .from(authSchema.account)
+            .where(eq(authSchema.account.userId, testUser.id));
+
+          testUserInfo = {
+            exists: true,
+            email: testUser.email,
+            hasAccount: !!testAccount,
+            accountProvider: testAccount?.providerId,
+            hasPassword: !!testAccount?.password,
+          };
+        }
+
+        const diagnostics = {
+          status: 'healthy',
+          database: {
+            connected: true,
+            tables: {
+              users: users.length,
+              accounts: accounts.length,
+              sessions: sessions.length,
+            },
+          },
+          configuration: {
+            emailPasswordEnabled: true,
+            betterAuthConfigured: true,
+          },
+          testUser: testUserInfo,
+          timestamp: new Date().toISOString(),
+        };
+
+        app.logger.info(diagnostics, 'Diagnostics completed');
+
+        return reply.code(200).send(diagnostics);
+      } catch (error) {
+        app.logger.error({ err: error }, 'Diagnostics failed');
+
+        return reply.code(200).send({
+          status: 'error',
+          error: error instanceof Error ? error.message : 'Unknown error',
+          database: {
+            connected: false,
+            tables: {
+              users: 0,
+              accounts: 0,
+              sessions: 0,
+            },
+          },
+          configuration: {
+            emailPasswordEnabled: false,
+            betterAuthConfigured: false,
+          },
+          testUser: null,
+          timestamp: new Date().toISOString(),
         });
       }
     }
