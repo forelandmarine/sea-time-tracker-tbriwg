@@ -137,4 +137,114 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     }
   );
+
+  // GET /api/users/session - Get current session with user data
+  // This endpoint helps with session retrieval in Expo Go and preview environments
+  fastify.get(
+    '/api/users/session',
+    {
+      schema: {
+        description: 'Get current session with user data (supports bearer token)',
+        tags: ['users'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  email: { type: 'string' },
+                  name: { type: 'string' },
+                  image: { type: ['string', 'null'] },
+                  emailVerified: { type: 'boolean' },
+                  createdAt: { type: 'string' },
+                  updatedAt: { type: 'string' },
+                },
+              },
+              session: {
+                type: 'object',
+                nullable: true,
+              },
+            },
+          },
+          401: {
+            type: 'object',
+            properties: {
+              error: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      app.logger.info({ method: 'GET', path: '/api/users/session' }, 'Retrieving session');
+
+      try {
+        // Try to get bearer token from Authorization header
+        const authHeader = request.headers.authorization;
+        const token = authHeader?.replace('Bearer ', '');
+
+        if (!token) {
+          app.logger.warn('No authorization token provided');
+          return reply.code(401).send({
+            error: 'No authorization token provided',
+          });
+        }
+
+        // Query the session from the database using the token
+        const [sessionRecord] = await app.db
+          .select()
+          .from(authSchema.session)
+          .where(eq(authSchema.session.token, token));
+
+        if (!sessionRecord || !sessionRecord.expiresAt || new Date() > sessionRecord.expiresAt) {
+          app.logger.warn({ token: token.substring(0, 10) }, 'Session not found or expired');
+          return reply.code(401).send({
+            error: 'Session not found or expired',
+          });
+        }
+
+        // Fetch the user associated with the session
+        const [user] = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.id, sessionRecord.userId));
+
+        if (!user) {
+          app.logger.warn({ userId: sessionRecord.userId }, 'User not found for session');
+          return reply.code(401).send({
+            error: 'User not found',
+          });
+        }
+
+        app.logger.info(
+          { userId: user.id, email: user.email },
+          'Session retrieved successfully'
+        );
+
+        return reply.code(200).send({
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            image: user.image,
+            emailVerified: user.emailVerified,
+            createdAt: user.createdAt,
+            updatedAt: user.updatedAt,
+          },
+          session: sessionRecord,
+        });
+      } catch (error) {
+        app.logger.error(
+          { err: error },
+          'Failed to retrieve session'
+        );
+
+        return reply.code(401).send({
+          error: 'Failed to retrieve session',
+        });
+      }
+    }
+  );
 }
