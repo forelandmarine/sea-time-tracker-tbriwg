@@ -11,6 +11,7 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
+  Image,
 } from "react-native";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "expo-router";
@@ -87,7 +88,11 @@ export default function AuthScreen() {
         <View style={styles.content}>
           {/* Lighthouse Logo and Welcome Message */}
           <View style={styles.headerContainer}>
-            <Text style={styles.lighthouseIcon}>🗼</Text>
+            <Image
+              source={require('@/assets/images/21aceeb3-aa54-4040-ae08-68dd74a31f85.png')}
+              style={styles.lighthouseLogo}
+              resizeMode="contain"
+            />
             <Text style={styles.appName}>SeaTime Tracker</Text>
             <Text style={styles.welcomeMessage}>
               Welcome aboard! Track your sea time and manage your maritime service records with ease.
@@ -200,8 +205,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 32,
   },
-  lighthouseIcon: {
-    fontSize: 72,
+  lighthouseLogo: {
+    width: 120,
+    height: 120,
     marginBottom: 16,
   },
   appName: {

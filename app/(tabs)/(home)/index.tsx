@@ -196,7 +196,7 @@ export default function SeaTimeScreen() {
         <View style={styles.header}>
           <View style={styles.headerTitleContainer}>
             <Image
-              source={require('@/assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png')}
+              source={require('@/assets/images/21aceeb3-aa54-4040-ae08-68dd74a31f85.png')}
               style={styles.appIcon}
               resizeMode="contain"
             />
