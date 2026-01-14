@@ -76,6 +76,8 @@ export default function AuthScreen() {
         errorMessage = "An account with this email already exists. Please sign in instead.";
       } else if (errorMessage.includes("network") || errorMessage.includes("fetch")) {
         errorMessage = "Network error. Please check your internet connection and try again.";
+      } else if (errorMessage.includes("session was not established")) {
+        errorMessage = "Sign in succeeded but session could not be established. This may be a temporary issue. Please try again.";
       }
       
       Alert.alert("Authentication Error", errorMessage);

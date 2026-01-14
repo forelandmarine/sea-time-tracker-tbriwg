@@ -1,3 +1,4 @@
+
 import { createAuthClient } from "better-auth/react";
 import { expoClient } from "@better-auth/expo/client";
 import * as SecureStore from "expo-secure-store";
@@ -21,20 +22,20 @@ export const authClient = createAuthClient({
   baseURL: API_URL,
   plugins: [
     expoClient({
-      scheme: "seatime-tracker",
+      scheme: "seatimetracker",
       storagePrefix: "seatime-tracker",
       storage,
     }),
   ],
-  // On web, use bearer token for authenticated requests
-  ...(Platform.OS === "web" && {
-    fetchOptions: {
-      auth: {
-        type: "Bearer" as const,
-        token: () => localStorage.getItem(BEARER_TOKEN_KEY) || "",
-      },
+  fetchOptions: {
+    credentials: "include",
+    onError(context) {
+      console.error("[Auth] Request error:", context.error);
     },
-  }),
+    onSuccess(context) {
+      console.log("[Auth] Request successful:", context.response.status);
+    },
+  },
 });
 
 export function storeWebBearerToken(token: string) {
