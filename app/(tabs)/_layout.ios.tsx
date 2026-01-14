@@ -1,34 +1,13 @@
 
-import { Tabs, Redirect } from 'expo-router';
+import { Tabs } from 'expo-router';
 import React from 'react';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
-import { useColorScheme, View, ActivityIndicator } from 'react-native';
-import { useAuth } from '@/contexts/AuthContext';
+import { useColorScheme } from 'react-native';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { user, loading } = useAuth();
-
-  console.log('[TabLayout] Auth check - User:', user?.email, 'Loading:', loading);
-
-  // Show loading spinner while checking authentication
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? '#000000' : '#F2F2F7' }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
-  // Redirect to auth screen if not logged in
-  if (!user) {
-    console.log('[TabLayout] No user found, redirecting to auth screen');
-    return <Redirect href="/auth" />;
-  }
-
-  console.log('[TabLayout] User authenticated, showing tabs');
 
   return (
     <Tabs
