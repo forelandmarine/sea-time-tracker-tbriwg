@@ -39,7 +39,7 @@ function createStyles(isDark: boolean) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
     scrollContent: {
       padding: 20,
@@ -48,12 +48,12 @@ function createStyles(isDark: boolean) {
     header: {
       fontSize: 28,
       fontWeight: 'bold',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       marginBottom: 8,
     },
     mmsi: {
       fontSize: 16,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginBottom: 24,
     },
     statsContainer: {
@@ -63,7 +63,7 @@ function createStyles(isDark: boolean) {
     },
     statCard: {
       flex: 1,
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 16,
       padding: 16,
       marginHorizontal: 4,
@@ -73,6 +73,8 @@ function createStyles(isDark: boolean) {
       shadowOpacity: 0.1,
       shadowRadius: 4,
       elevation: 3,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
     },
     statValue: {
       fontSize: 24,
@@ -82,18 +84,18 @@ function createStyles(isDark: boolean) {
     },
     statLabel: {
       fontSize: 12,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
     },
     sectionTitle: {
       fontSize: 20,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       marginBottom: 12,
       marginTop: 8,
     },
     entryCard: {
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 16,
       padding: 16,
       marginBottom: 12,
@@ -102,6 +104,8 @@ function createStyles(isDark: boolean) {
       shadowOpacity: 0.1,
       shadowRadius: 4,
       elevation: 3,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
     },
     entryHeader: {
       flexDirection: 'row',
@@ -112,7 +116,7 @@ function createStyles(isDark: boolean) {
     entryDate: {
       fontSize: 16,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
     },
     statusBadge: {
       paddingHorizontal: 12,
@@ -129,7 +133,7 @@ function createStyles(isDark: boolean) {
     },
     entryDetailText: {
       fontSize: 14,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginBottom: 4,
     },
     emptyState: {
@@ -138,28 +142,28 @@ function createStyles(isDark: boolean) {
     },
     emptyText: {
       fontSize: 16,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
       marginTop: 12,
     },
     dateHeader: {
       fontSize: 18,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       marginTop: 16,
       marginBottom: 8,
     },
     debugButton: {
-      backgroundColor: isDark ? 'rgba(147, 51, 234, 0.2)' : 'rgba(147, 51, 234, 0.1)',
+      backgroundColor: isDark ? colors.secondary : colors.accent,
       borderRadius: 12,
       padding: 16,
       alignItems: 'center',
       marginBottom: 24,
       borderWidth: 1,
-      borderColor: '#9333ea',
+      borderColor: colors.primary,
     },
     debugButtonText: {
-      color: '#9333ea',
+      color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '600',
     },
@@ -332,7 +336,7 @@ export default function VesselDetailScreen() {
               ios_icon_name="clock"
               android_material_icon_name="schedule"
               size={48}
-              color={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
             />
             <Text style={styles.emptyText}>
               No sea time entries yet.
