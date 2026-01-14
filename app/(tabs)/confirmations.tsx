@@ -58,6 +58,17 @@ export default function ConfirmationsScreen() {
       console.log('[ConfirmationsScreen] Fetching pending entries from API...');
       const entriesData = await seaTimeApi.getPendingEntries();
       console.log('[ConfirmationsScreen] Raw pending entries data:', JSON.stringify(entriesData, null, 2));
+      
+      // Log each entry's coordinates
+      entriesData.forEach((entry: SeaTimeEntry, index: number) => {
+        console.log(`[ConfirmationsScreen] Entry ${index} (${entry.id}) coordinates:`, {
+          start_latitude: entry.start_latitude,
+          start_longitude: entry.start_longitude,
+          end_latitude: entry.end_latitude,
+          end_longitude: entry.end_longitude,
+        });
+      });
+      
       setPendingEntries(entriesData);
       console.log('[ConfirmationsScreen] Pending entries loaded:', entriesData.length);
     } catch (error: any) {
@@ -207,7 +218,7 @@ export default function ConfirmationsScreen() {
                                    entry.end_longitude !== null && entry.end_longitude !== undefined;
               const hasAnyCoords = hasStartCoords || hasEndCoords;
 
-              console.log(`[ConfirmationsScreen] Entry ${entry.id} coordinates:`, {
+              console.log(`[ConfirmationsScreen] Rendering entry ${entry.id} coordinates:`, {
                 hasStartCoords,
                 hasEndCoords,
                 start_latitude: entry.start_latitude,
