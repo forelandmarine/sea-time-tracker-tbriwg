@@ -351,6 +351,7 @@ export function register(app: App, fastify: FastifyInstance) {
             },
           },
         },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
         500: { type: 'object', properties: { error: { type: 'string' } } },
       },
@@ -421,6 +422,27 @@ export function register(app: App, fastify: FastifyInstance) {
       const startLng = parseFloat(String(olderRecord.longitude));
       const endLat = parseFloat(String(newestRecord.latitude));
       const endLng = parseFloat(String(newestRecord.longitude));
+
+      // Validate that start and end coordinates are different
+      // Prevent creating entries when coordinates are identical despite different timestamps
+      if (startLat === endLat && startLng === endLng) {
+        app.logger.warn(
+          {
+            vesselId: vessel.id,
+            vesselName: vessel.vessel_name,
+            startTime: olderRecord.check_time.toISOString(),
+            startLat,
+            startLng,
+            endTime: newestRecord.check_time.toISOString(),
+            endLat,
+            endLng,
+          },
+          `Test endpoint: Vessel ${vessel.vessel_name} has identical coordinates (${startLat}, ${startLng}) despite different timestamps - skipping sea time entry creation`
+        );
+        return reply.code(400).send({
+          error: `Cannot create sea time entry: start and end coordinates are identical (${startLat}, ${startLng}) despite different timestamps`,
+        });
+      }
 
       // Calculate duration in hours
       const duration_ms = newestRecord.check_time.getTime() - olderRecord.check_time.getTime();

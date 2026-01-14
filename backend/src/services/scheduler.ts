@@ -262,6 +262,28 @@ async function handleSeaTimeEntries(
 
   // Check if location has changed significantly (more than threshold)
   if (maxDiff > LOCATION_CHANGE_THRESHOLD) {
+    // Validate that start and end coordinates are different
+    // Prevent creating entries when coordinates are identical despite different timestamps
+    const coordinatesAreIdentical = previousLat === currentLat && previousLng === currentLng;
+
+    if (coordinatesAreIdentical) {
+      app.logger.warn(
+        {
+          vesselId,
+          mmsi,
+          startLat: previousLat,
+          startLng: previousLng,
+          endLat: currentLat,
+          endLng: currentLng,
+          startTime: previousCheck.check_time.toISOString(),
+          endTime: currentCheck.check_time.toISOString(),
+          maxDiff: Math.round(maxDiff * 10000) / 10000,
+        },
+        `Vessel ${vessel_name} has identical coordinates (${previousLat}, ${previousLng}) despite different timestamps - skipping sea time entry creation`
+      );
+      return;
+    }
+
     // Check if there's already an open pending sea time entry
     const openEntry = await app.db
       .select()
