@@ -49,19 +49,19 @@ export default function ConfirmationsScreen() {
   const styles = createStyles(isDark);
 
   useEffect(() => {
-    console.log('ConfirmationsScreen: Loading pending entries');
+    console.log('[ConfirmationsScreen] Loading pending entries');
     loadData();
   }, []);
 
   const loadData = async () => {
     try {
-      console.log('Fetching pending entries from API...');
+      console.log('[ConfirmationsScreen] Fetching pending entries from API...');
       const entriesData = await seaTimeApi.getPendingEntries();
-      console.log('Raw pending entries data:', JSON.stringify(entriesData, null, 2));
+      console.log('[ConfirmationsScreen] Raw pending entries data:', JSON.stringify(entriesData, null, 2));
       setPendingEntries(entriesData);
-      console.log('Pending entries loaded:', entriesData.length);
+      console.log('[ConfirmationsScreen] Pending entries loaded:', entriesData.length);
     } catch (error: any) {
-      console.error('Failed to load pending entries:', error);
+      console.error('[ConfirmationsScreen] Failed to load pending entries:', error);
       Alert.alert('Error', 'Failed to load pending entries: ' + error.message);
     } finally {
       setLoading(false);
@@ -69,7 +69,7 @@ export default function ConfirmationsScreen() {
   };
 
   const onRefresh = async () => {
-    console.log('User refreshing pending entries');
+    console.log('[ConfirmationsScreen] User refreshing pending entries');
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
@@ -85,12 +85,12 @@ export default function ConfirmationsScreen() {
           text: 'Confirm',
           onPress: async () => {
             try {
-              console.log('User confirming entry:', entryId);
+              console.log('[ConfirmationsScreen] User confirming entry:', entryId);
               await seaTimeApi.confirmSeaTimeEntry(entryId);
               await loadData();
               Alert.alert('Success', 'Sea time entry confirmed');
             } catch (error: any) {
-              console.error('Failed to confirm entry:', error);
+              console.error('[ConfirmationsScreen] Failed to confirm entry:', error);
               Alert.alert('Error', 'Failed to confirm entry: ' + error.message);
             }
           },
@@ -110,12 +110,12 @@ export default function ConfirmationsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('User rejecting entry:', entryId);
+              console.log('[ConfirmationsScreen] User rejecting entry:', entryId);
               await seaTimeApi.rejectSeaTimeEntry(entryId);
               await loadData();
               Alert.alert('Success', 'Sea time entry rejected');
             } catch (error: any) {
-              console.error('Failed to reject entry:', error);
+              console.error('[ConfirmationsScreen] Failed to reject entry:', error);
               Alert.alert('Error', 'Failed to reject entry: ' + error.message);
             }
           },
@@ -193,19 +193,32 @@ export default function ConfirmationsScreen() {
         ) : (
           <View style={styles.entriesContainer}>
             {pendingEntries.map((entry, index) => {
-              // Show entry even if vessel is missing, but with a warning
               const vesselName = entry.vessel?.vessel_name || 'Unknown Vessel';
               const vesselMmsi = entry.vessel?.mmsi || 'N/A';
               const hasVesselData = !!entry.vessel;
 
               if (!hasVesselData) {
-                console.warn('Entry missing vessel data:', entry.id, 'Full entry:', JSON.stringify(entry, null, 2));
+                console.warn('[ConfirmationsScreen] Entry missing vessel data:', entry.id);
               }
+
+              const hasStartCoords = entry.start_latitude !== null && entry.start_latitude !== undefined && 
+                                     entry.start_longitude !== null && entry.start_longitude !== undefined;
+              const hasEndCoords = entry.end_latitude !== null && entry.end_latitude !== undefined && 
+                                   entry.end_longitude !== null && entry.end_longitude !== undefined;
+              const hasAnyCoords = hasStartCoords || hasEndCoords;
+
+              console.log(`[ConfirmationsScreen] Entry ${entry.id} coordinates:`, {
+                hasStartCoords,
+                hasEndCoords,
+                start_latitude: entry.start_latitude,
+                start_longitude: entry.start_longitude,
+                end_latitude: entry.end_latitude,
+                end_longitude: entry.end_longitude,
+              });
 
               return (
                 <React.Fragment key={index}>
-                  <View key={entry.id} style={styles.entryCard}>
-                    {/* Warning banner if vessel data is missing */}
+                  <View style={styles.entryCard}>
                     {!hasVesselData && (
                       <View style={styles.warningBanner}>
                         <IconSymbol
@@ -236,7 +249,7 @@ export default function ConfirmationsScreen() {
                       </View>
                       <View style={[styles.statusBadge, { backgroundColor: getStatusColor(entry.status) + '20' }]}>
                         <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
-                          {entry.status}
+                          {entry.status.toUpperCase()}
                         </Text>
                       </View>
                     </View>
@@ -278,39 +291,38 @@ export default function ConfirmationsScreen() {
                       )}
                     </View>
 
-                    {/* Coordinates */}
-                    {(entry.start_latitude !== null && entry.start_latitude !== undefined) || 
-                     (entry.end_latitude !== null && entry.end_latitude !== undefined) ? (
+                    {/* GPS Coordinates Section */}
+                    {hasAnyCoords && (
                       <View style={styles.coordinatesSection}>
                         <View style={styles.coordinatesHeader}>
                           <IconSymbol
                             ios_icon_name="location.fill"
                             android_material_icon_name="location-on"
                             size={16}
-                            color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                            color={colors.primary}
                           />
                           <Text style={styles.coordinatesHeaderText}>GPS Coordinates</Text>
                         </View>
                         
-                        {entry.start_latitude !== null && entry.start_latitude !== undefined && (
+                        {hasStartCoords && (
                           <View style={styles.coordinateRow}>
                             <Text style={styles.coordinateLabel}>Start Position:</Text>
                             <Text style={styles.coordinateValue}>
-                              {entry.start_latitude.toFixed(6)}°, {entry.start_longitude?.toFixed(6)}°
+                              {entry.start_latitude!.toFixed(6)}°, {entry.start_longitude!.toFixed(6)}°
                             </Text>
                           </View>
                         )}
                         
-                        {entry.end_latitude !== null && entry.end_latitude !== undefined && (
+                        {hasEndCoords && (
                           <View style={styles.coordinateRow}>
                             <Text style={styles.coordinateLabel}>End Position:</Text>
                             <Text style={styles.coordinateValue}>
-                              {entry.end_latitude.toFixed(6)}°, {entry.end_longitude?.toFixed(6)}°
+                              {entry.end_latitude!.toFixed(6)}°, {entry.end_longitude!.toFixed(6)}°
                             </Text>
                           </View>
                         )}
                       </View>
-                    ) : null}
+                    )}
 
                     {/* Duration */}
                     {entry.duration_hours !== null && (
@@ -524,10 +536,12 @@ function createStyles(isDark: boolean) {
       marginTop: 2,
     },
     coordinatesSection: {
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      backgroundColor: isDark ? 'rgba(0, 122, 255, 0.1)' : 'rgba(0, 122, 255, 0.05)',
       borderRadius: 12,
       padding: 12,
       marginBottom: 12,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.primary,
     },
     coordinatesHeader: {
       flexDirection: 'row',
@@ -537,8 +551,10 @@ function createStyles(isDark: boolean) {
     },
     coordinatesHeaderText: {
       fontSize: 12,
-      fontWeight: '600',
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      fontWeight: '700',
+      color: colors.primary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     coordinateRow: {
       flexDirection: 'row',

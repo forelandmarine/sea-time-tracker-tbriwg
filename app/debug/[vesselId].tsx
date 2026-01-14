@@ -110,6 +110,7 @@ function createStyles(isDark: boolean) {
       borderRadius: 8,
       padding: 12,
       marginTop: 8,
+      marginBottom: 8,
       borderLeftWidth: 3,
       borderLeftColor: colors.primary,
     },
@@ -291,7 +292,9 @@ export default function DebugScreen() {
     try {
       const debugLogs = await seaTimeApi.getAISDebugLogs(vesselId);
       console.log('[DebugScreen] Debug logs loaded:', debugLogs.length);
-      console.log('[DebugScreen] First log sample:', debugLogs[0]);
+      if (debugLogs.length > 0) {
+        console.log('[DebugScreen] First log sample:', JSON.stringify(debugLogs[0], null, 2));
+      }
       setLogs(debugLogs);
     } catch (error) {
       console.error('[DebugScreen] Error loading debug logs:', error);
@@ -323,7 +326,6 @@ export default function DebugScreen() {
   const getStatusColor = (statusString: string) => {
     const status = parseInt(statusString);
     if (isNaN(status)) {
-      // Handle non-numeric status strings like "connection_error"
       if (statusString.includes('error') || statusString.includes('failed')) {
         return colors.error;
       }
@@ -391,34 +393,48 @@ export default function DebugScreen() {
   };
 
   const extractCoordinates = (body: string | null): { latitude: number | null; longitude: number | null } => {
-    if (!body) return { latitude: null, longitude: null };
+    if (!body) {
+      console.log('[DebugScreen] No response body to extract coordinates from');
+      return { latitude: null, longitude: null };
+    }
     
     try {
       const parsed = JSON.parse(body);
+      console.log('[DebugScreen] Parsing response body for coordinates:', parsed);
       
-      // Try different possible locations for coordinates in the response
       let latitude = null;
       let longitude = null;
       
-      // Direct properties
+      // Try different possible locations for coordinates in the response
       if (parsed.latitude !== undefined && parsed.longitude !== undefined) {
         latitude = parsed.latitude;
         longitude = parsed.longitude;
+        console.log('[DebugScreen] Found coordinates at root level:', { latitude, longitude });
       } else if (parsed.lat !== undefined && parsed.lng !== undefined) {
         latitude = parsed.lat;
         longitude = parsed.lng;
-      }
-      // Nested in position object
-      else if (parsed.position) {
+        console.log('[DebugScreen] Found coordinates as lat/lng at root level:', { latitude, longitude });
+      } else if (parsed.position) {
         if (parsed.position.latitude !== undefined && parsed.position.longitude !== undefined) {
           latitude = parsed.position.latitude;
           longitude = parsed.position.longitude;
+          console.log('[DebugScreen] Found coordinates in position object:', { latitude, longitude });
         } else if (parsed.position.lat !== undefined && parsed.position.lng !== undefined) {
           latitude = parsed.position.lat;
           longitude = parsed.position.lng;
+          console.log('[DebugScreen] Found coordinates as lat/lng in position object:', { latitude, longitude });
         }
       }
       
+      // Ensure they are numbers
+      if (latitude !== null && typeof latitude !== 'number') {
+        latitude = parseFloat(latitude);
+      }
+      if (longitude !== null && typeof longitude !== 'number') {
+        longitude = parseFloat(longitude);
+      }
+      
+      console.log('[DebugScreen] Final extracted coordinates:', { latitude, longitude });
       return { latitude, longitude };
     } catch (error) {
       console.error('[DebugScreen] Error extracting coordinates:', error);
@@ -491,6 +507,8 @@ export default function DebugScreen() {
             const coordinates = extractCoordinates(log.response_body);
             const hasCoordinates = coordinates.latitude !== null && coordinates.longitude !== null;
             
+            console.log(`[DebugScreen] Rendering log ${log.id}, hasCoordinates:`, hasCoordinates, coordinates);
+            
             return (
               <View
                 key={log.id || index}
@@ -513,7 +531,7 @@ export default function DebugScreen() {
                   <Text style={styles.logValue}>{log.mmsi}</Text>
                 </View>
 
-                {/* GPS Coordinates Section */}
+                {/* GPS Coordinates Section - ALWAYS VISIBLE IF COORDINATES EXIST */}
                 {hasCoordinates && (
                   <View style={styles.coordinatesSection}>
                     <View style={styles.coordinatesHeader}>
