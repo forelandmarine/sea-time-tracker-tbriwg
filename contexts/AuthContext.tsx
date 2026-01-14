@@ -72,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Verify token with backend
-      const response = await fetch(`${API_URL}/api/auth/me`, {
+      const response = await fetch(`${API_URL}/api/auth/user`, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -99,7 +99,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signIn = async (email: string, password: string) => {
     try {
       console.log('[Auth] Signing in:', email);
-      const response = await fetch(`${API_URL}/api/auth/login`, {
+      const response = await fetch(`${API_URL}/api/auth/sign-in/email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -108,12 +108,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Login failed');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Login failed');
       }
 
       const data = await response.json();
-      await tokenStorage.setToken(data.token);
+      await tokenStorage.setToken(data.session.token);
       setUser(data.user);
       console.log('[Auth] Sign in successful');
     } catch (error) {
@@ -125,21 +125,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (email: string, password: string, name?: string) => {
     try {
       console.log('[Auth] Signing up:', email);
-      const response = await fetch(`${API_URL}/api/auth/register`, {
+      const response = await fetch(`${API_URL}/api/auth/sign-up/email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, password, name }),
+        body: JSON.stringify({ email, password, name: name || 'User' }),
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Registration failed');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Registration failed');
       }
 
       const data = await response.json();
-      await tokenStorage.setToken(data.token);
+      await tokenStorage.setToken(data.session.token);
       setUser(data.user);
       console.log('[Auth] Sign up successful');
     } catch (error) {
@@ -151,7 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithApple = async (identityToken: string, appleUser?: any) => {
     try {
       console.log('[Auth] Signing in with Apple');
-      const response = await fetch(`${API_URL}/api/auth/apple`, {
+      const response = await fetch(`${API_URL}/api/auth/sign-in/apple`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -163,12 +163,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Apple sign in failed');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Apple sign in failed');
       }
 
       const data = await response.json();
-      await tokenStorage.setToken(data.token);
+      await tokenStorage.setToken(data.session.token);
       setUser(data.user);
       console.log('[Auth] Apple sign in successful');
     } catch (error) {
@@ -184,11 +184,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (token) {
         // Call logout endpoint (optional - for token invalidation)
-        await fetch(`${API_URL}/api/auth/logout`, {
+        await fetch(`${API_URL}/api/auth/sign-out`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
           },
+          body: JSON.stringify({}),
         });
       }
 

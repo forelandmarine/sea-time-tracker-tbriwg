@@ -36,8 +36,8 @@ export default function AuthScreen() {
       return;
     }
 
-    if (password.length < 8) {
-      Alert.alert('Error', 'Password must be at least 8 characters');
+    if (isSignUp && password.length < 6) {
+      Alert.alert('Error', 'Password must be at least 6 characters');
       return;
     }
 
@@ -45,7 +45,7 @@ export default function AuthScreen() {
     try {
       if (isSignUp) {
         console.log('[AuthScreen] User tapped Sign Up button');
-        await signUp(email, password, name);
+        await signUp(email, password, name || 'User');
       } else {
         console.log('[AuthScreen] User tapped Sign In button');
         await signIn(email, password);
@@ -95,7 +95,7 @@ export default function AuthScreen() {
       const API_URL = Constants.expoConfig?.extra?.backendUrl || '';
       
       // Create test user via backend endpoint
-      const response = await fetch(`${API_URL}/api/auth/create-test-user`, {
+      const response = await fetch(`${API_URL}/api/auth/test-user`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -104,40 +104,34 @@ export default function AuthScreen() {
       });
 
       if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error || 'Failed to create test user');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create test user');
       }
 
       const data = await response.json();
-      console.log('[AuthScreen] Test user created:', data.message);
+      console.log('[AuthScreen] Test user response:', data.message);
       
-      // Now sign in with the test credentials
-      await signIn('test@seatime.com', 'testpassword123');
+      // The backend returns a session token, so we can use it directly
+      // Store the token and user
+      const { user, session } = data;
+      
+      // Import token storage from AuthContext
+      const TOKEN_KEY = 'seatime_auth_token';
+      if (Platform.OS === 'web') {
+        localStorage.setItem(TOKEN_KEY, session.token);
+      } else {
+        const SecureStore = await import('expo-secure-store');
+        await SecureStore.setItemAsync(TOKEN_KEY, session.token);
+      }
       
       Alert.alert(
-        'Test Account Created',
-        'Email: test@seatime.com\nPassword: testpassword123\n\nYou are now signed in!',
+        'Test Account Ready',
+        `Email: test@seatime.com\nPassword: testpassword123\n\n${data.message}`,
         [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
       );
     } catch (error: any) {
       console.error('[AuthScreen] Create test user failed:', error);
-      
-      // If user already exists, try to sign in
-      if (error.message?.includes('already exists') || error.message?.includes('unique')) {
-        console.log('[AuthScreen] Test user already exists, attempting sign in');
-        try {
-          await signIn('test@seatime.com', 'testpassword123');
-          Alert.alert(
-            'Test Account',
-            'Signed in with existing test account\n\nEmail: test@seatime.com\nPassword: testpassword123',
-            [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
-          );
-        } catch (signInError) {
-          Alert.alert('Error', 'Failed to sign in with test account');
-        }
-      } else {
-        Alert.alert('Error', error.message || 'Failed to create test user');
-      }
+      Alert.alert('Error', error.message || 'Failed to create test user');
     } finally {
       setLoading(false);
     }
@@ -193,7 +187,7 @@ export default function AuthScreen() {
           <Text style={styles.label}>Password</Text>
           <TextInput
             style={styles.input}
-            placeholder="Minimum 8 characters"
+            placeholder={isSignUp ? "Minimum 6 characters" : "Enter your password"}
             placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
             value={password}
             onChangeText={setPassword}
