@@ -1,0 +1,545 @@
+
+import { colors } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+  useColorScheme,
+  RefreshControl,
+  Platform,
+} from 'react-native';
+import React, { useState, useEffect } from 'react';
+import * as seaTimeApi from '@/utils/seaTimeApi';
+import { useRouter } from 'expo-router';
+
+interface Vessel {
+  id: string;
+  mmsi: string;
+  vessel_name: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+interface SeaTimeEntry {
+  id: string;
+  vessel: Vessel | null;
+  start_time: string;
+  end_time: string | null;
+  duration_hours: number | null;
+  status: 'pending' | 'confirmed' | 'rejected';
+  notes: string | null;
+  created_at: string;
+}
+
+export default function ConfirmationsScreen() {
+  const router = useRouter();
+  const [pendingEntries, setPendingEntries] = useState<SeaTimeEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const styles = createStyles(isDark);
+
+  useEffect(() => {
+    console.log('ConfirmationsScreen: Loading pending entries');
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      console.log('Fetching pending entries from API...');
+      const entriesData = await seaTimeApi.getPendingEntries();
+      setPendingEntries(entriesData);
+      console.log('Pending entries loaded:', entriesData.length);
+    } catch (error: any) {
+      console.error('Failed to load pending entries:', error);
+      Alert.alert('Error', 'Failed to load pending entries: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    console.log('User refreshing pending entries');
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const handleConfirmEntry = async (entryId: string) => {
+    Alert.alert(
+      'Confirm Sea Time',
+      'Confirm this sea time entry?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            try {
+              console.log('User confirming entry:', entryId);
+              await seaTimeApi.confirmSeaTimeEntry(entryId);
+              await loadData();
+              Alert.alert('Success', 'Sea time entry confirmed');
+            } catch (error: any) {
+              console.error('Failed to confirm entry:', error);
+              Alert.alert('Error', 'Failed to confirm entry: ' + error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleRejectEntry = async (entryId: string) => {
+    Alert.alert(
+      'Reject Sea Time',
+      'Reject this sea time entry?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reject',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('User rejecting entry:', entryId);
+              await seaTimeApi.rejectSeaTimeEntry(entryId);
+              await loadData();
+              Alert.alert('Success', 'Sea time entry rejected');
+            } catch (error: any) {
+              console.error('Failed to reject entry:', error);
+              Alert.alert('Error', 'Failed to reject entry: ' + error.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'confirmed':
+        return colors.success;
+      case 'rejected':
+        return colors.error;
+      case 'pending':
+        return colors.warning;
+      default:
+        return isDark ? colors.textSecondary : colors.textSecondaryLight;
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Pending Confirmations</Text>
+        <Text style={styles.headerSubtitle}>
+          Review and confirm your sea time entries
+        </Text>
+      </View>
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {pendingEntries.length === 0 ? (
+          <View style={styles.emptyState}>
+            <IconSymbol
+              ios_icon_name="checkmark.circle"
+              android_material_icon_name="check-circle"
+              size={64}
+              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+            />
+            <Text style={styles.emptyText}>No Pending Confirmations</Text>
+            <Text style={styles.emptySubtext}>
+              All sea time entries have been reviewed
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.entriesContainer}>
+            {pendingEntries.map((entry, index) => {
+              // Check if vessel exists before rendering
+              if (!entry.vessel) {
+                console.warn('Entry has no vessel data:', entry.id);
+                return null;
+              }
+
+              return (
+                <React.Fragment key={index}>
+                  <View key={entry.id} style={styles.entryCard}>
+                    {/* Vessel Name Header */}
+                    <View style={styles.entryHeader}>
+                      <View style={styles.vesselInfo}>
+                        <IconSymbol
+                          ios_icon_name="ferry"
+                          android_material_icon_name="directions-boat"
+                          size={24}
+                          color={colors.primary}
+                        />
+                        <View style={styles.vesselTextInfo}>
+                          <Text style={styles.vesselName}>{entry.vessel.vessel_name}</Text>
+                          <Text style={styles.vesselMmsi}>MMSI: {entry.vessel.mmsi}</Text>
+                        </View>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(entry.status) + '20' }]}>
+                        <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
+                          {entry.status}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Time Information */}
+                    <View style={styles.timeSection}>
+                      <View style={styles.timeRow}>
+                        <View style={styles.timeLabel}>
+                          <IconSymbol
+                            ios_icon_name="clock"
+                            android_material_icon_name="schedule"
+                            size={16}
+                            color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                          />
+                          <Text style={styles.timeLabelText}>Start</Text>
+                        </View>
+                        <View style={styles.timeValue}>
+                          <Text style={styles.timeDate}>{formatDate(entry.start_time)}</Text>
+                          <Text style={styles.timeTime}>{formatTime(entry.start_time)}</Text>
+                        </View>
+                      </View>
+
+                      {entry.end_time && (
+                        <View style={styles.timeRow}>
+                          <View style={styles.timeLabel}>
+                            <IconSymbol
+                              ios_icon_name="clock.fill"
+                              android_material_icon_name="schedule"
+                              size={16}
+                              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                            />
+                            <Text style={styles.timeLabelText}>End</Text>
+                          </View>
+                          <View style={styles.timeValue}>
+                            <Text style={styles.timeDate}>{formatDate(entry.end_time)}</Text>
+                            <Text style={styles.timeTime}>{formatTime(entry.end_time)}</Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Duration */}
+                    {entry.duration_hours !== null && (
+                      <View style={styles.durationSection}>
+                        <View style={styles.durationCard}>
+                          <IconSymbol
+                            ios_icon_name="timer"
+                            android_material_icon_name="access-time"
+                            size={20}
+                            color={colors.primary}
+                          />
+                          <View style={styles.durationInfo}>
+                            <Text style={styles.durationLabel}>Total Duration</Text>
+                            <Text style={styles.durationValue}>
+                              {entry.duration_hours.toFixed(1)} hours
+                            </Text>
+                            <Text style={styles.durationDays}>
+                              ({(entry.duration_hours / 24).toFixed(2)} days)
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Notes */}
+                    {entry.notes && (
+                      <View style={styles.notesSection}>
+                        <Text style={styles.notesLabel}>Notes:</Text>
+                        <Text style={styles.notesText}>{entry.notes}</Text>
+                      </View>
+                    )}
+
+                    {/* Action Buttons */}
+                    <View style={styles.actionButtons}>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.confirmButton]}
+                        onPress={() => handleConfirmEntry(entry.id)}
+                      >
+                        <IconSymbol
+                          ios_icon_name="checkmark.circle.fill"
+                          android_material_icon_name="check-circle"
+                          size={20}
+                          color="#fff"
+                        />
+                        <Text style={styles.actionButtonText}>Confirm</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.rejectButton]}
+                        onPress={() => handleRejectEntry(entry.id)}
+                      >
+                        <IconSymbol
+                          ios_icon_name="xmark.circle.fill"
+                          android_material_icon_name="cancel"
+                          size={20}
+                          color="#fff"
+                        />
+                        <Text style={styles.actionButtonText}>Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </React.Fragment>
+              );
+            })}
+          </View>
+        )}
+      </ScrollView>
+    </View>
+  );
+}
+
+function createStyles(isDark: boolean) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+    },
+    loadingText: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    },
+    header: {
+      padding: 20,
+      paddingTop: Platform.OS === 'android' ? 48 : 20,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
+    },
+    headerTitle: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    headerSubtitle: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 4,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    scrollContent: {
+      padding: 16,
+      paddingBottom: 100,
+    },
+    entriesContainer: {
+      gap: 16,
+    },
+    entryCard: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 16,
+      padding: 16,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.warning,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    entryHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    vesselInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      flex: 1,
+    },
+    vesselTextInfo: {
+      flex: 1,
+    },
+    vesselName: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    vesselMmsi: {
+      fontSize: 12,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 2,
+    },
+    statusBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 6,
+    },
+    statusText: {
+      fontSize: 11,
+      fontWeight: 'bold',
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+    },
+    timeSection: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 12,
+      gap: 8,
+    },
+    timeRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    timeLabel: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    timeLabelText: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      fontWeight: '500',
+    },
+    timeValue: {
+      alignItems: 'flex-end',
+    },
+    timeDate: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    timeTime: {
+      fontSize: 12,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 2,
+    },
+    durationSection: {
+      marginBottom: 12,
+    },
+    durationCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primary + '10',
+      borderRadius: 12,
+      padding: 12,
+      gap: 12,
+    },
+    durationInfo: {
+      flex: 1,
+    },
+    durationLabel: {
+      fontSize: 12,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 2,
+    },
+    durationValue: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: colors.primary,
+    },
+    durationDays: {
+      fontSize: 12,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 2,
+    },
+    notesSection: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 12,
+      padding: 12,
+      marginBottom: 12,
+    },
+    notesLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 4,
+    },
+    notesText: {
+      fontSize: 14,
+      color: isDark ? colors.text : colors.textLight,
+      lineHeight: 20,
+    },
+    actionButtons: {
+      flexDirection: 'row',
+      gap: 10,
+    },
+    actionButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 14,
+      borderRadius: 10,
+      gap: 8,
+    },
+    confirmButton: {
+      backgroundColor: colors.success,
+    },
+    rejectButton: {
+      backgroundColor: colors.error,
+    },
+    actionButtonText: {
+      color: '#fff',
+      fontWeight: 'bold',
+      fontSize: 15,
+    },
+    emptyState: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 80,
+      paddingHorizontal: 40,
+    },
+    emptyText: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: isDark ? colors.text : colors.textLight,
+      marginTop: 16,
+      textAlign: 'center',
+    },
+    emptySubtext: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 8,
+      textAlign: 'center',
+    },
+  });
+}
