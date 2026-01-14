@@ -284,13 +284,16 @@ export default function VesselDetailScreen() {
     }
   };
 
-  const calculateTotalHours = () => {
-    return entries
-      .filter((e) => e.status === 'confirmed' && e.duration_hours)
-      .reduce((sum, e) => sum + (e.duration_hours || 0), 0);
+  const calculateTotalHours = (): number => {
+    const total = entries
+      .filter((e) => e.status === 'confirmed' && e.duration_hours !== null && e.duration_hours !== undefined)
+      .reduce((sum, e) => sum + (Number(e.duration_hours) || 0), 0);
+    
+    console.log('[VesselDetailScreen] calculateTotalHours result:', total);
+    return total || 0;
   };
 
-  const calculateTotalDays = () => {
+  const calculateTotalDays = (): number => {
     const hours = calculateTotalHours();
     return Math.floor(hours / 24);
   };
@@ -330,6 +333,8 @@ export default function VesselDetailScreen() {
   }
 
   const groupedEntries = groupEntriesByDate();
+  const totalHours = calculateTotalHours();
+  const totalDays = calculateTotalDays();
 
   return (
     <View style={styles.container}>
@@ -353,11 +358,11 @@ export default function VesselDetailScreen() {
 
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{calculateTotalDays()}</Text>
+            <Text style={styles.statValue}>{totalDays}</Text>
             <Text style={styles.statLabel}>Total Days</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{calculateTotalHours().toFixed(1)}</Text>
+            <Text style={styles.statValue}>{totalHours.toFixed(1)}</Text>
             <Text style={styles.statLabel}>Total Hours</Text>
           </View>
           <View style={styles.statCard}>
@@ -415,10 +420,10 @@ export default function VesselDetailScreen() {
                           End: {formatDateTime(entry.end_time)}
                         </Text>
                       )}
-                      {entry.duration_hours && (
+                      {entry.duration_hours !== null && entry.duration_hours !== undefined && (
                         <Text style={styles.entryDetailText}>
-                          Duration: {entry.duration_hours} hours (
-                          {(entry.duration_hours / 24).toFixed(2)} days)
+                          Duration: {Number(entry.duration_hours).toFixed(1)} hours (
+                          {(Number(entry.duration_hours) / 24).toFixed(2)} days)
                         </Text>
                       )}
                       {entry.notes && (
@@ -449,7 +454,7 @@ export default function VesselDetailScreen() {
                           <View style={styles.coordinateRow}>
                             <Text style={styles.coordinateLabel}>Start:</Text>
                             <Text style={styles.coordinateValue}>
-                              {entry.start_latitude.toFixed(6)}°, {entry.start_longitude.toFixed(6)}°
+                              {Number(entry.start_latitude).toFixed(6)}°, {Number(entry.start_longitude).toFixed(6)}°
                             </Text>
                           </View>
                         )}
@@ -459,7 +464,7 @@ export default function VesselDetailScreen() {
                           <View style={styles.coordinateRow}>
                             <Text style={styles.coordinateLabel}>End:</Text>
                             <Text style={styles.coordinateValue}>
-                              {entry.end_latitude.toFixed(6)}°, {entry.end_longitude.toFixed(6)}°
+                              {Number(entry.end_latitude).toFixed(6)}°, {Number(entry.end_longitude).toFixed(6)}°
                             </Text>
                           </View>
                         )}
