@@ -1,215 +1,205 @@
-/**
- * Authentication Context Template
- *
- * Provides authentication state and methods throughout the app.
- * Supports:
- * - Email/password authentication
- * - Social auth (Google, Apple, GitHub) with popup flow for web
- * - Session management
- * - User state
- *
- * Usage:
- * 1. Update imports to match your auth-client.ts path
- * 2. Wrap your app with <AuthProvider>
- * 3. Use useAuth() hook in components to access auth methods
- * 4. Customize user type and auth methods as needed
- */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { Platform } from "react-native";
-import { authClient, storeWebBearerToken } from "@/lib/auth";
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-// User type - customize based on your backend
+const API_URL = Constants.expoConfig?.extra?.backendUrl || '';
+const TOKEN_KEY = 'seatime_auth_token';
+
 interface User {
   id: string;
   email: string;
   name?: string;
-  image?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (email: string, password: string, name?: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
-  signInWithApple: () => Promise<void>;
-  signInWithGitHub: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (email: string, password: string, name?: string) => Promise<void>;
+  signInWithApple: (identityToken: string, appleUser?: any) => Promise<void>;
   signOut: () => Promise<void>;
-  fetchUser: () => Promise<void>;
+  isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/**
- * Opens OAuth popup for web-based social authentication
- * Returns a promise that resolves with the token
- */
-function openOAuthPopup(provider: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const popupUrl = `${window.location.origin}/auth-popup?provider=${provider}`;
-    const width = 500;
-    const height = 600;
-    const left = window.screenX + (window.outerWidth - width) / 2;
-    const top = window.screenY + (window.outerHeight - height) / 2;
-
-    const popup = window.open(
-      popupUrl,
-      "oauth-popup",
-      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes`
-    );
-
-    if (!popup) {
-      reject(new Error("Failed to open popup. Please allow popups."));
-      return;
+// Platform-specific token storage
+const tokenStorage = {
+  async getToken(): Promise<string | null> {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(TOKEN_KEY);
     }
-
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === "oauth-success" && event.data?.token) {
-        window.removeEventListener("message", handleMessage);
-        clearInterval(checkClosed);
-        resolve(event.data.token);
-      } else if (event.data?.type === "oauth-error") {
-        window.removeEventListener("message", handleMessage);
-        clearInterval(checkClosed);
-        reject(new Error(event.data.error || "OAuth failed"));
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-
-    // Check if popup was closed manually
-    const checkClosed = setInterval(() => {
-      if (popup.closed) {
-        clearInterval(checkClosed);
-        window.removeEventListener("message", handleMessage);
-        reject(new Error("Authentication cancelled"));
-      }
-    }, 500);
-  });
-}
+    return await SecureStore.getItemAsync(TOKEN_KEY);
+  },
+  
+  async setToken(token: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(TOKEN_KEY, token);
+    } else {
+      await SecureStore.setItemAsync(TOKEN_KEY, token);
+    }
+  },
+  
+  async removeToken(): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(TOKEN_KEY);
+    } else {
+      await SecureStore.deleteItemAsync(TOKEN_KEY);
+    }
+  },
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch current user on mount
+  // Check for existing session on mount
   useEffect(() => {
-    fetchUser();
+    checkAuth();
   }, []);
 
-  const fetchUser = async () => {
+  const checkAuth = async () => {
     try {
-      setLoading(true);
-      const session = await authClient.getSession();
-      if (session?.user) {
-        setUser(session.user as User);
+      console.log('[Auth] Checking authentication status...');
+      const token = await tokenStorage.getToken();
+      
+      if (!token) {
+        console.log('[Auth] No token found');
+        setLoading(false);
+        return;
+      }
+
+      // Verify token with backend
+      const response = await fetch(`${API_URL}/api/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('[Auth] User authenticated:', data.user.email);
+        setUser(data.user);
       } else {
+        console.log('[Auth] Token invalid, clearing...');
+        await tokenStorage.removeToken();
         setUser(null);
       }
     } catch (error) {
-      console.error("Failed to fetch user:", error);
+      console.error('[Auth] Check auth failed:', error);
+      await tokenStorage.removeToken();
       setUser(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const signInWithEmail = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string) => {
     try {
-      await authClient.signIn.email({ email, password });
-      await fetchUser();
-    } catch (error) {
-      console.error("Email sign in failed:", error);
-      throw error;
-    }
-  };
-
-  const signUpWithEmail = async (email: string, password: string, name?: string) => {
-    try {
-      await authClient.signUp.email({
-        email,
-        password,
-        name,
-        callbackURL: "/profile", // TODO: Update redirect URL
+      console.log('[Auth] Signing in:', email);
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password }),
       });
-      await fetchUser();
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Login failed');
+      }
+
+      const data = await response.json();
+      await tokenStorage.setToken(data.token);
+      setUser(data.user);
+      console.log('[Auth] Sign in successful');
     } catch (error) {
-      console.error("Email sign up failed:", error);
+      console.error('[Auth] Sign in failed:', error);
       throw error;
     }
   };
 
-  const signInWithGoogle = async () => {
+  const signUp = async (email: string, password: string, name?: string) => {
     try {
-      if (Platform.OS === "web") {
-        // Web: Use popup flow to avoid cross-origin issues
-        const token = await openOAuthPopup("google");
-        storeWebBearerToken(token);
-        await fetchUser();
-      } else {
-        // Native: Use deep linking (handled by Better Auth)
-        await authClient.signIn.social({
-          provider: "google",
-          callbackURL: "/profile", // TODO: Update redirect URL
-        });
-        await fetchUser();
+      console.log('[Auth] Signing up:', email);
+      const response = await fetch(`${API_URL}/api/auth/register`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password, name }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Registration failed');
       }
+
+      const data = await response.json();
+      await tokenStorage.setToken(data.token);
+      setUser(data.user);
+      console.log('[Auth] Sign up successful');
     } catch (error) {
-      console.error("Google sign in failed:", error);
+      console.error('[Auth] Sign up failed:', error);
       throw error;
     }
   };
 
-  const signInWithApple = async () => {
+  const signInWithApple = async (identityToken: string, appleUser?: any) => {
     try {
-      if (Platform.OS === "web") {
-        // Web: Use popup flow
-        const token = await openOAuthPopup("apple");
-        storeWebBearerToken(token);
-        await fetchUser();
-      } else {
-        // Native: Use deep linking
-        await authClient.signIn.social({
-          provider: "apple",
-          callbackURL: "/profile", // TODO: Update redirect URL
-        });
-        await fetchUser();
-      }
-    } catch (error) {
-      console.error("Apple sign in failed:", error);
-      throw error;
-    }
-  };
+      console.log('[Auth] Signing in with Apple');
+      const response = await fetch(`${API_URL}/api/auth/apple`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          identityToken,
+          user: appleUser,
+        }),
+      });
 
-  const signInWithGitHub = async () => {
-    try {
-      if (Platform.OS === "web") {
-        // Web: Use popup flow
-        const token = await openOAuthPopup("github");
-        storeWebBearerToken(token);
-        await fetchUser();
-      } else {
-        // Native: Use deep linking
-        await authClient.signIn.social({
-          provider: "github",
-          callbackURL: "/profile", // TODO: Update redirect URL
-        });
-        await fetchUser();
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Apple sign in failed');
       }
+
+      const data = await response.json();
+      await tokenStorage.setToken(data.token);
+      setUser(data.user);
+      console.log('[Auth] Apple sign in successful');
     } catch (error) {
-      console.error("GitHub sign in failed:", error);
+      console.error('[Auth] Apple sign in failed:', error);
       throw error;
     }
   };
 
   const signOut = async () => {
     try {
-      await authClient.signOut();
+      console.log('[Auth] Signing out');
+      const token = await tokenStorage.getToken();
+      
+      if (token) {
+        // Call logout endpoint (optional - for token invalidation)
+        await fetch(`${API_URL}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+      }
+
+      await tokenStorage.removeToken();
       setUser(null);
+      console.log('[Auth] Sign out successful');
     } catch (error) {
-      console.error("Sign out failed:", error);
-      throw error;
+      console.error('[Auth] Sign out failed:', error);
+      // Still clear local state even if API call fails
+      await tokenStorage.removeToken();
+      setUser(null);
     }
   };
 
@@ -218,13 +208,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         loading,
-        signInWithEmail,
-        signUpWithEmail,
-        signInWithGoogle,
+        signIn,
+        signUp,
         signInWithApple,
-        signInWithGitHub,
         signOut,
-        fetchUser,
+        isAuthenticated: !!user,
       }}
     >
       {children}
@@ -232,14 +220,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-/**
- * Hook to access auth context
- * Must be used within AuthProvider
- */
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error("useAuth must be used within AuthProvider");
+    throw new Error('useAuth must be used within AuthProvider');
   }
   return context;
 }

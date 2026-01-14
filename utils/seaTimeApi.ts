@@ -1,11 +1,14 @@
 
 import Constants from 'expo-constants';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || '';
+const TOKEN_KEY = 'seatime_auth_token';
 
 // Log the backend URL for debugging
 console.log('[SeaTimeAPI] Backend URL configured:', API_BASE_URL);
-console.log('[SeaTimeAPI] No authentication required - all endpoints are public');
+console.log('[SeaTimeAPI] Authentication enabled - all endpoints require auth token');
 
 export interface Vessel {
   id: string;
@@ -88,20 +91,33 @@ function checkBackendConfigured() {
   }
 }
 
-// Helper function to get API headers
-function getApiHeaders(): HeadersInit {
+// Helper function to get auth token
+async function getAuthToken(): Promise<string | null> {
+  if (Platform.OS === 'web') {
+    return localStorage.getItem(TOKEN_KEY);
+  }
+  return await SecureStore.getItemAsync(TOKEN_KEY);
+}
+
+// Helper function to get API headers with auth token
+async function getApiHeaders(): Promise<HeadersInit> {
+  const token = await getAuthToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
   };
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   
   return headers;
 }
 
 // Helper function to get fetch options
-function getFetchOptions(method: string = 'GET', body?: any): RequestInit {
+async function getFetchOptions(method: string = 'GET', body?: any): Promise<RequestInit> {
   const options: RequestInit = {
     method,
-    headers: getApiHeaders(),
+    headers: await getApiHeaders(),
   };
   
   if (body) {
@@ -116,7 +132,7 @@ export async function getVessels(): Promise<Vessel[]> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels`;
   console.log('[API] Fetching vessels:', url);
-  const response = await fetch(url, getFetchOptions());
+  const response = await fetch(url, await getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to fetch vessels:', response.status, errorText);
@@ -131,7 +147,7 @@ export async function createVessel(mmsi: string, vessel_name: string, is_active?
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels`;
   console.log('[API] Creating vessel:', { mmsi, vessel_name, is_active });
-  const response = await fetch(url, getFetchOptions('POST', { mmsi, vessel_name, is_active }));
+  const response = await fetch(url, await getFetchOptions('POST', { mmsi, vessel_name, is_active }));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to create vessel:', response.status, errorText);
@@ -146,7 +162,7 @@ export async function activateVessel(vesselId: string): Promise<Vessel> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels/${vesselId}/activate`;
   console.log('[API] Activating vessel:', vesselId);
-  const response = await fetch(url, getFetchOptions('PUT', {}));
+  const response = await fetch(url, await getFetchOptions('PUT', {}));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to activate vessel:', response.status, errorText);
@@ -161,7 +177,7 @@ export async function deleteVessel(vesselId: string): Promise<{ success: boolean
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels/${vesselId}`;
   console.log('[API] Deleting vessel:', vesselId);
-  const response = await fetch(url, getFetchOptions('DELETE'));
+  const response = await fetch(url, await getFetchOptions('DELETE'));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to delete vessel:', response.status, errorText);
@@ -175,7 +191,7 @@ export async function getVesselSeaTime(vesselId: string): Promise<SeaTimeEntry[]
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels/${vesselId}/sea-time`;
   console.log('[API] Fetching sea time for vessel:', vesselId);
-  const response = await fetch(url, getFetchOptions());
+  const response = await fetch(url, await getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to fetch vessel sea time:', response.status, errorText);
@@ -191,7 +207,7 @@ export async function checkVesselAIS(vesselId: string): Promise<AISCheckResult> 
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/check/${vesselId}`;
   console.log('[API] Checking vessel AIS:', vesselId);
-  const response = await fetch(url, getFetchOptions('POST', {}));
+  const response = await fetch(url, await getFetchOptions('POST', {}));
   
   if (!response.ok) {
     let errorMessage = 'Failed to check vessel AIS';
@@ -237,7 +253,7 @@ export async function getVesselAISStatus(vesselId: string): Promise<AISStatus> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/status/${vesselId}`;
   console.log('[API] Getting vessel AIS status:', vesselId);
-  const response = await fetch(url, getFetchOptions());
+  const response = await fetch(url, await getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to get vessel AIS status:', response.status, errorText);
@@ -268,7 +284,7 @@ export async function getVesselAISLocation(vesselId: string, extended: boolean =
   const params = extended ? '?extended=true' : '';
   const url = `${API_BASE_URL}/api/ais/check/${vesselId}${params}`;
   console.log('[API] Getting vessel AIS location data:', vesselId, 'extended:', extended);
-  const response = await fetch(url, getFetchOptions());
+  const response = await fetch(url, await getFetchOptions());
   
   if (!response.ok) {
     let errorMessage = 'Failed to get vessel AIS location';
@@ -313,7 +329,7 @@ export async function scheduleAISChecks(vesselId: string, intervalHours: number 
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/schedule-check`;
   console.log('[API] Scheduling AIS checks for vessel:', vesselId, 'every', intervalHours, 'hours');
-  const response = await fetch(url, getFetchOptions('POST', { vessel_id: vesselId, interval_hours: intervalHours }));
+  const response = await fetch(url, await getFetchOptions('POST', { vessel_id: vesselId, interval_hours: intervalHours }));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to schedule AIS checks:', response.status, errorText);
@@ -330,7 +346,7 @@ export async function getScheduledTasks(): Promise<ScheduledTask[]> {
   console.log('[API] Fetching scheduled tasks');
   
   try {
-    const response = await fetch(url, getFetchOptions());
+    const response = await fetch(url, await getFetchOptions());
     if (!response.ok) {
       if (response.status === 404) {
         console.warn('[API] Scheduled tasks endpoint not found (404) - feature may not be implemented yet');
@@ -356,7 +372,7 @@ export async function toggleScheduledTask(taskId: string, isActive: boolean): Pr
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/scheduled-tasks/${taskId}/toggle`;
   console.log('[API] Toggling scheduled task:', taskId, isActive);
-  const response = await fetch(url, getFetchOptions('PUT', { is_active: isActive }));
+  const response = await fetch(url, await getFetchOptions('PUT', { is_active: isActive }));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to toggle scheduled task:', response.status, errorText);
@@ -372,7 +388,7 @@ export async function getAISDebugLogs(vesselId: string): Promise<AISDebugLog[]> 
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/ais/debug/${vesselId}`;
   console.log('[API] Fetching AIS debug logs for vessel:', vesselId);
-  const response = await fetch(url, getFetchOptions());
+  const response = await fetch(url, await getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to fetch debug logs:', response.status, errorText);
@@ -388,7 +404,7 @@ export async function getSeaTimeEntries(): Promise<SeaTimeEntry[]> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time`;
   console.log('[API] Fetching sea time entries:', url);
-  const response = await fetch(url, getFetchOptions());
+  const response = await fetch(url, await getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to fetch sea time entries:', response.status, errorText);
@@ -403,7 +419,7 @@ export async function getPendingEntries(): Promise<SeaTimeEntry[]> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/pending`;
   console.log('[API] Fetching pending entries:', url);
-  const response = await fetch(url, getFetchOptions());
+  const response = await fetch(url, await getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to fetch pending entries:', response.status, errorText);
@@ -418,7 +434,7 @@ export async function confirmSeaTimeEntry(entryId: string, notes?: string): Prom
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/${entryId}/confirm`;
   console.log('[API] Confirming sea time entry:', entryId, notes);
-  const response = await fetch(url, getFetchOptions('PUT', { notes: notes || undefined }));
+  const response = await fetch(url, await getFetchOptions('PUT', { notes: notes || undefined }));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to confirm entry:', response.status, errorText);
@@ -433,7 +449,7 @@ export async function rejectSeaTimeEntry(entryId: string, notes?: string): Promi
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/${entryId}/reject`;
   console.log('[API] Rejecting sea time entry:', entryId, notes);
-  const response = await fetch(url, getFetchOptions('PUT', { notes: notes || undefined }));
+  const response = await fetch(url, await getFetchOptions('PUT', { notes: notes || undefined }));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to reject entry:', response.status, errorText);
@@ -448,7 +464,7 @@ export async function deleteSeaTimeEntry(entryId: string): Promise<{ success: bo
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/${entryId}`;
   console.log('[API] Deleting sea time entry:', entryId);
-  const response = await fetch(url, getFetchOptions('DELETE', {}));
+  const response = await fetch(url, await getFetchOptions('DELETE', {}));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to delete entry:', response.status, errorText);
@@ -468,7 +484,7 @@ export async function getReportSummary(startDate?: string, endDate?: string): Pr
   
   const url = `${API_BASE_URL}/api/reports/summary${params.toString() ? '?' + params.toString() : ''}`;
   console.log('[API] Fetching report summary:', url);
-  const response = await fetch(url, getFetchOptions());
+  const response = await fetch(url, await getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to fetch report summary:', response.status, errorText);
@@ -485,7 +501,7 @@ export async function downloadCSVReport(startDate?: string, endDate?: string): P
   
   const url = `${API_BASE_URL}/api/reports/csv${params.toString() ? '?' + params.toString() : ''}`;
   console.log('[API] Downloading CSV report:', url);
-  const response = await fetch(url, getFetchOptions());
+  const response = await fetch(url, await getFetchOptions());
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to download CSV report:', response.status, errorText);
@@ -499,7 +515,7 @@ export async function createTestSeaDayEntry(): Promise<SeaTimeEntry> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/sea-time/test-entry`;
   console.log('[API] Creating test sea day entry from Norwegian position records');
-  const response = await fetch(url, getFetchOptions('POST', {}));
+  const response = await fetch(url, await getFetchOptions('POST', {}));
   
   if (!response.ok) {
     let errorMessage = 'Failed to create test sea day entry';

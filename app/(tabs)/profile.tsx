@@ -16,6 +16,8 @@ import {
   Share,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
+import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'expo-router';
 
 interface ReportSummary {
   total_hours: number;
@@ -57,6 +59,33 @@ function createStyles(isDark: boolean) {
       fontSize: 16,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
+    },
+    userCard: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      flexDirection: 'row',
+      alignItems: 'center',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    userInfo: {
+      flex: 1,
+      marginLeft: 12,
+    },
+    userName: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 4,
+    },
+    userEmail: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
     summaryCard: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
@@ -146,6 +175,14 @@ function createStyles(isDark: boolean) {
       fontSize: 16,
       fontWeight: '600',
     },
+    signOutButton: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderWidth: 1,
+      borderColor: colors.error,
+    },
+    signOutButtonText: {
+      color: colors.error,
+    },
     emptyState: {
       alignItems: 'center',
       justifyContent: 'center',
@@ -163,7 +200,7 @@ function createStyles(isDark: boolean) {
       padding: 16,
       marginBottom: 16,
       borderLeftWidth: 4,
-      borderLeftColor: colors.primary,
+      borderLeftColor: colors.success,
     },
     infoText: {
       fontSize: 14,
@@ -177,6 +214,8 @@ export default function ReportsScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
+  const { user, signOut } = useAuth();
+  const router = useRouter();
 
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -249,6 +288,34 @@ export default function ReportsScreen() {
     }
   };
 
+  const handleSignOut = async () => {
+    console.log('User tapped Sign Out button');
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await signOut();
+              console.log('User signed out, navigating to auth screen');
+              router.replace('/auth');
+            } catch (error) {
+              console.error('Sign out failed:', error);
+              Alert.alert('Error', 'Failed to sign out');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
@@ -276,9 +343,24 @@ export default function ReportsScreen() {
         </Text>
       </View>
 
+      {user && (
+        <View style={styles.userCard}>
+          <IconSymbol
+            ios_icon_name="person.circle.fill"
+            android_material_icon_name="account-circle"
+            size={48}
+            color={colors.primary}
+          />
+          <View style={styles.userInfo}>
+            <Text style={styles.userName}>{user.name || 'Seafarer'}</Text>
+            <Text style={styles.userEmail}>{user.email}</Text>
+          </View>
+        </View>
+      )}
+
       <View style={styles.infoCard}>
         <Text style={styles.infoText}>
-          📊 No authentication required - all your data is stored locally and accessible anytime.
+          🔒 Your data is private and secure. All sea time records are tied to your account and protected by iOS-compliant authentication.
         </Text>
       </View>
 
@@ -343,6 +425,13 @@ export default function ReportsScreen() {
           </Text>
         </View>
       )}
+
+      <TouchableOpacity 
+        style={[styles.button, styles.signOutButton]} 
+        onPress={handleSignOut}
+      >
+        <Text style={[styles.buttonText, styles.signOutButtonText]}>Sign Out</Text>
+      </TouchableOpacity>
     </ScrollView>
   );
 }
