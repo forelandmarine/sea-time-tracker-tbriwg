@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   View,
@@ -283,12 +283,7 @@ export default function DebugScreen() {
   const styles = createStyles(isDark);
   const router = useRouter();
 
-  useEffect(() => {
-    console.log('[DebugScreen] Loading debug logs for vessel:', vesselId);
-    loadLogs();
-  }, [vesselId]);
-
-  const loadLogs = async () => {
+  const loadLogs = useCallback(async () => {
     try {
       const debugLogs = await seaTimeApi.getAISDebugLogs(vesselId);
       console.log('[DebugScreen] Debug logs loaded:', debugLogs.length);
@@ -302,7 +297,12 @@ export default function DebugScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [vesselId]);
+
+  useEffect(() => {
+    console.log('[DebugScreen] Loading debug logs for vessel:', vesselId);
+    loadLogs();
+  }, [loadLogs]);
 
   const onRefresh = () => {
     console.log('[DebugScreen] User initiated refresh');
