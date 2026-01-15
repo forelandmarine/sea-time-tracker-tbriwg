@@ -102,6 +102,15 @@ export interface UserProfile {
   updatedAt: string;
 }
 
+// Helper function to normalize vessel data from API response
+// Handles both 'type' and 'vessel_type' field names
+function normalizeVessel(vessel: any): Vessel {
+  return {
+    ...vessel,
+    vessel_type: vessel.vessel_type || vessel.type || undefined,
+  };
+}
+
 // Helper function to check if backend is configured
 function checkBackendConfigured() {
   if (!API_BASE_URL) {
@@ -229,7 +238,8 @@ export async function getVessels(): Promise<Vessel[]> {
   }
   const data = await response.json();
   console.log('[API] Vessels fetched:', data.length);
-  return data;
+  // Normalize vessel data to ensure vessel_type field is present
+  return data.map(normalizeVessel);
 }
 
 export async function createVessel(
@@ -254,7 +264,7 @@ export async function createVessel(
   // Add optional fields if provided
   if (flag) body.flag = flag;
   if (official_number) body.official_number = official_number;
-  if (vessel_type) body.vessel_type = vessel_type;
+  if (vessel_type) body.type = vessel_type; // Send as 'type' to backend
   if (length_metres !== undefined) body.length_metres = length_metres;
   if (gross_tonnes !== undefined) body.gross_tonnes = gross_tonnes;
   
@@ -267,7 +277,7 @@ export async function createVessel(
   }
   const data = await response.json();
   console.log('[API] Vessel created:', data);
-  return data;
+  return normalizeVessel(data);
 }
 
 export async function updateVesselParticulars(
@@ -291,7 +301,7 @@ export async function updateVesselParticulars(
   }
   const data = await response.json();
   console.log('[API] Vessel particulars updated:', data);
-  return data;
+  return normalizeVessel(data);
 }
 
 export async function activateVessel(vesselId: string): Promise<Vessel> {
@@ -306,7 +316,7 @@ export async function activateVessel(vesselId: string): Promise<Vessel> {
   }
   const data = await response.json();
   console.log('[API] Vessel activated:', data);
-  return data;
+  return normalizeVessel(data);
 }
 
 export async function deleteVessel(vesselId: string): Promise<{ success: boolean }> {
@@ -335,7 +345,11 @@ export async function getVesselSeaTime(vesselId: string): Promise<SeaTimeEntry[]
   }
   const data = await response.json();
   console.log('[API] Vessel sea time entries fetched:', data.length);
-  return data;
+  // Normalize vessel data in each entry
+  return data.map((entry: any) => ({
+    ...entry,
+    vessel: normalizeVessel(entry.vessel),
+  }));
 }
 
 // AIS Tracking
@@ -548,7 +562,11 @@ export async function getSeaTimeEntries(): Promise<SeaTimeEntry[]> {
   }
   const data = await response.json();
   console.log('[API] Sea time entries fetched:', data.length);
-  return data;
+  // Normalize vessel data in each entry
+  return data.map((entry: any) => ({
+    ...entry,
+    vessel: entry.vessel ? normalizeVessel(entry.vessel) : null,
+  }));
 }
 
 export async function getPendingEntries(): Promise<SeaTimeEntry[]> {
@@ -563,7 +581,11 @@ export async function getPendingEntries(): Promise<SeaTimeEntry[]> {
   }
   const data = await response.json();
   console.log('[API] Pending entries fetched:', data.length);
-  return data;
+  // Normalize vessel data in each entry
+  return data.map((entry: any) => ({
+    ...entry,
+    vessel: entry.vessel ? normalizeVessel(entry.vessel) : null,
+  }));
 }
 
 export async function confirmSeaTimeEntry(entryId: string, notes?: string): Promise<SeaTimeEntry> {
@@ -578,7 +600,10 @@ export async function confirmSeaTimeEntry(entryId: string, notes?: string): Prom
   }
   const data = await response.json();
   console.log('[API] Entry confirmed:', data);
-  return data;
+  return {
+    ...data,
+    vessel: data.vessel ? normalizeVessel(data.vessel) : null,
+  };
 }
 
 export async function rejectSeaTimeEntry(entryId: string, notes?: string): Promise<SeaTimeEntry> {
@@ -593,7 +618,10 @@ export async function rejectSeaTimeEntry(entryId: string, notes?: string): Promi
   }
   const data = await response.json();
   console.log('[API] Entry rejected:', data);
-  return data;
+  return {
+    ...data,
+    vessel: data.vessel ? normalizeVessel(data.vessel) : null,
+  };
 }
 
 export async function deleteSeaTimeEntry(entryId: string): Promise<{ success: boolean }> {
@@ -709,5 +737,8 @@ export async function createTestSeaDayEntry(): Promise<SeaTimeEntry> {
   
   const data = await response.json();
   console.log('[API] Test sea day entry created successfully:', data);
-  return data;
+  return {
+    ...data,
+    vessel: data.vessel ? normalizeVessel(data.vessel) : null,
+  };
 }
