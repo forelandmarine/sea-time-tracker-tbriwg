@@ -165,13 +165,48 @@ const createStyles = (isDark: boolean, topInset: number) =>
       marginBottom: 12,
       marginTop: 8,
     },
-    entryCard: {
+    vesselGroupHeader: {
       backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
       borderRadius: 12,
       padding: 16,
       marginBottom: 12,
       borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 0, 0, 0.15)',
+    },
+    vesselGroupTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 8,
+    },
+    vesselGroupStats: {
+      flexDirection: 'row',
+      gap: 16,
+    },
+    vesselStat: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    vesselStatText: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    },
+    vesselStatValue: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    entryCard: {
+      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      marginLeft: 16,
+      borderWidth: 1,
       borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
     },
     entryHeader: {
       flexDirection: 'row',
@@ -246,6 +281,23 @@ const createStyles = (isDark: boolean, topInset: number) =>
       marginBottom: 20,
       borderWidth: 1,
       borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    calendarLegend: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 12,
+      gap: 8,
+    },
+    legendDot: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.primary,
+    },
+    legendText: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
     modalOverlay: {
       flex: 1,
@@ -500,31 +552,66 @@ export default function LogbookScreen() {
 
   const getMarkedDates = () => {
     const marked: any = {};
+    
+    // Mark all days that have confirmed sea time
     entries
       .filter((e) => e.status === 'confirmed')
       .forEach((entry) => {
         const startDate = new Date(entry.start_time);
         const endDate = entry.end_time ? new Date(entry.end_time) : new Date();
         
+        // Mark each day from start to end
         let currentDate = new Date(startDate);
-        while (currentDate <= endDate) {
+        currentDate.setHours(0, 0, 0, 0); // Reset to start of day
+        
+        const endDateNormalized = new Date(endDate);
+        endDateNormalized.setHours(23, 59, 59, 999); // Set to end of day
+        
+        while (currentDate <= endDateNormalized) {
           const dateString = currentDate.toISOString().split('T')[0];
           marked[dateString] = {
             marked: true,
             dotColor: colors.primary,
             selected: true,
-            selectedColor: colors.primary + '40',
+            selectedColor: colors.primary + '30',
           };
           currentDate.setDate(currentDate.getDate() + 1);
         }
       });
+    
+    console.log('[LogbookScreen iOS] Marked dates for calendar:', Object.keys(marked).length, 'days');
     return marked;
+  };
+
+  // Group entries by vessel for better organization
+  const groupEntriesByVessel = () => {
+    const confirmedEntries = entries.filter((e) => e.status === 'confirmed');
+    const grouped: { [vesselId: string]: { vessel: Vessel | null; entries: SeaTimeEntry[] } } = {};
+    
+    confirmedEntries.forEach((entry) => {
+      const vesselId = entry.vessel?.id || 'unknown';
+      if (!grouped[vesselId]) {
+        grouped[vesselId] = {
+          vessel: entry.vessel,
+          entries: [],
+        };
+      }
+      grouped[vesselId].entries.push(entry);
+    });
+    
+    // Sort entries within each vessel by date (most recent first)
+    Object.values(grouped).forEach((group) => {
+      group.entries.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
+    });
+    
+    return grouped;
   };
 
   const confirmedEntries = entries
     .filter((e) => e.status === 'confirmed')
     .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
   const pendingEntries = entries.filter((e) => e.status === 'pending');
+  const groupedByVessel = groupEntriesByVessel();
 
   if (loading) {
     return (
@@ -635,6 +722,10 @@ export default function LogbookScreen() {
                 textMonthFontSize: 18,
               }}
             />
+            <View style={styles.calendarLegend}>
+              <View style={styles.legendDot} />
+              <Text style={styles.legendText}>Sea day recorded</Text>
+            </View>
           </View>
 
           <View style={styles.summaryCard}>
@@ -710,60 +801,85 @@ export default function LogbookScreen() {
 
               {confirmedEntries.length > 0 && (
                 <React.Fragment>
-                  <Text style={styles.sectionTitle}>Sea Days (Most Recent First)</Text>
-                  {confirmedEntries.map((entry, index) => (
-                    <View key={index} style={styles.entryCard}>
-                      <View style={styles.entryHeader}>
-                        <Text style={styles.vesselName}>
-                          {entry.vessel?.vessel_name || 'Unknown Vessel'}
-                        </Text>
-                        <View
-                          style={[
-                            styles.statusBadge,
-                            { backgroundColor: getStatusColor(entry.status) },
-                          ]}
-                        >
-                          <Text style={styles.statusText}>
-                            {entry.status.toUpperCase()}
+                  <Text style={styles.sectionTitle}>Sea Time Records by Vessel</Text>
+                  {Object.entries(groupedByVessel).map(([vesselId, group], groupIndex) => {
+                    const vesselTotalHours = group.entries.reduce(
+                      (sum, entry) => sum + toNumber(entry.duration_hours),
+                      0
+                    );
+                    const vesselTotalDays = (vesselTotalHours / 24).toFixed(1);
+                    
+                    return (
+                      <React.Fragment key={groupIndex}>
+                        <View style={styles.vesselGroupHeader}>
+                          <Text style={styles.vesselGroupTitle}>
+                            {group.vessel?.vessel_name || 'Unknown Vessel'}
                           </Text>
+                          <View style={styles.vesselGroupStats}>
+                            <View style={styles.vesselStat}>
+                              <Text style={styles.vesselStatText}>Entries:</Text>
+                              <Text style={styles.vesselStatValue}>{group.entries.length}</Text>
+                            </View>
+                            <View style={styles.vesselStat}>
+                              <Text style={styles.vesselStatText}>Total:</Text>
+                              <Text style={styles.vesselStatValue}>{vesselTotalDays} days</Text>
+                            </View>
+                          </View>
                         </View>
-                      </View>
+                        
+                        {group.entries.map((entry, entryIndex) => (
+                          <View key={entryIndex} style={styles.entryCard}>
+                            <View style={styles.entryHeader}>
+                              <View
+                                style={[
+                                  styles.statusBadge,
+                                  { backgroundColor: getStatusColor(entry.status) },
+                                ]}
+                              >
+                                <Text style={styles.statusText}>
+                                  {entry.status.toUpperCase()}
+                                </Text>
+                              </View>
+                            </View>
 
-                      <View style={styles.entryRow}>
-                        <IconSymbol
-                          ios_icon_name="calendar"
-                          android_material_icon_name="calendar-today"
-                          size={16}
-                          color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                          style={styles.entryIcon}
-                        />
-                        <Text style={styles.entryText}>
-                          {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
-                          {entry.end_time &&
-                            ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
-                        </Text>
-                      </View>
+                            <View style={styles.entryRow}>
+                              <IconSymbol
+                                ios_icon_name="calendar"
+                                android_material_icon_name="calendar-today"
+                                size={16}
+                                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                                style={styles.entryIcon}
+                              />
+                              <Text style={styles.entryText}>
+                                {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
+                                {entry.end_time &&
+                                  ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
+                              </Text>
+                            </View>
 
-                      {entry.duration_hours !== null && (
-                        <Text style={styles.durationText}>
-                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
-                        </Text>
-                      )}
+                            {entry.duration_hours !== null && (
+                              <Text style={styles.durationText}>
+                                {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
+                              </Text>
+                            )}
 
-                      {entry.notes && (
-                        <View style={styles.entryRow}>
-                          <IconSymbol
-                            ios_icon_name="note.text"
-                            android_material_icon_name="description"
-                            size={16}
-                            color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                            style={styles.entryIcon}
-                          />
-                          <Text style={styles.entryText}>{entry.notes}</Text>
-                        </View>
-                      )}
-                    </View>
-                  ))}
+                            {entry.notes && (
+                              <View style={styles.entryRow}>
+                                <IconSymbol
+                                  ios_icon_name="note.text"
+                                  android_material_icon_name="description"
+                                  size={16}
+                                  color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                                  style={styles.entryIcon}
+                                />
+                                <Text style={styles.entryText}>{entry.notes}</Text>
+                              </View>
+                            )}
+                          </View>
+                        ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </React.Fragment>
               )}
 
