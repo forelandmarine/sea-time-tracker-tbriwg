@@ -89,6 +89,19 @@ export interface AISDebugLog {
   created_at: string;
 }
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  email_verified: boolean;
+  emailVerified: boolean;
+  image: string | null;
+  imageUrl: string | null;
+  created_at: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // Helper function to check if backend is configured
 function checkBackendConfigured() {
   if (!API_BASE_URL) {
@@ -130,6 +143,77 @@ async function getFetchOptions(method: string = 'GET', body?: any): Promise<Requ
   }
   
   return options;
+}
+
+// User Profile Management
+export async function getUserProfile(): Promise<UserProfile> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/profile`;
+  console.log('[API] Fetching user profile:', url);
+  const response = await fetch(url, await getFetchOptions());
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[API] Failed to fetch user profile:', response.status, errorText);
+    throw new Error('Failed to fetch user profile');
+  }
+  const data = await response.json();
+  console.log('[API] User profile fetched:', data.email);
+  return data;
+}
+
+export async function updateUserProfile(updates: { name?: string; email?: string }): Promise<UserProfile> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/profile`;
+  console.log('[API] Updating user profile:', updates);
+  const response = await fetch(url, await getFetchOptions('PUT', updates));
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[API] Failed to update user profile:', response.status, errorText);
+    throw new Error('Failed to update user profile');
+  }
+  const data = await response.json();
+  console.log('[API] User profile updated:', data.email);
+  return data;
+}
+
+export async function uploadProfileImage(imageUri: string): Promise<{ url: string; message: string }> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/profile/upload-image`;
+  console.log('[API] Uploading profile image');
+  
+  const token = await getAuthToken();
+  
+  // Create form data
+  const formData = new FormData();
+  
+  // For React Native, we need to create a file object
+  const filename = imageUri.split('/').pop() || 'profile.jpg';
+  const match = /\.(\w+)$/.exec(filename);
+  const type = match ? `image/${match[1]}` : 'image/jpeg';
+  
+  formData.append('image', {
+    uri: imageUri,
+    name: filename,
+    type,
+  } as any);
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': token ? `Bearer ${token}` : '',
+    },
+    body: formData,
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[API] Failed to upload profile image:', response.status, errorText);
+    throw new Error('Failed to upload profile image');
+  }
+  
+  const data = await response.json();
+  console.log('[API] Profile image uploaded:', data.url);
+  return data;
 }
 
 // Vessel Management

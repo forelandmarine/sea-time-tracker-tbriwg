@@ -4,6 +4,7 @@ import * as seaTimeApi from '@/utils/seaTimeApi';
 import React, { useState, useEffect } from 'react';
 import { colors } from '@/styles/commonStyles';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as ImagePicker from 'expo-image-picker';
 import {
   View,
   Text,
@@ -14,6 +15,10 @@ import {
   useColorScheme,
   Platform,
   Share,
+  Image,
+  TextInput,
+  Modal,
+  ActivityIndicator,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,7 +38,20 @@ interface ReportSummary {
   }[];
 }
 
-export default function ReportsScreen() {
+interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  email_verified: boolean;
+  emailVerified: boolean;
+  image: string | null;
+  imageUrl: string | null;
+  created_at: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export default function ProfileScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const insets = useSafeAreaInsets();
@@ -41,25 +59,113 @@ export default function ReportsScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
 
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    loadSummary();
+    loadData();
   }, []);
 
-  const loadSummary = async () => {
-    console.log('User viewing Reports screen');
+  const loadData = async () => {
+    console.log('User viewing Profile screen');
     try {
       setLoading(true);
-      const data = await seaTimeApi.getReportSummary();
-      console.log('Report summary loaded:', data);
-      setSummary(data);
+      
+      const [profileData, summaryData] = await Promise.all([
+        seaTimeApi.getUserProfile(),
+        seaTimeApi.getReportSummary(),
+      ]);
+      
+      console.log('Profile loaded:', profileData.email);
+      console.log('Report summary loaded:', summaryData);
+      
+      setProfile(profileData);
+      setSummary(summaryData);
     } catch (error) {
-      console.error('Failed to load report summary:', error);
-      Alert.alert('Error', 'Failed to load report summary');
+      console.error('Failed to load profile data:', error);
+      Alert.alert('Error', 'Failed to load profile data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleEditProfile = () => {
+    console.log('User tapped Edit Profile button');
+    if (profile) {
+      setEditName(profile.name);
+      setEditEmail(profile.email);
+      setEditModalVisible(true);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    console.log('User saving profile changes');
+    try {
+      const updates: { name?: string; email?: string } = {};
+      
+      if (editName !== profile?.name) {
+        updates.name = editName;
+      }
+      if (editEmail !== profile?.email) {
+        updates.email = editEmail;
+      }
+      
+      if (Object.keys(updates).length === 0) {
+        setEditModalVisible(false);
+        return;
+      }
+      
+      const updatedProfile = await seaTimeApi.updateUserProfile(updates);
+      console.log('Profile updated successfully');
+      setProfile(updatedProfile);
+      setEditModalVisible(false);
+      Alert.alert('Success', 'Profile updated successfully');
+    } catch (error) {
+      console.error('Failed to update profile:', error);
+      Alert.alert('Error', 'Failed to update profile');
+    }
+  };
+
+  const handleChangeProfilePicture = async () => {
+    console.log('User tapped Change Profile Picture button');
+    
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Please grant permission to access your photos');
+      return;
+    }
+    
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images' as any,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    
+    if (!result.canceled && result.assets[0]) {
+      const imageUri = result.assets[0].uri;
+      console.log('Image selected:', imageUri);
+      
+      try {
+        setUploading(true);
+        const response = await seaTimeApi.uploadProfileImage(imageUri);
+        console.log('Profile image uploaded:', response.url);
+        
+        const updatedProfile = await seaTimeApi.getUserProfile();
+        setProfile(updatedProfile);
+        
+        Alert.alert('Success', 'Profile picture updated successfully');
+      } catch (error) {
+        console.error('Failed to upload profile image:', error);
+        Alert.alert('Error', 'Failed to upload profile picture');
+      } finally {
+        setUploading(false);
+      }
     }
   };
 
@@ -70,7 +176,6 @@ export default function ReportsScreen() {
       const fileName = `seatime_report_${new Date().toISOString().split('T')[0]}.pdf`;
       const fileUri = `${FileSystem.documentDirectory}${fileName}`;
       
-      // Convert blob to base64
       const reader = new FileReader();
       reader.readAsDataURL(pdfBlob);
       reader.onloadend = async () => {
@@ -132,23 +237,6 @@ export default function ReportsScreen() {
     }
   };
 
-  const handleShareReport = async () => {
-    console.log('User tapped Share Report button');
-    if (!summary) return;
-
-    const message = `Sea Time Report\n\nTotal Hours: ${summary.total_hours.toFixed(1)}\nTotal Days: ${summary.total_days.toFixed(1)}\n\nGenerated by SeaTime Tracker\nBy Foreland Marine`;
-
-    try {
-      await Share.share({
-        message,
-        title: 'Sea Time Report',
-      });
-    } catch (error) {
-      console.error('Failed to share report:', error);
-      Alert.alert('Error', 'Failed to share report');
-    }
-  };
-
   const handleSignOut = async () => {
     console.log('User tapped Sign Out button');
     Alert.alert(
@@ -177,11 +265,24 @@ export default function ReportsScreen() {
     );
   };
 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyStateText}>Loading report...</Text>
+        <View style={styles.header}>
+          <Text style={styles.title}>Profile</Text>
+        </View>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.emptyStateText}>Loading profile...</Text>
         </View>
       </View>
     );
@@ -190,46 +291,75 @@ export default function ReportsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.headerIcon}>
-          <IconSymbol
-            ios_icon_name="chart.bar.fill"
-            android_material_icon_name="assessment"
-            size={48}
-            color={colors.primary}
-          />
+        <View style={styles.profileImageContainer}>
+          {uploading ? (
+            <View style={styles.profileImagePlaceholder}>
+              <ActivityIndicator size="large" color={colors.primary} />
+            </View>
+          ) : profile?.imageUrl || profile?.image ? (
+            <Image source={{ uri: profile.imageUrl || profile.image || '' }} style={styles.profileImage} />
+          ) : (
+            <View style={styles.profileImagePlaceholder}>
+              <IconSymbol
+                ios_icon_name="person.circle.fill"
+                android_material_icon_name="account-circle"
+                size={60}
+                color={colors.primary}
+              />
+            </View>
+          )}
+          <TouchableOpacity 
+            style={styles.editImageButton}
+            onPress={handleChangeProfilePicture}
+            disabled={uploading}
+          >
+            <IconSymbol
+              ios_icon_name="camera.fill"
+              android_material_icon_name="camera"
+              size={16}
+              color="#fff"
+            />
+          </TouchableOpacity>
         </View>
-        <Text style={styles.title}>Reports & Export</Text>
-        <Text style={styles.subtitle}>
-          View your sea time summary and export records
-        </Text>
+        <Text style={styles.title}>{profile?.name || 'Seafarer'}</Text>
+        <Text style={styles.subtitle}>{profile?.email}</Text>
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
-        {user && (
-          <View style={styles.userCard}>
-            <IconSymbol
-              ios_icon_name="person.circle.fill"
-              android_material_icon_name="account-circle"
-              size={48}
-              color={colors.primary}
-            />
-            <View style={styles.userInfo}>
-              <Text style={styles.userName}>{user.name || 'Seafarer'}</Text>
-              <Text style={styles.userEmail}>{user.email}</Text>
+        {profile && (
+          <View style={styles.profileCard}>
+            <View style={styles.profileRow}>
+              <View>
+                <Text style={styles.profileLabel}>Full Name</Text>
+                <Text style={styles.profileValue}>{profile.name}</Text>
+              </View>
+            </View>
+            <View style={styles.profileRow}>
+              <View>
+                <Text style={styles.profileLabel}>Email Address</Text>
+                <Text style={styles.profileValue}>{profile.email}</Text>
+              </View>
+            </View>
+            <View style={[styles.profileRow, styles.profileRowLast]}>
+              <View>
+                <Text style={styles.profileLabel}>Member Since</Text>
+                <Text style={styles.profileValue}>{formatDate(profile.createdAt || profile.created_at)}</Text>
+              </View>
             </View>
           </View>
         )}
 
-        <View style={styles.infoCard}>
-          <Text style={styles.infoText}>
-            🔒 Your data is private and secure. All sea time records are tied to your account and protected by iOS-compliant authentication.
-          </Text>
-        </View>
+        <TouchableOpacity 
+          style={[styles.button, styles.secondaryButton]} 
+          onPress={handleEditProfile}
+        >
+          <Text style={[styles.buttonText, styles.secondaryButtonText]}>✏️ Edit Profile</Text>
+        </TouchableOpacity>
 
         {summary && (
           <>
             <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Total Sea Time</Text>
+              <Text style={styles.summaryTitle}>Sea Time Summary</Text>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Total Hours</Text>
                 <Text style={styles.summaryValue}>{summary.total_hours.toFixed(1)} hrs</Text>
@@ -240,30 +370,6 @@ export default function ReportsScreen() {
               </View>
             </View>
 
-            {summary.entries_by_vessel.length > 0 && (
-              <View style={styles.sectionCard}>
-                <Text style={styles.sectionTitle}>By Vessel</Text>
-                {summary.entries_by_vessel.map((vessel, index) => (
-                  <View key={index} style={styles.listItem}>
-                    <Text style={styles.listItemText}>{vessel.vessel_name}</Text>
-                    <Text style={styles.listItemValue}>{vessel.total_hours.toFixed(1)} hrs</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
-            {summary.entries_by_month.length > 0 && (
-              <View style={styles.sectionCard}>
-                <Text style={styles.sectionTitle}>By Month</Text>
-                {summary.entries_by_month.map((month, index) => (
-                  <View key={index} style={styles.listItem}>
-                    <Text style={styles.listItemText}>{month.month}</Text>
-                    <Text style={styles.listItemValue}>{month.total_hours.toFixed(1)} hrs</Text>
-                  </View>
-                ))}
-              </View>
-            )}
-
             <TouchableOpacity style={styles.button} onPress={handleExportPDF}>
               <Text style={styles.buttonText}>📄 Export PDF Report</Text>
             </TouchableOpacity>
@@ -271,25 +377,7 @@ export default function ReportsScreen() {
             <TouchableOpacity style={styles.button} onPress={handleExportCSV}>
               <Text style={styles.buttonText}>📊 Export CSV Report</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity style={styles.button} onPress={handleShareReport}>
-              <Text style={styles.buttonText}>📤 Share Report Summary</Text>
-            </TouchableOpacity>
           </>
-        )}
-
-        {!summary && (
-          <View style={styles.emptyState}>
-            <IconSymbol
-              ios_icon_name="chart.bar"
-              android_material_icon_name="assessment"
-              size={64}
-              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-            />
-            <Text style={styles.emptyStateText}>
-              No sea time entries yet.{'\n'}Start tracking vessels to generate reports.
-            </Text>
-          </View>
         )}
 
         <TouchableOpacity 
@@ -299,6 +387,55 @@ export default function ReportsScreen() {
           <Text style={[styles.buttonText, styles.signOutButtonText]}>Sign Out</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Full Name"
+              placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+              value={editName}
+              onChangeText={setEditName}
+            />
+            
+            <TextInput
+              style={styles.input}
+              placeholder="Email Address"
+              placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+              value={editEmail}
+              onChangeText={setEditEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSecondary]}
+                onPress={() => setEditModalVisible(false)}
+              >
+                <Text style={[styles.modalButtonText, styles.modalButtonTextSecondary]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonPrimary]}
+                onPress={handleSaveProfile}
+              >
+                <Text style={styles.modalButtonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -318,17 +455,45 @@ function createStyles(isDark: boolean, topInset: number) {
       borderBottomColor: isDark ? colors.border : colors.borderLight,
       alignItems: 'center',
     },
-    headerIcon: {
+    profileImageContainer: {
+      position: 'relative',
       marginBottom: 12,
     },
+    profileImage: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+    },
+    profileImagePlaceholder: {
+      width: 100,
+      height: 100,
+      borderRadius: 50,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    editImageButton: {
+      position: 'absolute',
+      bottom: 0,
+      right: 0,
+      backgroundColor: colors.primary,
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 3,
+      borderColor: isDark ? colors.cardBackground : colors.card,
+    },
     title: {
-      fontSize: 28,
+      fontSize: 24,
       fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
-      marginBottom: 8,
+      marginBottom: 4,
     },
     subtitle: {
-      fontSize: 16,
+      fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
     },
@@ -338,6 +503,35 @@ function createStyles(isDark: boolean, topInset: number) {
     scrollContent: {
       padding: 16,
       paddingBottom: 100,
+    },
+    profileCard: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 12,
+      padding: 20,
+      marginBottom: 16,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    profileRow: {
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
+    },
+    profileRowLast: {
+      borderBottomWidth: 0,
+    },
+    profileLabel: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 4,
+    },
+    profileValue: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
     },
     summaryCard: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
@@ -376,40 +570,6 @@ function createStyles(isDark: boolean, topInset: number) {
       fontWeight: 'bold',
       color: colors.primary,
     },
-    sectionCard: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    sectionTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 12,
-    },
-    listItem: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 8,
-    },
-    listItemText: {
-      fontSize: 14,
-      color: isDark ? colors.text : colors.textLight,
-      flex: 1,
-    },
-    listItemValue: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: colors.primary,
-      marginLeft: 12,
-    },
     button: {
       backgroundColor: colors.primary,
       borderRadius: 12,
@@ -427,56 +587,13 @@ function createStyles(isDark: boolean, topInset: number) {
       fontSize: 16,
       fontWeight: '600',
     },
-    emptyState: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 40,
-    },
-    emptyStateText: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      textAlign: 'center',
-      marginTop: 12,
-    },
-    infoCard: {
+    secondaryButton: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16,
-      borderLeftWidth: 4,
-      borderLeftColor: colors.success,
+      borderWidth: 1,
+      borderColor: colors.primary,
     },
-    infoText: {
-      fontSize: 14,
-      color: isDark ? colors.text : colors.textLight,
-      lineHeight: 20,
-    },
-    userCard: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    userInfo: {
-      flex: 1,
-      marginLeft: 12,
-    },
-    userName: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 4,
-    },
-    userEmail: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    secondaryButtonText: {
+      color: colors.primary,
     },
     signOutButton: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
@@ -485,6 +602,72 @@ function createStyles(isDark: boolean, topInset: number) {
     },
     signOutButtonText: {
       color: colors.error,
+    },
+    emptyStateText: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      textAlign: 'center',
+      marginTop: 12,
+    },
+    loadingContainer: {
+      padding: 20,
+      alignItems: 'center',
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 16,
+      padding: 24,
+      width: '90%',
+      maxWidth: 400,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 20,
+      textAlign: 'center',
+    },
+    input: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    modalButton: {
+      flex: 1,
+      padding: 14,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    modalButtonPrimary: {
+      backgroundColor: colors.primary,
+    },
+    modalButtonSecondary: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    modalButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#fff',
+    },
+    modalButtonTextSecondary: {
+      color: isDark ? colors.text : colors.textLight,
     },
   });
 }
