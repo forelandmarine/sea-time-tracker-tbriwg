@@ -329,45 +329,46 @@ export default function SeaTimeScreen() {
                 Tap a vessel to view its history or activate it for tracking
               </Text>
             </View>
-            {historicVessels.map((vessel, index) => (
-              <TouchableOpacity
-                key={vessel.id}
-                style={styles.vesselCard}
-                onPress={() => handleVesselPress(vessel.id)}
-              >
-                <View style={styles.vesselHeader}>
-                  <View style={styles.vesselInfo}>
-                    <Text style={styles.vesselName}>{vessel.vessel_name}</Text>
-                    <Text style={styles.vesselMmsi}>MMSI: {vessel.mmsi}</Text>
+            {historicVessels.map((vessel) => (
+              <React.Fragment key={vessel.id}>
+                <TouchableOpacity
+                  style={styles.vesselCard}
+                  onPress={() => handleVesselPress(vessel.id)}
+                >
+                  <View style={styles.vesselHeader}>
+                    <View style={styles.vesselInfo}>
+                      <Text style={styles.vesselName}>{vessel.vessel_name}</Text>
+                      <Text style={styles.vesselMmsi}>MMSI: {vessel.mmsi}</Text>
+                    </View>
+                    <View style={styles.statusIndicator} />
                   </View>
-                  <View style={styles.statusIndicator} />
-                </View>
-                <View style={styles.vesselActions}>
-                  <TouchableOpacity
-                    style={[styles.vesselButton, styles.activateButton]}
-                    onPress={() => handleActivateVessel(vessel.id, vessel.vessel_name)}
-                  >
-                    <IconSymbol
-                      ios_icon_name="play.circle"
-                      android_material_icon_name="play-circle-filled"
-                      size={20}
-                      color="#fff"
-                    />
-                    <Text style={styles.vesselButtonText}>Activate</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.vesselButton, styles.deleteButton]}
-                    onPress={() => handleDeleteVessel(vessel.id, vessel.vessel_name)}
-                  >
-                    <IconSymbol
-                      ios_icon_name="trash"
-                      android_material_icon_name="delete"
-                      size={20}
-                      color="#fff"
-                    />
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
+                  <View style={styles.vesselActions}>
+                    <TouchableOpacity
+                      style={[styles.vesselButton, styles.activateButton]}
+                      onPress={() => handleActivateVessel(vessel.id, vessel.vessel_name)}
+                    >
+                      <IconSymbol
+                        ios_icon_name="play.circle"
+                        android_material_icon_name="play-circle-filled"
+                        size={20}
+                        color="#fff"
+                      />
+                      <Text style={styles.vesselButtonText}>Activate</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.vesselButton, styles.deleteButton]}
+                      onPress={() => handleDeleteVessel(vessel.id, vessel.vessel_name)}
+                    >
+                      <IconSymbol
+                        ios_icon_name="trash"
+                        android_material_icon_name="delete"
+                        size={20}
+                        color="#fff"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
+              </React.Fragment>
             ))}
           </View>
         )}
