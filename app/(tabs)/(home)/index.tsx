@@ -208,7 +208,7 @@ export default function SeaTimeScreen() {
               <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
                 SeaTime Tracker
               </Text>
-              <Text style={styles.headerSubtitle}>track your days at sea with AIS</Text>
+              <Text style={styles.headerSubtitle}>Track Your Days at Sea with AIS</Text>
             </View>
           </View>
         </View>
