@@ -17,9 +17,10 @@
  * - Vessel Management: GET/POST /api/vessels, GET/PUT /api/vessels/:id
  * - AIS Tracking: POST /api/ais/check/:vesselId, GET /api/ais/:vesselId/history
  * - Sea Time Entries: GET/POST /api/sea-time, PUT /api/sea-time/:id/confirm
- * - Reports: GET /api/reports/sea-time-summary
+ * - Reports: GET /api/reports/csv, GET /api/reports/pdf, GET /api/reports/summary
  * - Tracking: GET /api/tracking/vessel/:vesselId
- * - Authentication: Email/password, Apple Sign-In, profile, logout
+ * - Authentication: POST /api/auth/sign-up/email, POST /api/auth/sign-in/email, POST /api/auth/sign-in/apple, GET /api/auth/user, POST /api/auth/sign-out
+ * - User Profile: GET /api/profile, PUT /api/profile, POST /api/profile/upload-image
  */
 
 import { createApplication } from "@specific-dev/framework";
@@ -33,6 +34,7 @@ import * as seaTimeRoutes from './routes/sea-time.js';
 import * as reportsRoutes from './routes/reports.js';
 import * as trackingRoutes from './routes/tracking.js';
 import * as authRoutes from './routes/auth.js';
+import * as profileRoutes from './routes/profile.js';
 
 // Import scheduler service
 import { startScheduler } from './services/scheduler.js';
@@ -47,6 +49,9 @@ export const app = await createApplication(schema);
 app.withAuth({
   socialProviders: {},
 });
+
+// Enable storage for file uploads (profile images, documents, etc.)
+app.withStorage();
 
 // Configure CORS for all origins (support authentication)
 app.fastify.addHook('onRequest', async (request, reply) => {
@@ -97,6 +102,7 @@ seaTimeRoutes.register(app, app.fastify);
 reportsRoutes.register(app, app.fastify);
 trackingRoutes.register(app, app.fastify);
 authRoutes.register(app, app.fastify);
+profileRoutes.register(app, app.fastify);
 
 // Log API configuration status
 const aisApiKey = process.env.MYSHIPTRACKING_API_KEY;
