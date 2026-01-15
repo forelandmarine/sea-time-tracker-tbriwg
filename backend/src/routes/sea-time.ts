@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { eq, and, isNull, desc, lte, gte } from "drizzle-orm";
 import * as schema from "../db/schema.js";
+import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
 
 function calculateDurationHours(startTime: Date, endTime: Date): number {
@@ -495,6 +496,279 @@ export function register(app: App, fastify: FastifyInstance) {
     } catch (error) {
       app.logger.error({ err: error }, 'Test endpoint: Error creating sea day entry');
       return reply.code(500).send({ error: 'Failed to create sea day entry' });
+    }
+  });
+
+  // GET /api/logbook - Get sea time entries in chronological order for logbook/calendar view
+  fastify.get<{ Querystring: { startDate?: string; endDate?: string } }>('/api/logbook', {
+    schema: {
+      description: 'Get sea time entries in chronological order for logbook/calendar view with optional date range filtering',
+      tags: ['logbook'],
+      querystring: {
+        type: 'object',
+        properties: {
+          startDate: { type: 'string', description: 'ISO 8601 date string' },
+          endDate: { type: 'string', description: 'ISO 8601 date string' },
+        },
+      },
+      response: {
+        200: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              vessel_id: { type: 'string' },
+              start_time: { type: 'string' },
+              end_time: { type: ['string', 'null'] },
+              duration_hours: { type: ['string', 'null'] },
+              status: { type: 'string' },
+              notes: { type: ['string', 'null'] },
+              start_latitude: { type: ['string', 'null'] },
+              start_longitude: { type: ['string', 'null'] },
+              end_latitude: { type: ['string', 'null'] },
+              end_longitude: { type: ['string', 'null'] },
+              created_at: { type: 'string' },
+              vessel: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  mmsi: { type: 'string' },
+                  vessel_name: { type: 'string' },
+                  flag: { type: ['string', 'null'] },
+                  vessel_type: { type: ['string', 'null'] },
+                  is_active: { type: 'boolean' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const { startDate, endDate } = request.query;
+
+    app.logger.info({ startDate, endDate }, 'Retrieving logbook entries');
+
+    let query = app.db.query.sea_time_entries.findMany({
+      with: {
+        vessel: true,
+      },
+      orderBy: desc(schema.sea_time_entries.start_time),
+    });
+
+    let entries = await query;
+
+    // Filter by date range if provided
+    if (startDate || endDate) {
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
+
+      entries = entries.filter((entry) => {
+        const entryDate = new Date(entry.start_time);
+        if (start && entryDate < start) return false;
+        if (end && entryDate > end) return false;
+        return true;
+      });
+    }
+
+    app.logger.info({ count: entries.length }, 'Logbook entries retrieved');
+    return reply.code(200).send(entries);
+  });
+
+  // POST /api/logbook/manual-entry - Create manual sea time entry (authenticated)
+  fastify.post<{
+    Body: {
+      vessel_id: string;
+      start_time: string;
+      end_time?: string;
+      notes?: string;
+      start_latitude?: number;
+      start_longitude?: number;
+      end_latitude?: number;
+      end_longitude?: number;
+    };
+  }>('/api/logbook/manual-entry', {
+    schema: {
+      description: 'Create a manual sea time entry (requires authentication)',
+      tags: ['logbook'],
+      body: {
+        type: 'object',
+        required: ['vessel_id', 'start_time'],
+        properties: {
+          vessel_id: { type: 'string', description: 'UUID of the vessel' },
+          start_time: { type: 'string', description: 'ISO 8601 start time' },
+          end_time: { type: 'string', description: 'ISO 8601 end time (optional)' },
+          notes: { type: 'string', description: 'Optional notes' },
+          start_latitude: { type: 'number', description: 'Start position latitude' },
+          start_longitude: { type: 'number', description: 'Start position longitude' },
+          end_latitude: { type: 'number', description: 'End position latitude' },
+          end_longitude: { type: 'number', description: 'End position longitude' },
+        },
+      },
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            vessel_id: { type: 'string' },
+            start_time: { type: 'string' },
+            end_time: { type: ['string', 'null'] },
+            duration_hours: { type: ['string', 'null'] },
+            status: { type: 'string' },
+            notes: { type: ['string', 'null'] },
+            start_latitude: { type: ['string', 'null'] },
+            start_longitude: { type: ['string', 'null'] },
+            end_latitude: { type: ['string', 'null'] },
+            end_longitude: { type: ['string', 'null'] },
+            created_at: { type: 'string' },
+            vessel: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                mmsi: { type: 'string' },
+                vessel_name: { type: 'string' },
+                flag: { type: ['string', 'null'] },
+                vessel_type: { type: ['string', 'null'] },
+                is_active: { type: 'boolean' },
+              },
+            },
+          },
+        },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const { vessel_id, start_time, end_time, notes, start_latitude, start_longitude, end_latitude, end_longitude } = request.body;
+
+    app.logger.info(
+      { vessel_id, start_time, end_time },
+      'Manual sea time entry creation request'
+    );
+
+    // Authenticate user
+    const authHeader = request.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '');
+
+    if (!token) {
+      app.logger.warn({}, 'Manual entry creation without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
+    // Find user session
+    const sessions = await app.db
+      .select()
+      .from(authSchema.session)
+      .where(eq(authSchema.session.token, token));
+
+    if (sessions.length === 0) {
+      app.logger.warn({}, 'Invalid token for manual entry creation');
+      return reply.code(401).send({ error: 'Invalid or expired token' });
+    }
+
+    const session = sessions[0];
+
+    // Check if session is expired
+    if (session.expiresAt < new Date()) {
+      app.logger.warn({ sessionId: session.id }, 'Session expired for manual entry creation');
+      return reply.code(401).send({ error: 'Session expired' });
+    }
+
+    // Validate vessel exists
+    const vessel = await app.db
+      .select()
+      .from(schema.vessels)
+      .where(eq(schema.vessels.id, vessel_id));
+
+    if (vessel.length === 0) {
+      app.logger.warn({ vessel_id }, 'Vessel not found for manual entry');
+      return reply.code(404).send({ error: 'Vessel not found' });
+    }
+
+    // Validate start_time
+    let startDate: Date;
+    try {
+      startDate = new Date(start_time);
+      if (isNaN(startDate.getTime())) {
+        throw new Error('Invalid date');
+      }
+    } catch (error) {
+      app.logger.warn({ start_time }, 'Invalid start_time format');
+      return reply.code(400).send({ error: 'Invalid start_time format' });
+    }
+
+    // Validate and process end_time if provided
+    let endDate: Date | null = null;
+    let durationHours: string | null = null;
+
+    if (end_time) {
+      try {
+        endDate = new Date(end_time);
+        if (isNaN(endDate.getTime())) {
+          throw new Error('Invalid date');
+        }
+
+        // Validate that end_time is after start_time
+        if (endDate <= startDate) {
+          app.logger.warn({ start_time, end_time }, 'End time is not after start time');
+          return reply.code(400).send({ error: 'End time must be after start time' });
+        }
+
+        // Calculate duration
+        const durationMs = endDate.getTime() - startDate.getTime();
+        const hours = durationMs / (1000 * 60 * 60);
+        durationHours = String(Math.round(hours * 100) / 100);
+
+        app.logger.info({ vessel_id, durationHours }, 'Calculated sea time duration');
+      } catch (error) {
+        app.logger.warn({ end_time }, 'Invalid end_time format');
+        return reply.code(400).send({ error: 'Invalid end_time format' });
+      }
+    }
+
+    // Create the sea time entry (marked as confirmed for manually created entries)
+    try {
+      const [entry] = await app.db
+        .insert(schema.sea_time_entries)
+        .values({
+          vessel_id,
+          start_time: startDate,
+          end_time: endDate,
+          duration_hours: durationHours,
+          status: 'confirmed', // Manually created entries are confirmed
+          notes,
+          start_latitude: start_latitude ? String(start_latitude) : null,
+          start_longitude: start_longitude ? String(start_longitude) : null,
+          end_latitude: end_latitude ? String(end_latitude) : null,
+          end_longitude: end_longitude ? String(end_longitude) : null,
+        })
+        .returning();
+
+      app.logger.info(
+        {
+          entryId: entry.id,
+          vessel_id,
+          vesselName: vessel[0].vessel_name,
+          start_time,
+          end_time: endDate?.toISOString(),
+          durationHours,
+          status: 'confirmed',
+        },
+        'Manual sea time entry created successfully'
+      );
+
+      // Return entry with vessel details
+      const response = {
+        ...entry,
+        vessel: vessel[0],
+      };
+
+      return reply.code(201).send(response);
+    } catch (error) {
+      app.logger.error({ err: error, vessel_id }, 'Failed to create manual sea time entry');
+      return reply.code(400).send({ error: 'Failed to create sea time entry' });
     }
   });
 }
