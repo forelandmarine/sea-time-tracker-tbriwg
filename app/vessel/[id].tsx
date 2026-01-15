@@ -22,6 +22,11 @@ interface Vessel {
   vessel_name: string;
   is_active: boolean;
   created_at: string;
+  flag?: string;
+  official_number?: string;
+  vessel_type?: string;
+  length_metres?: number;
+  gross_tonnes?: number;
 }
 
 interface SeaTimeEntry {
@@ -59,6 +64,55 @@ function createStyles(isDark: boolean) {
       fontSize: 16,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginBottom: 24,
+    },
+    particularsCard: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 24,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    particularsHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 12,
+      gap: 8,
+    },
+    particularsTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    particularRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+    },
+    particularRowLast: {
+      borderBottomWidth: 0,
+    },
+    particularLabel: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      fontWeight: '500',
+    },
+    particularValue: {
+      fontSize: 14,
+      color: isDark ? colors.text : colors.textLight,
+      fontWeight: '600',
+    },
+    particularValueEmpty: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      fontStyle: 'italic',
     },
     statsContainer: {
       flexDirection: 'row',
@@ -355,6 +409,54 @@ export default function VesselDetailScreen() {
       >
         <Text style={styles.header}>{vessel.vessel_name}</Text>
         <Text style={styles.mmsi}>MMSI: {vessel.mmsi}</Text>
+
+        {/* Vessel Particulars Section */}
+        <View style={styles.particularsCard}>
+          <View style={styles.particularsHeader}>
+            <IconSymbol
+              ios_icon_name="info.circle.fill"
+              android_material_icon_name="info"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.particularsTitle}>Vessel Particulars</Text>
+          </View>
+          
+          <View style={styles.particularRow}>
+            <Text style={styles.particularLabel}>Flag</Text>
+            <Text style={vessel.flag ? styles.particularValue : styles.particularValueEmpty}>
+              {vessel.flag || 'Not specified'}
+            </Text>
+          </View>
+          
+          <View style={styles.particularRow}>
+            <Text style={styles.particularLabel}>Official No.</Text>
+            <Text style={vessel.official_number ? styles.particularValue : styles.particularValueEmpty}>
+              {vessel.official_number || 'Not specified'}
+            </Text>
+          </View>
+          
+          <View style={styles.particularRow}>
+            <Text style={styles.particularLabel}>Type</Text>
+            <Text style={vessel.vessel_type ? styles.particularValue : styles.particularValueEmpty}>
+              {vessel.vessel_type || 'Not specified'}
+            </Text>
+          </View>
+          
+          <View style={styles.particularRow}>
+            <Text style={styles.particularLabel}>Length</Text>
+            <Text style={vessel.length_metres ? styles.particularValue : styles.particularValueEmpty}>
+              {vessel.length_metres ? `${vessel.length_metres} m` : 'Not specified'}
+            </Text>
+          </View>
+          
+          <View style={[styles.particularRow, styles.particularRowLast]}>
+            <Text style={styles.particularLabel}>Gross Tonnes</Text>
+            <Text style={vessel.gross_tonnes ? styles.particularValue : styles.particularValueEmpty}>
+              {vessel.gross_tonnes ? `${vessel.gross_tonnes} GT` : 'Not specified'}
+            </Text>
+          </View>
+        </View>
 
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
