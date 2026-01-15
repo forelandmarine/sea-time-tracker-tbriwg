@@ -4,6 +4,23 @@ import * as schema from "../db/schema.js";
 import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
 
+// Helper function to transform vessel object for API response
+function transformVesselForResponse(vessel: any) {
+  return {
+    id: vessel.id,
+    mmsi: vessel.mmsi,
+    vessel_name: vessel.vessel_name,
+    flag: vessel.flag,
+    official_number: vessel.official_number,
+    vessel_type: vessel.type, // Map 'type' database field to 'vessel_type' in API response
+    length_metres: vessel.length_metres,
+    gross_tonnes: vessel.gross_tonnes,
+    is_active: vessel.is_active,
+    created_at: vessel.created_at,
+    updated_at: vessel.updated_at,
+  };
+}
+
 export function register(app: App, fastify: FastifyInstance) {
   // GET /api/vessels - Return all vessels with is_active field
   fastify.get('/api/vessels', {
@@ -21,7 +38,7 @@ export function register(app: App, fastify: FastifyInstance) {
               vessel_name: { type: 'string' },
               flag: { type: ['string', 'null'] },
               official_number: { type: ['string', 'null'] },
-              type: { type: ['string', 'null'] },
+              vessel_type: { type: ['string', 'null'] },
               length_metres: { type: ['string', 'null'] },
               gross_tonnes: { type: ['string', 'null'] },
               is_active: { type: 'boolean' },
@@ -36,7 +53,7 @@ export function register(app: App, fastify: FastifyInstance) {
     app.logger.info({}, 'Fetching all vessels');
     const vessels = await app.db.select().from(schema.vessels);
     app.logger.info({ count: vessels.length }, 'Vessels fetched');
-    return vessels;
+    return vessels.map(transformVesselForResponse);
   });
 
   // POST /api/vessels - Create vessel with mmsi, vessel_name, and optional additional details
@@ -78,7 +95,7 @@ export function register(app: App, fastify: FastifyInstance) {
             vessel_name: { type: 'string' },
             flag: { type: ['string', 'null'] },
             official_number: { type: ['string', 'null'] },
-            type: { type: ['string', 'null'] },
+            vessel_type: { type: ['string', 'null'] },
             length_metres: { type: ['string', 'null'] },
             gross_tonnes: { type: ['string', 'null'] },
             is_active: { type: 'boolean' },
@@ -146,7 +163,7 @@ export function register(app: App, fastify: FastifyInstance) {
       'Vessel created successfully'
     );
 
-    return reply.code(201).send(vessel);
+    return reply.code(201).send(transformVesselForResponse(vessel));
   });
 
   // PUT /api/vessels/:id/activate - Activate specified vessel and deactivate all others
@@ -168,7 +185,7 @@ export function register(app: App, fastify: FastifyInstance) {
             vessel_name: { type: 'string' },
             flag: { type: ['string', 'null'] },
             official_number: { type: ['string', 'null'] },
-            type: { type: ['string', 'null'] },
+            vessel_type: { type: ['string', 'null'] },
             length_metres: { type: ['string', 'null'] },
             gross_tonnes: { type: ['string', 'null'] },
             is_active: { type: 'boolean' },
@@ -213,7 +230,7 @@ export function register(app: App, fastify: FastifyInstance) {
       'Vessel activated successfully'
     );
 
-    return reply.code(200).send(activated);
+    return reply.code(200).send(transformVesselForResponse(activated));
   });
 
   // DELETE /api/vessels/:id - Delete vessel
@@ -296,7 +313,7 @@ export function register(app: App, fastify: FastifyInstance) {
             vessel_name: { type: 'string' },
             flag: { type: ['string', 'null'] },
             official_number: { type: ['string', 'null'] },
-            type: { type: ['string', 'null'] },
+            vessel_type: { type: ['string', 'null'] },
             length_metres: { type: ['string', 'null'] },
             gross_tonnes: { type: ['string', 'null'] },
             is_active: { type: 'boolean' },
@@ -350,7 +367,7 @@ export function register(app: App, fastify: FastifyInstance) {
       'Vessel updated successfully'
     );
 
-    return reply.code(200).send(updated);
+    return reply.code(200).send(transformVesselForResponse(updated));
   });
 
   // PUT /api/vessels/:id/particulars - Update vessel particulars (authenticated)
@@ -393,7 +410,7 @@ export function register(app: App, fastify: FastifyInstance) {
               vessel_name: { type: 'string' },
               flag: { type: ['string', 'null'] },
               official_number: { type: ['string', 'null'] },
-              type: { type: ['string', 'null'] },
+              vessel_type: { type: ['string', 'null'] },
               length_metres: { type: ['string', 'null'] },
               gross_tonnes: { type: ['string', 'null'] },
               is_active: { type: 'boolean' },
@@ -479,7 +496,7 @@ export function register(app: App, fastify: FastifyInstance) {
         'Vessel particulars updated successfully'
       );
 
-      return reply.code(200).send(updated);
+      return reply.code(200).send(transformVesselForResponse(updated));
     }
   );
 }
