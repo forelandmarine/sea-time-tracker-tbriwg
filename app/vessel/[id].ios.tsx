@@ -363,6 +363,31 @@ function createStyles(isDark: boolean) {
       borderWidth: 1,
       borderColor: isDark ? colors.border : colors.borderLight,
     },
+    typeButtonContainer: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    typeButton: {
+      flex: 1,
+      padding: 14,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      alignItems: 'center',
+    },
+    typeButtonActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    typeButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    typeButtonTextActive: {
+      color: '#fff',
+    },
     modalButtons: {
       flexDirection: 'row',
       gap: 12,
@@ -966,14 +991,37 @@ export default function VesselDetailScreen() {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Vessel Type</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={editForm.vessel_type}
-                    onChangeText={(text) => setEditForm({ ...editForm, vessel_type: text })}
-                    placeholder="e.g., Cargo, Tanker, Passenger"
-                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                  />
+                  <Text style={styles.inputLabel}>Type (Motor/Sail)</Text>
+                  <View style={styles.typeButtonContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeButton,
+                        editForm.vessel_type === 'Motor' && styles.typeButtonActive
+                      ]}
+                      onPress={() => setEditForm({ ...editForm, vessel_type: 'Motor' })}
+                    >
+                      <Text style={[
+                        styles.typeButtonText,
+                        editForm.vessel_type === 'Motor' && styles.typeButtonTextActive
+                      ]}>
+                        Motor
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeButton,
+                        editForm.vessel_type === 'Sail' && styles.typeButtonActive
+                      ]}
+                      onPress={() => setEditForm({ ...editForm, vessel_type: 'Sail' })}
+                    >
+                      <Text style={[
+                        styles.typeButtonText,
+                        editForm.vessel_type === 'Sail' && styles.typeButtonTextActive
+                      ]}>
+                        Sail
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <View style={styles.inputGroup}>
