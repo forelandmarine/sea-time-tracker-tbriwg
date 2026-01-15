@@ -15,6 +15,7 @@ import {
 import React, { useState, useEffect } from 'react';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Vessel {
   id: string;
@@ -41,13 +42,14 @@ interface SeaTimeEntry {
 
 export default function ConfirmationsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [pendingEntries, setPendingEntries] = useState<SeaTimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const styles = createStyles(isDark);
+  const styles = createStyles(isDark, insets.top);
 
   useEffect(() => {
     console.log('[ConfirmationsScreen] Loading pending entries');
@@ -549,7 +551,7 @@ export default function ConfirmationsScreen() {
   );
 }
 
-function createStyles(isDark: boolean) {
+function createStyles(isDark: boolean, topInset: number) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -567,7 +569,7 @@ function createStyles(isDark: boolean) {
     },
     header: {
       padding: 20,
-      paddingTop: Platform.OS === 'android' ? 48 : 20,
+      paddingTop: topInset + 12,
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderBottomWidth: 1,
       borderBottomColor: isDark ? colors.border : colors.borderLight,

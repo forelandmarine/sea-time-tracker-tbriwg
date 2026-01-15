@@ -20,6 +20,7 @@ import {
 import React, { useState, useEffect } from 'react';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -38,6 +39,7 @@ interface Vessel {
 
 export default function SeaTimeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -51,7 +53,7 @@ export default function SeaTimeScreen() {
   const [newGrossTonnes, setNewGrossTonnes] = useState('');
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const styles = createStyles(isDark);
+  const styles = createStyles(isDark, insets.top);
 
   // Separate vessels into active and historic
   const activeVessel = vessels.find(v => v.is_active);
@@ -527,7 +529,7 @@ export default function SeaTimeScreen() {
   );
 }
 
-function createStyles(isDark: boolean) {
+function createStyles(isDark: boolean, topInset: number) {
   return StyleSheet.create({
     container: {
       flex: 1,
@@ -548,7 +550,7 @@ function createStyles(isDark: boolean) {
     },
     header: {
       padding: 20,
-      paddingTop: Platform.OS === 'android' ? 48 : 20,
+      paddingTop: topInset + 12,
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderBottomWidth: 1,
       borderBottomColor: isDark ? colors.border : colors.borderLight,
