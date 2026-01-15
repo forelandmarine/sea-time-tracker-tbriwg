@@ -258,19 +258,6 @@ export default function SeaTimeScreen() {
                   <Text style={styles.vesselMmsi}>MMSI: {activeVessel.mmsi}</Text>
                 </View>
               </View>
-              <View style={styles.vesselActions}>
-                <TouchableOpacity
-                  style={[styles.vesselButton, styles.deleteButton]}
-                  onPress={() => handleDeleteVessel(activeVessel.id, activeVessel.vessel_name)}
-                >
-                  <IconSymbol
-                    ios_icon_name="trash"
-                    android_material_icon_name="delete"
-                    size={20}
-                    color="#fff"
-                  />
-                </TouchableOpacity>
-              </View>
             </TouchableOpacity>
           )}
         </View>
@@ -309,17 +296,6 @@ export default function SeaTimeScreen() {
                         color="#fff"
                       />
                       <Text style={styles.vesselButtonText}>Activate</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.vesselButton, styles.deleteButton]}
-                      onPress={() => handleDeleteVessel(vessel.id, vessel.vessel_name)}
-                    >
-                      <IconSymbol
-                        ios_icon_name="trash"
-                        android_material_icon_name="delete"
-                        size={20}
-                        color="#fff"
-                      />
                     </TouchableOpacity>
                   </View>
                 </TouchableOpacity>
@@ -575,7 +551,6 @@ function createStyles(isDark: boolean) {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 12,
     },
     vesselInfo: {
       flex: 1,
@@ -625,6 +600,7 @@ function createStyles(isDark: boolean) {
     vesselActions: {
       flexDirection: 'row',
       gap: 8,
+      marginTop: 12,
     },
     vesselButton: {
       flex: 1,
