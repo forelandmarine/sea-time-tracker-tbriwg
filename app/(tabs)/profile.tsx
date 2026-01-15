@@ -157,10 +157,18 @@ function createStyles(isDark: boolean) {
       shadowRadius: 4,
       elevation: 3,
     },
+    buttonSecondary: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderWidth: 1,
+      borderColor: colors.primary,
+    },
     buttonText: {
       color: '#fff',
       fontSize: 16,
       fontWeight: '600',
+    },
+    buttonTextSecondary: {
+      color: colors.primary,
     },
     emptyState: {
       alignItems: 'center',
@@ -221,6 +229,11 @@ export default function ReportsScreen() {
   const handleUserCardPress = () => {
     console.log('User tapped user profile card, navigating to user-profile page');
     router.push('/user-profile');
+  };
+
+  const handleViewMCARequirements = () => {
+    console.log('User tapped View MCA Requirements button');
+    router.push('/mca-requirements');
   };
 
   const handleExportPDF = async () => {
@@ -379,6 +392,15 @@ export default function ReportsScreen() {
               <Text style={styles.summaryValue}>{summary.total_days.toFixed(1)} days</Text>
             </View>
           </View>
+
+          <TouchableOpacity 
+            style={[styles.button, styles.buttonSecondary]} 
+            onPress={handleViewMCARequirements}
+          >
+            <Text style={[styles.buttonText, styles.buttonTextSecondary]}>
+              📋 View MCA Requirements
+            </Text>
+          </TouchableOpacity>
 
           <TouchableOpacity style={styles.button} onPress={handleExportPDF}>
             <Text style={styles.buttonText}>📄 Export PDF Report</Text>

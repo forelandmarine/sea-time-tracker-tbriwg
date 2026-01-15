@@ -19,6 +19,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 import { useRouter } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
+import { getRequirementTitles } from '@/constants/mcaRequirements';
 
 interface Vessel {
   id: string;
@@ -44,6 +45,7 @@ interface SeaTimeEntry {
 }
 
 type ViewMode = 'list' | 'calendar';
+type ServiceType = 'seagoing' | 'standby' | 'yard';
 
 const createStyles = (isDark: boolean) =>
   StyleSheet.create({
@@ -238,6 +240,7 @@ const createStyles = (isDark: boolean) =>
       padding: 24,
       width: '90%',
       maxWidth: 400,
+      maxHeight: '80%',
     },
     modalTitle: {
       fontSize: 24,
@@ -308,6 +311,55 @@ const createStyles = (isDark: boolean) =>
       fontSize: 16,
       color: isDark ? colors.text : colors.textLight,
     },
+    mcaButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 12,
+      padding: 12,
+      marginTop: 12,
+      borderWidth: 1,
+      borderColor: colors.primary,
+    },
+    mcaButtonText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.primary,
+      marginLeft: 8,
+    },
+    serviceTypeContainer: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 8,
+    },
+    serviceTypeButton: {
+      flex: 1,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+      alignItems: 'center',
+    },
+    serviceTypeButtonActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    serviceTypeText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    },
+    serviceTypeTextActive: {
+      color: '#FFFFFF',
+    },
+    helperText: {
+      fontSize: 12,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 4,
+      fontStyle: 'italic',
+    },
   });
 
 export default function LogbookScreen() {
@@ -329,6 +381,7 @@ export default function LogbookScreen() {
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [serviceType, setServiceType] = useState<ServiceType>('seagoing');
 
   useEffect(() => {
     console.log('[LogbookScreen] Component mounted, loading data');
@@ -365,6 +418,11 @@ export default function LogbookScreen() {
     setShowAddModal(true);
   };
 
+  const handleViewMCARequirements = () => {
+    console.log('[LogbookScreen] User tapped View MCA Requirements from modal');
+    router.push('/mca-requirements');
+  };
+
   const handleSaveEntry = async () => {
     console.log('[LogbookScreen] User tapped Save Entry');
     
@@ -387,18 +445,22 @@ export default function LogbookScreen() {
         return;
       }
 
+      const serviceTypeNote = `Service Type: ${serviceType.charAt(0).toUpperCase() + serviceType.slice(1)}`;
+      const fullNotes = notes ? `${serviceTypeNote}\n${notes}` : serviceTypeNote;
+
       console.log('[LogbookScreen] Creating manual sea time entry:', {
         vessel_id: selectedVessel.id,
         start_time: startDateTime.toISOString(),
         end_time: endDateTime?.toISOString() || null,
-        notes: notes || null,
+        notes: fullNotes,
+        service_type: serviceType,
       });
 
       await seaTimeApi.createManualSeaTimeEntry({
         vessel_id: selectedVessel.id,
         start_time: startDateTime.toISOString(),
         end_time: endDateTime?.toISOString() || null,
-        notes: notes || null,
+        notes: fullNotes,
       });
 
       Alert.alert('Success', 'Sea time entry added successfully');
@@ -407,6 +469,7 @@ export default function LogbookScreen() {
       setStartDate('');
       setEndDate('');
       setNotes('');
+      setServiceType('seagoing');
       loadData();
     } catch (error: any) {
       console.error('[LogbookScreen] Error creating entry:', error);
@@ -796,8 +859,78 @@ export default function LogbookScreen() {
             onPress={() => setShowAddModal(false)}
           >
             <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-              <View style={styles.modalContent}>
+              <ScrollView style={styles.modalContent}>
                 <Text style={styles.modalTitle}>Add Sea Time Entry</Text>
+
+                <TouchableOpacity style={styles.mcaButton} onPress={handleViewMCARequirements}>
+                  <IconSymbol
+                    ios_icon_name="info.circle"
+                    android_material_icon_name="info"
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.mcaButtonText}>View MCA Requirements</Text>
+                </TouchableOpacity>
+
+                <Text style={styles.inputLabel}>Service Type *</Text>
+                <View style={styles.serviceTypeContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.serviceTypeButton,
+                      serviceType === 'seagoing' && styles.serviceTypeButtonActive,
+                    ]}
+                    onPress={() => setServiceType('seagoing')}
+                  >
+                    <Text
+                      style={[
+                        styles.serviceTypeText,
+                        serviceType === 'seagoing' && styles.serviceTypeTextActive,
+                      ]}
+                    >
+                      Seagoing
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.serviceTypeButton,
+                      serviceType === 'standby' && styles.serviceTypeButtonActive,
+                    ]}
+                    onPress={() => setServiceType('standby')}
+                  >
+                    <Text
+                      style={[
+                        styles.serviceTypeText,
+                        serviceType === 'standby' && styles.serviceTypeTextActive,
+                      ]}
+                    >
+                      Standby
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.serviceTypeButton,
+                      serviceType === 'yard' && styles.serviceTypeButtonActive,
+                    ]}
+                    onPress={() => setServiceType('yard')}
+                  >
+                    <Text
+                      style={[
+                        styles.serviceTypeText,
+                        serviceType === 'yard' && styles.serviceTypeTextActive,
+                      ]}
+                    >
+                      Yard
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {serviceType === 'standby' && (
+                  <Text style={styles.helperText}>
+                    Max 14 consecutive days; cannot exceed previous voyage length
+                  </Text>
+                )}
+                {serviceType === 'yard' && (
+                  <Text style={styles.helperText}>Up to 90 days total (continuous or split)</Text>
+                )}
 
                 <Text style={styles.inputLabel}>Vessel *</Text>
                 <TouchableOpacity
@@ -859,7 +992,7 @@ export default function LogbookScreen() {
                     </Text>
                   </TouchableOpacity>
                 </View>
-              </View>
+              </ScrollView>
             </TouchableOpacity>
           </TouchableOpacity>
         </KeyboardAvoidingView>
