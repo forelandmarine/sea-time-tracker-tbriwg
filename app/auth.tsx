@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   useColorScheme,
   Platform,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -142,11 +143,10 @@ export default function AuthScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
-        <IconSymbol
-          ios_icon_name="anchor"
-          android_material_icon_name="anchor"
-          size={64}
-          color={colors.primary}
+        <Image
+          source={require('@/assets/images/8331a0b9-33c9-4ff2-93d0-772c257bd0c9.png')}
+          style={styles.logo}
+          resizeMode="contain"
         />
         <Text style={styles.title}>SeaTime Tracker</Text>
         <Text style={styles.subtitle}>
@@ -298,6 +298,10 @@ function createStyles(isDark: boolean) {
       alignItems: 'center',
       marginBottom: 40,
       marginTop: 40,
+    },
+    logo: {
+      width: 62,
+      height: 62,
     },
     title: {
       fontSize: 32,
