@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { eq } from "drizzle-orm";
 import * as schema from "../db/schema.js";
+import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
 
 export function register(app: App, fastify: FastifyInstance) {
@@ -351,4 +352,134 @@ export function register(app: App, fastify: FastifyInstance) {
 
     return reply.code(200).send(updated);
   });
+
+  // PUT /api/vessels/:id/particulars - Update vessel particulars (authenticated)
+  fastify.put<{
+    Params: { id: string };
+    Body: {
+      flag?: string;
+      official_number?: string;
+      type?: string;
+      length_metres?: number;
+      gross_tonnes?: number;
+    };
+  }>(
+    '/api/vessels/:id/particulars',
+    {
+      schema: {
+        description: 'Update vessel particulars (flag, official number, type, length, gross tonnes). Requires authentication.',
+        tags: ['vessels'],
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string' } },
+        },
+        body: {
+          type: 'object',
+          properties: {
+            flag: { type: 'string' },
+            official_number: { type: 'string' },
+            type: { type: 'string', enum: ['Motor', 'Sail'] },
+            length_metres: { type: 'number' },
+            gross_tonnes: { type: 'number' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              mmsi: { type: 'string' },
+              vessel_name: { type: 'string' },
+              flag: { type: ['string', 'null'] },
+              official_number: { type: ['string', 'null'] },
+              type: { type: ['string', 'null'] },
+              length_metres: { type: ['string', 'null'] },
+              gross_tonnes: { type: ['string', 'null'] },
+              is_active: { type: 'boolean' },
+              created_at: { type: 'string' },
+              updated_at: { type: 'string' },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+          401: { type: 'object', properties: { error: { type: 'string' } } },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { flag, official_number, type, length_metres, gross_tonnes } = request.body;
+
+      app.logger.info({ vesselId: id }, 'Updating vessel particulars');
+
+      // Get token from Authorization header
+      const authHeader = request.headers.authorization;
+      const token = authHeader?.replace('Bearer ', '');
+
+      if (!token) {
+        app.logger.warn({ vesselId: id }, 'Vessel particulars update without authentication');
+        return reply.code(401).send({ error: 'Authentication required' });
+      }
+
+      // Find user session
+      const sessions = await app.db
+        .select()
+        .from(authSchema.session)
+        .where(eq(authSchema.session.token, token));
+
+      if (sessions.length === 0) {
+        app.logger.warn({ vesselId: id }, 'Invalid token for vessel particulars update');
+        return reply.code(401).send({ error: 'Invalid or expired token' });
+      }
+
+      const session = sessions[0];
+
+      // Check if session is expired
+      if (session.expiresAt < new Date()) {
+        app.logger.warn({ vesselId: id, sessionId: session.id }, 'Session expired for vessel particulars update');
+        return reply.code(401).send({ error: 'Session expired' });
+      }
+
+      // Verify at least one field is provided for update
+      if (flag === undefined && official_number === undefined && type === undefined &&
+          length_metres === undefined && gross_tonnes === undefined) {
+        app.logger.warn({ vesselId: id }, 'Vessel particulars update with no fields to update');
+        return reply.code(400).send({ error: 'At least one field must be provided for update' });
+      }
+
+      // Check if vessel exists
+      const vessel = await app.db
+        .select()
+        .from(schema.vessels)
+        .where(eq(schema.vessels.id, id));
+
+      if (vessel.length === 0) {
+        app.logger.warn({ vesselId: id }, 'Vessel not found for particulars update');
+        return reply.code(404).send({ error: 'Vessel not found' });
+      }
+
+      // Build update data with only provided fields
+      const updateData: Record<string, any> = { updated_at: new Date() };
+      if (flag !== undefined) updateData.flag = flag;
+      if (official_number !== undefined) updateData.official_number = official_number;
+      if (type !== undefined) updateData.type = type;
+      if (length_metres !== undefined) updateData.length_metres = length_metres ? String(length_metres) : null;
+      if (gross_tonnes !== undefined) updateData.gross_tonnes = gross_tonnes ? String(gross_tonnes) : null;
+
+      // Update vessel
+      const [updated] = await app.db
+        .update(schema.vessels)
+        .set(updateData)
+        .where(eq(schema.vessels.id, id))
+        .returning();
+
+      app.logger.info(
+        { vesselId: updated.id, vesselName: updated.vessel_name, updatedFields: Object.keys(updateData).filter(k => k !== 'updated_at') },
+        'Vessel particulars updated successfully'
+      );
+
+      return reply.code(200).send(updated);
+    }
+  );
 }
