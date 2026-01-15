@@ -12,9 +12,14 @@ const clearLogAfterDelay = (logKey: string) => {
 };
 
 // Queue for batching logs
-let logQueue: { level: string; message: string; source: string; timestamp: string; platform: string }[] = [];
+let logQueue: Array<{ level: string; message: string; source: string; timestamp: string; platform: string }> = [];
 let flushTimeout: ReturnType<typeof setTimeout> | null = null;
 const FLUSH_INTERVAL = 500; // Flush every 500ms
+
+// Store original console methods at module load time (before any modifications)
+const originalConsoleLog = console.log.bind(console);
+const originalConsoleWarn = console.warn.bind(console);
+const originalConsoleError = console.error.bind(console);
 
 // Get a friendly platform name
 const getPlatformName = (): string => {
@@ -102,10 +107,8 @@ const flushLogs = async () => {
         // Log fetch errors only once to avoid spam
         if (!fetchErrorLogged) {
           fetchErrorLogged = true;
-          // Use a different method to avoid recursion - write directly without going through our intercept
-          if (typeof window !== 'undefined' && window.console) {
-            (window.console as any).__proto__.log.call(console, '[Natively] Fetch error (will not repeat):', e.message || e);
-          }
+          // Use the original console method to avoid recursion
+          originalConsoleLog('[Natively] Fetch error (will not repeat):', e.message || e);
         }
       });
     } catch (e) {
@@ -262,11 +265,6 @@ const stringifyArgs = (args: any[]): string => {
 };
 
 export const setupErrorLogging = () => {
-  // Store original console methods BEFORE any modifications
-  const originalConsoleLog = console.log;
-  const originalConsoleWarn = console.warn;
-  const originalConsoleError = console.error;
-
   // Log initialization info using original console (not intercepted)
   const logServerUrl = getLogServerUrl();
   originalConsoleLog('[Natively] Setting up error logging...');
@@ -276,7 +274,7 @@ export const setupErrorLogging = () => {
   // Override console.log to capture and send to server
   console.log = (...args: any[]) => {
     // Always call original first
-    originalConsoleLog.apply(console, args);
+    originalConsoleLog(...args);
 
     // Queue log for sending to server
     const message = stringifyArgs(args);
@@ -287,7 +285,7 @@ export const setupErrorLogging = () => {
   // Override console.warn to capture and send to server
   console.warn = (...args: any[]) => {
     // Always call original first
-    originalConsoleWarn.apply(console, args);
+    originalConsoleWarn(...args);
 
     // Queue log for sending to server
     const message = stringifyArgs(args);
@@ -298,7 +296,7 @@ export const setupErrorLogging = () => {
   // Override console.error to capture and send to server
   console.error = (...args: any[]) => {
     // Always call original first
-    originalConsoleError.apply(console, args);
+    originalConsoleError(...args);
 
     // Queue log for sending to server
     const message = stringifyArgs(args);
