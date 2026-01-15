@@ -300,8 +300,8 @@ function createStyles(isDark: boolean) {
       marginTop: 40,
     },
     logo: {
-      width: 85,
-      height: 85,
+      width: 100,
+      height: 100,
     },
     title: {
       fontSize: 32,
