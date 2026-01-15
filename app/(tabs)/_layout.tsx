@@ -76,6 +76,20 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="logbook"
+        options={{
+          title: 'Logbook',
+          tabBarIcon: ({ color, focused }) => (
+            <IconSymbol
+              ios_icon_name="book.closed.fill"
+              android_material_icon_name="menu-book"
+              size={24}
+              color={color}
+            />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="confirmations"
         options={{
           title: 'Review',
