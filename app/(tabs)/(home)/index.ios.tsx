@@ -200,12 +200,14 @@ export default function SeaTimeScreen() {
         <View style={styles.header}>
           <View style={styles.headerTitleContainer}>
             <Image
-              source={require('@/assets/images/21aceeb3-aa54-4040-ae08-68dd74a31f85.png')}
+              source={require('@/assets/images/c13cbd51-c2f7-489f-bbbb-6b28094d9b2b.png')}
               style={styles.appIcon}
               resizeMode="contain"
             />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.headerTitle}>SeaTime Tracker</Text>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+                SeaTime Tracker
+              </Text>
               <Text style={styles.headerSubtitle}>Track your days at sea</Text>
             </View>
           </View>
@@ -441,6 +443,10 @@ function createStyles(isDark: boolean) {
       width: 53,
       height: 53,
       borderRadius: 12,
+    },
+    headerTextContainer: {
+      flex: 1,
+      minWidth: 0,
     },
     headerTitle: {
       fontSize: 28,
