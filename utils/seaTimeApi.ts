@@ -205,7 +205,7 @@ export async function deleteVessel(vesselId: string): Promise<{ success: boolean
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels/${vesselId}`;
   console.log('[API] Deleting vessel:', vesselId);
-  const response = await fetch(url, await getFetchOptions('DELETE'));
+  const response = await fetch(url, await getFetchOptions('DELETE', {}));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to delete vessel:', response.status, errorText);
