@@ -270,6 +270,30 @@ export async function createVessel(
   return data;
 }
 
+export async function updateVesselParticulars(
+  vesselId: string,
+  updates: {
+    flag?: string;
+    official_number?: string;
+    type?: string;
+    length_metres?: number;
+    gross_tonnes?: number;
+  }
+): Promise<Vessel> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/vessels/${vesselId}/particulars`;
+  console.log('[API] Updating vessel particulars:', vesselId, updates);
+  const response = await fetch(url, await getFetchOptions('PUT', updates));
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[API] Failed to update vessel particulars:', response.status, errorText);
+    throw new Error('Failed to update vessel particulars');
+  }
+  const data = await response.json();
+  console.log('[API] Vessel particulars updated:', data);
+  return data;
+}
+
 export async function activateVessel(vesselId: string): Promise<Vessel> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels/${vesselId}/activate`;

@@ -9,6 +9,9 @@ import {
   useColorScheme,
   RefreshControl,
   Platform,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
@@ -305,6 +308,90 @@ function createStyles(isDark: boolean) {
       fontSize: 16,
       fontWeight: '600',
     },
+    // Modal styles
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 16,
+      padding: 24,
+      width: '90%',
+      maxWidth: 500,
+      maxHeight: '80%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 8,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    closeButton: {
+      padding: 4,
+    },
+    modalScrollContent: {
+      paddingBottom: 16,
+    },
+    inputGroup: {
+      marginBottom: 16,
+    },
+    inputLabel: {
+      fontSize: 14,
+      fontWeight: '500',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 8,
+    },
+    input: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 8,
+      padding: 12,
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 8,
+    },
+    modalButton: {
+      flex: 1,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+    },
+    cancelButton: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    saveButton: {
+      backgroundColor: colors.primary,
+    },
+    modalButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    cancelButtonText: {
+      color: isDark ? colors.text : colors.textLight,
+    },
+    saveButtonText: {
+      color: '#FFFFFF',
+    },
   });
 }
 
@@ -314,6 +401,14 @@ export default function VesselDetailScreen() {
   const [entries, setEntries] = useState<SeaTimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editForm, setEditForm] = useState({
+    flag: '',
+    official_number: '',
+    vessel_type: '',
+    length_metres: '',
+    gross_tonnes: '',
+  });
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
@@ -359,12 +454,61 @@ export default function VesselDetailScreen() {
 
   const handleEditParticulars = () => {
     console.log('[VesselDetailScreen] User tapped Edit Particulars button');
-    Alert.alert(
-      'Edit Vessel Particulars',
-      'This feature will allow you to edit vessel details like flag, official number, type, length, and gross tonnage.',
-      [{ text: 'OK' }]
-    );
-    // TODO: Implement edit particulars functionality
+    if (!vessel) {
+      console.error('[VesselDetailScreen] No vessel data available');
+      return;
+    }
+    
+    // Pre-fill the form with current values
+    setEditForm({
+      flag: vessel.flag || '',
+      official_number: vessel.official_number || '',
+      vessel_type: vessel.vessel_type || '',
+      length_metres: vessel.length_metres?.toString() || '',
+      gross_tonnes: vessel.gross_tonnes?.toString() || '',
+    });
+    
+    setEditModalVisible(true);
+  };
+
+  const handleSaveParticulars = async () => {
+    console.log('[VesselDetailScreen] User tapped Save button in edit modal');
+    if (!vessel) {
+      console.error('[VesselDetailScreen] No vessel data available');
+      return;
+    }
+
+    try {
+      // Prepare the update payload
+      const updates: any = {};
+      
+      if (editForm.flag.trim()) updates.flag = editForm.flag.trim();
+      if (editForm.official_number.trim()) updates.official_number = editForm.official_number.trim();
+      if (editForm.vessel_type.trim()) updates.type = editForm.vessel_type.trim();
+      if (editForm.length_metres.trim()) {
+        const length = parseFloat(editForm.length_metres);
+        if (!isNaN(length) && length > 0) {
+          updates.length_metres = length;
+        }
+      }
+      if (editForm.gross_tonnes.trim()) {
+        const tonnes = parseFloat(editForm.gross_tonnes);
+        if (!isNaN(tonnes) && tonnes > 0) {
+          updates.gross_tonnes = tonnes;
+        }
+      }
+
+      console.log('[VesselDetailScreen] Updating vessel particulars:', updates);
+      
+      await seaTimeApi.updateVesselParticulars(vessel.id, updates);
+      
+      setEditModalVisible(false);
+      Alert.alert('Success', 'Vessel particulars updated successfully');
+      await loadData();
+    } catch (error: any) {
+      console.error('[VesselDetailScreen] Failed to update vessel particulars:', error);
+      Alert.alert('Error', 'Failed to update vessel particulars: ' + error.message);
+    }
   };
 
   const handleActivateVessel = async () => {
@@ -761,6 +905,120 @@ export default function VesselDetailScreen() {
           <Text style={styles.deleteButtonText}>Delete Vessel</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Edit Particulars Modal */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setEditModalVisible(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={styles.modalContent}
+            >
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Edit Vessel Particulars</Text>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={() => setEditModalVisible(false)}
+                >
+                  <IconSymbol
+                    ios_icon_name="xmark.circle.fill"
+                    android_material_icon_name="cancel"
+                    size={28}
+                    color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={styles.modalScrollContent}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Flag</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.flag}
+                    onChangeText={(text) => setEditForm({ ...editForm, flag: text })}
+                    placeholder="e.g., United Kingdom"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Official Number</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.official_number}
+                    onChangeText={(text) => setEditForm({ ...editForm, official_number: text })}
+                    placeholder="e.g., 123456"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Vessel Type</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.vessel_type}
+                    onChangeText={(text) => setEditForm({ ...editForm, vessel_type: text })}
+                    placeholder="e.g., Cargo, Tanker, Passenger"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Length (metres)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.length_metres}
+                    onChangeText={(text) => setEditForm({ ...editForm, length_metres: text })}
+                    placeholder="e.g., 150"
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Gross Tonnes</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.gross_tonnes}
+                    onChangeText={(text) => setEditForm({ ...editForm, gross_tonnes: text })}
+                    placeholder="e.g., 5000"
+                    keyboardType="decimal-pad"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  />
+                </View>
+              </ScrollView>
+
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.cancelButton]}
+                  onPress={() => setEditModalVisible(false)}
+                >
+                  <Text style={[styles.modalButtonText, styles.cancelButtonText]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton]}
+                  onPress={handleSaveParticulars}
+                >
+                  <Text style={[styles.modalButtonText, styles.saveButtonText]}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
