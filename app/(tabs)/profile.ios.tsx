@@ -242,7 +242,6 @@ export default function ReportsScreen() {
     console.log('User tapped Export PDF button');
     try {
       const pdfBlob = await seaTimeApi.downloadPDFReport();
-      
       const fileName = `seatime_report_${new Date().toISOString().split('T')[0]}.pdf`;
       const fileUri = `${FileSystem.documentDirectory}${fileName}`;
       
@@ -259,19 +258,20 @@ export default function ReportsScreen() {
         
         console.log('PDF file saved:', fileUri);
         
-        if (Platform.OS === 'ios' || Platform.OS === 'android') {
-          const canShare = await Sharing.isAvailableAsync();
-          if (canShare) {
-            await Sharing.shareAsync(fileUri, {
-              mimeType: 'application/pdf',
-              dialogTitle: 'Export Sea Time PDF Report',
-            });
-          } else {
-            Alert.alert('Success', `PDF report saved to: ${fileUri}`);
-          }
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(fileUri, {
+            mimeType: 'application/pdf',
+            dialogTitle: 'Export Sea Time PDF Report',
+          });
         } else {
           Alert.alert('Success', `PDF report saved to: ${fileUri}`);
         }
+      };
+      
+      reader.onerror = () => {
+        console.error('Failed to read PDF blob');
+        Alert.alert('Error', 'Failed to process PDF file');
       };
     } catch (error) {
       console.error('Failed to export PDF:', error);
@@ -283,7 +283,6 @@ export default function ReportsScreen() {
     console.log('User tapped Export CSV button');
     try {
       const csvData = await seaTimeApi.downloadCSVReport();
-      
       const fileName = `seatime_report_${new Date().toISOString().split('T')[0]}.csv`;
       const fileUri = `${FileSystem.documentDirectory}${fileName}`;
       
@@ -293,16 +292,12 @@ export default function ReportsScreen() {
       
       console.log('CSV file saved:', fileUri);
       
-      if (Platform.OS === 'ios' || Platform.OS === 'android') {
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(fileUri, {
-            mimeType: 'text/csv',
-            dialogTitle: 'Export Sea Time Report',
-          });
-        } else {
-          Alert.alert('Success', `Report saved to: ${fileUri}`);
-        }
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(fileUri, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Export Sea Time Report',
+        });
       } else {
         Alert.alert('Success', `Report saved to: ${fileUri}`);
       }
@@ -325,6 +320,7 @@ export default function ReportsScreen() {
       });
     } catch (error) {
       console.error('Failed to share report:', error);
+      Alert.alert('Error', 'Failed to share report');
     }
   };
 

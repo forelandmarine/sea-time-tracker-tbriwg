@@ -243,24 +243,38 @@ export default function ReportsScreen() {
     console.log('User tapped Export PDF button');
     try {
       const pdfBlob = await seaTimeApi.downloadPDFReport();
-      
       const fileName = `seatime_report_${new Date().toISOString().split('T')[0]}.pdf`;
-      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
       
-      // Convert blob to base64
-      const reader = new FileReader();
-      reader.readAsDataURL(pdfBlob);
-      reader.onloadend = async () => {
-        const base64data = reader.result as string;
-        const base64 = base64data.split(',')[1];
+      if (Platform.OS === 'web') {
+        // Web: Use browser download
+        console.log('Web platform: Triggering browser download for PDF');
+        const url = URL.createObjectURL(pdfBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        Alert.alert('Success', 'PDF report downloaded successfully');
+      } else {
+        // Native: Save to file system and share
+        console.log('Native platform: Saving PDF to file system');
+        const fileUri = `${FileSystem.documentDirectory}${fileName}`;
         
-        await FileSystem.writeAsStringAsync(fileUri, base64, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-        
-        console.log('PDF file saved:', fileUri);
-        
-        if (Platform.OS === 'ios' || Platform.OS === 'android') {
+        // Convert blob to base64
+        const reader = new FileReader();
+        reader.readAsDataURL(pdfBlob);
+        reader.onloadend = async () => {
+          const base64data = reader.result as string;
+          const base64 = base64data.split(',')[1];
+          
+          await FileSystem.writeAsStringAsync(fileUri, base64, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          
+          console.log('PDF file saved:', fileUri);
+          
           const canShare = await Sharing.isAvailableAsync();
           if (canShare) {
             await Sharing.shareAsync(fileUri, {
@@ -270,10 +284,13 @@ export default function ReportsScreen() {
           } else {
             Alert.alert('Success', `PDF report saved to: ${fileUri}`);
           }
-        } else {
-          Alert.alert('Success', `PDF report saved to: ${fileUri}`);
-        }
-      };
+        };
+        
+        reader.onerror = () => {
+          console.error('Failed to read PDF blob');
+          Alert.alert('Error', 'Failed to process PDF file');
+        };
+      }
     } catch (error) {
       console.error('Failed to export PDF:', error);
       Alert.alert('Error', 'Failed to export PDF report');
@@ -284,17 +301,32 @@ export default function ReportsScreen() {
     console.log('User tapped Export CSV button');
     try {
       const csvData = await seaTimeApi.downloadCSVReport();
-      
       const fileName = `seatime_report_${new Date().toISOString().split('T')[0]}.csv`;
-      const fileUri = `${FileSystem.documentDirectory}${fileName}`;
       
-      await FileSystem.writeAsStringAsync(fileUri, csvData, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-      
-      console.log('CSV file saved:', fileUri);
-      
-      if (Platform.OS === 'ios' || Platform.OS === 'android') {
+      if (Platform.OS === 'web') {
+        // Web: Use browser download
+        console.log('Web platform: Triggering browser download for CSV');
+        const blob = new Blob([csvData], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        Alert.alert('Success', 'CSV report downloaded successfully');
+      } else {
+        // Native: Save to file system and share
+        console.log('Native platform: Saving CSV to file system');
+        const fileUri = `${FileSystem.documentDirectory}${fileName}`;
+        
+        await FileSystem.writeAsStringAsync(fileUri, csvData, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        
+        console.log('CSV file saved:', fileUri);
+        
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
           await Sharing.shareAsync(fileUri, {
@@ -304,8 +336,6 @@ export default function ReportsScreen() {
         } else {
           Alert.alert('Success', `Report saved to: ${fileUri}`);
         }
-      } else {
-        Alert.alert('Success', `Report saved to: ${fileUri}`);
       }
     } catch (error) {
       console.error('Failed to export CSV:', error);
@@ -320,12 +350,21 @@ export default function ReportsScreen() {
     const message = `Sea Time Report\n\nTotal Hours: ${summary.total_hours.toFixed(1)}\nTotal Days: ${summary.total_days.toFixed(1)}\n\nGenerated by SeaTime Tracker\nBy Foreland Marine`;
 
     try {
-      await Share.share({
-        message,
-        title: 'Sea Time Report',
-      });
+      if (Platform.OS === 'web') {
+        // Web: Copy to clipboard
+        console.log('Web platform: Copying report summary to clipboard');
+        await navigator.clipboard.writeText(message);
+        Alert.alert('Success', 'Report summary copied to clipboard');
+      } else {
+        // Native: Use Share API
+        await Share.share({
+          message,
+          title: 'Sea Time Report',
+        });
+      }
     } catch (error) {
       console.error('Failed to share report:', error);
+      Alert.alert('Error', 'Failed to share report');
     }
   };
 
