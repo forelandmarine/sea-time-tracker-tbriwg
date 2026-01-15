@@ -385,16 +385,31 @@ export default function SeaTimeScreen() {
           )}
         </View>
 
-        {/* Historic Vessels Section */}
-        {historicVessels.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.historicHeader}>
-              <Text style={styles.sectionTitle}>Historic Vessels</Text>
-              <Text style={styles.sectionSubtitle}>
-                Tap a vessel to view its history and activate it for tracking
+        {/* Historic Vessels Section - Always show */}
+        <View style={styles.section}>
+          <View style={styles.historicHeader}>
+            <Text style={styles.sectionTitle}>Historic Vessels</Text>
+            <Text style={styles.sectionSubtitle}>
+              {historicVessels.length > 0 
+                ? 'Tap a vessel to view its history and activate it for tracking'
+                : 'No historic vessels'}
+            </Text>
+          </View>
+          {historicVessels.length === 0 ? (
+            <View style={styles.emptyState}>
+              <IconSymbol
+                ios_icon_name="clock"
+                android_material_icon_name="history"
+                size={48}
+                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+              />
+              <Text style={styles.emptyHistoricText}>No historic vessels</Text>
+              <Text style={styles.emptySubtext}>
+                Vessels you&apos;ve previously tracked will appear here
               </Text>
             </View>
-            {historicVessels.map((vessel) => (
+          ) : (
+            historicVessels.map((vessel) => (
               <React.Fragment key={vessel.id}>
                 <TouchableOpacity
                   style={styles.vesselCard}
@@ -433,9 +448,9 @@ export default function SeaTimeScreen() {
                   </View>
                 </TouchableOpacity>
               </React.Fragment>
-            ))}
-          </View>
-        )}
+            ))
+          )}
+        </View>
       </ScrollView>
 
       {/* Add Vessel Modal */}
@@ -790,6 +805,12 @@ function createStyles(isDark: boolean, topInset: number) {
       fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
       marginTop: 16,
+    },
+    emptyHistoricText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginTop: 12,
     },
     emptySubtext: {
       fontSize: 14,
