@@ -110,6 +110,26 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       fontStyle: 'italic',
     },
+    activateButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+      marginBottom: 16,
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 8,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    activateButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
+    },
     checkAISButton: {
       backgroundColor: colors.primary,
       borderRadius: 12,
@@ -315,6 +335,47 @@ export default function VesselDetailScreen() {
     console.log('[VesselDetailScreen] User initiated refresh');
     setRefreshing(true);
     loadData();
+  };
+
+  const handleActivateVessel = async () => {
+    if (!vessel) {
+      console.error('[VesselDetailScreen] No vessel data available');
+      return;
+    }
+
+    try {
+      const vessels = await seaTimeApi.getVessels();
+      const activeVessel = vessels.find(v => v.is_active);
+      
+      const message = activeVessel 
+        ? `Start tracking ${vessel.vessel_name}? This will deactivate ${activeVessel.vessel_name}.`
+        : `Start tracking ${vessel.vessel_name}? The app will monitor this vessel's AIS data.`;
+
+      Alert.alert(
+        'Activate Vessel',
+        message,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Activate',
+            onPress: async () => {
+              try {
+                console.log('[VesselDetailScreen] Activating vessel:', vessel.id);
+                await seaTimeApi.activateVessel(vessel.id);
+                await loadData();
+                Alert.alert('Success', `${vessel.vessel_name} is now being tracked`);
+              } catch (error: any) {
+                console.error('[VesselDetailScreen] Failed to activate vessel:', error);
+                Alert.alert('Error', 'Failed to activate vessel: ' + error.message);
+              }
+            },
+          },
+        ]
+      );
+    } catch (error: any) {
+      console.error('[VesselDetailScreen] Error checking active vessels:', error);
+      Alert.alert('Error', 'Failed to check active vessels: ' + error.message);
+    }
   };
 
   const handleCheckAIS = async () => {
@@ -528,6 +589,22 @@ export default function VesselDetailScreen() {
           </View>
         </View>
 
+        {/* Activate Button - Only show for inactive vessels */}
+        {!vessel.is_active && (
+          <TouchableOpacity
+            style={styles.activateButton}
+            onPress={handleActivateVessel}
+          >
+            <IconSymbol
+              ios_icon_name="play.circle"
+              android_material_icon_name="play-circle-filled"
+              size={20}
+              color="#fff"
+            />
+            <Text style={styles.activateButtonText}>Activate Vessel</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Check AIS Button */}
         <TouchableOpacity
           style={[
@@ -580,7 +657,9 @@ export default function VesselDetailScreen() {
             <Text style={styles.emptyText}>
               No sea time entries yet.
               {'\n\n'}
-              Activate this vessel and check AIS data to start tracking.
+              {vessel.is_active 
+                ? 'Check AIS data to start tracking.'
+                : 'Activate this vessel and check AIS data to start tracking.'}
             </Text>
           </View>
         ) : (

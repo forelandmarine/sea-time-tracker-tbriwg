@@ -239,7 +239,7 @@ export default function SeaTimeScreen() {
               <Text style={styles.emptyText}>No active vessel</Text>
               <Text style={styles.emptySubtext}>
                 {historicVessels.length > 0 
-                  ? 'Activate a vessel from the historic list below'
+                  ? 'Tap a vessel below to view details and activate it'
                   : 'Tap the + button to add your first vessel'}
               </Text>
             </View>
@@ -268,7 +268,7 @@ export default function SeaTimeScreen() {
             <View style={styles.historicHeader}>
               <Text style={styles.sectionTitle}>Historic Vessels</Text>
               <Text style={styles.sectionSubtitle}>
-                Tap a vessel to view its history or activate it for tracking
+                Tap a vessel to view its history and activate it for tracking
               </Text>
             </View>
             {historicVessels.map((vessel) => (
@@ -282,21 +282,12 @@ export default function SeaTimeScreen() {
                       <Text style={styles.vesselName}>{vessel.vessel_name}</Text>
                       <Text style={styles.vesselMmsi}>MMSI: {vessel.mmsi}</Text>
                     </View>
-                    <View style={styles.statusIndicator} />
-                  </View>
-                  <View style={styles.vesselActions}>
-                    <TouchableOpacity
-                      style={[styles.vesselButton, styles.activateButton]}
-                      onPress={() => handleActivateVessel(vessel.id, vessel.vessel_name)}
-                    >
-                      <IconSymbol
-                        ios_icon_name="play.circle"
-                        android_material_icon_name="play-circle-filled"
-                        size={20}
-                        color="#fff"
-                      />
-                      <Text style={styles.vesselButtonText}>Activate</Text>
-                    </TouchableOpacity>
+                    <IconSymbol
+                      ios_icon_name="chevron.right"
+                      android_material_icon_name="chevron-right"
+                      size={24}
+                      color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    />
                   </View>
                 </TouchableOpacity>
               </React.Fragment>
