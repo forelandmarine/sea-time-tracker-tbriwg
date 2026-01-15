@@ -538,6 +538,35 @@ export async function downloadCSVReport(startDate?: string, endDate?: string): P
   return response.text();
 }
 
+export async function downloadPDFReport(startDate?: string, endDate?: string): Promise<Blob> {
+  checkBackendConfigured();
+  const params = new URLSearchParams();
+  if (startDate) params.append('startDate', startDate);
+  if (endDate) params.append('endDate', endDate);
+  
+  const url = `${API_BASE_URL}/api/reports/pdf${params.toString() ? '?' + params.toString() : ''}`;
+  console.log('[API] Downloading PDF report:', url);
+  
+  const token = await getAuthToken();
+  const headers: HeadersInit = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const response = await fetch(url, {
+    method: 'GET',
+    headers,
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[API] Failed to download PDF report:', response.status, errorText);
+    throw new Error('Failed to download PDF report');
+  }
+  
+  return response.blob();
+}
+
 // Test Endpoint - Create test sea day entry from specific position records
 export async function createTestSeaDayEntry(): Promise<SeaTimeEntry> {
   checkBackendConfigured();
