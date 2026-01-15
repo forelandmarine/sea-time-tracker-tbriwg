@@ -245,6 +245,26 @@ function createStyles(isDark: boolean) {
       fontSize: 16,
       fontWeight: '600',
     },
+    deleteButton: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+      marginTop: 24,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: colors.error,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    deleteButtonText: {
+      color: colors.error,
+      fontSize: 16,
+      fontWeight: '600',
+    },
   });
 }
 
@@ -333,6 +353,36 @@ export default function VesselDetailScreen() {
       console.error('[VesselDetailScreen] AIS check failed:', error);
       Alert.alert('AIS Check Failed', error.message);
     }
+  };
+
+  const handleDeleteVessel = async () => {
+    if (!vessel) {
+      console.error('[VesselDetailScreen] No vessel data available');
+      return;
+    }
+
+    Alert.alert(
+      'Delete Vessel',
+      `Are you sure you want to delete ${vessel.vessel_name}? This will also delete all associated sea time entries.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('[VesselDetailScreen] Deleting vessel:', vessel.id);
+              await seaTimeApi.deleteVessel(vessel.id);
+              Alert.alert('Success', 'Vessel deleted');
+              router.back();
+            } catch (error: any) {
+              console.error('[VesselDetailScreen] Failed to delete vessel:', error);
+              Alert.alert('Error', 'Failed to delete vessel: ' + error.message);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const formatDate = (dateString: string) => {
@@ -579,6 +629,14 @@ export default function VesselDetailScreen() {
               </React.Fragment>
             ))
         )}
+
+        {/* Delete Vessel Button - At the bottom like logout button */}
+        <TouchableOpacity 
+          style={styles.deleteButton} 
+          onPress={handleDeleteVessel}
+        >
+          <Text style={styles.deleteButtonText}>Delete Vessel</Text>
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
