@@ -1,4 +1,5 @@
 
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,12 +9,16 @@ import {
   Alert,
   useColorScheme,
   RefreshControl,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 import { useRouter } from 'expo-router';
-import { IconSymbol } from '@/components/IconSymbol';
-import React, { useState, useEffect } from 'react';
+import { Calendar } from 'react-native-calendars';
 
 interface Vessel {
   id: string;
@@ -38,6 +43,8 @@ interface SeaTimeEntry {
   end_longitude?: number | string | null;
 }
 
+type ViewMode = 'list' | 'calendar';
+
 const createStyles = (isDark: boolean) =>
   StyleSheet.create({
     container: {
@@ -50,15 +57,53 @@ const createStyles = (isDark: boolean) =>
       paddingBottom: 20,
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
     title: {
       fontSize: 34,
       fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
-      marginBottom: 8,
+    },
+    addButton: {
+      backgroundColor: colors.primary,
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     subtitle: {
       fontSize: 16,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 12,
+    },
+    viewToggle: {
+      flexDirection: 'row',
+      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
+      borderRadius: 12,
+      padding: 4,
+    },
+    toggleButton: {
+      flex: 1,
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    toggleButtonActive: {
+      backgroundColor: colors.primary,
+    },
+    toggleText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    },
+    toggleTextActive: {
+      color: '#FFFFFF',
     },
     scrollContent: {
       paddingHorizontal: 20,
@@ -169,6 +214,100 @@ const createStyles = (isDark: boolean) =>
       marginTop: 8,
       paddingHorizontal: 40,
     },
+    calendarContainer: {
+      paddingHorizontal: 20,
+      paddingBottom: 20,
+    },
+    calendarCard: {
+      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
+      borderRadius: 16,
+      padding: 16,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
+      borderRadius: 20,
+      padding: 24,
+      width: '90%',
+      maxWidth: 400,
+    },
+    modalTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 20,
+    },
+    inputLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 8,
+      marginTop: 12,
+    },
+    input: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 12,
+      padding: 12,
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    pickerButton: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 12,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    pickerButtonText: {
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      marginTop: 24,
+      gap: 12,
+    },
+    modalButton: {
+      flex: 1,
+      padding: 14,
+      borderRadius: 12,
+      alignItems: 'center',
+    },
+    cancelButton: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+    },
+    saveButton: {
+      backgroundColor: colors.primary,
+    },
+    modalButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    cancelButtonText: {
+      color: isDark ? colors.text : colors.textLight,
+    },
+    saveButtonText: {
+      color: '#FFFFFF',
+    },
+    vesselOption: {
+      padding: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    vesselOptionText: {
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
+    },
   });
 
 export default function LogbookScreen() {
@@ -178,8 +317,18 @@ export default function LogbookScreen() {
   const router = useRouter();
 
   const [entries, setEntries] = useState<SeaTimeEntry[]>([]);
+  const [vessels, setVessels] = useState<Vessel[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>('list');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showVesselPicker, setShowVesselPicker] = useState(false);
+
+  // Form state
+  const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [notes, setNotes] = useState('');
 
   useEffect(() => {
     console.log('[LogbookScreen] Component mounted, loading data');
@@ -188,13 +337,17 @@ export default function LogbookScreen() {
 
   const loadData = async () => {
     try {
-      console.log('[LogbookScreen] Fetching sea time entries');
-      const data = await seaTimeApi.getSeaTimeEntries();
-      console.log('[LogbookScreen] Received entries:', data.length);
-      setEntries(data);
+      console.log('[LogbookScreen] Fetching sea time entries and vessels');
+      const [entriesData, vesselsData] = await Promise.all([
+        seaTimeApi.getSeaTimeEntries(),
+        seaTimeApi.getVessels(),
+      ]);
+      console.log('[LogbookScreen] Received entries:', entriesData.length, 'vessels:', vesselsData.length);
+      setEntries(entriesData);
+      setVessels(vesselsData);
     } catch (error) {
-      console.error('[LogbookScreen] Error loading entries:', error);
-      Alert.alert('Error', 'Failed to load logbook entries');
+      console.error('[LogbookScreen] Error loading data:', error);
+      Alert.alert('Error', 'Failed to load logbook data');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -205,6 +358,60 @@ export default function LogbookScreen() {
     console.log('[LogbookScreen] User initiated refresh');
     setRefreshing(true);
     loadData();
+  };
+
+  const handleAddEntry = () => {
+    console.log('[LogbookScreen] User tapped Add Entry button');
+    setShowAddModal(true);
+  };
+
+  const handleSaveEntry = async () => {
+    console.log('[LogbookScreen] User tapped Save Entry');
+    
+    if (!selectedVessel) {
+      Alert.alert('Error', 'Please select a vessel');
+      return;
+    }
+    
+    if (!startDate) {
+      Alert.alert('Error', 'Please enter a start date and time');
+      return;
+    }
+
+    try {
+      const startDateTime = new Date(startDate);
+      const endDateTime = endDate ? new Date(endDate) : null;
+
+      if (endDateTime && endDateTime <= startDateTime) {
+        Alert.alert('Error', 'End date must be after start date');
+        return;
+      }
+
+      console.log('[LogbookScreen] Creating manual sea time entry:', {
+        vessel_id: selectedVessel.id,
+        start_time: startDateTime.toISOString(),
+        end_time: endDateTime?.toISOString() || null,
+        notes: notes || null,
+      });
+
+      await seaTimeApi.createManualSeaTimeEntry({
+        vessel_id: selectedVessel.id,
+        start_time: startDateTime.toISOString(),
+        end_time: endDateTime?.toISOString() || null,
+        notes: notes || null,
+      });
+
+      Alert.alert('Success', 'Sea time entry added successfully');
+      setShowAddModal(false);
+      setSelectedVessel(null);
+      setStartDate('');
+      setEndDate('');
+      setNotes('');
+      loadData();
+    } catch (error: any) {
+      console.error('[LogbookScreen] Error creating entry:', error);
+      Alert.alert('Error', error.message || 'Failed to create sea time entry');
+    }
   };
 
   const formatDate = (dateString: string) => {
@@ -269,7 +476,32 @@ export default function LogbookScreen() {
     return (calculateTotalHours() / 24).toFixed(1);
   };
 
-  const confirmedEntries = entries.filter((e) => e.status === 'confirmed');
+  const getMarkedDates = () => {
+    const marked: any = {};
+    entries
+      .filter((e) => e.status === 'confirmed')
+      .forEach((entry) => {
+        const startDate = new Date(entry.start_time);
+        const endDate = entry.end_time ? new Date(entry.end_time) : new Date();
+        
+        let currentDate = new Date(startDate);
+        while (currentDate <= endDate) {
+          const dateString = currentDate.toISOString().split('T')[0];
+          marked[dateString] = {
+            marked: true,
+            dotColor: colors.primary,
+            selected: true,
+            selectedColor: colors.primary + '40',
+          };
+          currentDate.setDate(currentDate.getDate() + 1);
+        }
+      });
+    return marked;
+  };
+
+  const confirmedEntries = entries
+    .filter((e) => e.status === 'confirmed')
+    .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
   const pendingEntries = entries.filter((e) => e.status === 'pending');
 
   if (loading) {
@@ -286,175 +518,387 @@ export default function LogbookScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Logbook</Text>
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>Logbook</Text>
+          <TouchableOpacity style={styles.addButton} onPress={handleAddEntry}>
+            <IconSymbol
+              ios_icon_name="plus"
+              android_material_icon_name="add"
+              size={24}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
+        </View>
         <Text style={styles.subtitle}>All your sea time entries</Text>
+        
+        <View style={styles.viewToggle}>
+          <TouchableOpacity
+            style={[styles.toggleButton, viewMode === 'list' && styles.toggleButtonActive]}
+            onPress={() => {
+              console.log('[LogbookScreen] Switching to list view');
+              setViewMode('list');
+            }}
+          >
+            <Text style={[styles.toggleText, viewMode === 'list' && styles.toggleTextActive]}>
+              List
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toggleButton, viewMode === 'calendar' && styles.toggleButtonActive]}
+            onPress={() => {
+              console.log('[LogbookScreen] Switching to calendar view');
+              setViewMode('calendar');
+            }}
+          >
+            <Text style={[styles.toggleText, viewMode === 'calendar' && styles.toggleTextActive]}>
+              Calendar
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={entries.length === 0 ? { flex: 1 } : styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-          />
-        }
-      >
-        {entries.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <IconSymbol
-              ios_icon_name="book.closed"
-              android_material_icon_name="menu-book"
-              size={64}
-              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+      {viewMode === 'calendar' ? (
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.calendarContainer}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
             />
-            <Text style={styles.emptyText}>No sea time entries yet</Text>
-            <Text style={styles.emptySubtext}>
-              Your confirmed sea time entries will appear here once you start tracking vessels
-            </Text>
+          }
+        >
+          <View style={styles.calendarCard}>
+            <Calendar
+              markedDates={getMarkedDates()}
+              theme={{
+                backgroundColor: 'transparent',
+                calendarBackground: 'transparent',
+                textSectionTitleColor: isDark ? colors.textSecondary : colors.textSecondaryLight,
+                selectedDayBackgroundColor: colors.primary,
+                selectedDayTextColor: '#FFFFFF',
+                todayTextColor: colors.primary,
+                dayTextColor: isDark ? colors.text : colors.textLight,
+                textDisabledColor: isDark ? colors.textSecondary : colors.textSecondaryLight,
+                dotColor: colors.primary,
+                selectedDotColor: '#FFFFFF',
+                arrowColor: colors.primary,
+                monthTextColor: isDark ? colors.text : colors.textLight,
+                textMonthFontWeight: 'bold',
+                textDayFontSize: 16,
+                textMonthFontSize: 18,
+              }}
+            />
           </View>
-        ) : (
-          <React.Fragment>
-            {/* Summary Card */}
-            <View style={styles.summaryCard}>
-              <Text style={styles.summaryTitle}>Summary</Text>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Total Confirmed Days</Text>
-                <Text style={styles.summaryValue}>{calculateTotalDays()}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Total Confirmed Hours</Text>
-                <Text style={styles.summaryValue}>
-                  {calculateTotalHours().toFixed(1)}h
-                </Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Confirmed Entries</Text>
-                <Text style={styles.summaryValue}>{confirmedEntries.length}</Text>
-              </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Pending Review</Text>
-                <Text style={styles.summaryValue}>{pendingEntries.length}</Text>
-              </View>
+
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryTitle}>Summary</Text>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total Confirmed Days</Text>
+              <Text style={styles.summaryValue}>{calculateTotalDays()}</Text>
             </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total Confirmed Hours</Text>
+              <Text style={styles.summaryValue}>
+                {calculateTotalHours().toFixed(1)}h
+              </Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Confirmed Entries</Text>
+              <Text style={styles.summaryValue}>{confirmedEntries.length}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Pending Review</Text>
+              <Text style={styles.summaryValue}>{pendingEntries.length}</Text>
+            </View>
+          </View>
+        </ScrollView>
+      ) : (
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={entries.length === 0 ? { flex: 1 } : styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+            />
+          }
+        >
+          {entries.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <IconSymbol
+                ios_icon_name="book.closed"
+                android_material_icon_name="menu-book"
+                size={64}
+                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+              />
+              <Text style={styles.emptyText}>No sea time entries yet</Text>
+              <Text style={styles.emptySubtext}>
+                Tap the + button to manually add a sea time entry, or start tracking vessels
+              </Text>
+            </View>
+          ) : (
+            <React.Fragment>
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryTitle}>Summary</Text>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Total Confirmed Days</Text>
+                  <Text style={styles.summaryValue}>{calculateTotalDays()}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Total Confirmed Hours</Text>
+                  <Text style={styles.summaryValue}>
+                    {calculateTotalHours().toFixed(1)}h
+                  </Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Confirmed Entries</Text>
+                  <Text style={styles.summaryValue}>{confirmedEntries.length}</Text>
+                </View>
+                <View style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>Pending Review</Text>
+                  <Text style={styles.summaryValue}>{pendingEntries.length}</Text>
+                </View>
+              </View>
 
-            {/* Confirmed Entries */}
-            {confirmedEntries.length > 0 && (
-              <React.Fragment>
-                <Text style={styles.sectionTitle}>Confirmed Entries</Text>
-                {confirmedEntries.map((entry, index) => (
-                  <View key={index} style={styles.entryCard}>
-                    <View style={styles.entryHeader}>
-                      <Text style={styles.vesselName}>
-                        {entry.vessel?.vessel_name || 'Unknown Vessel'}
-                      </Text>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: getStatusColor(entry.status) },
-                        ]}
-                      >
-                        <Text style={styles.statusText}>
-                          {entry.status.toUpperCase()}
+              {confirmedEntries.length > 0 && (
+                <React.Fragment>
+                  <Text style={styles.sectionTitle}>Sea Days (Most Recent First)</Text>
+                  {confirmedEntries.map((entry, index) => (
+                    <View key={index} style={styles.entryCard}>
+                      <View style={styles.entryHeader}>
+                        <Text style={styles.vesselName}>
+                          {entry.vessel?.vessel_name || 'Unknown Vessel'}
                         </Text>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            { backgroundColor: getStatusColor(entry.status) },
+                          ]}
+                        >
+                          <Text style={styles.statusText}>
+                            {entry.status.toUpperCase()}
+                          </Text>
+                        </View>
                       </View>
-                    </View>
 
-                    <View style={styles.entryRow}>
-                      <IconSymbol
-                        ios_icon_name="calendar"
-                        android_material_icon_name="calendar-today"
-                        size={16}
-                        color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                        style={styles.entryIcon}
-                      />
-                      <Text style={styles.entryText}>
-                        {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
-                        {entry.end_time &&
-                          ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
-                      </Text>
-                    </View>
-
-                    {entry.duration_hours !== null && (
-                      <Text style={styles.durationText}>
-                        {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
-                      </Text>
-                    )}
-
-                    {entry.notes && (
                       <View style={styles.entryRow}>
                         <IconSymbol
-                          ios_icon_name="note.text"
-                          android_material_icon_name="description"
+                          ios_icon_name="calendar"
+                          android_material_icon_name="calendar-today"
                           size={16}
                           color={isDark ? colors.textSecondary : colors.textSecondaryLight}
                           style={styles.entryIcon}
                         />
-                        <Text style={styles.entryText}>{entry.notes}</Text>
-                      </View>
-                    )}
-                  </View>
-                ))}
-              </React.Fragment>
-            )}
-
-            {/* Pending Entries */}
-            {pendingEntries.length > 0 && (
-              <React.Fragment>
-                <Text style={styles.sectionTitle}>Pending Review</Text>
-                {pendingEntries.map((entry, index) => (
-                  <TouchableOpacity
-                    key={index}
-                    style={styles.entryCard}
-                    onPress={() => {
-                      console.log('[LogbookScreen] User tapped pending entry, navigating to Review tab');
-                      router.push('/(tabs)/confirmations');
-                    }}
-                  >
-                    <View style={styles.entryHeader}>
-                      <Text style={styles.vesselName}>
-                        {entry.vessel?.vessel_name || 'Unknown Vessel'}
-                      </Text>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: getStatusColor(entry.status) },
-                        ]}
-                      >
-                        <Text style={styles.statusText}>
-                          {entry.status.toUpperCase()}
+                        <Text style={styles.entryText}>
+                          {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
+                          {entry.end_time &&
+                            ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
                         </Text>
                       </View>
-                    </View>
 
-                    <View style={styles.entryRow}>
-                      <IconSymbol
-                        ios_icon_name="calendar"
-                        android_material_icon_name="calendar-today"
-                        size={16}
-                        color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                        style={styles.entryIcon}
-                      />
-                      <Text style={styles.entryText}>
-                        {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
-                        {entry.end_time &&
-                          ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
-                      </Text>
-                    </View>
+                      {entry.duration_hours !== null && (
+                        <Text style={styles.durationText}>
+                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
+                        </Text>
+                      )}
 
-                    {entry.duration_hours !== null && (
-                      <Text style={styles.durationText}>
-                        {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
-                      </Text>
-                    )}
+                      {entry.notes && (
+                        <View style={styles.entryRow}>
+                          <IconSymbol
+                            ios_icon_name="note.text"
+                            android_material_icon_name="description"
+                            size={16}
+                            color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                            style={styles.entryIcon}
+                          />
+                          <Text style={styles.entryText}>{entry.notes}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </React.Fragment>
+              )}
+
+              {pendingEntries.length > 0 && (
+                <React.Fragment>
+                  <Text style={styles.sectionTitle}>Pending Review</Text>
+                  {pendingEntries.map((entry, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      style={styles.entryCard}
+                      onPress={() => {
+                        console.log('[LogbookScreen] User tapped pending entry, navigating to Review tab');
+                        router.push('/(tabs)/confirmations');
+                      }}
+                    >
+                      <View style={styles.entryHeader}>
+                        <Text style={styles.vesselName}>
+                          {entry.vessel?.vessel_name || 'Unknown Vessel'}
+                        </Text>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            { backgroundColor: getStatusColor(entry.status) },
+                          ]}
+                        >
+                          <Text style={styles.statusText}>
+                            {entry.status.toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.entryRow}>
+                        <IconSymbol
+                          ios_icon_name="calendar"
+                          android_material_icon_name="calendar-today"
+                          size={16}
+                          color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                          style={styles.entryIcon}
+                        />
+                        <Text style={styles.entryText}>
+                          {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
+                          {entry.end_time &&
+                            ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
+                        </Text>
+                      </View>
+
+                      {entry.duration_hours !== null && (
+                        <Text style={styles.durationText}>
+                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </React.Fragment>
+              )}
+            </React.Fragment>
+          )}
+        </ScrollView>
+      )}
+
+      {/* Add Entry Modal */}
+      <Modal
+        visible={showAddModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAddModal(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowAddModal(false)}
+          >
+            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Add Sea Time Entry</Text>
+
+                <Text style={styles.inputLabel}>Vessel *</Text>
+                <TouchableOpacity
+                  style={styles.pickerButton}
+                  onPress={() => setShowVesselPicker(true)}
+                >
+                  <Text style={styles.pickerButtonText}>
+                    {selectedVessel ? selectedVessel.vessel_name : 'Select a vessel'}
+                  </Text>
+                </TouchableOpacity>
+
+                <Text style={styles.inputLabel}>Start Date & Time *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="YYYY-MM-DD HH:MM"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  value={startDate}
+                  onChangeText={setStartDate}
+                />
+
+                <Text style={styles.inputLabel}>End Date & Time (Optional)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="YYYY-MM-DD HH:MM"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  value={endDate}
+                  onChangeText={setEndDate}
+                />
+
+                <Text style={styles.inputLabel}>Notes (Optional)</Text>
+                <TextInput
+                  style={[styles.input, { height: 80 }]}
+                  placeholder="Add any notes about this sea time..."
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  value={notes}
+                  onChangeText={setNotes}
+                  multiline
+                  numberOfLines={3}
+                />
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton]}
+                    onPress={() => {
+                      console.log('[LogbookScreen] User cancelled add entry');
+                      setShowAddModal(false);
+                    }}
+                  >
+                    <Text style={[styles.modalButtonText, styles.cancelButtonText]}>
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.saveButton]}
+                    onPress={handleSaveEntry}
+                  >
+                    <Text style={[styles.modalButtonText, styles.saveButtonText]}>
+                      Save
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Vessel Picker Modal */}
+      <Modal
+        visible={showVesselPicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowVesselPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowVesselPicker(false)}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select Vessel</Text>
+              <ScrollView style={{ maxHeight: 300 }}>
+                {vessels.map((vessel, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    style={styles.vesselOption}
+                    onPress={() => {
+                      console.log('[LogbookScreen] User selected vessel:', vessel.vessel_name);
+                      setSelectedVessel(vessel);
+                      setShowVesselPicker(false);
+                    }}
+                  >
+                    <Text style={styles.vesselOptionText}>{vessel.vessel_name}</Text>
                   </TouchableOpacity>
                 ))}
-              </React.Fragment>
-            )}
-          </React.Fragment>
-        )}
-      </ScrollView>
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }

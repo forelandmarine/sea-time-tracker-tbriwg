@@ -742,3 +742,52 @@ export async function createTestSeaDayEntry(): Promise<SeaTimeEntry> {
     vessel: data.vessel ? normalizeVessel(data.vessel) : null,
   };
 }
+
+// Manual Sea Time Entry Creation
+export async function createManualSeaTimeEntry(entry: {
+  vessel_id: string;
+  start_time: string;
+  end_time?: string | null;
+  notes?: string | null;
+  start_latitude?: number | null;
+  start_longitude?: number | null;
+  end_latitude?: number | null;
+  end_longitude?: number | null;
+}): Promise<SeaTimeEntry> {
+  checkBackendConfigured();
+  const url = `${API_BASE_URL}/api/logbook/manual-entry`;
+  console.log('[API] Creating manual sea time entry:', entry);
+  const response = await fetch(url, await getFetchOptions('POST', entry));
+  
+  if (!response.ok) {
+    let errorMessage = 'Failed to create manual sea time entry';
+    
+    try {
+      const errorData = await response.json();
+      console.error('[API] Manual entry creation failed:', response.status, errorData);
+      
+      if (errorData.error) {
+        errorMessage = errorData.error;
+      }
+    } catch (parseError) {
+      try {
+        const errorText = await response.text();
+        console.error('[API] Manual entry creation failed (text):', response.status, errorText);
+        if (errorText) {
+          errorMessage = errorText;
+        }
+      } catch (textError) {
+        console.error('[API] Could not parse error response:', textError);
+      }
+    }
+    
+    throw new Error(errorMessage);
+  }
+  
+  const data = await response.json();
+  console.log('[API] Manual sea time entry created successfully:', data);
+  return {
+    ...data,
+    vessel: data.vessel ? normalizeVessel(data.vessel) : null,
+  };
+}
