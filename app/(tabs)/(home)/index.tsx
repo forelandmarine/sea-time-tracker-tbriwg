@@ -153,39 +153,6 @@ export default function SeaTimeScreen() {
     );
   };
 
-  const handleCheckVessel = async (vesselId: string, vesselName: string, isActive: boolean) => {
-    if (!isActive) {
-      Alert.alert('Vessel Not Active', 'Please activate the vessel first before checking AIS data.');
-      return;
-    }
-
-    try {
-      console.log('Checking AIS for vessel:', vesselId);
-      const result = await seaTimeApi.checkVesselAIS(vesselId);
-      
-      // Handle null values gracefully
-      const speedText = result.speed_knots !== null && result.speed_knots !== undefined
-        ? result.speed_knots.toFixed(1) + ' knots'
-        : 'Unknown';
-      
-      const positionText =
-        result.latitude !== null && result.latitude !== undefined &&
-        result.longitude !== null && result.longitude !== undefined
-          ? `${result.latitude.toFixed(4)}, ${result.longitude.toFixed(4)}`
-          : 'Unknown';
-
-      const message = result.is_moving
-        ? `Vessel is moving\n\nSpeed: ${speedText}\nPosition: ${positionText}`
-        : `Vessel is not moving\n\nSpeed: ${speedText}\nPosition: ${positionText}`;
-
-      Alert.alert(`AIS Check - ${vesselName}`, message);
-      await loadData();
-    } catch (error: any) {
-      console.error('AIS check failed:', error);
-      Alert.alert('AIS Check Failed', error.message);
-    }
-  };
-
   const handleDeleteVessel = async (vesselId: string, vesselName: string) => {
     Alert.alert(
       'Delete Vessel',
@@ -292,18 +259,6 @@ export default function SeaTimeScreen() {
                 </View>
               </View>
               <View style={styles.vesselActions}>
-                <TouchableOpacity
-                  style={[styles.vesselButton, styles.checkButton]}
-                  onPress={() => handleCheckVessel(activeVessel.id, activeVessel.vessel_name, true)}
-                >
-                  <IconSymbol
-                    ios_icon_name="location.circle"
-                    android_material_icon_name="my-location"
-                    size={20}
-                    color="#fff"
-                  />
-                  <Text style={styles.vesselButtonText}>Check AIS</Text>
-                </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.vesselButton, styles.deleteButton]}
                   onPress={() => handleDeleteVessel(activeVessel.id, activeVessel.vessel_name)}
@@ -681,9 +636,6 @@ function createStyles(isDark: boolean) {
       gap: 6,
     },
     activateButton: {
-      backgroundColor: colors.primary,
-    },
-    checkButton: {
       backgroundColor: colors.primary,
     },
     deleteButton: {

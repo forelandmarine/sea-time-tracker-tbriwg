@@ -69,7 +69,7 @@ function createStyles(isDark: boolean) {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 16,
       padding: 16,
-      marginBottom: 24,
+      marginBottom: 16,
       shadowColor: '#000',
       shadowOffset: { width: 0, height: 2 },
       shadowOpacity: 0.1,
@@ -113,6 +113,30 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       fontStyle: 'italic',
+    },
+    checkAISButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+      marginBottom: 24,
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 8,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.1,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    checkAISButtonDisabled: {
+      backgroundColor: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      opacity: 0.6,
+    },
+    checkAISButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
     },
     statsContainer: {
       flexDirection: 'row',
@@ -315,6 +339,44 @@ export default function VesselDetailScreen() {
     loadData();
   };
 
+  const handleCheckAIS = async () => {
+    if (!vessel) {
+      console.error('[VesselDetailScreen] No vessel data available');
+      return;
+    }
+
+    if (!vessel.is_active) {
+      Alert.alert('Vessel Not Active', 'Please activate the vessel first before checking AIS data.');
+      return;
+    }
+
+    try {
+      console.log('[VesselDetailScreen] Checking AIS for vessel:', vessel.id);
+      const result = await seaTimeApi.checkVesselAIS(vessel.id);
+      
+      // Handle null values gracefully
+      const speedText = result.speed_knots !== null && result.speed_knots !== undefined
+        ? result.speed_knots.toFixed(1) + ' knots'
+        : 'Unknown';
+      
+      const positionText =
+        result.latitude !== null && result.latitude !== undefined &&
+        result.longitude !== null && result.longitude !== undefined
+          ? `${result.latitude.toFixed(4)}, ${result.longitude.toFixed(4)}`
+          : 'Unknown';
+
+      const message = result.is_moving
+        ? `Vessel is moving\n\nSpeed: ${speedText}\nPosition: ${positionText}`
+        : `Vessel is not moving\n\nSpeed: ${speedText}\nPosition: ${positionText}`;
+
+      Alert.alert(`AIS Check - ${vessel.vessel_name}`, message);
+      await loadData();
+    } catch (error: any) {
+      console.error('[VesselDetailScreen] AIS check failed:', error);
+      Alert.alert('AIS Check Failed', error.message);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString();
@@ -457,6 +519,26 @@ export default function VesselDetailScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Check AIS Button */}
+        <TouchableOpacity
+          style={[
+            styles.checkAISButton,
+            !vessel.is_active && styles.checkAISButtonDisabled
+          ]}
+          onPress={handleCheckAIS}
+          disabled={!vessel.is_active}
+        >
+          <IconSymbol
+            ios_icon_name="location.circle"
+            android_material_icon_name="my-location"
+            size={20}
+            color="#fff"
+          />
+          <Text style={styles.checkAISButtonText}>
+            {vessel.is_active ? 'Check AIS' : 'Activate Vessel to Check AIS'}
+          </Text>
+        </TouchableOpacity>
 
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
