@@ -29,6 +29,11 @@ interface Vessel {
   vessel_name: string;
   is_active: boolean;
   created_at: string;
+  flag?: string;
+  official_number?: string;
+  vessel_type?: string;
+  length_metres?: number;
+  gross_tonnes?: number;
 }
 
 export default function SeaTimeScreen() {
@@ -37,8 +42,13 @@ export default function SeaTimeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
-  const [newMMSI, setNewMMSI] = useState('');
   const [newVesselName, setNewVesselName] = useState('');
+  const [newMMSI, setNewMMSI] = useState('');
+  const [newFlag, setNewFlag] = useState('');
+  const [newOfficialNumber, setNewOfficialNumber] = useState('');
+  const [newVesselType, setNewVesselType] = useState('');
+  const [newLengthMetres, setNewLengthMetres] = useState('');
+  const [newGrossTonnes, setNewGrossTonnes] = useState('');
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
@@ -78,11 +88,35 @@ export default function SeaTimeScreen() {
     }
 
     try {
-      console.log('Creating new vessel:', { mmsi: newMMSI, name: newVesselName });
-      await seaTimeApi.createVessel(newMMSI.trim(), newVesselName.trim(), false);
+      console.log('Creating new vessel:', { 
+        mmsi: newMMSI, 
+        name: newVesselName,
+        flag: newFlag,
+        official_number: newOfficialNumber,
+        vessel_type: newVesselType,
+        length_metres: newLengthMetres,
+        gross_tonnes: newGrossTonnes
+      });
+      
+      await seaTimeApi.createVessel(
+        newMMSI.trim(), 
+        newVesselName.trim(), 
+        false,
+        newFlag.trim() || undefined,
+        newOfficialNumber.trim() || undefined,
+        newVesselType || undefined,
+        newLengthMetres ? parseFloat(newLengthMetres) : undefined,
+        newGrossTonnes ? parseFloat(newGrossTonnes) : undefined
+      );
+      
       setModalVisible(false);
       setNewMMSI('');
       setNewVesselName('');
+      setNewFlag('');
+      setNewOfficialNumber('');
+      setNewVesselType('');
+      setNewLengthMetres('');
+      setNewGrossTonnes('');
       await loadData();
       Alert.alert('Success', 'Vessel added successfully');
     } catch (error: any) {
@@ -371,7 +405,7 @@ export default function SeaTimeScreen() {
                 showsVerticalScrollIndicator={true}
               >
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Vessel Name</Text>
+                  <Text style={styles.inputLabel}>Vessel Name *</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="e.g., MV Serenity"
@@ -383,7 +417,7 @@ export default function SeaTimeScreen() {
                 </View>
 
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>MMSI Number</Text>
+                  <Text style={styles.inputLabel}>MMSI Number *</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="e.g., 235012345"
@@ -391,6 +425,90 @@ export default function SeaTimeScreen() {
                     value={newMMSI}
                     onChangeText={setNewMMSI}
                     keyboardType="numeric"
+                    returnKeyType="next"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Flag</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., United Kingdom"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newFlag}
+                    onChangeText={setNewFlag}
+                    returnKeyType="next"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Official No.</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 123456"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newOfficialNumber}
+                    onChangeText={setNewOfficialNumber}
+                    returnKeyType="next"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Type (Motor/Sail)</Text>
+                  <View style={styles.typeButtonContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeButton,
+                        newVesselType === 'Motor' && styles.typeButtonActive
+                      ]}
+                      onPress={() => setNewVesselType('Motor')}
+                    >
+                      <Text style={[
+                        styles.typeButtonText,
+                        newVesselType === 'Motor' && styles.typeButtonTextActive
+                      ]}>
+                        Motor
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeButton,
+                        newVesselType === 'Sail' && styles.typeButtonActive
+                      ]}
+                      onPress={() => setNewVesselType('Sail')}
+                    >
+                      <Text style={[
+                        styles.typeButtonText,
+                        newVesselType === 'Sail' && styles.typeButtonTextActive
+                      ]}>
+                        Sail
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Length (metres)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 45.5"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newLengthMetres}
+                    onChangeText={setNewLengthMetres}
+                    keyboardType="decimal-pad"
+                    returnKeyType="next"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Gross Tonnes</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 500"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newGrossTonnes}
+                    onChangeText={setNewGrossTonnes}
+                    keyboardType="decimal-pad"
                     returnKeyType="done"
                     onSubmitEditing={handleAddVessel}
                   />
@@ -607,13 +725,13 @@ function createStyles(isDark: boolean) {
     },
     modalKeyboardView: {
       justifyContent: 'flex-end',
-      maxHeight: SCREEN_HEIGHT * 0.7,
+      maxHeight: SCREEN_HEIGHT * 0.85,
     },
     modalContent: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
-      height: SCREEN_HEIGHT * 0.6,
+      height: SCREEN_HEIGHT * 0.85,
     },
     modalHeader: {
       flexDirection: 'row',
@@ -653,6 +771,31 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.text : colors.textLight,
       borderWidth: 1,
       borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    typeButtonContainer: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    typeButton: {
+      flex: 1,
+      padding: 14,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      alignItems: 'center',
+    },
+    typeButtonActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    typeButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    typeButtonTextActive: {
+      color: '#fff',
     },
     submitButton: {
       backgroundColor: colors.primary,

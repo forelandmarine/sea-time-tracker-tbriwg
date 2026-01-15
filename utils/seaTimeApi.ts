@@ -16,6 +16,11 @@ export interface Vessel {
   vessel_name: string;
   is_active: boolean;
   created_at: string;
+  flag?: string;
+  official_number?: string;
+  vessel_type?: string;
+  length_metres?: number;
+  gross_tonnes?: number;
 }
 
 export interface SeaTimeEntry {
@@ -143,11 +148,34 @@ export async function getVessels(): Promise<Vessel[]> {
   return data;
 }
 
-export async function createVessel(mmsi: string, vessel_name: string, is_active?: boolean): Promise<Vessel> {
+export async function createVessel(
+  mmsi: string, 
+  vessel_name: string, 
+  is_active?: boolean,
+  flag?: string,
+  official_number?: string,
+  vessel_type?: string,
+  length_metres?: number,
+  gross_tonnes?: number
+): Promise<Vessel> {
   checkBackendConfigured();
   const url = `${API_BASE_URL}/api/vessels`;
-  console.log('[API] Creating vessel:', { mmsi, vessel_name, is_active });
-  const response = await fetch(url, await getFetchOptions('POST', { mmsi, vessel_name, is_active }));
+  
+  const body: any = { 
+    mmsi, 
+    vessel_name, 
+    is_active 
+  };
+  
+  // Add optional fields if provided
+  if (flag) body.flag = flag;
+  if (official_number) body.official_number = official_number;
+  if (vessel_type) body.vessel_type = vessel_type;
+  if (length_metres !== undefined) body.length_metres = length_metres;
+  if (gross_tonnes !== undefined) body.gross_tonnes = gross_tonnes;
+  
+  console.log('[API] Creating vessel:', body);
+  const response = await fetch(url, await getFetchOptions('POST', body));
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[API] Failed to create vessel:', response.status, errorText);
