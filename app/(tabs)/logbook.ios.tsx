@@ -13,6 +13,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -53,21 +54,41 @@ const createStyles = (isDark: boolean, topInset: number) =>
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
     header: {
-      paddingTop: topInset + 20,
-      paddingHorizontal: 20,
-      paddingBottom: 20,
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      padding: 20,
+      paddingTop: topInset + 12,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
-    headerRow: {
+    headerTitleContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      marginBottom: 16,
+    },
+    appIcon: {
+      width: 53,
+      height: 53,
+      borderRadius: 12,
+    },
+    headerTextContainer: {
+      flex: 1,
+      minWidth: 0,
+    },
+    headerTitle: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    headerSubtitle: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 4,
+    },
+    headerControls: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 8,
-    },
-    title: {
-      fontSize: 34,
-      fontWeight: 'bold',
-      color: isDark ? colors.text : colors.textLight,
     },
     addButton: {
       backgroundColor: colors.primary,
@@ -77,16 +98,13 @@ const createStyles = (isDark: boolean, topInset: number) =>
       justifyContent: 'center',
       alignItems: 'center',
     },
-    subtitle: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 12,
-    },
     viewToggle: {
       flexDirection: 'row',
-      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
       borderRadius: 12,
       padding: 4,
+      flex: 1,
+      marginRight: 12,
     },
     toggleButton: {
       flex: 1,
@@ -108,6 +126,7 @@ const createStyles = (isDark: boolean, topInset: number) =>
     },
     scrollContent: {
       paddingHorizontal: 20,
+      paddingTop: 16,
       paddingBottom: 100,
     },
     summaryCard: {
@@ -217,6 +236,7 @@ const createStyles = (isDark: boolean, topInset: number) =>
     },
     calendarContainer: {
       paddingHorizontal: 20,
+      paddingTop: 16,
       paddingBottom: 20,
     },
     calendarCard: {
@@ -510,8 +530,19 @@ export default function LogbookScreen() {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.title}>Logbook</Text>
-          <Text style={styles.subtitle}>Loading your sea time records...</Text>
+          <View style={styles.headerTitleContainer}>
+            <Image
+              source={require('@/assets/images/c13cbd51-c2f7-489f-bbbb-6b28094d9b2b.png')}
+              style={styles.appIcon}
+              resizeMode="contain"
+            />
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+                SeaTime Tracker
+              </Text>
+              <Text style={styles.headerSubtitle}>Loading your sea time records...</Text>
+            </View>
+          </View>
         </View>
       </View>
     );
@@ -519,9 +550,47 @@ export default function LogbookScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
-        <View style={styles.headerRow}>
-          <Text style={styles.title}>Logbook</Text>
+        <View style={styles.headerTitleContainer}>
+          <Image
+            source={require('@/assets/images/c13cbd51-c2f7-489f-bbbb-6b28094d9b2b.png')}
+            style={styles.appIcon}
+            resizeMode="contain"
+          />
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+              SeaTime Tracker
+            </Text>
+            <Text style={styles.headerSubtitle}>Your Sea Time Logbook</Text>
+          </View>
+        </View>
+        
+        <View style={styles.headerControls}>
+          <View style={styles.viewToggle}>
+            <TouchableOpacity
+              style={[styles.toggleButton, viewMode === 'list' && styles.toggleButtonActive]}
+              onPress={() => {
+                console.log('[LogbookScreen iOS] Switching to list view');
+                setViewMode('list');
+              }}
+            >
+              <Text style={[styles.toggleText, viewMode === 'list' && styles.toggleTextActive]}>
+                List
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.toggleButton, viewMode === 'calendar' && styles.toggleButtonActive]}
+              onPress={() => {
+                console.log('[LogbookScreen iOS] Switching to calendar view');
+                setViewMode('calendar');
+              }}
+            >
+              <Text style={[styles.toggleText, viewMode === 'calendar' && styles.toggleTextActive]}>
+                Calendar
+              </Text>
+            </TouchableOpacity>
+          </View>
           <TouchableOpacity style={styles.addButton} onPress={handleAddEntry}>
             <IconSymbol
               ios_icon_name="plus"
@@ -529,32 +598,6 @@ export default function LogbookScreen() {
               size={24}
               color="#FFFFFF"
             />
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.subtitle}>All your sea time entries</Text>
-        
-        <View style={styles.viewToggle}>
-          <TouchableOpacity
-            style={[styles.toggleButton, viewMode === 'list' && styles.toggleButtonActive]}
-            onPress={() => {
-              console.log('[LogbookScreen iOS] Switching to list view');
-              setViewMode('list');
-            }}
-          >
-            <Text style={[styles.toggleText, viewMode === 'list' && styles.toggleTextActive]}>
-              List
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.toggleButton, viewMode === 'calendar' && styles.toggleButtonActive]}
-            onPress={() => {
-              console.log('[LogbookScreen iOS] Switching to calendar view');
-              setViewMode('calendar');
-            }}
-          >
-            <Text style={[styles.toggleText, viewMode === 'calendar' && styles.toggleTextActive]}>
-              Calendar
-            </Text>
           </TouchableOpacity>
         </View>
       </View>
