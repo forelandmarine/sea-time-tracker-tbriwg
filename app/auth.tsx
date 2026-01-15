@@ -149,9 +149,7 @@ export default function AuthScreen() {
           resizeMode="contain"
         />
         <Text style={styles.title}>SeaTime Tracker</Text>
-        <Text style={styles.subtitle}>
-          {isSignUp ? 'Create your account' : 'Welcome back'}
-        </Text>
+        <Text style={styles.subtitle}>By Foreland Marine</Text>
       </View>
 
       <View style={styles.form}>
