@@ -36,6 +36,11 @@ interface Vessel {
   gross_tonnes?: number;
 }
 
+interface VesselLocation {
+  latitude: number | null;
+  longitude: number | null;
+}
+
 export default function SeaTimeScreen() {
   const router = useRouter();
   const [vessels, setVessels] = useState<Vessel[]>([]);
@@ -49,6 +54,8 @@ export default function SeaTimeScreen() {
   const [newVesselType, setNewVesselType] = useState('');
   const [newLengthMetres, setNewLengthMetres] = useState('');
   const [newGrossTonnes, setNewGrossTonnes] = useState('');
+  const [activeVesselLocation, setActiveVesselLocation] = useState<VesselLocation | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
@@ -60,6 +67,14 @@ export default function SeaTimeScreen() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (activeVessel) {
+      loadActiveVesselLocation();
+    } else {
+      setActiveVesselLocation(null);
+    }
+  }, [activeVessel?.id]);
 
   const loadData = async () => {
     try {
@@ -75,9 +90,36 @@ export default function SeaTimeScreen() {
     }
   };
 
+  const loadActiveVesselLocation = async () => {
+    if (!activeVessel) {
+      console.log('No active vessel to load location for');
+      return;
+    }
+
+    try {
+      setLocationLoading(true);
+      console.log('Loading location for active vessel:', activeVessel.id);
+      const locationData = await seaTimeApi.getVesselAISLocation(activeVessel.id, false);
+      setActiveVesselLocation({
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+      });
+      console.log('Active vessel location loaded:', locationData.latitude, locationData.longitude);
+    } catch (error: any) {
+      console.error('Failed to load active vessel location:', error);
+      // Don't show alert for location errors, just log them
+      setActiveVesselLocation(null);
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadData();
+    if (activeVessel) {
+      await loadActiveVesselLocation();
+    }
     setRefreshing(false);
   };
 
@@ -183,6 +225,13 @@ export default function SeaTimeScreen() {
     router.push(`/vessel/${vesselId}` as any);
   };
 
+  const formatCoordinate = (value: number | null | undefined): string => {
+    if (value === null || value === undefined) {
+      return 'N/A';
+    }
+    return value.toFixed(6);
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -256,6 +305,13 @@ export default function SeaTimeScreen() {
                   </View>
                   <Text style={styles.vesselName}>{activeVessel.vessel_name}</Text>
                   <Text style={styles.vesselMmsi}>MMSI: {activeVessel.mmsi}</Text>
+                  {locationLoading ? (
+                    <Text style={styles.vesselLocation}>Loading location...</Text>
+                  ) : activeVesselLocation && (activeVesselLocation.latitude !== null || activeVesselLocation.longitude !== null) ? (
+                    <Text style={styles.vesselLocation}>
+                      Lat: {formatCoordinate(activeVesselLocation.latitude)}, Lon: {formatCoordinate(activeVesselLocation.longitude)}
+                    </Text>
+                  ) : null}
                 </View>
               </View>
             </TouchableOpacity>
@@ -578,6 +634,11 @@ function createStyles(isDark: boolean) {
     vesselMmsi: {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    },
+    vesselLocation: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 2,
     },
     statusIndicator: {
       width: 12,
