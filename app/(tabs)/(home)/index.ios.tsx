@@ -227,11 +227,31 @@ export default function SeaTimeScreen() {
     router.push(`/vessel/${vesselId}` as any);
   };
 
-  const formatCoordinate = (value: number | null | undefined): string => {
-    if (value === null || value === undefined) {
-      return 'N/A';
+  const convertToDMS = (decimal: number, isLatitude: boolean): string => {
+    const absolute = Math.abs(decimal);
+    const degrees = Math.floor(absolute);
+    const minutesDecimal = (absolute - degrees) * 60;
+    const minutes = Math.floor(minutesDecimal);
+    const seconds = ((minutesDecimal - minutes) * 60).toFixed(1);
+    
+    let direction = '';
+    if (isLatitude) {
+      direction = decimal >= 0 ? 'N' : 'S';
+    } else {
+      direction = decimal >= 0 ? 'E' : 'W';
     }
-    return value.toFixed(6);
+    
+    return `${degrees}° ${minutes}' ${seconds}" ${direction}`;
+  };
+
+  const formatLocationDMS = (lat: number | null | undefined, lon: number | null | undefined): { lat: string; lon: string } | null => {
+    if (lat === null || lat === undefined || lon === null || lon === undefined) {
+      return null;
+    }
+    return {
+      lat: convertToDMS(lat, true),
+      lon: convertToDMS(lon, false)
+    };
   };
 
   if (loading) {
@@ -307,12 +327,39 @@ export default function SeaTimeScreen() {
                   </View>
                   <Text style={styles.vesselName}>{activeVessel.vessel_name}</Text>
                   <Text style={styles.vesselMmsi}>MMSI: {activeVessel.mmsi}</Text>
+                  
+                  {/* Vessel Particulars */}
+                  <View style={styles.vesselParticulars}>
+                    {activeVessel.flag && (
+                      <Text style={styles.vesselDetail}>Flag: {activeVessel.flag}</Text>
+                    )}
+                    {activeVessel.official_number && (
+                      <Text style={styles.vesselDetail}>Official No.: {activeVessel.official_number}</Text>
+                    )}
+                    {activeVessel.vessel_type && (
+                      <Text style={styles.vesselDetail}>Type: {activeVessel.vessel_type}</Text>
+                    )}
+                    {activeVessel.length_metres && (
+                      <Text style={styles.vesselDetail}>Length: {activeVessel.length_metres}m</Text>
+                    )}
+                    {activeVessel.gross_tonnes && (
+                      <Text style={styles.vesselDetail}>Gross Tonnes: {activeVessel.gross_tonnes}</Text>
+                    )}
+                  </View>
+
+                  {/* Location in DMS format */}
                   {locationLoading ? (
                     <Text style={styles.vesselLocation}>Loading location...</Text>
                   ) : activeVesselLocation && (activeVesselLocation.latitude !== null || activeVesselLocation.longitude !== null) ? (
-                    <Text style={styles.vesselLocation}>
-                      Lat: {formatCoordinate(activeVesselLocation.latitude)}, Lon: {formatCoordinate(activeVesselLocation.longitude)}
-                    </Text>
+                    (() => {
+                      const dmsLocation = formatLocationDMS(activeVesselLocation.latitude, activeVesselLocation.longitude);
+                      return dmsLocation ? (
+                        <View style={styles.locationContainer}>
+                          <Text style={styles.vesselLocation}>Lat: {dmsLocation.lat}</Text>
+                          <Text style={styles.vesselLocation}>Lon: {dmsLocation.lon}</Text>
+                        </View>
+                      ) : null;
+                    })()
                   ) : null}
                 </View>
               </View>
@@ -339,6 +386,25 @@ export default function SeaTimeScreen() {
                     <View style={styles.vesselInfo}>
                       <Text style={styles.vesselName}>{vessel.vessel_name}</Text>
                       <Text style={styles.vesselMmsi}>MMSI: {vessel.mmsi}</Text>
+                      
+                      {/* Vessel Particulars for historic vessels */}
+                      <View style={styles.vesselParticulars}>
+                        {vessel.flag && (
+                          <Text style={styles.vesselDetail}>Flag: {vessel.flag}</Text>
+                        )}
+                        {vessel.official_number && (
+                          <Text style={styles.vesselDetail}>Official No.: {vessel.official_number}</Text>
+                        )}
+                        {vessel.vessel_type && (
+                          <Text style={styles.vesselDetail}>Type: {vessel.vessel_type}</Text>
+                        )}
+                        {vessel.length_metres && (
+                          <Text style={styles.vesselDetail}>Length: {vessel.length_metres}m</Text>
+                        )}
+                        {vessel.gross_tonnes && (
+                          <Text style={styles.vesselDetail}>Gross Tonnes: {vessel.gross_tonnes}</Text>
+                        )}
+                      </View>
                     </View>
                     <IconSymbol
                       ios_icon_name="chevron.right"
@@ -636,11 +702,24 @@ function createStyles(isDark: boolean, topInset: number) {
     vesselMmsi: {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 8,
+    },
+    vesselParticulars: {
+      marginTop: 4,
+      marginBottom: 8,
+    },
+    vesselDetail: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 2,
+    },
+    locationContainer: {
+      marginTop: 4,
     },
     vesselLocation: {
-      fontSize: 14,
+      fontSize: 13,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 2,
+      marginBottom: 1,
     },
     statusIndicator: {
       width: 12,
