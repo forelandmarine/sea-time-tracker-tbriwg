@@ -1,6 +1,6 @@
 
 import { Tabs, useRouter, useSegments } from 'expo-router';
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { useColorScheme, ActivityIndicator, View } from 'react-native';
@@ -13,7 +13,7 @@ export default function TabLayout() {
   const router = useRouter();
   const segments = useSegments();
 
-  useEffect(() => {
+  const checkAuth = useCallback(() => {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(tabs)';
@@ -23,7 +23,11 @@ export default function TabLayout() {
       console.log('[TabLayout iOS] User not authenticated, redirecting to auth');
       router.replace('/auth');
     }
-  }, [user, loading, segments]);
+  }, [user, loading, segments, router]);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
 
   if (loading) {
     return (
