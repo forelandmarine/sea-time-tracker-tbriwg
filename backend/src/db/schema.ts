@@ -5,8 +5,14 @@ export const vessels = pgTable('vessels', {
   id: uuid('id').primaryKey().defaultRandom(),
   mmsi: text('mmsi').notNull().unique(),
   vessel_name: text('vessel_name').notNull(),
+  flag: text('flag'),
+  official_number: text('official_number'),
+  type: text('type'), // 'Motor' or 'Sail'
+  length_metres: decimal('length_metres', { precision: 8, scale: 2 }),
+  gross_tonnes: decimal('gross_tonnes', { precision: 10, scale: 2 }),
   is_active: boolean('is_active').notNull().default(false),
   created_at: timestamp('created_at').defaultNow().notNull(),
+  updated_at: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
   index('vessels_mmsi_idx').on(table.mmsi),
   index('vessels_is_active_idx').on(table.is_active),
