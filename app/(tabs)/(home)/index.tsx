@@ -39,6 +39,7 @@ interface Vessel {
 interface VesselLocation {
   latitude: number | null;
   longitude: number | null;
+  timestamp: string | null;
 }
 
 export default function SeaTimeScreen() {
@@ -103,8 +104,9 @@ export default function SeaTimeScreen() {
       setActiveVesselLocation({
         latitude: locationData.latitude,
         longitude: locationData.longitude,
+        timestamp: locationData.timestamp,
       });
-      console.log('Active vessel location loaded:', locationData.latitude, locationData.longitude);
+      console.log('Active vessel location loaded:', locationData.latitude, locationData.longitude, 'timestamp:', locationData.timestamp);
     } catch (error: any) {
       console.error('Failed to load active vessel location:', error);
       // Don't show alert for location errors, just log them
@@ -252,6 +254,17 @@ export default function SeaTimeScreen() {
     };
   };
 
+  const formatTimestamp = (timestamp: string | null | undefined): string => {
+    if (!timestamp) return '';
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleString();
+    } catch (e) {
+      console.error('Failed to format timestamp:', e);
+      return '';
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -345,7 +358,7 @@ export default function SeaTimeScreen() {
                     )}
                   </View>
 
-                  {/* Location in DMS format */}
+                  {/* Location in DMS format with timestamp */}
                   {locationLoading ? (
                     <Text style={styles.vesselLocation}>Loading location...</Text>
                   ) : activeVesselLocation && (activeVesselLocation.latitude !== null || activeVesselLocation.longitude !== null) ? (
@@ -355,6 +368,11 @@ export default function SeaTimeScreen() {
                         <View style={styles.locationContainer}>
                           <Text style={styles.vesselLocation}>Lat: {dmsLocation.lat}</Text>
                           <Text style={styles.vesselLocation}>Lon: {dmsLocation.lon}</Text>
+                          {activeVesselLocation.timestamp && (
+                            <Text style={styles.vesselTimestamp}>
+                              {formatTimestamp(activeVesselLocation.timestamp)}
+                            </Text>
+                          )}
                         </View>
                       ) : null;
                     })()
@@ -718,6 +736,12 @@ function createStyles(isDark: boolean) {
       fontSize: 13,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginBottom: 1,
+    },
+    vesselTimestamp: {
+      fontSize: 12,
+      color: colors.primary,
+      marginTop: 4,
+      fontWeight: '600',
     },
     statusIndicator: {
       width: 12,
