@@ -23,6 +23,8 @@ export function register(app: App, fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { startDate, endDate } = request.query;
 
+    app.logger.info({ startDate, endDate }, 'Generating CSV report');
+
     let entries = await app.db.query.sea_time_entries.findMany({
       with: {
         vessel: true,
@@ -45,12 +47,33 @@ export function register(app: App, fastify: FastifyInstance) {
     // Only include confirmed entries
     entries = entries.filter((entry) => entry.status === 'confirmed');
 
-    // Build CSV
-    const headers = ['Date', 'Vessel Name', 'MMSI', 'Start Time', 'End Time', 'Duration Hours', 'Status', 'Notes'];
+    app.logger.info({ count: entries.length }, 'Filtered entries for CSV report');
+
+    // Build CSV with vessel particulars
+    const headers = [
+      'Date',
+      'Vessel Name',
+      'MMSI',
+      'Flag',
+      'Official Number',
+      'Vessel Type',
+      'Length (metres)',
+      'Gross Tonnes',
+      'Start Time',
+      'End Time',
+      'Duration Hours',
+      'Status',
+      'Notes',
+    ];
     const rows = entries.map((entry) => [
       new Date(entry.start_time).toISOString().split('T')[0],
       entry.vessel?.vessel_name || '',
       entry.vessel?.mmsi || '',
+      entry.vessel?.flag || '',
+      entry.vessel?.official_number || '',
+      entry.vessel?.type || '',
+      entry.vessel?.length_metres || '',
+      entry.vessel?.gross_tonnes || '',
       new Date(entry.start_time).toISOString(),
       entry.end_time ? new Date(entry.end_time).toISOString() : '',
       entry.duration_hours || '',
@@ -64,6 +87,8 @@ export function register(app: App, fastify: FastifyInstance) {
         row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')
       ),
     ].join('\n');
+
+    app.logger.info({ headerCount: headers.length, rowCount: rows.length }, 'CSV report generated');
 
     reply.header('Content-Type', 'text/csv');
     reply.header('Content-Disposition', 'attachment; filename="sea-time-entries.csv"');
