@@ -21,6 +21,7 @@ import * as seaTimeApi from '@/utils/seaTimeApi';
 import { useRouter } from 'expo-router';
 import { Calendar } from 'react-native-calendars';
 import { getRequirementTitles } from '@/constants/mcaRequirements';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 interface Vessel {
   id: string;
@@ -311,26 +312,41 @@ const createStyles = (isDark: boolean) =>
       borderRadius: 20,
       padding: 24,
       width: '90%',
-      maxWidth: 400,
-      maxHeight: '80%',
+      maxWidth: 500,
+      maxHeight: '85%',
+    },
+    modalScrollContent: {
+      paddingBottom: 20,
     },
     modalTitle: {
       fontSize: 24,
       fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
+      marginBottom: 8,
+    },
+    modalSubtitle: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 20,
+    },
+    inputGroup: {
       marginBottom: 20,
     },
     inputLabel: {
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
       marginBottom: 8,
-      marginTop: 12,
+    },
+    inputLabelOptional: {
+      fontSize: 13,
+      fontWeight: '400',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
     input: {
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
       borderRadius: 12,
-      padding: 12,
+      padding: 14,
       fontSize: 16,
       color: isDark ? colors.text : colors.textLight,
       borderWidth: 1,
@@ -339,13 +355,38 @@ const createStyles = (isDark: boolean) =>
     pickerButton: {
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
       borderRadius: 12,
-      padding: 12,
+      padding: 14,
       borderWidth: 1,
       borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
     },
     pickerButtonText: {
       fontSize: 16,
       color: isDark ? colors.text : colors.textLight,
+    },
+    pickerButtonPlaceholder: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    },
+    dateTimeButton: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 12,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    dateTimeText: {
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
+    },
+    dateTimePlaceholder: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
     modalButtons: {
       flexDirection: 'row',
@@ -354,12 +395,14 @@ const createStyles = (isDark: boolean) =>
     },
     modalButton: {
       flex: 1,
-      padding: 14,
+      padding: 16,
       borderRadius: 12,
       alignItems: 'center',
     },
     cancelButton: {
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
     },
     saveButton: {
       backgroundColor: colors.primary,
@@ -375,7 +418,7 @@ const createStyles = (isDark: boolean) =>
       color: '#FFFFFF',
     },
     vesselOption: {
-      padding: 12,
+      padding: 16,
       borderBottomWidth: 1,
       borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
     },
@@ -390,7 +433,7 @@ const createStyles = (isDark: boolean) =>
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
       borderRadius: 12,
       padding: 12,
-      marginTop: 12,
+      marginBottom: 20,
       borderWidth: 1,
       borderColor: colors.primary,
     },
@@ -403,13 +446,12 @@ const createStyles = (isDark: boolean) =>
     serviceTypeContainer: {
       flexDirection: 'row',
       gap: 8,
-      marginTop: 8,
     },
     serviceTypeButton: {
       flex: 1,
-      paddingVertical: 10,
+      paddingVertical: 12,
       paddingHorizontal: 12,
-      borderRadius: 8,
+      borderRadius: 10,
       borderWidth: 1,
       borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
       alignItems: 'center',
@@ -419,7 +461,7 @@ const createStyles = (isDark: boolean) =>
       borderColor: colors.primary,
     },
     serviceTypeText: {
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: '600',
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
@@ -429,8 +471,21 @@ const createStyles = (isDark: boolean) =>
     helperText: {
       fontSize: 12,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 4,
+      marginTop: 6,
       fontStyle: 'italic',
+      lineHeight: 16,
+    },
+    voyageRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    voyageColumn: {
+      flex: 1,
+    },
+    divider: {
+      height: 1,
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+      marginVertical: 20,
     },
   });
 
@@ -450,10 +505,18 @@ export default function LogbookScreen() {
 
   // Form state
   const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [notes, setNotes] = useState('');
   const [serviceType, setServiceType] = useState<ServiceType>('seagoing');
+  
+  // Voyage location fields
+  const [voyageFrom, setVoyageFrom] = useState('');
+  const [voyageTo, setVoyageTo] = useState('');
 
   useEffect(() => {
     console.log('[LogbookScreen] Component mounted, loading data');
@@ -495,6 +558,23 @@ export default function LogbookScreen() {
     router.push('/mca-requirements');
   };
 
+  const parseLatLong = (text: string): { lat: number | null; lon: number | null } => {
+    // Try to parse lat/long from text like "51.5074, -0.1278" or "51.5074 N, 0.1278 W"
+    const coordPattern = /(-?\d+\.?\d*)\s*[,\s]\s*(-?\d+\.?\d*)/;
+    const match = text.match(coordPattern);
+    
+    if (match) {
+      const lat = parseFloat(match[1]);
+      const lon = parseFloat(match[2]);
+      
+      if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+        return { lat, lon };
+      }
+    }
+    
+    return { lat: null, lon: null };
+  };
+
   const handleSaveEntry = async () => {
     console.log('[LogbookScreen] User tapped Save Entry');
     
@@ -504,49 +584,79 @@ export default function LogbookScreen() {
     }
     
     if (!startDate) {
-      Alert.alert('Error', 'Please enter a start date and time');
+      Alert.alert('Error', 'Please select a start date and time');
+      return;
+    }
+
+    if (endDate && endDate <= startDate) {
+      Alert.alert('Error', 'End date must be after start date');
       return;
     }
 
     try {
-      const startDateTime = new Date(startDate);
-      const endDateTime = endDate ? new Date(endDate) : null;
+      // Parse voyage locations
+      const fromCoords = parseLatLong(voyageFrom);
+      const toCoords = parseLatLong(voyageTo);
 
-      if (endDateTime && endDateTime <= startDateTime) {
-        Alert.alert('Error', 'End date must be after start date');
-        return;
-      }
-
+      // Build notes with voyage information
       const serviceTypeNote = `Service Type: ${serviceType.charAt(0).toUpperCase() + serviceType.slice(1)}`;
-      const fullNotes = notes ? `${serviceTypeNote}\n${notes}` : serviceTypeNote;
+      const voyageFromNote = voyageFrom ? `From: ${voyageFrom}` : '';
+      const voyageToNote = voyageTo ? `To: ${voyageTo}` : '';
+      
+      const noteParts = [serviceTypeNote, voyageFromNote, voyageToNote, notes].filter(Boolean);
+      const fullNotes = noteParts.join('\n');
 
       console.log('[LogbookScreen] Creating manual sea time entry:', {
         vessel_id: selectedVessel.id,
-        start_time: startDateTime.toISOString(),
-        end_time: endDateTime?.toISOString() || null,
+        start_time: startDate.toISOString(),
+        end_time: endDate?.toISOString() || null,
         notes: fullNotes,
-        service_type: serviceType,
+        start_latitude: fromCoords.lat,
+        start_longitude: fromCoords.lon,
+        end_latitude: toCoords.lat,
+        end_longitude: toCoords.lon,
       });
 
       await seaTimeApi.createManualSeaTimeEntry({
         vessel_id: selectedVessel.id,
-        start_time: startDateTime.toISOString(),
-        end_time: endDateTime?.toISOString() || null,
+        start_time: startDate.toISOString(),
+        end_time: endDate?.toISOString() || null,
         notes: fullNotes,
+        start_latitude: fromCoords.lat,
+        start_longitude: fromCoords.lon,
+        end_latitude: toCoords.lat,
+        end_longitude: toCoords.lon,
       });
 
       Alert.alert('Success', 'Sea time entry added successfully');
       setShowAddModal(false);
-      setSelectedVessel(null);
-      setStartDate('');
-      setEndDate('');
-      setNotes('');
-      setServiceType('seagoing');
+      resetForm();
       loadData();
     } catch (error: any) {
       console.error('[LogbookScreen] Error creating entry:', error);
       Alert.alert('Error', error.message || 'Failed to create sea time entry');
     }
+  };
+
+  const resetForm = () => {
+    setSelectedVessel(null);
+    setStartDate(null);
+    setEndDate(null);
+    setNotes('');
+    setServiceType('seagoing');
+    setVoyageFrom('');
+    setVoyageTo('');
+  };
+
+  const formatDateTime = (date: Date | null) => {
+    if (!date) return '';
+    return date.toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   const formatDate = (dateString: string) => {
@@ -614,19 +724,17 @@ export default function LogbookScreen() {
   const getMarkedDates = () => {
     const marked: any = {};
     
-    // Mark all days that have confirmed sea time
     entries
       .filter((e) => e.status === 'confirmed')
       .forEach((entry) => {
         const startDate = new Date(entry.start_time);
         const endDate = entry.end_time ? new Date(entry.end_time) : new Date();
         
-        // Mark each day from start to end
         let currentDate = new Date(startDate);
-        currentDate.setHours(0, 0, 0, 0); // Reset to start of day
+        currentDate.setHours(0, 0, 0, 0);
         
         const endDateNormalized = new Date(endDate);
-        endDateNormalized.setHours(23, 59, 59, 999); // Set to end of day
+        endDateNormalized.setHours(23, 59, 59, 999);
         
         while (currentDate <= endDateNormalized) {
           const dateString = currentDate.toISOString().split('T')[0];
@@ -644,7 +752,6 @@ export default function LogbookScreen() {
     return marked;
   };
 
-  // Group entries by vessel for better organization
   const groupEntriesByVessel = () => {
     const confirmedEntries = entries.filter((e) => e.status === 'confirmed');
     const grouped: { [vesselId: string]: { vessel: Vessel | null; entries: SeaTimeEntry[] } } = {};
@@ -660,7 +767,6 @@ export default function LogbookScreen() {
       grouped[vesselId].entries.push(entry);
     });
     
-    // Sort entries within each vessel by date (most recent first)
     Object.values(grouped).forEach((group) => {
       group.entries.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime());
     });
@@ -1005,7 +1111,7 @@ export default function LogbookScreen() {
       <Modal
         visible={showAddModal}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setShowAddModal(false)}
       >
         <KeyboardAvoidingView
@@ -1018,117 +1124,221 @@ export default function LogbookScreen() {
             onPress={() => setShowAddModal(false)}
           >
             <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-              <ScrollView style={styles.modalContent}>
+              <View style={styles.modalContent}>
                 <Text style={styles.modalTitle}>Add Sea Time Entry</Text>
+                <Text style={styles.modalSubtitle}>
+                  Manually record your sea time with voyage details
+                </Text>
 
-                <TouchableOpacity style={styles.mcaButton} onPress={handleViewMCARequirements}>
-                  <IconSymbol
-                    ios_icon_name="info.circle"
-                    android_material_icon_name="info"
-                    size={20}
-                    color={colors.primary}
-                  />
-                  <Text style={styles.mcaButtonText}>View MCA Requirements</Text>
-                </TouchableOpacity>
-
-                <Text style={styles.inputLabel}>Service Type *</Text>
-                <View style={styles.serviceTypeContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.serviceTypeButton,
-                      serviceType === 'seagoing' && styles.serviceTypeButtonActive,
-                    ]}
-                    onPress={() => setServiceType('seagoing')}
-                  >
-                    <Text
-                      style={[
-                        styles.serviceTypeText,
-                        serviceType === 'seagoing' && styles.serviceTypeTextActive,
-                      ]}
-                    >
-                      Seagoing
-                    </Text>
+                <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={styles.modalScrollContent}>
+                  <TouchableOpacity style={styles.mcaButton} onPress={handleViewMCARequirements}>
+                    <IconSymbol
+                      ios_icon_name="info.circle"
+                      android_material_icon_name="info"
+                      size={20}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.mcaButtonText}>View MCA Requirements</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.serviceTypeButton,
-                      serviceType === 'standby' && styles.serviceTypeButtonActive,
-                    ]}
-                    onPress={() => setServiceType('standby')}
-                  >
-                    <Text
-                      style={[
-                        styles.serviceTypeText,
-                        serviceType === 'standby' && styles.serviceTypeTextActive,
-                      ]}
+
+                  {/* Service Type */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Service Type</Text>
+                    <View style={styles.serviceTypeContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.serviceTypeButton,
+                          serviceType === 'seagoing' && styles.serviceTypeButtonActive,
+                        ]}
+                        onPress={() => setServiceType('seagoing')}
+                      >
+                        <Text
+                          style={[
+                            styles.serviceTypeText,
+                            serviceType === 'seagoing' && styles.serviceTypeTextActive,
+                          ]}
+                        >
+                          Seagoing
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.serviceTypeButton,
+                          serviceType === 'standby' && styles.serviceTypeButtonActive,
+                        ]}
+                        onPress={() => setServiceType('standby')}
+                      >
+                        <Text
+                          style={[
+                            styles.serviceTypeText,
+                            serviceType === 'standby' && styles.serviceTypeTextActive,
+                          ]}
+                        >
+                          Standby
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.serviceTypeButton,
+                          serviceType === 'yard' && styles.serviceTypeButtonActive,
+                        ]}
+                        onPress={() => setServiceType('yard')}
+                      >
+                        <Text
+                          style={[
+                            styles.serviceTypeText,
+                            serviceType === 'yard' && styles.serviceTypeTextActive,
+                          ]}
+                        >
+                          Yard
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    {serviceType === 'standby' && (
+                      <Text style={styles.helperText}>
+                        Max 14 consecutive days; cannot exceed previous voyage length
+                      </Text>
+                    )}
+                    {serviceType === 'yard' && (
+                      <Text style={styles.helperText}>
+                        Up to 90 days total (continuous or split)
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* Vessel Selection */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Vessel</Text>
+                    <TouchableOpacity
+                      style={styles.pickerButton}
+                      onPress={() => setShowVesselPicker(true)}
                     >
-                      Standby
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.serviceTypeButton,
-                      serviceType === 'yard' && styles.serviceTypeButtonActive,
-                    ]}
-                    onPress={() => setServiceType('yard')}
-                  >
-                    <Text
-                      style={[
-                        styles.serviceTypeText,
-                        serviceType === 'yard' && styles.serviceTypeTextActive,
-                      ]}
+                      <Text
+                        style={
+                          selectedVessel
+                            ? styles.pickerButtonText
+                            : styles.pickerButtonPlaceholder
+                        }
+                      >
+                        {selectedVessel ? selectedVessel.vessel_name : 'Select a vessel'}
+                      </Text>
+                      <IconSymbol
+                        ios_icon_name="chevron.down"
+                        android_material_icon_name="arrow-drop-down"
+                        size={20}
+                        color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.divider} />
+
+                  {/* Start Date & Time */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Start Date & Time</Text>
+                    <TouchableOpacity
+                      style={styles.dateTimeButton}
+                      onPress={() => setShowStartDatePicker(true)}
                     >
-                      Yard
+                      <Text
+                        style={
+                          startDate ? styles.dateTimeText : styles.dateTimePlaceholder
+                        }
+                      >
+                        {startDate ? formatDateTime(startDate) : 'Select start date & time'}
+                      </Text>
+                      <IconSymbol
+                        ios_icon_name="calendar"
+                        android_material_icon_name="calendar-today"
+                        size={20}
+                        color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* End Date & Time */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>
+                      End Date & Time{' '}
+                      <Text style={styles.inputLabelOptional}>(Optional)</Text>
                     </Text>
-                  </TouchableOpacity>
-                </View>
-                {serviceType === 'standby' && (
-                  <Text style={styles.helperText}>
-                    Max 14 consecutive days; cannot exceed previous voyage length
-                  </Text>
-                )}
-                {serviceType === 'yard' && (
-                  <Text style={styles.helperText}>Up to 90 days total (continuous or split)</Text>
-                )}
+                    <TouchableOpacity
+                      style={styles.dateTimeButton}
+                      onPress={() => setShowEndDatePicker(true)}
+                    >
+                      <Text
+                        style={endDate ? styles.dateTimeText : styles.dateTimePlaceholder}
+                      >
+                        {endDate ? formatDateTime(endDate) : 'Select end date & time'}
+                      </Text>
+                      <IconSymbol
+                        ios_icon_name="calendar"
+                        android_material_icon_name="calendar-today"
+                        size={20}
+                        color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                      />
+                    </TouchableOpacity>
+                  </View>
 
-                <Text style={styles.inputLabel}>Vessel *</Text>
-                <TouchableOpacity
-                  style={styles.pickerButton}
-                  onPress={() => setShowVesselPicker(true)}
-                >
-                  <Text style={styles.pickerButtonText}>
-                    {selectedVessel ? selectedVessel.vessel_name : 'Select a vessel'}
-                  </Text>
-                </TouchableOpacity>
+                  <View style={styles.divider} />
 
-                <Text style={styles.inputLabel}>Start Date & Time *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="YYYY-MM-DD HH:MM"
-                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                  value={startDate}
-                  onChangeText={setStartDate}
-                />
+                  {/* Voyage From/To */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>
+                      Voyage Locations{' '}
+                      <Text style={styles.inputLabelOptional}>(Optional)</Text>
+                    </Text>
+                    <Text style={styles.helperText}>
+                      Enter location names or coordinates (e.g., "51.5074, -0.1278")
+                    </Text>
+                  </View>
 
-                <Text style={styles.inputLabel}>End Date & Time (Optional)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="YYYY-MM-DD HH:MM"
-                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                  value={endDate}
-                  onChangeText={setEndDate}
-                />
+                  <View style={styles.voyageRow}>
+                    <View style={styles.voyageColumn}>
+                      <Text style={[styles.inputLabel, { marginBottom: 8 }]}>From</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Port or coordinates"
+                        placeholderTextColor={
+                          isDark ? colors.textSecondary : colors.textSecondaryLight
+                        }
+                        value={voyageFrom}
+                        onChangeText={setVoyageFrom}
+                      />
+                    </View>
+                    <View style={styles.voyageColumn}>
+                      <Text style={[styles.inputLabel, { marginBottom: 8 }]}>To</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="Port or coordinates"
+                        placeholderTextColor={
+                          isDark ? colors.textSecondary : colors.textSecondaryLight
+                        }
+                        value={voyageTo}
+                        onChangeText={setVoyageTo}
+                      />
+                    </View>
+                  </View>
 
-                <Text style={styles.inputLabel}>Notes (Optional)</Text>
-                <TextInput
-                  style={[styles.input, { height: 80 }]}
-                  placeholder="Add any notes about this sea time..."
-                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                  value={notes}
-                  onChangeText={setNotes}
-                  multiline
-                  numberOfLines={3}
-                />
+                  {/* Notes */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>
+                      Additional Notes{' '}
+                      <Text style={styles.inputLabelOptional}>(Optional)</Text>
+                    </Text>
+                    <TextInput
+                      style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
+                      placeholder="Add any notes about this sea time..."
+                      placeholderTextColor={
+                        isDark ? colors.textSecondary : colors.textSecondaryLight
+                      }
+                      value={notes}
+                      onChangeText={setNotes}
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </View>
+                </ScrollView>
 
                 <View style={styles.modalButtons}>
                   <TouchableOpacity
@@ -1136,6 +1346,7 @@ export default function LogbookScreen() {
                     onPress={() => {
                       console.log('[LogbookScreen] User cancelled add entry');
                       setShowAddModal(false);
+                      resetForm();
                     }}
                   >
                     <Text style={[styles.modalButtonText, styles.cancelButtonText]}>
@@ -1146,12 +1357,10 @@ export default function LogbookScreen() {
                     style={[styles.modalButton, styles.saveButton]}
                     onPress={handleSaveEntry}
                   >
-                    <Text style={[styles.modalButtonText, styles.saveButtonText]}>
-                      Save
-                    </Text>
+                    <Text style={[styles.modalButtonText, styles.saveButtonText]}>Save</Text>
                   </TouchableOpacity>
                 </View>
-              </ScrollView>
+              </View>
             </TouchableOpacity>
           </TouchableOpacity>
         </KeyboardAvoidingView>
@@ -1161,7 +1370,7 @@ export default function LogbookScreen() {
       <Modal
         visible={showVesselPicker}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setShowVesselPicker(false)}
       >
         <TouchableOpacity
@@ -1172,7 +1381,7 @@ export default function LogbookScreen() {
           <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Select Vessel</Text>
-              <ScrollView style={{ maxHeight: 300 }}>
+              <ScrollView style={{ maxHeight: 400 }}>
                 {vessels.map((vessel, index) => (
                   <TouchableOpacity
                     key={index}
@@ -1191,6 +1400,160 @@ export default function LogbookScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {/* Date/Time Pickers for Android/Web */}
+      {showStartDatePicker && Platform.OS !== 'ios' && (
+        <DateTimePicker
+          value={startDate || new Date()}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowStartDatePicker(false);
+            if (selectedDate) {
+              const newDate = startDate ? new Date(startDate) : new Date();
+              newDate.setFullYear(selectedDate.getFullYear());
+              newDate.setMonth(selectedDate.getMonth());
+              newDate.setDate(selectedDate.getDate());
+              setStartDate(newDate);
+              setShowStartTimePicker(true);
+            }
+          }}
+        />
+      )}
+
+      {showStartTimePicker && Platform.OS !== 'ios' && (
+        <DateTimePicker
+          value={startDate || new Date()}
+          mode="time"
+          display="default"
+          onChange={(event, selectedTime) => {
+            setShowStartTimePicker(false);
+            if (selectedTime) {
+              const newDate = startDate ? new Date(startDate) : new Date();
+              newDate.setHours(selectedTime.getHours());
+              newDate.setMinutes(selectedTime.getMinutes());
+              setStartDate(newDate);
+            }
+          }}
+        />
+      )}
+
+      {showEndDatePicker && Platform.OS !== 'ios' && (
+        <DateTimePicker
+          value={endDate || new Date()}
+          mode="date"
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowEndDatePicker(false);
+            if (selectedDate) {
+              const newDate = endDate ? new Date(endDate) : new Date();
+              newDate.setFullYear(selectedDate.getFullYear());
+              newDate.setMonth(selectedDate.getMonth());
+              newDate.setDate(selectedDate.getDate());
+              setEndDate(newDate);
+              setShowEndTimePicker(true);
+            }
+          }}
+        />
+      )}
+
+      {showEndTimePicker && Platform.OS !== 'ios' && (
+        <DateTimePicker
+          value={endDate || new Date()}
+          mode="time"
+          display="default"
+          onChange={(event, selectedTime) => {
+            setShowEndTimePicker(false);
+            if (selectedTime) {
+              const newDate = endDate ? new Date(endDate) : new Date();
+              newDate.setHours(selectedTime.getHours());
+              newDate.setMinutes(selectedTime.getMinutes());
+              setEndDate(newDate);
+            }
+          }}
+        />
+      )}
+
+      {/* iOS Date/Time Pickers - Inline in modal */}
+      {showStartDatePicker && Platform.OS === 'ios' && (
+        <Modal
+          visible={showStartDatePicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowStartDatePicker(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowStartDatePicker(false)}
+          >
+            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Select Start Date & Time</Text>
+                <DateTimePicker
+                  value={startDate || new Date()}
+                  mode="datetime"
+                  display="spinner"
+                  onChange={(event, selectedDate) => {
+                    if (selectedDate) {
+                      setStartDate(selectedDate);
+                    }
+                  }}
+                  textColor={isDark ? colors.text : colors.textLight}
+                />
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.saveButton]}
+                    onPress={() => setShowStartDatePicker(false)}
+                  >
+                    <Text style={[styles.modalButtonText, styles.saveButtonText]}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      )}
+
+      {showEndDatePicker && Platform.OS === 'ios' && (
+        <Modal
+          visible={showEndDatePicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowEndDatePicker(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowEndDatePicker(false)}
+          >
+            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Select End Date & Time</Text>
+                <DateTimePicker
+                  value={endDate || new Date()}
+                  mode="datetime"
+                  display="spinner"
+                  onChange={(event, selectedDate) => {
+                    if (selectedDate) {
+                      setEndDate(selectedDate);
+                    }
+                  }}
+                  textColor={isDark ? colors.text : colors.textLight}
+                />
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.saveButton]}
+                    onPress={() => setShowEndDatePicker(false)}
+                  >
+                    <Text style={[styles.modalButtonText, styles.saveButtonText]}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </View>
   );
 }
