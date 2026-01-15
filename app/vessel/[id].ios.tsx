@@ -77,13 +77,33 @@ function createStyles(isDark: boolean) {
     particularsHeader: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'space-between',
       marginBottom: 12,
+    },
+    particularsHeaderLeft: {
+      flexDirection: 'row',
+      alignItems: 'center',
       gap: 8,
+      flex: 1,
     },
     particularsTitle: {
       fontSize: 18,
       fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
+    },
+    editButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    editButtonText: {
+      color: '#FFFFFF',
+      fontSize: 12,
+      fontWeight: '600',
     },
     particularRow: {
       flexDirection: 'row',
@@ -337,6 +357,16 @@ export default function VesselDetailScreen() {
     loadData();
   };
 
+  const handleEditParticulars = () => {
+    console.log('[VesselDetailScreen] User tapped Edit Particulars button');
+    Alert.alert(
+      'Edit Vessel Particulars',
+      'This feature will allow you to edit vessel details like flag, official number, type, length, and gross tonnage.',
+      [{ text: 'OK' }]
+    );
+    // TODO: Implement edit particulars functionality
+  };
+
   const handleActivateVessel = async () => {
     if (!vessel) {
       console.error('[VesselDetailScreen] No vessel data available');
@@ -544,13 +574,27 @@ export default function VesselDetailScreen() {
         {/* Vessel Particulars Section */}
         <View style={styles.particularsCard}>
           <View style={styles.particularsHeader}>
-            <IconSymbol
-              ios_icon_name="info.circle.fill"
-              android_material_icon_name="info"
-              size={20}
-              color={colors.primary}
-            />
-            <Text style={styles.particularsTitle}>Vessel Particulars</Text>
+            <View style={styles.particularsHeaderLeft}>
+              <IconSymbol
+                ios_icon_name="info.circle.fill"
+                android_material_icon_name="info"
+                size={20}
+                color={colors.primary}
+              />
+              <Text style={styles.particularsTitle}>Vessel Particulars</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.editButton}
+              onPress={handleEditParticulars}
+            >
+              <IconSymbol
+                ios_icon_name="pencil"
+                android_material_icon_name="edit"
+                size={14}
+                color="#FFFFFF"
+              />
+              <Text style={styles.editButtonText}>Edit</Text>
+            </TouchableOpacity>
           </View>
           
           <View style={styles.particularRow}>
