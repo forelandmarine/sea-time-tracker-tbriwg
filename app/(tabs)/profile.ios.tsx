@@ -52,9 +52,41 @@ function createStyles(isDark: boolean, topInset: number) {
       flex: 1,
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
+    header: {
+      padding: 20,
+      paddingTop: topInset + 12,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
+      marginBottom: 16,
+    },
+    headerTitleContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    appIcon: {
+      width: 53,
+      height: 53,
+      borderRadius: 12,
+    },
+    headerTextContainer: {
+      flex: 1,
+      minWidth: 0,
+    },
+    headerTitle: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    headerSubtitle: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 4,
+    },
     scrollContent: {
       padding: 16,
-      paddingTop: topInset + 16,
+      paddingTop: 0,
       paddingBottom: 100,
     },
     userCard: {
@@ -307,91 +339,122 @@ export default function ReportsScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.headerTitleContainer}>
+            <Image
+              source={require('@/assets/images/c13cbd51-c2f7-489f-bbbb-6b28094d9b2b.png')}
+              style={styles.appIcon}
+              resizeMode="contain"
+            />
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+                Reports
+              </Text>
+              <Text style={styles.headerSubtitle}>Loading reports...</Text>
+            </View>
+          </View>
+        </View>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.emptyStateText}>Loading reports...</Text>
         </View>
       </View>
     );
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      {/* Small User Card */}
-      {profile && (
-        <TouchableOpacity style={styles.userCard} onPress={handleUserCardPress}>
-          {profile?.imageUrl || profile?.image ? (
-            <Image source={{ uri: profile.imageUrl || profile.image || '' }} style={styles.profileImage} />
-          ) : (
-            <View style={styles.profileImagePlaceholder}>
-              <IconSymbol
-                ios_icon_name="person.circle.fill"
-                android_material_icon_name="account-circle"
-                size={40}
-                color={colors.primary}
-              />
-            </View>
-          )}
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>{profile.name}</Text>
-            <Text style={styles.userEmail}>{profile.email}</Text>
-          </View>
-          <IconSymbol
-            ios_icon_name="chevron.right"
-            android_material_icon_name="arrow-forward"
-            size={20}
-            color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-            style={styles.chevron}
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerTitleContainer}>
+          <Image
+            source={require('@/assets/images/c13cbd51-c2f7-489f-bbbb-6b28094d9b2b.png')}
+            style={styles.appIcon}
+            resizeMode="contain"
           />
-        </TouchableOpacity>
-      )}
-
-      <Text style={styles.title}>Sea Time Reports</Text>
-
-      {summary && (
-        <>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Sea Time Summary</Text>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Hours</Text>
-              <Text style={styles.summaryValue}>{summary.total_hours.toFixed(1)} hrs</Text>
-            </View>
-            <View style={[styles.summaryRow, styles.summaryRowLast]}>
-              <Text style={styles.summaryLabel}>Total Days</Text>
-              <Text style={styles.summaryValue}>{summary.total_days.toFixed(1)} days</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity 
-            style={[styles.button, styles.buttonSecondary]} 
-            onPress={handleViewMCARequirements}
-          >
-            <Text style={[styles.buttonText, styles.buttonTextSecondary]}>
-              📋 View MCA Requirements
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+              Reports
             </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.button} onPress={handleExportPDF}>
-            <Text style={styles.buttonText}>📄 Export PDF Report</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.button} onPress={handleExportCSV}>
-            <Text style={styles.buttonText}>📊 Export CSV Report</Text>
-          </TouchableOpacity>
-        </>
-      )}
-
-      {!summary && (
-        <View style={styles.emptyState}>
-          <IconSymbol
-            ios_icon_name="doc.text"
-            android_material_icon_name="description"
-            size={64}
-            color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-          />
-          <Text style={styles.emptyStateText}>No sea time data available yet</Text>
+            <Text style={styles.headerSubtitle}>Sea Time Reports & Export</Text>
+          </View>
         </View>
-      )}
-    </ScrollView>
+      </View>
+
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        {/* Small User Card */}
+        {profile && (
+          <TouchableOpacity style={styles.userCard} onPress={handleUserCardPress}>
+            {profile?.imageUrl || profile?.image ? (
+              <Image source={{ uri: profile.imageUrl || profile.image || '' }} style={styles.profileImage} />
+            ) : (
+              <View style={styles.profileImagePlaceholder}>
+                <IconSymbol
+                  ios_icon_name="person.circle.fill"
+                  android_material_icon_name="account-circle"
+                  size={40}
+                  color={colors.primary}
+                />
+              </View>
+            )}
+            <View style={styles.userInfo}>
+              <Text style={styles.userName}>{profile.name}</Text>
+              <Text style={styles.userEmail}>{profile.email}</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+              style={styles.chevron}
+            />
+          </TouchableOpacity>
+        )}
+
+        {summary && (
+          <>
+            <View style={styles.summaryCard}>
+              <Text style={styles.summaryTitle}>Sea Time Summary</Text>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Total Hours</Text>
+                <Text style={styles.summaryValue}>{summary.total_hours.toFixed(1)} hrs</Text>
+              </View>
+              <View style={[styles.summaryRow, styles.summaryRowLast]}>
+                <Text style={styles.summaryLabel}>Total Days</Text>
+                <Text style={styles.summaryValue}>{summary.total_days.toFixed(1)} days</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity 
+              style={[styles.button, styles.buttonSecondary]} 
+              onPress={handleViewMCARequirements}
+            >
+              <Text style={[styles.buttonText, styles.buttonTextSecondary]}>
+                📋 View MCA Requirements
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.button} onPress={handleExportPDF}>
+              <Text style={styles.buttonText}>📄 Export PDF Report</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.button} onPress={handleExportCSV}>
+              <Text style={styles.buttonText}>📊 Export CSV Report</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {!summary && (
+          <View style={styles.emptyState}>
+            <IconSymbol
+              ios_icon_name="doc.text"
+              android_material_icon_name="description"
+              size={64}
+              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+            />
+            <Text style={styles.emptyStateText}>No sea time data available yet</Text>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }

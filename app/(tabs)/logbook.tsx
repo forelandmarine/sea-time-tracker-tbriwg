@@ -599,7 +599,7 @@ export default function LogbookScreen() {
             />
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
-                SeaTime Tracker
+                Logbook
               </Text>
               <Text style={styles.headerSubtitle}>Loading your sea time records...</Text>
             </View>
@@ -621,7 +621,7 @@ export default function LogbookScreen() {
           />
           <View style={styles.headerTextContainer}>
             <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
-              SeaTime Tracker
+              Logbook
             </Text>
             <Text style={styles.headerSubtitle}>Your Sea Time Logbook</Text>
           </View>
