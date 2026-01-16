@@ -236,10 +236,10 @@ export function register(app: App, fastify: FastifyInstance) {
     });
   });
 
-  // GET /api/reports/pdf - Generate PDF report with date filtering
+  // GET /api/reports/pdf - Generate PDF report with date filtering (public endpoint)
   fastify.get<{ Querystring: { startDate?: string; endDate?: string } }>('/api/reports/pdf', {
     schema: {
-      description: 'Generate PDF report of sea time entries with optional date filtering',
+      description: 'Generate PDF report of sea time entries with optional date filtering (public)',
       tags: ['reports'],
       querystring: {
         type: 'object',
@@ -250,46 +250,12 @@ export function register(app: App, fastify: FastifyInstance) {
       },
       response: {
         200: { type: 'string' },
-        401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
     const { startDate, endDate } = request.query;
 
     app.logger.info({ startDate, endDate }, 'Generating PDF report');
-
-    // Get authenticated user from token
-    const authHeader = request.headers.authorization;
-    const token = authHeader?.replace('Bearer ', '');
-
-    if (!token) {
-      app.logger.warn({}, 'PDF report requested without authentication');
-      return reply.code(401).send({ error: 'Authentication required' });
-    }
-
-    // Find user session
-    const sessions = await app.db
-      .select()
-      .from(authSchema.session)
-      .where(eq(authSchema.session.token, token));
-
-    if (sessions.length === 0) {
-      app.logger.warn({}, 'Invalid token for PDF report');
-      return reply.code(401).send({ error: 'Invalid or expired token' });
-    }
-
-    const session = sessions[0];
-    const users = await app.db
-      .select()
-      .from(authSchema.user)
-      .where(eq(authSchema.user.id, session.userId));
-
-    if (users.length === 0) {
-      app.logger.warn({ userId: session.userId }, 'User not found for PDF report');
-      return reply.code(401).send({ error: 'User not found' });
-    }
-
-    const user = users[0];
 
     // Fetch all sea time entries with vessel data
     let entries = await app.db.query.sea_time_entries.findMany({
@@ -373,7 +339,6 @@ export function register(app: App, fastify: FastifyInstance) {
     doc.fontSize(24).font('Helvetica-Bold').text('Sea Time Report', { align: 'center' });
     doc.fontSize(12).font('Helvetica').text('By Foreland Marine', { align: 'center' });
     doc.fontSize(10).fillColor('#666666').text(`Generated: ${formatDate(new Date())}`, { align: 'center' });
-    doc.fontSize(10).text(`User: ${user.name} (${user.email})`, { align: 'center' });
 
     if (startDate || endDate) {
       const dateRange = [startDate && formatDate(startDate), endDate && formatDate(endDate)]
@@ -535,7 +500,7 @@ export function register(app: App, fastify: FastifyInstance) {
     doc.end();
 
     app.logger.info(
-      { userEmail: user.email, entryCount: confirmedEntries.length, pageCount },
+      { entryCount: confirmedEntries.length, pageCount },
       'PDF report generated successfully'
     );
 
