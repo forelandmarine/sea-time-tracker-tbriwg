@@ -302,6 +302,34 @@ const createStyles = (isDark: boolean, topInset: number) =>
       fontSize: 13,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
+    selectedDateCard: {
+      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    selectedDateTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 16,
+    },
+    selectedDateEntry: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 12,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+    },
+    noEntriesText: {
+      fontSize: 15,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      textAlign: 'center',
+      fontStyle: 'italic',
+    },
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -508,6 +536,7 @@ export default function LogbookScreen() {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [showAddModal, setShowAddModal] = useState(false);
   const [showVesselPicker, setShowVesselPicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   // Form state
   const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
@@ -722,6 +751,29 @@ export default function LogbookScreen() {
     return (calculateTotalHours() / 24).toFixed(1);
   };
 
+  const handleDatePress = (day: any) => {
+    const dateString = day.dateString;
+    console.log('[LogbookScreen iOS] User tapped calendar date:', dateString);
+    setSelectedDate(dateString);
+  };
+
+  const getEntriesForDate = (dateString: string): SeaTimeEntry[] => {
+    return entries.filter((entry) => {
+      if (entry.status !== 'confirmed') return false;
+      
+      const entryStartDate = new Date(entry.start_time);
+      const entryEndDate = entry.end_time ? new Date(entry.end_time) : new Date();
+      
+      const selectedDateObj = new Date(dateString);
+      selectedDateObj.setHours(0, 0, 0, 0);
+      
+      const nextDay = new Date(selectedDateObj);
+      nextDay.setDate(nextDay.getDate() + 1);
+      
+      return entryStartDate < nextDay && entryEndDate >= selectedDateObj;
+    });
+  };
+
   const getMarkedDates = () => {
     const marked: any = {};
     
@@ -742,8 +794,9 @@ export default function LogbookScreen() {
           marked[dateString] = {
             marked: true,
             dotColor: colors.primary,
-            selected: true,
-            selectedColor: colors.primary + '30',
+            selected: selectedDate === dateString,
+            selectedColor: colors.primary,
+            selectedTextColor: '#FFFFFF',
           };
           currentDate.setDate(currentDate.getDate() + 1);
         }
@@ -827,6 +880,7 @@ export default function LogbookScreen() {
               onPress={() => {
                 console.log('[LogbookScreen iOS] Switching to list view');
                 setViewMode('list');
+                setSelectedDate(null);
               }}
             >
               <Text style={[styles.toggleText, viewMode === 'list' && styles.toggleTextActive]}>
@@ -871,6 +925,7 @@ export default function LogbookScreen() {
           <View style={styles.calendarCard}>
             <Calendar
               markedDates={getMarkedDates()}
+              onDayPress={handleDatePress}
               theme={{
                 backgroundColor: 'transparent',
                 calendarBackground: 'transparent',
@@ -891,9 +946,76 @@ export default function LogbookScreen() {
             />
             <View style={styles.calendarLegend}>
               <View style={styles.legendDot} />
-              <Text style={styles.legendText}>Sea day recorded</Text>
+              <Text style={styles.legendText}>Sea day recorded - Tap a date to view details</Text>
             </View>
           </View>
+
+          {selectedDate && (
+            <View style={styles.selectedDateCard}>
+              <Text style={styles.selectedDateTitle}>
+                Entries for {formatDate(selectedDate + 'T00:00:00')}
+              </Text>
+              {getEntriesForDate(selectedDate).length > 0 ? (
+                <React.Fragment>
+                  {getEntriesForDate(selectedDate).map((entry, index) => (
+                    <View key={index} style={styles.selectedDateEntry}>
+                      <View style={styles.entryHeader}>
+                        <Text style={styles.vesselName}>
+                          {entry.vessel?.vessel_name || 'Unknown Vessel'}
+                        </Text>
+                        <View
+                          style={[
+                            styles.statusBadge,
+                            { backgroundColor: getStatusColor(entry.status) },
+                          ]}
+                        >
+                          <Text style={styles.statusText}>
+                            {entry.status.toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.entryRow}>
+                        <IconSymbol
+                          ios_icon_name="calendar"
+                          android_material_icon_name="calendar-today"
+                          size={16}
+                          color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                          style={styles.entryIcon}
+                        />
+                        <Text style={styles.entryText}>
+                          {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
+                          {entry.end_time &&
+                            ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
+                        </Text>
+                      </View>
+
+                      {entry.duration_hours !== null && (
+                        <Text style={styles.durationText}>
+                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
+                        </Text>
+                      )}
+
+                      {entry.notes && (
+                        <View style={styles.entryRow}>
+                          <IconSymbol
+                            ios_icon_name="note.text"
+                            android_material_icon_name="description"
+                            size={16}
+                            color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                            style={styles.entryIcon}
+                          />
+                          <Text style={styles.entryText}>{entry.notes}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
+                </React.Fragment>
+              ) : (
+                <Text style={styles.noEntriesText}>No entries recorded for this date</Text>
+              )}
+            </View>
+          )}
 
           <View style={styles.summaryCard}>
             <Text style={styles.summaryTitle}>Summary</Text>
