@@ -1,6 +1,4 @@
 
-import { colors } from '@/styles/commonStyles';
-import { IconSymbol } from '@/components/IconSymbol';
 import {
   View,
   Text,
@@ -11,10 +9,13 @@ import {
   useColorScheme,
   RefreshControl,
   Platform,
+  Image,
 } from 'react-native';
+import { colors } from '@/styles/commonStyles';
 import React, { useState, useEffect } from 'react';
-import * as seaTimeApi from '@/utils/seaTimeApi';
 import { useRouter } from 'expo-router';
+import { IconSymbol } from '@/components/IconSymbol';
+import * as seaTimeApi from '@/utils/seaTimeApi';
 
 interface Vessel {
   id: string;
@@ -255,10 +256,21 @@ export default function ConfirmationsScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Review</Text>
-        <Text style={styles.headerSubtitle}>
-          Confirm your sea time entries
-        </Text>
+        <View style={styles.headerTitleContainer}>
+          <Image
+            source={require('@/assets/images/c13cbd51-c2f7-489f-bbbb-6b28094d9b2b.png')}
+            style={styles.appIcon}
+            resizeMode="contain"
+          />
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+              Review
+            </Text>
+            <Text style={styles.headerSubtitle}>
+              Confirm your sea time entries
+            </Text>
+          </View>
+        </View>
       </View>
 
       <ScrollView
@@ -569,6 +581,20 @@ function createStyles(isDark: boolean) {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderBottomWidth: 1,
       borderBottomColor: isDark ? colors.border : colors.borderLight,
+    },
+    headerTitleContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    appIcon: {
+      width: 53,
+      height: 53,
+      borderRadius: 12,
+    },
+    headerTextContainer: {
+      flex: 1,
+      minWidth: 0,
     },
     headerTitle: {
       fontSize: 28,
