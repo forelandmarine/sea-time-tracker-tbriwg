@@ -586,6 +586,27 @@ export async function createTestSeaDayEntry() {
   return entry;
 }
 
+// Generate Sample Sea Time Entries
+export async function generateSampleSeaTimeEntries() {
+  checkBackendConfigured();
+  console.log('[API] Generating sample sea time entries');
+  const headers = await getApiHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/sea-time/generate-samples`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({}),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to generate sample entries');
+  }
+  
+  const result = await response.json();
+  console.log('[API] Sample entries generated:', result.entries?.length || 0);
+  return result;
+}
+
 // Manual Sea Time Entry API
 export async function createManualSeaTimeEntry(entry: {
   vessel_id: string;

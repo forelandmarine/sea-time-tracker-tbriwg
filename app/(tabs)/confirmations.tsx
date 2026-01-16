@@ -15,6 +15,7 @@ import {
   RefreshControl,
   Platform,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { scheduleSeaTimeNotification } from '@/utils/notifications';
 
@@ -45,6 +46,7 @@ export default function ConfirmationsScreen() {
   const [entries, setEntries] = useState<SeaTimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [generatingSamples, setGeneratingSamples] = useState(false);
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -137,6 +139,26 @@ export default function ConfirmationsScreen() {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
+  };
+
+  const handleGenerateSamples = async () => {
+    try {
+      console.log('[Confirmations] User generating sample entries');
+      setGeneratingSamples(true);
+      const result = await seaTimeApi.generateSampleSeaTimeEntries();
+      console.log('[Confirmations] Generated samples:', result);
+      await loadData();
+      Alert.alert(
+        'Success',
+        `Generated ${result.entries?.length || 3} sample sea time entries for review`,
+        [{ text: 'OK' }]
+      );
+    } catch (error: any) {
+      console.error('[Confirmations] Failed to generate samples:', error);
+      Alert.alert('Error', 'Failed to generate sample entries: ' + error.message);
+    } finally {
+      setGeneratingSamples(false);
+    }
   };
 
   const handleConfirmEntry = async (entryId: string) => {
@@ -284,6 +306,7 @@ export default function ConfirmationsScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
@@ -325,6 +348,30 @@ export default function ConfirmationsScreen() {
               <Text style={styles.emptyText}>All caught up!</Text>
               <Text style={styles.emptySubtext}>
                 No pending sea time entries to review
+              </Text>
+              
+              {/* Generate Samples Button */}
+              <TouchableOpacity
+                style={styles.generateButton}
+                onPress={handleGenerateSamples}
+                disabled={generatingSamples}
+              >
+                {generatingSamples ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <React.Fragment>
+                    <IconSymbol
+                      ios_icon_name="plus.circle"
+                      android_material_icon_name="add-circle"
+                      size={20}
+                      color="#fff"
+                    />
+                    <Text style={styles.generateButtonText}>Generate Sample Entries</Text>
+                  </React.Fragment>
+                )}
+              </TouchableOpacity>
+              <Text style={styles.generateHint}>
+                Create 3 sample sea time entries for testing
               </Text>
             </View>
           ) : (
@@ -454,6 +501,7 @@ function createStyles(isDark: boolean) {
       justifyContent: 'center',
       alignItems: 'center',
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      gap: 12,
     },
     loadingText: {
       fontSize: 16,
@@ -507,6 +555,29 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginTop: 8,
+      textAlign: 'center',
+    },
+    generateButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primary,
+      paddingHorizontal: 24,
+      paddingVertical: 14,
+      borderRadius: 10,
+      marginTop: 24,
+      gap: 8,
+      minWidth: 200,
+    },
+    generateButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    generateHint: {
+      fontSize: 12,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 12,
       textAlign: 'center',
     },
     entryCard: {
