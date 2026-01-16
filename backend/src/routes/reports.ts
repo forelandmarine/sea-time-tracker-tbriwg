@@ -101,7 +101,7 @@ export function register(app: App, fastify: FastifyInstance) {
   // GET /api/reports/summary - Return summary statistics with date filtering
   fastify.get<{ Querystring: { startDate?: string; endDate?: string } }>('/api/reports/summary', {
     schema: {
-      description: 'Get summary statistics of sea time entries',
+      description: 'Get summary statistics of confirmed sea time entries with aggregations by vessel and month',
       tags: ['reports'],
       querystring: {
         type: 'object',
@@ -116,14 +116,34 @@ export function register(app: App, fastify: FastifyInstance) {
           properties: {
             total_hours: { type: 'number' },
             total_days: { type: 'number' },
-            entries_by_vessel: { type: 'object' },
-            entries_by_month: { type: 'object' },
+            entries_by_vessel: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  vessel_name: { type: 'string' },
+                  total_hours: { type: 'number' },
+                },
+              },
+            },
+            entries_by_month: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  month: { type: 'string' },
+                  total_hours: { type: 'number' },
+                },
+              },
+            },
           },
         },
       },
     },
   }, async (request, reply) => {
     const { startDate, endDate } = request.query;
+
+    app.logger.info({ startDate, endDate }, 'Generating summary report');
 
     let entries = await app.db.query.sea_time_entries.findMany({
       with: {
@@ -147,6 +167,8 @@ export function register(app: App, fastify: FastifyInstance) {
     // Only include confirmed entries
     entries = entries.filter((entry) => entry.status === 'confirmed');
 
+    app.logger.info({ count: entries.length }, 'Filtered confirmed entries for summary');
+
     // Calculate total hours
     let total_hours = 0;
     entries.forEach((entry) => {
@@ -158,31 +180,53 @@ export function register(app: App, fastify: FastifyInstance) {
     // Calculate total days (24-hour periods)
     const total_days = Math.round((total_hours / 24) * 100) / 100;
 
-    // Group by vessel
-    const entries_by_vessel: { [key: string]: { count: number; hours: number } } = {};
+    // Group by vessel - return as array
+    const vesselMap: { [key: string]: number } = {};
     entries.forEach((entry) => {
       const vessel_name = entry.vessel?.vessel_name || 'Unknown';
-      if (!entries_by_vessel[vessel_name]) {
-        entries_by_vessel[vessel_name] = { count: 0, hours: 0 };
+      if (!vesselMap[vessel_name]) {
+        vesselMap[vessel_name] = 0;
       }
-      entries_by_vessel[vessel_name].count += 1;
       if (entry.duration_hours) {
-        entries_by_vessel[vessel_name].hours += parseFloat(String(entry.duration_hours));
+        vesselMap[vessel_name] += parseFloat(String(entry.duration_hours));
       }
     });
 
-    // Group by month
-    const entries_by_month: { [key: string]: { count: number; hours: number } } = {};
+    const entries_by_vessel = Object.entries(vesselMap)
+      .map(([vessel_name, total_hours]) => ({
+        vessel_name,
+        total_hours: Math.round(total_hours * 100) / 100,
+      }))
+      .sort((a, b) => b.total_hours - a.total_hours); // Sort by hours descending
+
+    // Group by month - return as array
+    const monthMap: { [key: string]: number } = {};
     entries.forEach((entry) => {
       const month = new Date(entry.start_time).toISOString().slice(0, 7); // YYYY-MM format
-      if (!entries_by_month[month]) {
-        entries_by_month[month] = { count: 0, hours: 0 };
+      if (!monthMap[month]) {
+        monthMap[month] = 0;
       }
-      entries_by_month[month].count += 1;
       if (entry.duration_hours) {
-        entries_by_month[month].hours += parseFloat(String(entry.duration_hours));
+        monthMap[month] += parseFloat(String(entry.duration_hours));
       }
     });
+
+    const entries_by_month = Object.entries(monthMap)
+      .map(([month, total_hours]) => ({
+        month,
+        total_hours: Math.round(total_hours * 100) / 100,
+      }))
+      .sort((a, b) => a.month.localeCompare(b.month)); // Sort by month ascending
+
+    app.logger.info(
+      {
+        total_hours: Math.round(total_hours * 100) / 100,
+        total_days,
+        vesselCount: entries_by_vessel.length,
+        monthCount: entries_by_month.length
+      },
+      'Summary report generated'
+    );
 
     return reply.code(200).send({
       total_hours: Math.round(total_hours * 100) / 100,
