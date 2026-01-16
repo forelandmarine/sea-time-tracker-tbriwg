@@ -1,6 +1,7 @@
 
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
+import CartoMap from '@/components/CartoMap';
 import {
   View,
   Text,
@@ -326,60 +327,75 @@ export default function SeaTimeScreen() {
               </Text>
             </View>
           ) : (
-            <TouchableOpacity
-              style={[styles.vesselCard, styles.activeVesselCard]}
-              onPress={() => handleVesselPress(activeVessel.id)}
-            >
-              <View style={styles.vesselHeader}>
-                <View style={styles.vesselInfo}>
-                  <View style={styles.activeVesselBadge}>
-                    <View style={styles.activeIndicatorPulse} />
-                    <Text style={styles.activeVesselBadgeText}>TRACKING</Text>
-                  </View>
-                  <Text style={styles.vesselName}>{activeVessel.vessel_name}</Text>
-                  <Text style={styles.vesselMmsi}>MMSI: {activeVessel.mmsi}</Text>
-                  
-                  {/* Vessel Particulars */}
-                  <View style={styles.vesselParticulars}>
-                    {activeVessel.flag && (
-                      <Text style={styles.vesselDetail}>Flag: {activeVessel.flag}</Text>
-                    )}
-                    {activeVessel.official_number && (
-                      <Text style={styles.vesselDetail}>Official No.: {activeVessel.official_number}</Text>
-                    )}
-                    {activeVessel.vessel_type && (
-                      <Text style={styles.vesselDetail}>Type: {activeVessel.vessel_type}</Text>
-                    )}
-                    {activeVessel.length_metres && (
-                      <Text style={styles.vesselDetail}>Length: {activeVessel.length_metres}m</Text>
-                    )}
-                    {activeVessel.gross_tonnes && (
-                      <Text style={styles.vesselDetail}>Gross Tonnes: {activeVessel.gross_tonnes}</Text>
-                    )}
-                  </View>
+            <View>
+              <TouchableOpacity
+                style={[styles.vesselCard, styles.activeVesselCard]}
+                onPress={() => handleVesselPress(activeVessel.id)}
+              >
+                <View style={styles.vesselHeader}>
+                  <View style={styles.vesselInfo}>
+                    <View style={styles.activeVesselBadge}>
+                      <View style={styles.activeIndicatorPulse} />
+                      <Text style={styles.activeVesselBadgeText}>TRACKING</Text>
+                    </View>
+                    <Text style={styles.vesselName}>{activeVessel.vessel_name}</Text>
+                    <Text style={styles.vesselMmsi}>MMSI: {activeVessel.mmsi}</Text>
+                    
+                    {/* Vessel Particulars */}
+                    <View style={styles.vesselParticulars}>
+                      {activeVessel.flag && (
+                        <Text style={styles.vesselDetail}>Flag: {activeVessel.flag}</Text>
+                      )}
+                      {activeVessel.official_number && (
+                        <Text style={styles.vesselDetail}>Official No.: {activeVessel.official_number}</Text>
+                      )}
+                      {activeVessel.vessel_type && (
+                        <Text style={styles.vesselDetail}>Type: {activeVessel.vessel_type}</Text>
+                      )}
+                      {activeVessel.length_metres && (
+                        <Text style={styles.vesselDetail}>Length: {activeVessel.length_metres}m</Text>
+                      )}
+                      {activeVessel.gross_tonnes && (
+                        <Text style={styles.vesselDetail}>Gross Tonnes: {activeVessel.gross_tonnes}</Text>
+                      )}
+                    </View>
 
-                  {/* Location in DMS format with timestamp */}
-                  {locationLoading ? (
-                    <Text style={styles.vesselLocation}>Loading location...</Text>
-                  ) : activeVesselLocation && (activeVesselLocation.latitude !== null || activeVesselLocation.longitude !== null) ? (
-                    (() => {
-                      const dmsLocation = formatLocationDMS(activeVesselLocation.latitude, activeVesselLocation.longitude);
-                      return dmsLocation ? (
-                        <View style={styles.locationContainer}>
-                          <Text style={styles.vesselLocation}>Lat: {dmsLocation.lat}</Text>
-                          <Text style={styles.vesselLocation}>Lon: {dmsLocation.lon}</Text>
-                          {activeVesselLocation.timestamp && (
-                            <Text style={styles.vesselTimestamp}>
-                              {formatTimestamp(activeVesselLocation.timestamp)}
-                            </Text>
-                          )}
-                        </View>
-                      ) : null;
-                    })()
-                  ) : null}
+                    {/* Location in DMS format with timestamp */}
+                    {locationLoading ? (
+                      <Text style={styles.vesselLocation}>Loading location...</Text>
+                    ) : activeVesselLocation && (activeVesselLocation.latitude !== null || activeVesselLocation.longitude !== null) ? (
+                      (() => {
+                        const dmsLocation = formatLocationDMS(activeVesselLocation.latitude, activeVesselLocation.longitude);
+                        return dmsLocation ? (
+                          <View style={styles.locationContainer}>
+                            <Text style={styles.vesselLocation}>Lat: {dmsLocation.lat}</Text>
+                            <Text style={styles.vesselLocation}>Lon: {dmsLocation.lon}</Text>
+                            {activeVesselLocation.timestamp && (
+                              <Text style={styles.vesselTimestamp}>
+                                {formatTimestamp(activeVesselLocation.timestamp)}
+                              </Text>
+                            )}
+                          </View>
+                        ) : null;
+                      })()
+                    ) : null}
+                  </View>
                 </View>
-              </View>
-            </TouchableOpacity>
+              </TouchableOpacity>
+
+              {/* Map showing vessel location */}
+              {activeVesselLocation && 
+               activeVesselLocation.latitude !== null && 
+               activeVesselLocation.longitude !== null && (
+                <View style={styles.mapContainer}>
+                  <CartoMap
+                    latitude={activeVesselLocation.latitude}
+                    longitude={activeVesselLocation.longitude}
+                    vesselName={activeVessel.vessel_name}
+                  />
+                </View>
+              )}
+            </View>
           )}
         </View>
 
@@ -757,6 +773,13 @@ function createStyles(isDark: boolean) {
       color: colors.primary,
       marginTop: 4,
       fontWeight: '600',
+    },
+    mapContainer: {
+      marginTop: 12,
+      borderRadius: 8,
+      overflow: 'hidden',
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
     },
     statusIndicator: {
       width: 12,
