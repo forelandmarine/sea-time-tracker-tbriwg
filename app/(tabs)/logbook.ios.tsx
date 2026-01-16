@@ -582,8 +582,14 @@ export default function LogbookScreen() {
       ]);
       console.log('[LogbookScreen iOS] Received entries:', entriesData.length, 'vessels:', vesselsData.length);
       
-      // Debug: Log entry statuses to see what we're getting
-      console.log('[LogbookScreen iOS] Entry statuses:', entriesData.map(e => ({ id: e.id, status: e.status, vessel: e.vessel?.vessel_name })));
+      // Debug: Log full entry data to see what we're getting
+      console.log('[LogbookScreen iOS] Full entry data sample:', JSON.stringify(entriesData[0], null, 2));
+      console.log('[LogbookScreen iOS] Entry statuses:', entriesData.map(e => ({ 
+        id: e.id, 
+        status: e.status, 
+        statusType: typeof e.status,
+        vessel: e.vessel?.vessel_name 
+      })));
       
       setEntries(entriesData);
       setVessels(vesselsData);
