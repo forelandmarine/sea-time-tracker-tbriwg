@@ -15,6 +15,7 @@ import {
   Platform,
   Image,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { useRouter } from 'expo-router';
@@ -230,6 +231,7 @@ export default function ReportsScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -255,6 +257,23 @@ export default function ReportsScreen() {
       Alert.alert('Error', 'Failed to load reports data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const onRefresh = async () => {
+    console.log('User pulled to refresh Reports screen');
+    try {
+      setRefreshing(true);
+      
+      const summaryData = await seaTimeApi.getReportSummary();
+      console.log('Report summary refreshed:', summaryData);
+      
+      setSummary(summaryData);
+    } catch (error) {
+      console.error('Failed to refresh reports data:', error);
+      Alert.alert('Error', 'Failed to refresh reports data');
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -380,7 +399,18 @@ export default function ReportsScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+      <ScrollView 
+        style={styles.container} 
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
         {/* Small User Card */}
         {profile && (
           <TouchableOpacity style={styles.userCard} onPress={handleUserCardPress}>
