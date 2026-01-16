@@ -6,19 +6,29 @@ import * as Device from 'expo-device';
 console.log('[Notifications] Notification utility initialized');
 
 // Set the notification handler to show notifications when app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Only on native platforms
+if (Platform.OS !== 'web') {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 /**
  * Request notification permissions from the user
  * Required for iOS to show notifications
+ * Returns false on web (not supported)
  */
 export async function registerForPushNotificationsAsync(): Promise<boolean> {
+  // Notifications are not supported on web
+  if (Platform.OS === 'web') {
+    console.log('[Notifications] Notifications not supported on web');
+    return false;
+  }
+
   console.log('[Notifications] Requesting notification permissions');
   
   if (!Device.isDevice) {
@@ -66,12 +76,19 @@ export async function registerForPushNotificationsAsync(): Promise<boolean> {
  * @param vesselName - Name of the vessel
  * @param entryId - ID of the sea time entry
  * @param durationHours - Duration of the sea time in hours
+ * @returns notification ID or null if not supported/failed
  */
 export async function scheduleSeaTimeNotification(
   vesselName: string,
   entryId: string,
   durationHours: number
 ): Promise<string | null> {
+  // Notifications are not supported on web
+  if (Platform.OS === 'web') {
+    console.log('[Notifications] Skipping notification on web');
+    return null;
+  }
+
   try {
     console.log('[Notifications] Scheduling notification for sea time entry:', {
       vesselName,
@@ -115,6 +132,10 @@ export async function scheduleSeaTimeNotification(
  * @param notificationId - ID of the notification to cancel
  */
 export async function cancelNotification(notificationId: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    return;
+  }
+
   try {
     console.log('[Notifications] Canceling notification:', notificationId);
     await Notifications.cancelScheduledNotificationAsync(notificationId);
@@ -128,6 +149,10 @@ export async function cancelNotification(notificationId: string): Promise<void> 
  * Cancel all scheduled notifications
  */
 export async function cancelAllNotifications(): Promise<void> {
+  if (Platform.OS === 'web') {
+    return;
+  }
+
   try {
     console.log('[Notifications] Canceling all notifications');
     await Notifications.cancelAllScheduledNotificationsAsync();
@@ -141,6 +166,10 @@ export async function cancelAllNotifications(): Promise<void> {
  * Get the badge count
  */
 export async function getBadgeCount(): Promise<number> {
+  if (Platform.OS === 'web') {
+    return 0;
+  }
+
   try {
     const count = await Notifications.getBadgeCountAsync();
     return count;
@@ -155,6 +184,10 @@ export async function getBadgeCount(): Promise<number> {
  * @param count - Number to set as badge
  */
 export async function setBadgeCount(count: number): Promise<void> {
+  if (Platform.OS === 'web') {
+    return;
+  }
+
   try {
     console.log('[Notifications] Setting badge count to:', count);
     await Notifications.setBadgeCountAsync(count);

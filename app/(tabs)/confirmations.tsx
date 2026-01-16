@@ -3,7 +3,7 @@ import { colors } from '@/styles/commonStyles';
 import { useRouter } from 'expo-router';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 import { IconSymbol } from '@/components/IconSymbol';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -53,23 +53,27 @@ export default function ConfirmationsScreen() {
   const notifiedEntriesRef = useRef<Set<string>>(new Set());
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  useEffect(() => {
-    console.log('[Confirmations] Component mounted, loading data');
-    loadData();
-
-    // Set up polling for new entries every 30 seconds
-    console.log('[Confirmations] Setting up notification polling');
-    pollIntervalRef.current = setInterval(checkForNewEntries, 30000);
-
-    return () => {
-      console.log('[Confirmations] Component unmounting, cleaning up polling');
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
-    };
+  const loadData = useCallback(async () => {
+    try {
+      console.log('[Confirmations] Loading pending entries');
+      const pendingEntries = await seaTimeApi.getPendingEntries();
+      setEntries(pendingEntries);
+      console.log('[Confirmations] Loaded', pendingEntries.length, 'pending entries');
+    } catch (error: any) {
+      console.error('[Confirmations] Failed to load data:', error);
+      Alert.alert('Error', 'Failed to load data: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const checkForNewEntries = async () => {
+  const checkForNewEntries = useCallback(async () => {
+    // Skip on web - notifications not supported
+    if (Platform.OS === 'web') {
+      console.log('[Confirmations] Skipping notification check on web');
+      return;
+    }
+
     try {
       console.log('[Confirmations] Checking for new entries to notify');
       const result = await seaTimeApi.getNewSeaTimeEntries();
@@ -107,21 +111,27 @@ export default function ConfirmationsScreen() {
     } catch (error) {
       console.error('[Confirmations] Failed to check for new entries:', error);
     }
-  };
+  }, [loadData]);
 
-  const loadData = async () => {
-    try {
-      console.log('[Confirmations] Loading pending entries');
-      const pendingEntries = await seaTimeApi.getPendingEntries();
-      setEntries(pendingEntries);
-      console.log('[Confirmations] Loaded', pendingEntries.length, 'pending entries');
-    } catch (error: any) {
-      console.error('[Confirmations] Failed to load data:', error);
-      Alert.alert('Error', 'Failed to load data: ' + error.message);
-    } finally {
-      setLoading(false);
+  useEffect(() => {
+    console.log('[Confirmations] Component mounted, loading data');
+    loadData();
+
+    // Set up polling for new entries every 30 seconds (only on native platforms)
+    if (Platform.OS !== 'web') {
+      console.log('[Confirmations] Setting up notification polling');
+      pollIntervalRef.current = setInterval(checkForNewEntries, 30000);
+    } else {
+      console.log('[Confirmations] Skipping notification polling on web');
     }
-  };
+
+    return () => {
+      console.log('[Confirmations] Component unmounting, cleaning up polling');
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
+  }, [loadData, checkForNewEntries]);
 
   const onRefresh = async () => {
     setRefreshing(true);

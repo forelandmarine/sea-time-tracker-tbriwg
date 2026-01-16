@@ -6,7 +6,7 @@ import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, Alert } from "react-native";
+import { useColorScheme, Alert, Platform } from "react-native";
 import { useNetworkState } from "expo-network";
 import * as Notifications from 'expo-notifications';
 import {
@@ -42,19 +42,29 @@ export default function RootLayout() {
       console.log('[App] ✅ Backend URL configured:', BACKEND_URL);
       console.log('[App] ✅ App ready with authentication');
       
-      // Request notification permissions
-      registerForPushNotificationsAsync().then((granted) => {
-        if (granted) {
-          console.log('[App] ✅ Notification permissions granted');
-        } else {
-          console.log('[App] ⚠️ Notification permissions not granted');
-        }
-      });
+      // Request notification permissions (only on native platforms)
+      if (Platform.OS !== 'web') {
+        registerForPushNotificationsAsync().then((granted) => {
+          if (granted) {
+            console.log('[App] ✅ Notification permissions granted');
+          } else {
+            console.log('[App] ⚠️ Notification permissions not granted');
+          }
+        });
+      } else {
+        console.log('[App] ℹ️ Notifications not supported on web');
+      }
     }
   }, [loaded]);
 
   // Handle notification responses (when user taps on notification)
+  // Only set up on native platforms
   useEffect(() => {
+    if (Platform.OS === 'web') {
+      console.log('[App] Skipping notification listeners on web');
+      return;
+    }
+
     console.log('[App] Setting up notification response listener');
     
     // Check if app was opened from a notification
@@ -71,6 +81,8 @@ export default function RootLayout() {
           }, 500);
         }
       }
+    }).catch((error) => {
+      console.error('[App] Error checking last notification response:', error);
     });
 
     // Listen for notification taps while app is running
