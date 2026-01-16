@@ -1,4 +1,10 @@
 
+import { colors } from '@/styles/commonStyles';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import * as seaTimeApi from '@/utils/seaTimeApi';
+import { IconSymbol } from '@/components/IconSymbol';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,12 +17,7 @@ import {
   Platform,
   Image,
 } from 'react-native';
-import { colors } from '@/styles/commonStyles';
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'expo-router';
-import { IconSymbol } from '@/components/IconSymbol';
-import * as seaTimeApi from '@/utils/seaTimeApi';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { scheduleSeaTimeNotification } from '@/utils/notifications';
 
 interface Vessel {
   id: string;
@@ -42,85 +43,110 @@ interface SeaTimeEntry {
 }
 
 export default function ConfirmationsScreen() {
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const [pendingEntries, setPendingEntries] = useState<SeaTimeEntry[]>([]);
+  const [entries, setEntries] = useState<SeaTimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
+  const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
+  const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const insets = useSafeAreaInsets();
   const styles = createStyles(isDark, insets.top);
+  const notifiedEntriesRef = useRef<Set<string>>(new Set());
+  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    console.log('[ConfirmationsScreen] Loading pending entries');
+    console.log('[Confirmations] Component mounted, loading data');
     loadData();
+
+    // Set up polling for new entries every 30 seconds
+    console.log('[Confirmations] Setting up notification polling');
+    pollIntervalRef.current = setInterval(checkForNewEntries, 30000);
+
+    return () => {
+      console.log('[Confirmations] Component unmounting, cleaning up polling');
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
+    };
   }, []);
+
+  const checkForNewEntries = async () => {
+    try {
+      console.log('[Confirmations] Checking for new entries to notify');
+      const result = await seaTimeApi.getNewSeaTimeEntries();
+      
+      if (result.newEntries && result.newEntries.length > 0) {
+        console.log('[Confirmations] Found', result.newEntries.length, 'new entries to notify');
+        
+        for (const entry of result.newEntries) {
+          // Skip if we've already notified about this entry in this session
+          if (notifiedEntriesRef.current.has(entry.id)) {
+            console.log('[Confirmations] Skipping already notified entry:', entry.id);
+            continue;
+          }
+
+          const vesselName = entry.vessel_name || 'Unknown Vessel';
+          const durationHours = typeof entry.duration_hours === 'string' 
+            ? parseFloat(entry.duration_hours) 
+            : entry.duration_hours || 0;
+
+          console.log('[Confirmations] Scheduling notification for entry:', {
+            id: entry.id,
+            vesselName,
+            durationHours,
+          });
+
+          await scheduleSeaTimeNotification(vesselName, entry.id, durationHours);
+          notifiedEntriesRef.current.add(entry.id);
+        }
+
+        // Reload data to show the new entries
+        await loadData();
+      } else {
+        console.log('[Confirmations] No new entries to notify');
+      }
+    } catch (error) {
+      console.error('[Confirmations] Failed to check for new entries:', error);
+    }
+  };
 
   const loadData = async () => {
     try {
-      console.log('[ConfirmationsScreen] Fetching pending entries from API...');
-      const entriesData = await seaTimeApi.getPendingEntries();
-      console.log('[ConfirmationsScreen] Raw pending entries data:', JSON.stringify(entriesData, null, 2));
-      
-      // Log each entry's coordinates and duration
-      entriesData.forEach((entry: SeaTimeEntry, index: number) => {
-        console.log(`[ConfirmationsScreen] Entry ${index} (${entry.id}):`, {
-          duration_hours: entry.duration_hours,
-          duration_type: typeof entry.duration_hours,
-          start_latitude: entry.start_latitude,
-          start_latitude_type: typeof entry.start_latitude,
-          start_longitude: entry.start_longitude,
-          end_latitude: entry.end_latitude,
-          end_longitude: entry.end_longitude,
-        });
-      });
-      
-      setPendingEntries(entriesData);
-      console.log('[ConfirmationsScreen] Pending entries loaded:', entriesData.length);
+      console.log('[Confirmations] Loading pending entries');
+      const pendingEntries = await seaTimeApi.getPendingEntries();
+      setEntries(pendingEntries);
+      console.log('[Confirmations] Loaded', pendingEntries.length, 'pending entries');
     } catch (error: any) {
-      console.error('[ConfirmationsScreen] Failed to load pending entries:', error);
-      Alert.alert('Error', 'Failed to load pending entries: ' + error.message);
+      console.error('[Confirmations] Failed to load data:', error);
+      Alert.alert('Error', 'Failed to load data: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
 
   const onRefresh = async () => {
-    console.log('[ConfirmationsScreen] User refreshing pending entries');
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
   };
 
   const handleConfirmEntry = async (entryId: string) => {
-    Alert.alert(
-      'Confirm Sea Time',
-      'Confirm this sea time entry?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Confirm',
-          onPress: async () => {
-            try {
-              console.log('[ConfirmationsScreen] User confirming entry:', entryId);
-              await seaTimeApi.confirmSeaTimeEntry(entryId);
-              await loadData();
-              Alert.alert('Success', 'Sea time entry confirmed');
-            } catch (error: any) {
-              console.error('[ConfirmationsScreen] Failed to confirm entry:', error);
-              Alert.alert('Error', 'Failed to confirm entry: ' + error.message);
-            }
-          },
-        },
-      ]
-    );
+    try {
+      console.log('[Confirmations] User confirming entry:', entryId);
+      await seaTimeApi.confirmSeaTimeEntry(entryId);
+      await loadData();
+      Alert.alert('Success', 'Sea time entry confirmed');
+    } catch (error: any) {
+      console.error('[Confirmations] Failed to confirm entry:', error);
+      Alert.alert('Error', 'Failed to confirm entry: ' + error.message);
+    }
   };
 
   const handleRejectEntry = async (entryId: string) => {
     Alert.alert(
-      'Reject Sea Time',
-      'Reject this sea time entry?',
+      'Reject Entry',
+      'Are you sure you want to reject this sea time entry?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -128,12 +154,12 @@ export default function ConfirmationsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('[ConfirmationsScreen] User rejecting entry:', entryId);
+              console.log('[Confirmations] User rejecting entry:', entryId);
               await seaTimeApi.rejectSeaTimeEntry(entryId);
               await loadData();
               Alert.alert('Success', 'Sea time entry rejected');
             } catch (error: any) {
-              console.error('[ConfirmationsScreen] Failed to reject entry:', error);
+              console.error('[Confirmations] Failed to reject entry:', error);
               Alert.alert('Error', 'Failed to reject entry: ' + error.message);
             }
           },
@@ -143,28 +169,46 @@ export default function ConfirmationsScreen() {
   };
 
   const toggleExpanded = (entryId: string) => {
-    console.log('[ConfirmationsScreen] User toggling expanded view for entry:', entryId);
-    setExpandedEntryId(expandedEntryId === entryId ? null : entryId);
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
+    console.log('[Confirmations] Toggling expanded state for entry:', entryId);
+    setExpandedEntries(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(entryId)) {
+        newSet.delete(entryId);
+      } else {
+        newSet.add(entryId);
+      }
+      return newSet;
     });
   };
 
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  const formatDate = (dateString: string): string => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch (e) {
+      console.error('[Confirmations] Failed to format date:', e);
+      return dateString;
+    }
   };
 
-  const getStatusColor = (status: string) => {
+  const formatTime = (dateString: string): string => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleTimeString('en-GB', {
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (e) {
+      console.error('[Confirmations] Failed to format time:', e);
+      return dateString;
+    }
+  };
+
+  const getStatusColor = (status: string): string => {
     switch (status) {
       case 'confirmed':
         return colors.success;
@@ -173,31 +217,20 @@ export default function ConfirmationsScreen() {
       case 'pending':
         return colors.warning;
       default:
-        return isDark ? colors.textSecondary : colors.textSecondaryLight;
+        return colors.textSecondary;
     }
   };
 
-  // Helper to convert string or number to number
-  const toNumber = (value: number | string | null | undefined): number | null => {
-    if (value === null || value === undefined) {
-      return null;
-    }
-    if (typeof value === 'number') {
-      return isNaN(value) ? null : value;
-    }
-    if (typeof value === 'string') {
-      const parsed = parseFloat(value);
-      return isNaN(parsed) ? null : parsed;
-    }
-    return null;
+  const toNumber = (value: number | string | null | undefined): number => {
+    if (value === null || value === undefined) return 0;
+    if (typeof value === 'number') return value;
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? 0 : parsed;
   };
 
   const formatCoordinate = (value: number | string | null | undefined): string => {
     const num = toNumber(value);
-    if (num !== null) {
-      return num.toFixed(6);
-    }
-    return 'N/A';
+    return num.toFixed(6);
   };
 
   const convertToDMS = (decimal: number, isLatitude: boolean): string => {
@@ -205,7 +238,7 @@ export default function ConfirmationsScreen() {
     const degrees = Math.floor(absolute);
     const minutesDecimal = (absolute - degrees) * 60;
     const minutes = Math.floor(minutesDecimal);
-    const seconds = ((minutesDecimal - minutes) * 60).toFixed(2);
+    const seconds = ((minutesDecimal - minutes) * 60).toFixed(1);
     
     let direction = '';
     if (isLatitude) {
@@ -217,33 +250,27 @@ export default function ConfirmationsScreen() {
     return `${degrees}° ${minutes}' ${seconds}" ${direction}`;
   };
 
-  const formatCoordinateDMS = (lat: number | string | null | undefined, lon: number | string | null | undefined): { lat: string; lon: string } => {
+  const formatCoordinateDMS = (
+    lat: number | string | null | undefined,
+    lon: number | string | null | undefined
+  ): string => {
     const latNum = toNumber(lat);
     const lonNum = toNumber(lon);
     
-    if (latNum !== null && lonNum !== null) {
-      return {
-        lat: convertToDMS(latNum, true),
-        lon: convertToDMS(lonNum, false),
-      };
-    }
-    return { lat: 'N/A', lon: 'N/A' };
+    if (latNum === 0 && lonNum === 0) return 'No coordinates';
+    
+    return `${convertToDMS(latNum, true)}, ${convertToDMS(lonNum, false)}`;
   };
 
   const formatDuration = (hours: number | string | null | undefined): string => {
     const num = toNumber(hours);
-    if (num !== null) {
-      return num.toFixed(1);
-    }
-    return '0.0';
+    return `${num.toFixed(1)} hours`;
   };
 
   const formatDays = (hours: number | string | null | undefined): string => {
     const num = toNumber(hours);
-    if (num !== null) {
-      return (num / 24).toFixed(2);
-    }
-    return '0.00';
+    const days = num / 24;
+    return `${days.toFixed(2)} days`;
   };
 
   if (loading) {
@@ -256,308 +283,150 @@ export default function ConfirmationsScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTitleContainer}>
-          <Image
-            source={require('@/assets/images/c13cbd51-c2f7-489f-bbbb-6b28094d9b2b.png')}
-            style={styles.appIcon}
-            resizeMode="contain"
-          />
-          <View style={styles.headerTextContainer}>
-            <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
-              Review
-            </Text>
-            <Text style={styles.headerSubtitle}>
-              Confirm your sea time entries
-            </Text>
-          </View>
-        </View>
-      </View>
-
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {pendingEntries.length === 0 ? (
-          <View style={styles.emptyState}>
-            <IconSymbol
-              ios_icon_name="checkmark.circle"
-              android_material_icon_name="check-circle"
-              size={64}
-              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+        {/* Header with Logo */}
+        <View style={styles.header}>
+          <View style={styles.headerContent}>
+            <Image
+              source={require('@/assets/images/c13cbd51-c2f7-489f-bbbb-6b28094d9b2b.png')}
+              style={styles.appIcon}
+              resizeMode="contain"
             />
-            <Text style={styles.emptyText}>No Pending Confirmations</Text>
-            <Text style={styles.emptySubtext}>
-              All sea time entries have been reviewed
-            </Text>
+            <View style={styles.headerTextContainer}>
+              <Text style={styles.headerTitle}>Review Sea Time</Text>
+              <Text style={styles.headerSubtitle}>
+                {entries.length} {entries.length === 1 ? 'entry' : 'entries'} pending confirmation
+              </Text>
+            </View>
           </View>
-        ) : (
-          <View style={styles.entriesContainer}>
-            {pendingEntries.map((entry, index) => {
-              const vesselName = entry.vessel?.vessel_name || 'Unknown Vessel';
-              const vesselMmsi = entry.vessel?.mmsi || 'N/A';
-              const hasVesselData = !!entry.vessel;
-              const isExpanded = expandedEntryId === entry.id;
+        </View>
 
-              if (!hasVesselData) {
-                console.warn('[ConfirmationsScreen] Entry missing vessel data:', entry.id);
-              }
-
-              // Convert to numbers for validation
-              const startLat = toNumber(entry.start_latitude);
-              const startLon = toNumber(entry.start_longitude);
-              const endLat = toNumber(entry.end_latitude);
-              const endLon = toNumber(entry.end_longitude);
-              const durationHours = toNumber(entry.duration_hours);
-
-              const hasStartCoords = startLat !== null && startLon !== null;
-              const hasEndCoords = endLat !== null && endLon !== null;
-              const hasAnyCoords = hasStartCoords || hasEndCoords;
-              const hasDuration = durationHours !== null;
-
-              console.log(`[ConfirmationsScreen] Rendering entry ${entry.id}:`, {
-                hasStartCoords,
-                hasEndCoords,
-                hasDuration,
-                duration_hours: entry.duration_hours,
-                start_latitude: entry.start_latitude,
-                start_longitude: entry.start_longitude,
-                end_latitude: entry.end_latitude,
-                end_longitude: entry.end_longitude,
-              });
-
-              const startDMS = formatCoordinateDMS(entry.start_latitude, entry.start_longitude);
-              const endDMS = formatCoordinateDMS(entry.end_latitude, entry.end_longitude);
-
+        {/* Entries List */}
+        <View style={styles.content}>
+          {entries.length === 0 ? (
+            <View style={styles.emptyState}>
+              <IconSymbol
+                ios_icon_name="checkmark.circle"
+                android_material_icon_name="check-circle"
+                size={64}
+                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+              />
+              <Text style={styles.emptyText}>All caught up!</Text>
+              <Text style={styles.emptySubtext}>
+                No pending sea time entries to review
+              </Text>
+            </View>
+          ) : (
+            entries.map((entry) => {
+              const isExpanded = expandedEntries.has(entry.id);
               return (
-                <React.Fragment key={index}>
-                  <View style={styles.entryCard}>
-                    {/* Tappable area for expansion */}
-                    <TouchableOpacity 
-                      onPress={() => toggleExpanded(entry.id)}
-                      activeOpacity={0.7}
-                    >
-                      {!hasVesselData && (
-                        <View style={styles.warningBanner}>
-                          <IconSymbol
-                            ios_icon_name="exclamationmark.triangle.fill"
-                            android_material_icon_name="warning"
-                            size={16}
-                            color={colors.warning}
-                          />
-                          <Text style={styles.warningText}>
-                            Vessel information unavailable
-                          </Text>
-                        </View>
-                      )}
-
-                      {/* Vessel Name Header */}
-                      <View style={styles.entryHeader}>
-                        <View style={styles.vesselInfo}>
-                          <IconSymbol
-                            ios_icon_name="ferry"
-                            android_material_icon_name="directions-boat"
-                            size={24}
-                            color={colors.primary}
-                          />
-                          <View style={styles.vesselTextInfo}>
-                            <Text style={styles.vesselName}>{vesselName}</Text>
-                            <Text style={styles.vesselMmsi}>MMSI: {vesselMmsi}</Text>
-                          </View>
-                        </View>
-                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(entry.status) + '20' }]}>
-                          <Text style={[styles.statusText, { color: getStatusColor(entry.status) }]}>
-                            {entry.status.toUpperCase()}
-                          </Text>
-                        </View>
+                <View key={entry.id} style={styles.entryCard}>
+                  <TouchableOpacity
+                    style={styles.entryHeader}
+                    onPress={() => toggleExpanded(entry.id)}
+                  >
+                    <View style={styles.entryHeaderLeft}>
+                      <Text style={styles.vesselName}>
+                        {entry.vessel?.vessel_name || 'Unknown Vessel'}
+                      </Text>
+                      <Text style={styles.entryDate}>
+                        {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
+                      </Text>
+                      <View style={styles.durationBadge}>
+                        <Text style={styles.durationText}>
+                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
+                        </Text>
                       </View>
-
-                      {/* Time Information */}
-                      <View style={styles.timeSection}>
-                        <View style={styles.timeRow}>
-                          <View style={styles.timeLabel}>
-                            <IconSymbol
-                              ios_icon_name="clock"
-                              android_material_icon_name="schedule"
-                              size={16}
-                              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                            />
-                            <Text style={styles.timeLabelText}>Start</Text>
-                          </View>
-                          <View style={styles.timeValue}>
-                            <Text style={styles.timeDate}>{formatDate(entry.start_time)}</Text>
-                            <Text style={styles.timeTime}>{formatTime(entry.start_time)}</Text>
-                          </View>
-                        </View>
-
-                        {entry.end_time && (
-                          <View style={styles.timeRow}>
-                            <View style={styles.timeLabel}>
-                              <IconSymbol
-                                ios_icon_name="clock.fill"
-                                android_material_icon_name="schedule"
-                                size={16}
-                                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                              />
-                              <Text style={styles.timeLabelText}>End</Text>
-                            </View>
-                            <View style={styles.timeValue}>
-                              <Text style={styles.timeDate}>{formatDate(entry.end_time)}</Text>
-                              <Text style={styles.timeTime}>{formatTime(entry.end_time)}</Text>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-
-                      {/* GPS Coordinates Section */}
-                      {hasAnyCoords && (
-                        <View style={styles.coordinatesSection}>
-                          <View style={styles.coordinatesHeader}>
-                            <IconSymbol
-                              ios_icon_name="location.fill"
-                              android_material_icon_name="location-on"
-                              size={16}
-                              color={colors.primary}
-                            />
-                            <Text style={styles.coordinatesHeaderText}>GPS Coordinates</Text>
-                            <IconSymbol
-                              ios_icon_name={isExpanded ? "chevron.up" : "chevron.down"}
-                              android_material_icon_name={isExpanded ? "expand-less" : "expand-more"}
-                              size={16}
-                              color={colors.primary}
-                            />
-                          </View>
-                          
-                          {hasStartCoords && (
-                            <View style={styles.coordinateRow}>
-                              <Text style={styles.coordinateLabel}>Start Position:</Text>
-                              <Text style={styles.coordinateValue}>
-                                {formatCoordinate(entry.start_latitude)}°, {formatCoordinate(entry.start_longitude)}°
-                              </Text>
-                            </View>
-                          )}
-                          
-                          {hasEndCoords && (
-                            <View style={styles.coordinateRow}>
-                              <Text style={styles.coordinateLabel}>End Position:</Text>
-                              <Text style={styles.coordinateValue}>
-                                {formatCoordinate(entry.end_latitude)}°, {formatCoordinate(entry.end_longitude)}°
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                      )}
-
-                      {/* Duration - Always show, even if 0 */}
-                      <View style={styles.durationSection}>
-                        <View style={styles.durationCard}>
-                          <IconSymbol
-                            ios_icon_name="timer"
-                            android_material_icon_name="access-time"
-                            size={20}
-                            color={colors.primary}
-                          />
-                          <View style={styles.durationInfo}>
-                            <Text style={styles.durationLabel}>Total Duration</Text>
-                            <Text style={styles.durationValue}>
-                              {formatDuration(entry.duration_hours)} hours
-                            </Text>
-                            <Text style={styles.durationDays}>
-                              ({formatDays(entry.duration_hours)} days)
-                            </Text>
-                          </View>
-                        </View>
-                      </View>
-
-                      {/* Notes */}
-                      {entry.notes && (
-                        <View style={styles.notesSection}>
-                          <Text style={styles.notesLabel}>Notes:</Text>
-                          <Text style={styles.notesText}>{entry.notes}</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-
-                    {/* Expanded DMS Coordinates Section */}
-                    {isExpanded && hasAnyCoords && (
-                      <View style={styles.dmsSection}>
-                        <View style={styles.dmsSectionHeader}>
-                          <IconSymbol
-                            ios_icon_name="map.fill"
-                            android_material_icon_name="map"
-                            size={16}
-                            color={colors.success}
-                          />
-                          <Text style={styles.dmsSectionHeaderText}>
-                            Degrees, Minutes, Seconds
-                          </Text>
-                        </View>
-                        
-                        {hasStartCoords && (
-                          <View style={styles.dmsBlock}>
-                            <Text style={styles.dmsBlockTitle}>Start Position</Text>
-                            <View style={styles.dmsRow}>
-                              <Text style={styles.dmsLabel}>Latitude:</Text>
-                              <Text style={styles.dmsValue}>{startDMS.lat}</Text>
-                            </View>
-                            <View style={styles.dmsRow}>
-                              <Text style={styles.dmsLabel}>Longitude:</Text>
-                              <Text style={styles.dmsValue}>{startDMS.lon}</Text>
-                            </View>
-                          </View>
-                        )}
-                        
-                        {hasEndCoords && (
-                          <View style={styles.dmsBlock}>
-                            <Text style={styles.dmsBlockTitle}>End Position</Text>
-                            <View style={styles.dmsRow}>
-                              <Text style={styles.dmsLabel}>Latitude:</Text>
-                              <Text style={styles.dmsValue}>{endDMS.lat}</Text>
-                            </View>
-                            <View style={styles.dmsRow}>
-                              <Text style={styles.dmsLabel}>Longitude:</Text>
-                              <Text style={styles.dmsValue}>{endDMS.lon}</Text>
-                            </View>
-                          </View>
-                        )}
-                      </View>
-                    )}
-
-                    {/* Action Buttons - Outside the TouchableOpacity */}
-                    <View style={styles.actionButtons}>
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.confirmButton]}
-                        onPress={() => handleConfirmEntry(entry.id)}
-                      >
-                        <IconSymbol
-                          ios_icon_name="checkmark.circle.fill"
-                          android_material_icon_name="check-circle"
-                          size={20}
-                          color="#fff"
-                        />
-                        <Text style={styles.actionButtonText}>Confirm</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.rejectButton]}
-                        onPress={() => handleRejectEntry(entry.id)}
-                      >
-                        <IconSymbol
-                          ios_icon_name="xmark.circle.fill"
-                          android_material_icon_name="cancel"
-                          size={20}
-                          color="#fff"
-                        />
-                        <Text style={styles.actionButtonText}>Reject</Text>
-                      </TouchableOpacity>
                     </View>
+                    <IconSymbol
+                      ios_icon_name={isExpanded ? 'chevron.up' : 'chevron.down'}
+                      android_material_icon_name={isExpanded ? 'expand-less' : 'expand-more'}
+                      size={24}
+                      color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    />
+                  </TouchableOpacity>
+
+                  {isExpanded && (
+                    <View style={styles.entryDetails}>
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Start:</Text>
+                        <Text style={styles.detailValue}>
+                          {formatDate(entry.start_time)} {formatTime(entry.start_time)}
+                        </Text>
+                      </View>
+                      {entry.end_time && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>End:</Text>
+                          <Text style={styles.detailValue}>
+                            {formatDate(entry.end_time)} {formatTime(entry.end_time)}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Duration:</Text>
+                        <Text style={styles.detailValue}>
+                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
+                        </Text>
+                      </View>
+                      {(entry.start_latitude || entry.start_longitude) && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Start Position:</Text>
+                          <Text style={styles.detailValue}>
+                            {formatCoordinateDMS(entry.start_latitude, entry.start_longitude)}
+                          </Text>
+                        </View>
+                      )}
+                      {(entry.end_latitude || entry.end_longitude) && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>End Position:</Text>
+                          <Text style={styles.detailValue}>
+                            {formatCoordinateDMS(entry.end_latitude, entry.end_longitude)}
+                          </Text>
+                        </View>
+                      )}
+                      {entry.notes && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Notes:</Text>
+                          <Text style={styles.detailValue}>{entry.notes}</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  <View style={styles.entryActions}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.confirmButton]}
+                      onPress={() => handleConfirmEntry(entry.id)}
+                    >
+                      <IconSymbol
+                        ios_icon_name="checkmark"
+                        android_material_icon_name="check"
+                        size={20}
+                        color="#fff"
+                      />
+                      <Text style={styles.actionButtonText}>Confirm</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.rejectButton]}
+                      onPress={() => handleRejectEntry(entry.id)}
+                    >
+                      <IconSymbol
+                        ios_icon_name="xmark"
+                        android_material_icon_name="close"
+                        size={20}
+                        color="#fff"
+                      />
+                      <Text style={styles.actionButtonText}>Reject</Text>
+                    </TouchableOpacity>
                   </View>
-                </React.Fragment>
+                </View>
               );
-            })}
-          </View>
-        )}
+            })
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -568,6 +437,9 @@ function createStyles(isDark: boolean, topInset: number) {
     container: {
       flex: 1,
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
+    },
+    scrollView: {
+      flex: 1,
     },
     loadingContainer: {
       flex: 1,
@@ -586,7 +458,7 @@ function createStyles(isDark: boolean, topInset: number) {
       borderBottomWidth: 1,
       borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
-    headerTitleContainer: {
+    headerContent: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
@@ -598,7 +470,6 @@ function createStyles(isDark: boolean, topInset: number) {
     },
     headerTextContainer: {
       flex: 1,
-      minWidth: 0,
     },
     headerTitle: {
       fontSize: 28,
@@ -610,263 +481,101 @@ function createStyles(isDark: boolean, topInset: number) {
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginTop: 4,
     },
-    scrollView: {
-      flex: 1,
-    },
-    scrollContent: {
+    content: {
       padding: 16,
-      paddingBottom: 100,
     },
-    entriesContainer: {
-      gap: 16,
+    emptyState: {
+      alignItems: 'center',
+      padding: 40,
+      marginTop: 60,
+    },
+    emptyText: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: isDark ? colors.text : colors.textLight,
+      marginTop: 16,
+    },
+    emptySubtext: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 8,
+      textAlign: 'center',
     },
     entryCard: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 16,
-      padding: 16,
-      borderLeftWidth: 4,
-      borderLeftColor: colors.warning,
+      borderRadius: 12,
+      marginBottom: 12,
       borderWidth: 1,
       borderColor: isDark ? colors.border : colors.borderLight,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    warningBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.warning + '20',
-      borderRadius: 8,
-      padding: 10,
-      marginBottom: 12,
-      gap: 8,
-    },
-    warningText: {
-      fontSize: 13,
-      color: colors.warning,
-      fontWeight: '600',
+      overflow: 'hidden',
     },
     entryHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 16,
+      padding: 16,
     },
-    vesselInfo: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 12,
-      flex: 1,
-    },
-    vesselTextInfo: {
+    entryHeaderLeft: {
       flex: 1,
     },
     vesselName: {
       fontSize: 18,
       fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
-    },
-    vesselMmsi: {
-      fontSize: 12,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 2,
-    },
-    statusBadge: {
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 6,
-    },
-    statusText: {
-      fontSize: 11,
-      fontWeight: 'bold',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
-    timeSection: {
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
-      borderRadius: 12,
-      padding: 12,
-      marginBottom: 12,
-      gap: 8,
-    },
-    timeRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    timeLabel: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
-    timeLabelText: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      fontWeight: '500',
-    },
-    timeValue: {
-      alignItems: 'flex-end',
-    },
-    timeDate: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-    },
-    timeTime: {
-      fontSize: 12,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 2,
-    },
-    coordinatesSection: {
-      backgroundColor: isDark ? 'rgba(0, 122, 255, 0.1)' : 'rgba(0, 122, 255, 0.05)',
-      borderRadius: 12,
-      padding: 12,
-      marginBottom: 12,
-      borderLeftWidth: 3,
-      borderLeftColor: colors.primary,
-    },
-    coordinatesHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      marginBottom: 8,
-    },
-    coordinatesHeaderText: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: colors.primary,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      flex: 1,
-    },
-    coordinateRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 4,
-    },
-    coordinateLabel: {
-      fontSize: 13,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      fontWeight: '500',
-    },
-    coordinateValue: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    },
-    dmsSection: {
-      backgroundColor: isDark ? 'rgba(76, 175, 80, 0.1)' : 'rgba(76, 175, 80, 0.05)',
-      borderRadius: 12,
-      padding: 14,
-      marginBottom: 12,
-      borderLeftWidth: 3,
-      borderLeftColor: colors.success,
-    },
-    dmsSectionHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      marginBottom: 12,
-    },
-    dmsSectionHeaderText: {
-      fontSize: 12,
-      fontWeight: '700',
-      color: colors.success,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    },
-    dmsBlock: {
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
-      borderRadius: 8,
-      padding: 10,
-      marginBottom: 8,
-    },
-    dmsBlockTitle: {
-      fontSize: 11,
-      fontWeight: '700',
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-      marginBottom: 6,
-    },
-    dmsRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      paddingVertical: 3,
-    },
-    dmsLabel: {
-      fontSize: 13,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      fontWeight: '500',
-    },
-    dmsValue: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: isDark ? colors.text : colors.textLight,
-      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    },
-    durationSection: {
-      marginBottom: 12,
-    },
-    durationCard: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.primary + '10',
-      borderRadius: 12,
-      padding: 12,
-      gap: 12,
-    },
-    durationInfo: {
-      flex: 1,
-    },
-    durationLabel: {
-      fontSize: 12,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 2,
-    },
-    durationValue: {
-      fontSize: 18,
-      fontWeight: 'bold',
-      color: colors.primary,
-    },
-    durationDays: {
-      fontSize: 12,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 2,
-    },
-    notesSection: {
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
-      borderRadius: 12,
-      padding: 12,
-      marginBottom: 12,
-    },
-    notesLabel: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginBottom: 4,
     },
-    notesText: {
+    entryDate: {
       fontSize: 14,
-      color: isDark ? colors.text : colors.textLight,
-      lineHeight: 20,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 8,
     },
-    actionButtons: {
+    durationBadge: {
+      backgroundColor: colors.primary + '20',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 6,
+      alignSelf: 'flex-start',
+    },
+    durationText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    entryDetails: {
+      paddingHorizontal: 16,
+      paddingBottom: 16,
+      borderTopWidth: 1,
+      borderTopColor: isDark ? colors.border : colors.borderLight,
+    },
+    detailRow: {
       flexDirection: 'row',
-      gap: 10,
+      marginTop: 12,
+    },
+    detailLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      width: 120,
+    },
+    detailValue: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      flex: 1,
+    },
+    entryActions: {
+      flexDirection: 'row',
+      gap: 12,
+      padding: 16,
+      borderTopWidth: 1,
+      borderTopColor: isDark ? colors.border : colors.borderLight,
     },
     actionButton: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: 14,
-      borderRadius: 10,
+      padding: 12,
+      borderRadius: 8,
       gap: 8,
     },
     confirmButton: {
@@ -877,27 +586,8 @@ function createStyles(isDark: boolean, topInset: number) {
     },
     actionButtonText: {
       color: '#fff',
-      fontWeight: 'bold',
-      fontSize: 15,
-    },
-    emptyState: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingVertical: 80,
-      paddingHorizontal: 40,
-    },
-    emptyText: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      color: isDark ? colors.text : colors.textLight,
-      marginTop: 16,
-      textAlign: 'center',
-    },
-    emptySubtext: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 8,
-      textAlign: 'center',
+      fontSize: 16,
+      fontWeight: '600',
     },
   });
 }

@@ -1,3 +1,4 @@
+
 // Global error logging for runtime errors
 // Captures console.log/warn/error and sends to Natively server for AI debugging
 
@@ -10,8 +11,8 @@ const clearLogAfterDelay = (logKey: string) => {
   setTimeout(() => delete recentLogs[logKey], 100);
 };
 
-// Queue for batching logs
-let logQueue: Array<{ level: string; message: string; source: string; timestamp: string; platform: string }> = [];
+// Queue for batching logs - FIXED: Changed from Array<T> to T[]
+let logQueue: { level: string; message: string; source: string; timestamp: string; platform: string }[] = [];
 let flushTimeout: ReturnType<typeof setTimeout> | null = null;
 const FLUSH_INTERVAL = 500; // Flush every 500ms
 

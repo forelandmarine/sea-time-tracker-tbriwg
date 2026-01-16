@@ -17,7 +17,7 @@ import {
   KeyboardAvoidingView,
   Dimensions,
 } from 'react-native';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -71,29 +71,7 @@ export default function SeaTimeScreen() {
     loadData();
   }, []);
 
-  useEffect(() => {
-    if (activeVessel) {
-      loadActiveVesselLocation();
-    } else {
-      setActiveVesselLocation(null);
-    }
-  }, [activeVessel?.id]);
-
-  const loadData = async () => {
-    try {
-      console.log('Loading vessels...');
-      const vesselsData = await seaTimeApi.getVessels();
-      setVessels(vesselsData);
-      console.log('Data loaded successfully - Active vessels:', vesselsData.filter(v => v.is_active).length, 'Historic vessels:', vesselsData.filter(v => !v.is_active).length);
-    } catch (error: any) {
-      console.error('Failed to load data:', error);
-      Alert.alert('Error', 'Failed to load data: ' + error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadActiveVesselLocation = async () => {
+  const loadActiveVesselLocation = useCallback(async () => {
     if (!activeVessel) {
       console.log('No active vessel to load location for');
       return;
@@ -115,6 +93,28 @@ export default function SeaTimeScreen() {
       setActiveVesselLocation(null);
     } finally {
       setLocationLoading(false);
+    }
+  }, [activeVessel]);
+
+  useEffect(() => {
+    if (activeVessel) {
+      loadActiveVesselLocation();
+    } else {
+      setActiveVesselLocation(null);
+    }
+  }, [activeVessel, loadActiveVesselLocation]);
+
+  const loadData = async () => {
+    try {
+      console.log('Loading vessels...');
+      const vesselsData = await seaTimeApi.getVessels();
+      setVessels(vesselsData);
+      console.log('Data loaded successfully - Active vessels:', vesselsData.filter(v => v.is_active).length, 'Historic vessels:', vesselsData.filter(v => !v.is_active).length);
+    } catch (error: any) {
+      console.error('Failed to load data:', error);
+      Alert.alert('Error', 'Failed to load data: ' + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 

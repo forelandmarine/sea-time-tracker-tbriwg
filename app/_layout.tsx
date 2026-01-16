@@ -2,12 +2,13 @@
 import "react-native-reanimated";
 import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useColorScheme, Alert } from "react-native";
 import { useNetworkState } from "expo-network";
+import * as Notifications from 'expo-notifications';
 import {
   DarkTheme,
   DefaultTheme,
@@ -18,6 +19,7 @@ import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { BACKEND_URL } from "@/utils/api";
+import { registerForPushNotificationsAsync } from "@/utils/notifications";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -29,6 +31,7 @@ export const unstable_settings = {
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const networkState = useNetworkState();
+  const router = useRouter();
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
@@ -38,8 +41,55 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
       console.log('[App] ✅ Backend URL configured:', BACKEND_URL);
       console.log('[App] ✅ App ready with authentication');
+      
+      // Request notification permissions
+      registerForPushNotificationsAsync().then((granted) => {
+        if (granted) {
+          console.log('[App] ✅ Notification permissions granted');
+        } else {
+          console.log('[App] ⚠️ Notification permissions not granted');
+        }
+      });
     }
   }, [loaded]);
+
+  // Handle notification responses (when user taps on notification)
+  useEffect(() => {
+    console.log('[App] Setting up notification response listener');
+    
+    // Check if app was opened from a notification
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response?.notification) {
+        console.log('[App] App opened from notification:', response.notification.request.content.data);
+        const data = response.notification.request.content.data;
+        
+        // Navigate to confirmations tab if notification has the screen data
+        if (data?.screen === 'confirmations' || data?.url) {
+          console.log('[App] Navigating to confirmations tab from notification');
+          setTimeout(() => {
+            router.push('/(tabs)/confirmations');
+          }, 500);
+        }
+      }
+    });
+
+    // Listen for notification taps while app is running
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      console.log('[App] Notification tapped:', response.notification.request.content.data);
+      const data = response.notification.request.content.data;
+      
+      // Navigate to confirmations tab
+      if (data?.screen === 'confirmations' || data?.url) {
+        console.log('[App] Navigating to confirmations tab from notification tap');
+        router.push('/(tabs)/confirmations');
+      }
+    });
+
+    return () => {
+      console.log('[App] Removing notification response listener');
+      subscription.remove();
+    };
+  }, [router]);
 
   React.useEffect(() => {
     if (
