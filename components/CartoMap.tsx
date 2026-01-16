@@ -14,7 +14,7 @@ export default function CartoMap({ latitude, longitude, vesselName }: CartoMapPr
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
-  // Generate HTML for the map using CARTO basemap
+  // Generate HTML for the map using CARTO basemap with theme support
   const mapHTML = `
     <!DOCTYPE html>
     <html>
@@ -28,6 +28,7 @@ export default function CartoMap({ latitude, longitude, vesselName }: CartoMapPr
           padding: 0;
           height: 100%;
           width: 100%;
+          background-color: ${isDark ? '#1a1a1a' : '#ffffff'};
         }
         #map {
           height: 100%;
@@ -46,17 +47,17 @@ export default function CartoMap({ latitude, longitude, vesselName }: CartoMapPr
           attributionControl: true
         });
 
-        // Add CARTO Voyager basemap (light theme)
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        // Add CARTO basemap - dark theme for dark mode, light theme for light mode
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/${isDark ? 'dark_all' : 'rastertiles/voyager'}/{z}/{x}/{y}{r}.png', {
           attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
           subdomains: 'abcd',
           maxZoom: 20
         }).addTo(map);
 
-        // Create custom vessel icon
+        // Create custom vessel icon with theme-aware styling
         const vesselIcon = L.divIcon({
           className: 'vessel-marker',
-          html: '<div style="background-color: #007AFF; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3);"></div>',
+          html: '<div style="background-color: #007AFF; width: 16px; height: 16px; border-radius: 50%; border: 3px solid ${isDark ? '#2c2c2e' : 'white'}; box-shadow: 0 2px 8px rgba(0,0,0,${isDark ? '0.6' : '0.3'});"></div>',
           iconSize: [22, 22],
           iconAnchor: [11, 11]
         });
@@ -64,7 +65,7 @@ export default function CartoMap({ latitude, longitude, vesselName }: CartoMapPr
         // Add marker for vessel
         const marker = L.marker([${latitude}, ${longitude}], { icon: vesselIcon }).addTo(map);
         
-        ${vesselName ? `marker.bindPopup('<b>${vesselName}</b><br>Lat: ${latitude.toFixed(4)}<br>Lon: ${longitude.toFixed(4)}');` : ''}
+        ${vesselName ? `marker.bindPopup('<div style="color: ${isDark ? '#ffffff' : '#000000'}; background-color: ${isDark ? '#2c2c2e' : '#ffffff'};"><b>${vesselName}</b><br>Lat: ${latitude.toFixed(4)}<br>Lon: ${longitude.toFixed(4)}</div>');` : ''}
 
         // Disable scroll zoom on mobile for better UX
         map.scrollWheelZoom.disable();
