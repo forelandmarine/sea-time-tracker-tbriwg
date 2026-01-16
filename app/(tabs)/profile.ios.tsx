@@ -242,19 +242,24 @@ export default function ReportsScreen() {
     try {
       setLoading(true);
       
-      const [profileData, summaryData] = await Promise.all([
-        seaTimeApi.getUserProfile(),
-        seaTimeApi.getReportSummary(),
-      ]);
+      // Try to load profile, but don't fail if authentication is not set up
+      let profileData = null;
+      try {
+        profileData = await seaTimeApi.getUserProfile();
+        console.log('Profile loaded:', profileData.email);
+        setProfile(profileData);
+      } catch (profileError: any) {
+        console.log('Profile not available (authentication not set up):', profileError.message);
+        // Profile is optional, continue without it
+      }
       
-      console.log('Profile loaded:', profileData.email);
+      // Load summary
+      const summaryData = await seaTimeApi.getReportSummary();
       console.log('Report summary loaded:', summaryData);
-      
-      setProfile(profileData);
       setSummary(summaryData);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load reports data:', error);
-      Alert.alert('Error', 'Failed to load reports data');
+      Alert.alert('Error', error.message || 'Failed to load reports data');
     } finally {
       setLoading(false);
     }
@@ -269,9 +274,9 @@ export default function ReportsScreen() {
       console.log('Report summary refreshed:', summaryData);
       
       setSummary(summaryData);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to refresh reports data:', error);
-      Alert.alert('Error', 'Failed to refresh reports data');
+      Alert.alert('Error', error.message || 'Failed to refresh reports data');
     } finally {
       setRefreshing(false);
     }
@@ -321,9 +326,9 @@ export default function ReportsScreen() {
         console.error('Failed to read PDF blob');
         Alert.alert('Error', 'Failed to process PDF file');
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to export PDF:', error);
-      Alert.alert('Error', 'Failed to export PDF report');
+      Alert.alert('Error', error.message || 'Failed to export PDF report');
     }
   };
 
@@ -349,9 +354,9 @@ export default function ReportsScreen() {
       } else {
         Alert.alert('Success', `Report saved to: ${fileUri}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to export CSV:', error);
-      Alert.alert('Error', 'Failed to export report');
+      Alert.alert('Error', error.message || 'Failed to export report');
     }
   };
 
@@ -411,7 +416,7 @@ export default function ReportsScreen() {
           />
         }
       >
-        {/* Small User Card */}
+        {/* Small User Card - Only show if profile is available */}
         {profile && (
           <TouchableOpacity style={styles.userCard} onPress={handleUserCardPress}>
             {profile?.imageUrl || profile?.image ? (
