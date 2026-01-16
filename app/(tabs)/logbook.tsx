@@ -1013,8 +1013,8 @@ export default function LogbookScreen() {
               </Text>
               {getEntriesForDate(selectedDate).length > 0 ? (
                 <React.Fragment>
-                  {getEntriesForDate(selectedDate).map((entry, index) => (
-                    <View key={index} style={styles.selectedDateEntry}>
+                  {getEntriesForDate(selectedDate).map((entry) => (
+                    <View key={entry.id} style={styles.selectedDateEntry}>
                       <View style={styles.entryHeader}>
                         <Text style={styles.vesselName}>
                           {entry.vessel?.vessel_name || 'Unknown Vessel'}
@@ -1137,7 +1137,7 @@ export default function LogbookScreen() {
               {confirmedEntries.length > 0 && (
                 <React.Fragment>
                   <Text style={styles.sectionTitle}>Sea Time Records by Vessel</Text>
-                  {Object.entries(groupedByVessel).map(([vesselId, group], groupIndex) => {
+                  {Object.entries(groupedByVessel).map(([vesselId, group]) => {
                     const vesselTotalHours = group.entries.reduce(
                       (sum, entry) => sum + toNumber(entry.duration_hours),
                       0
@@ -1145,7 +1145,7 @@ export default function LogbookScreen() {
                     const vesselTotalDays = (vesselTotalHours / 24).toFixed(1);
                     
                     return (
-                      <React.Fragment key={groupIndex}>
+                      <React.Fragment key={vesselId}>
                         <View style={styles.vesselGroupHeader}>
                           <Text style={styles.vesselGroupTitle}>
                             {group.vessel?.vessel_name || 'Unknown Vessel'}
@@ -1162,8 +1162,8 @@ export default function LogbookScreen() {
                           </View>
                         </View>
                         
-                        {group.entries.map((entry, entryIndex) => (
-                          <View key={entryIndex} style={styles.entryCard}>
+                        {group.entries.map((entry) => (
+                          <View key={entry.id} style={styles.entryCard}>
                             <View style={styles.entryHeader}>
                               <View
                                 style={[
@@ -1221,9 +1221,9 @@ export default function LogbookScreen() {
               {pendingEntries.length > 0 && (
                 <React.Fragment>
                   <Text style={styles.sectionTitle}>Pending Review</Text>
-                  {pendingEntries.map((entry, index) => (
+                  {pendingEntries.map((entry) => (
                     <TouchableOpacity
-                      key={index}
+                      key={entry.id}
                       style={styles.entryCard}
                       onPress={() => {
                         console.log('[LogbookScreen] User tapped pending entry, navigating to Review tab');
