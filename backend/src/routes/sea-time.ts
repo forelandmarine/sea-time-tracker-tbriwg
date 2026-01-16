@@ -9,16 +9,76 @@ function calculateDurationHours(startTime: Date, endTime: Date): number {
   return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100; // Round to 2 decimal places
 }
 
+// Helper function to transform vessel object for API response
+function transformVesselForResponse(vessel: any) {
+  return {
+    id: vessel.id,
+    mmsi: vessel.mmsi,
+    vessel_name: vessel.vessel_name,
+    flag: vessel.flag,
+    vessel_type: vessel.type, // Map 'type' database field to 'vessel_type' in API response
+    is_active: vessel.is_active,
+    created_at: vessel.created_at,
+  };
+}
+
+// Helper function to transform sea time entry for API response
+function transformSeaTimeEntryForResponse(entry: any) {
+  return {
+    id: entry.id,
+    vessel_id: entry.vessel_id,
+    start_time: entry.start_time.toISOString ? entry.start_time.toISOString() : entry.start_time,
+    end_time: entry.end_time ? (entry.end_time.toISOString ? entry.end_time.toISOString() : entry.end_time) : null,
+    duration_hours: entry.duration_hours,
+    status: entry.status,
+    notes: entry.notes,
+    start_latitude: entry.start_latitude,
+    start_longitude: entry.start_longitude,
+    end_latitude: entry.end_latitude,
+    end_longitude: entry.end_longitude,
+    created_at: entry.created_at.toISOString ? entry.created_at.toISOString() : entry.created_at,
+    vessel: entry.vessel ? transformVesselForResponse(entry.vessel) : null,
+  };
+}
+
 export function register(app: App, fastify: FastifyInstance) {
   // GET /api/sea-time - Return all sea time entries with vessel info
   fastify.get('/api/sea-time', {
     schema: {
-      description: 'Get all sea time entries with vessel information',
+      description: 'Get all sea time entries with complete vessel information',
       tags: ['sea-time'],
       response: {
         200: {
           type: 'array',
-          items: { type: 'object' },
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              vessel_id: { type: 'string' },
+              start_time: { type: 'string', format: 'date-time' },
+              end_time: { type: ['string', 'null'], format: 'date-time' },
+              duration_hours: { type: ['string', 'null'] },
+              status: { type: 'string', enum: ['pending', 'confirmed', 'rejected'] },
+              notes: { type: ['string', 'null'] },
+              start_latitude: { type: ['string', 'null'] },
+              start_longitude: { type: ['string', 'null'] },
+              end_latitude: { type: ['string', 'null'] },
+              end_longitude: { type: ['string', 'null'] },
+              created_at: { type: 'string', format: 'date-time' },
+              vessel: {
+                type: ['object', 'null'],
+                properties: {
+                  id: { type: 'string' },
+                  mmsi: { type: 'string' },
+                  vessel_name: { type: 'string' },
+                  flag: { type: ['string', 'null'] },
+                  vessel_type: { type: ['string', 'null'] },
+                  is_active: { type: 'boolean' },
+                  created_at: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -29,10 +89,11 @@ export function register(app: App, fastify: FastifyInstance) {
       with: {
         vessel: true,
       },
+      orderBy: desc(schema.sea_time_entries.start_time),
     });
 
-    app.logger.info(`Retrieved ${entries.length} sea time entries`);
-    return reply.code(200).send(entries);
+    app.logger.info({ count: entries.length }, 'Sea time entries retrieved');
+    return reply.code(200).send(entries.map(transformSeaTimeEntryForResponse));
   });
 
   // GET /api/vessels/:vesselId/sea-time - Return sea time entries for a specific vessel
