@@ -583,8 +583,13 @@ export default function LogbookScreen() {
   };
 
   const handleViewMCARequirements = () => {
-    console.log('[LogbookScreen] User tapped View MCA Requirements from modal');
-    router.push('/mca-requirements');
+    console.log('[LogbookScreen] User tapped View MCA Requirements from modal - closing modal first');
+    // Close the modal first, then navigate
+    setShowAddModal(false);
+    // Use setTimeout to ensure modal is fully closed before navigation
+    setTimeout(() => {
+      router.push('/mca-requirements');
+    }, 100);
   };
 
   const parseLatLong = (text: string): { lat: number | null; lon: number | null } => {
