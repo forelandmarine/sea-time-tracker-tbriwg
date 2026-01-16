@@ -444,6 +444,9 @@ const createStyles = (isDark: boolean, topInset: number) =>
     saveButtonText: {
       color: '#FFFFFF',
     },
+    vesselPickerScrollView: {
+      maxHeight: 400,
+    },
     vesselOption: {
       padding: 16,
       borderBottomWidth: 1,
@@ -1334,7 +1337,7 @@ export default function LogbookScreen() {
                   <TouchableOpacity
                     style={styles.pickerButton}
                     onPress={() => {
-                      console.log('[LogbookScreen iOS] User tapped vessel picker button');
+                      console.log('[LogbookScreen iOS] User tapped vessel picker button, vessels available:', vessels.length);
                       setShowVesselPicker(true);
                     }}
                   >
@@ -1521,17 +1524,26 @@ export default function LogbookScreen() {
         visible={showVesselPicker}
         transparent
         animationType="slide"
-        onRequestClose={() => setShowVesselPicker(false)}
+        onRequestClose={() => {
+          console.log('[LogbookScreen iOS] Vessel picker modal closed');
+          setShowVesselPicker(false);
+        }}
       >
         <View style={styles.modalOverlay}>
           <TouchableOpacity
             style={{ flex: 1 }}
             activeOpacity={1}
-            onPress={() => setShowVesselPicker(false)}
+            onPress={() => {
+              console.log('[LogbookScreen iOS] User tapped outside vessel picker, closing');
+              setShowVesselPicker(false);
+            }}
           />
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Select Vessel</Text>
-            <ScrollView style={{ maxHeight: 400 }}>
+            <Text style={styles.modalSubtitle}>
+              {vessels.length === 0 ? 'No vessels available. Add a vessel first.' : `Choose from ${vessels.length} vessel${vessels.length !== 1 ? 's' : ''}`}
+            </Text>
+            <ScrollView style={styles.vesselPickerScrollView}>
               {vessels.map((vessel) => (
                 <TouchableOpacity
                   key={vessel.id}
@@ -1543,9 +1555,25 @@ export default function LogbookScreen() {
                   }}
                 >
                   <Text style={styles.vesselOptionText}>{vessel.vessel_name}</Text>
+                  <Text style={[styles.vesselOptionText, { fontSize: 13, color: isDark ? colors.textSecondary : colors.textSecondaryLight, marginTop: 4 }]}>
+                    MMSI: {vessel.mmsi}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  console.log('[LogbookScreen iOS] User cancelled vessel selection');
+                  setShowVesselPicker(false);
+                }}
+              >
+                <Text style={[styles.modalButtonText, styles.cancelButtonText]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
