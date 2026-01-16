@@ -1328,7 +1328,10 @@ export default function LogbookScreen() {
                   <Text style={styles.inputLabel}>Vessel</Text>
                   <TouchableOpacity
                     style={styles.pickerButton}
-                    onPress={() => setShowVesselPicker(true)}
+                    onPress={() => {
+                      console.log('[LogbookScreen iOS] User tapped vessel picker button');
+                      setShowVesselPicker(true);
+                    }}
                   >
                     <Text
                       style={
@@ -1524,9 +1527,9 @@ export default function LogbookScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Select Vessel</Text>
             <ScrollView style={{ maxHeight: 400 }}>
-              {vessels.map((vessel, index) => (
+              {vessels.map((vessel) => (
                 <TouchableOpacity
-                  key={index}
+                  key={vessel.id}
                   style={styles.vesselOption}
                   onPress={() => {
                     console.log('[LogbookScreen iOS] User selected vessel:', vessel.vessel_name);
