@@ -560,6 +560,205 @@ export function register(app: App, fastify: FastifyInstance) {
     }
   });
 
+  // POST /api/sea-time/generate-samples - Generate sample sea time entries for testing
+  fastify.post('/api/sea-time/generate-samples', {
+    schema: {
+      description: 'Generate sample sea time entries for testing (creates vessel if needed)',
+      tags: ['sea-time'],
+      response: {
+        201: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            message: { type: 'string' },
+            vessel: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                mmsi: { type: 'string' },
+                vessel_name: { type: 'string' },
+                flag: { type: ['string', 'null'] },
+                vessel_type: { type: ['string', 'null'] },
+                is_active: { type: 'boolean' },
+                created_at: { type: 'string', format: 'date-time' },
+              },
+            },
+            entries: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  vessel_id: { type: 'string' },
+                  start_time: { type: 'string', format: 'date-time' },
+                  end_time: { type: 'string', format: 'date-time' },
+                  duration_hours: { type: 'string' },
+                  status: { type: 'string' },
+                  notes: { type: 'string' },
+                  start_latitude: { type: 'string' },
+                  start_longitude: { type: 'string' },
+                  end_latitude: { type: 'string' },
+                  end_longitude: { type: 'string' },
+                  created_at: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
+          },
+        },
+        400: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    app.logger.info({}, 'Generating sample sea time entries for testing');
+
+    try {
+      // Check if user has any vessels
+      let vessels = await app.db.select().from(schema.vessels);
+
+      let selectedVessel;
+
+      if (vessels.length === 0) {
+        // Create sample vessel
+        app.logger.info({}, 'No vessels found, creating sample vessel');
+
+        const [newVessel] = await app.db
+          .insert(schema.vessels)
+          .values({
+            mmsi: '235012345',
+            vessel_name: 'MV Sample Yacht',
+            is_active: true,
+            flag: 'United Kingdom',
+            type: 'Yacht',
+            length_metres: '24.5',
+            gross_tonnes: '45',
+          })
+          .returning();
+
+        selectedVessel = newVessel;
+        app.logger.info({ vesselId: newVessel.id, vesselName: newVessel.vessel_name }, 'Sample vessel created');
+      } else {
+        selectedVessel = vessels[0];
+        app.logger.info({ vesselId: selectedVessel.id, vesselName: selectedVessel.vessel_name }, 'Using existing vessel');
+      }
+
+      // Create three sample sea time entries
+      const now = new Date();
+      const entries = [];
+
+      // Entry 1: 2 days ago, 08:00 - 18:30 (10.5 hours)
+      const entry1Start = new Date(now);
+      entry1Start.setDate(entry1Start.getDate() - 2);
+      entry1Start.setHours(8, 0, 0, 0);
+
+      const entry1End = new Date(now);
+      entry1End.setDate(entry1End.getDate() - 2);
+      entry1End.setHours(18, 30, 0, 0);
+
+      const [sampleEntry1] = await app.db
+        .insert(schema.sea_time_entries)
+        .values({
+          vessel_id: selectedVessel.id,
+          start_time: entry1Start,
+          end_time: entry1End,
+          duration_hours: '10.5',
+          status: 'pending',
+          notes: 'Coastal passage from Southampton to Portsmouth. Good weather conditions.',
+          start_latitude: '50.9097',
+          start_longitude: '-1.4044',
+          end_latitude: '50.7964',
+          end_longitude: '-1.1089',
+        })
+        .returning();
+
+      entries.push(sampleEntry1);
+      app.logger.info({ entryId: sampleEntry1.id }, 'Sample entry 1 created');
+
+      // Entry 2: 7 days ago, 09:30 - 16:45 (7.25 hours)
+      const entry2Start = new Date(now);
+      entry2Start.setDate(entry2Start.getDate() - 7);
+      entry2Start.setHours(9, 30, 0, 0);
+
+      const entry2End = new Date(now);
+      entry2End.setDate(entry2End.getDate() - 7);
+      entry2End.setHours(16, 45, 0, 0);
+
+      const [sampleEntry2] = await app.db
+        .insert(schema.sea_time_entries)
+        .values({
+          vessel_id: selectedVessel.id,
+          start_time: entry2Start,
+          end_time: entry2End,
+          duration_hours: '7.25',
+          status: 'pending',
+          notes: 'Training voyage in the Solent. Practiced navigation and mooring.',
+          start_latitude: '50.7964',
+          start_longitude: '-1.1089',
+          end_latitude: '50.8429',
+          end_longitude: '-1.2981',
+        })
+        .returning();
+
+      entries.push(sampleEntry2);
+      app.logger.info({ entryId: sampleEntry2.id }, 'Sample entry 2 created');
+
+      // Entry 3: 14 days ago, 07:00 - 19:15 (12.25 hours)
+      const entry3Start = new Date(now);
+      entry3Start.setDate(entry3Start.getDate() - 14);
+      entry3Start.setHours(7, 0, 0, 0);
+
+      const entry3End = new Date(now);
+      entry3End.setDate(entry3End.getDate() - 14);
+      entry3End.setHours(19, 15, 0, 0);
+
+      const [sampleEntry3] = await app.db
+        .insert(schema.sea_time_entries)
+        .values({
+          vessel_id: selectedVessel.id,
+          start_time: entry3Start,
+          end_time: entry3End,
+          duration_hours: '12.25',
+          status: 'pending',
+          notes: 'Extended passage to Isle of Wight. Overnight preparation and early departure.',
+          start_latitude: '50.8429',
+          start_longitude: '-1.2981',
+          end_latitude: '50.6929',
+          end_longitude: '-1.3047',
+        })
+        .returning();
+
+      entries.push(sampleEntry3);
+      app.logger.info({ entryId: sampleEntry3.id }, 'Sample entry 3 created');
+
+      app.logger.info(
+        { vesselId: selectedVessel.id, entryCount: entries.length },
+        'Sample sea time entries generated successfully'
+      );
+
+      return reply.code(201).send({
+        success: true,
+        message: 'Sample sea time entries generated successfully',
+        vessel: transformVesselForResponse(selectedVessel),
+        entries: entries.map((entry) => ({
+          id: entry.id,
+          vessel_id: entry.vessel_id,
+          start_time: entry.start_time.toISOString(),
+          end_time: entry.end_time.toISOString(),
+          duration_hours: entry.duration_hours,
+          status: entry.status,
+          notes: entry.notes,
+          start_latitude: entry.start_latitude,
+          start_longitude: entry.start_longitude,
+          end_latitude: entry.end_latitude,
+          end_longitude: entry.end_longitude,
+          created_at: entry.created_at.toISOString(),
+        })),
+      });
+    } catch (error) {
+      app.logger.error({ err: error }, 'Failed to generate sample sea time entries');
+      return reply.code(400).send({ error: 'Failed to generate sample sea time entries' });
+    }
+  });
+
   // GET /api/logbook - Get sea time entries in chronological order for logbook/calendar view
   fastify.get<{ Querystring: { startDate?: string; endDate?: string } }>('/api/logbook', {
     schema: {
