@@ -330,6 +330,21 @@ const createStyles = (isDark: boolean) =>
       textAlign: 'center',
       fontStyle: 'italic',
     },
+    noDateSelectedContainer: {
+      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
+      borderRadius: 16,
+      padding: 32,
+      alignItems: 'center',
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    noDateSelectedText: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      textAlign: 'center',
+      marginTop: 12,
+    },
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -991,7 +1006,7 @@ export default function LogbookScreen() {
             </View>
           </View>
 
-          {selectedDate && (
+          {selectedDate ? (
             <View style={styles.selectedDateCard}>
               <Text style={styles.selectedDateTitle}>
                 Entries for {formatDate(selectedDate + 'T00:00:00')}
@@ -1056,29 +1071,19 @@ export default function LogbookScreen() {
                 <Text style={styles.noEntriesText}>No entries recorded for this date</Text>
               )}
             </View>
-          )}
-
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryTitle}>Summary</Text>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Confirmed Days</Text>
-              <Text style={styles.summaryValue}>{calculateTotalDays()}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Total Confirmed Hours</Text>
-              <Text style={styles.summaryValue}>
-                {calculateTotalHours().toFixed(1)}h
+          ) : (
+            <View style={styles.noDateSelectedContainer}>
+              <IconSymbol
+                ios_icon_name="calendar"
+                android_material_icon_name="calendar-today"
+                size={48}
+                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+              />
+              <Text style={styles.noDateSelectedText}>
+                Select a date on the calendar to view sea time entries for that day
               </Text>
             </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Confirmed Entries</Text>
-              <Text style={styles.summaryValue}>{confirmedEntries.length}</Text>
-            </View>
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Pending Review</Text>
-              <Text style={styles.summaryValue}>{pendingEntries.length}</Text>
-            </View>
-          </View>
+          )}
         </ScrollView>
       ) : (
         <ScrollView
