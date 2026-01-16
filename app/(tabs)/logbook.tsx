@@ -587,16 +587,13 @@ export default function LogbookScreen() {
 
   const handleViewMCARequirements = () => {
     console.log('[LogbookScreen] User tapped View MCA Requirements from modal - closing modal first');
-    // Close the modal first, then navigate
     setShowAddModal(false);
-    // Use setTimeout to ensure modal is fully closed before navigation
     setTimeout(() => {
       router.push('/mca-requirements');
     }, 100);
   };
 
   const parseLatLong = (text: string): { lat: number | null; lon: number | null } => {
-    // Try to parse lat/long from text like "51.5074, -0.1278" or "51.5074 N, 0.1278 W"
     const coordPattern = /(-?\d+\.?\d*)\s*[,\s]\s*(-?\d+\.?\d*)/;
     const match = text.match(coordPattern);
     
@@ -631,11 +628,9 @@ export default function LogbookScreen() {
     }
 
     try {
-      // Parse voyage locations
       const fromCoords = parseLatLong(voyageFrom);
       const toCoords = parseLatLong(voyageTo);
 
-      // Build notes with voyage information
       const serviceTypeNote = `Service Type: ${serviceType.charAt(0).toUpperCase() + serviceType.slice(1)}`;
       const voyageFromNote = voyageFrom ? `From: ${voyageFrom}` : '';
       const voyageToNote = voyageTo ? `To: ${voyageTo}` : '';
@@ -865,7 +860,6 @@ export default function LogbookScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerTitleContainer}>
           <Image
@@ -1237,7 +1231,6 @@ export default function LogbookScreen() {
         </ScrollView>
       )}
 
-      {/* Add Entry Modal */}
       <Modal
         visible={showAddModal}
         transparent
@@ -1271,7 +1264,6 @@ export default function LogbookScreen() {
                     <Text style={styles.mcaButtonText}>View MCA Requirements</Text>
                   </TouchableOpacity>
 
-                  {/* Service Type */}
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Service Type</Text>
                     <View style={styles.serviceTypeContainer}>
@@ -1336,7 +1328,6 @@ export default function LogbookScreen() {
                     )}
                   </View>
 
-                  {/* Vessel Selection */}
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Vessel</Text>
                     <TouchableOpacity
@@ -1366,7 +1357,6 @@ export default function LogbookScreen() {
 
                   <View style={styles.divider} />
 
-                  {/* Start Date & Time */}
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Start Date & Time</Text>
                     <TouchableOpacity
@@ -1389,7 +1379,6 @@ export default function LogbookScreen() {
                     </TouchableOpacity>
                   </View>
 
-                  {/* End Date & Time */}
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>
                       End Date & Time{' '}
@@ -1415,7 +1404,6 @@ export default function LogbookScreen() {
 
                   <View style={styles.divider} />
 
-                  {/* Voyage From/To */}
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>
                       Voyage Locations{' '}
@@ -1453,7 +1441,6 @@ export default function LogbookScreen() {
                     </View>
                   </View>
 
-                  {/* Notes */}
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>
                       Additional Notes{' '}
@@ -1499,7 +1486,6 @@ export default function LogbookScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Vessel Picker Modal */}
       <Modal
         visible={showVesselPicker}
         transparent
@@ -1524,9 +1510,9 @@ export default function LogbookScreen() {
                 {vessels.length === 0 ? 'No vessels available. Add a vessel first.' : `Choose from ${vessels.length} vessel${vessels.length !== 1 ? 's' : ''}`}
               </Text>
               <ScrollView style={styles.vesselPickerScrollView}>
-                {vessels.map((vessel) => (
+                {vessels.map((vessel, vesselIndex) => (
                   <TouchableOpacity
-                    key={vessel.id}
+                    key={vesselIndex}
                     style={styles.vesselOption}
                     onPress={() => {
                       console.log('[LogbookScreen] User selected vessel:', vessel.vessel_name);
@@ -1559,7 +1545,6 @@ export default function LogbookScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Date/Time Pickers for Android/Web */}
       {showStartDatePicker && Platform.OS !== 'ios' && (
         <DateTimePicker
           value={startDate || new Date()}
@@ -1632,7 +1617,6 @@ export default function LogbookScreen() {
         />
       )}
 
-      {/* iOS Date/Time Pickers - Inline in modal */}
       {showStartDatePicker && Platform.OS === 'ios' && (
         <Modal
           visible={showStartDatePicker}

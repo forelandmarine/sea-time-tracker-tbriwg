@@ -591,9 +591,7 @@ export default function LogbookScreen() {
 
   const handleViewMCARequirements = () => {
     console.log('[LogbookScreen iOS] User tapped View MCA Requirements from modal - closing modal first');
-    // Close the modal first, then navigate
     setShowAddModal(false);
-    // Use setTimeout to ensure modal is fully closed before navigation
     setTimeout(() => {
       router.push('/mca-requirements');
     }, 100);
@@ -1237,7 +1235,6 @@ export default function LogbookScreen() {
         </ScrollView>
       )}
 
-      {/* Add Entry Modal - iOS Bottom Sheet Style */}
       <Modal
         visible={showAddModal}
         transparent
@@ -1519,7 +1516,6 @@ export default function LogbookScreen() {
         </View>
       </Modal>
 
-      {/* Vessel Picker Modal */}
       <Modal
         visible={showVesselPicker}
         transparent
@@ -1544,9 +1540,9 @@ export default function LogbookScreen() {
               {vessels.length === 0 ? 'No vessels available. Add a vessel first.' : `Choose from ${vessels.length} vessel${vessels.length !== 1 ? 's' : ''}`}
             </Text>
             <ScrollView style={styles.vesselPickerScrollView}>
-              {vessels.map((vessel) => (
+              {vessels.map((vessel, vesselIndex) => (
                 <TouchableOpacity
-                  key={vessel.id}
+                  key={vesselIndex}
                   style={styles.vesselOption}
                   onPress={() => {
                     console.log('[LogbookScreen iOS] User selected vessel:', vessel.vessel_name);
