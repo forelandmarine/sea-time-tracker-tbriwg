@@ -577,6 +577,10 @@ export default function LogbookScreen() {
         seaTimeApi.getVessels(),
       ]);
       console.log('[LogbookScreen] Received entries:', entriesData.length, 'vessels:', vesselsData.length);
+      
+      // Debug: Log entry statuses to see what we're getting
+      console.log('[LogbookScreen] Entry statuses:', entriesData.map(e => ({ id: e.id, status: e.status, vessel: e.vessel?.vessel_name })));
+      
       setEntries(entriesData);
       setVessels(vesselsData);
     } catch (error) {
@@ -775,7 +779,8 @@ export default function LogbookScreen() {
   };
 
   const getEntriesForDate = (dateString: string): SeaTimeEntry[] => {
-    return entries.filter((entry) => {
+    const dateEntries = entries.filter((entry) => {
+      // Show confirmed entries on calendar
       if (entry.status !== 'confirmed') return false;
       
       const entryStartDate = new Date(entry.start_time);
@@ -789,35 +794,48 @@ export default function LogbookScreen() {
       
       return entryStartDate < nextDay && entryEndDate >= selectedDateObj;
     });
+    
+    console.log('[LogbookScreen] Entries for date', dateString, ':', dateEntries.length);
+    return dateEntries;
   };
 
   const getMarkedDates = () => {
     const marked: any = {};
     
-    entries
-      .filter((e) => e.status === 'confirmed')
-      .forEach((entry) => {
-        const startDate = new Date(entry.start_time);
-        const endDate = entry.end_time ? new Date(entry.end_time) : new Date();
-        
-        let currentDate = new Date(startDate);
-        currentDate.setHours(0, 0, 0, 0);
-        
-        const endDateNormalized = new Date(endDate);
-        endDateNormalized.setHours(23, 59, 59, 999);
-        
-        while (currentDate <= endDateNormalized) {
-          const dateString = currentDate.toISOString().split('T')[0];
-          marked[dateString] = {
-            marked: true,
-            dotColor: colors.primary,
-            selected: selectedDate === dateString,
-            selectedColor: colors.primary,
-            selectedTextColor: '#FFFFFF',
-          };
-          currentDate.setDate(currentDate.getDate() + 1);
-        }
+    // Filter for confirmed entries only
+    const confirmedEntries = entries.filter((e) => e.status === 'confirmed');
+    console.log('[LogbookScreen] Marking calendar - Total entries:', entries.length, 'Confirmed:', confirmedEntries.length);
+    
+    confirmedEntries.forEach((entry) => {
+      console.log('[LogbookScreen] Processing entry for calendar:', {
+        id: entry.id,
+        vessel: entry.vessel?.vessel_name,
+        start: entry.start_time,
+        end: entry.end_time,
+        status: entry.status
       });
+      
+      const startDate = new Date(entry.start_time);
+      const endDate = entry.end_time ? new Date(entry.end_time) : new Date();
+      
+      let currentDate = new Date(startDate);
+      currentDate.setHours(0, 0, 0, 0);
+      
+      const endDateNormalized = new Date(endDate);
+      endDateNormalized.setHours(23, 59, 59, 999);
+      
+      while (currentDate <= endDateNormalized) {
+        const dateString = currentDate.toISOString().split('T')[0];
+        marked[dateString] = {
+          marked: true,
+          dotColor: colors.primary,
+          selected: selectedDate === dateString,
+          selectedColor: colors.primary,
+          selectedTextColor: '#FFFFFF',
+        };
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    });
     
     console.log('[LogbookScreen] Marked dates for calendar:', Object.keys(marked).length, 'days');
     return marked;
