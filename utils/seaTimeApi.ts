@@ -474,47 +474,95 @@ export async function deleteSeaTimeEntry(entryId: string) {
 // Reports APIs
 export async function getReportSummary() {
   checkBackendConfigured();
-  console.log('[API] Fetching report summary');
+  console.log('[API] Fetching report summary from:', `${API_BASE_URL}/api/reports/summary`);
   const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/reports/summary`, options);
   
-  if (!response.ok) {
-    throw new Error('Failed to fetch report summary');
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/reports/summary`, options);
+    
+    console.log('[API] Report summary response status:', response.status);
+    
+    if (!response.ok) {
+      let errorMessage = 'Failed to fetch report summary';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (e) {
+        console.error('[API] Failed to parse error response:', e);
+      }
+      console.error('[API] Report summary error:', errorMessage);
+      throw new Error(errorMessage);
+    }
+    
+    const summary = await response.json();
+    console.log('[API] Received report summary:', summary);
+    return summary;
+  } catch (error) {
+    console.error('[API] Exception fetching report summary:', error);
+    throw error;
   }
-  
-  const summary = await response.json();
-  console.log('[API] Received report summary');
-  return summary;
 }
 
 export async function downloadCSVReport() {
   checkBackendConfigured();
-  console.log('[API] Downloading CSV report');
+  console.log('[API] Downloading CSV report from:', `${API_BASE_URL}/api/reports/csv`);
   const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/reports/csv`, options);
   
-  if (!response.ok) {
-    throw new Error('Failed to download CSV report');
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/reports/csv`, options);
+    
+    console.log('[API] CSV report response status:', response.status);
+    
+    if (!response.ok) {
+      let errorMessage = 'Failed to download CSV report';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (e) {
+        console.error('[API] Failed to parse error response:', e);
+      }
+      console.error('[API] CSV report error:', errorMessage);
+      throw new Error(errorMessage);
+    }
+    
+    const csvData = await response.text();
+    console.log('[API] CSV report downloaded, size:', csvData.length);
+    return csvData;
+  } catch (error) {
+    console.error('[API] Exception downloading CSV report:', error);
+    throw error;
   }
-  
-  const csvData = await response.text();
-  console.log('[API] CSV report downloaded');
-  return csvData;
 }
 
 export async function downloadPDFReport() {
   checkBackendConfigured();
-  console.log('[API] Downloading PDF report');
+  console.log('[API] Downloading PDF report from:', `${API_BASE_URL}/api/reports/pdf`);
   const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/reports/pdf`, options);
   
-  if (!response.ok) {
-    throw new Error('Failed to download PDF report');
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/reports/pdf`, options);
+    
+    console.log('[API] PDF report response status:', response.status);
+    
+    if (!response.ok) {
+      let errorMessage = 'Failed to download PDF report';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error || errorMessage;
+      } catch (e) {
+        console.error('[API] Failed to parse error response:', e);
+      }
+      console.error('[API] PDF report error:', errorMessage);
+      throw new Error(errorMessage);
+    }
+    
+    const pdfBlob = await response.blob();
+    console.log('[API] PDF report downloaded, size:', pdfBlob.size);
+    return pdfBlob;
+  } catch (error) {
+    console.error('[API] Exception downloading PDF report:', error);
+    throw error;
   }
-  
-  const pdfData = await response.text();
-  console.log('[API] PDF report downloaded');
-  return pdfData;
 }
 
 // Test APIs
