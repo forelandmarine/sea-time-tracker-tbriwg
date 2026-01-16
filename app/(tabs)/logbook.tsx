@@ -1495,54 +1495,53 @@ export default function LogbookScreen() {
           setShowVesselPicker(false);
         }}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => {
-            console.log('[LogbookScreen] User tapped outside vessel picker, closing');
-            setShowVesselPicker(false);
-          }}
-        >
-          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Select Vessel</Text>
-              <Text style={styles.modalSubtitle}>
-                {vessels.length === 0 ? 'No vessels available. Add a vessel first.' : `Choose from ${vessels.length} vessel${vessels.length !== 1 ? 's' : ''}`}
-              </Text>
-              <ScrollView style={styles.vesselPickerScrollView}>
-                {vessels.map((vessel, vesselIndex) => (
-                  <TouchableOpacity
-                    key={vesselIndex}
-                    style={styles.vesselOption}
-                    onPress={() => {
-                      console.log('[LogbookScreen] User selected vessel:', vessel.vessel_name);
-                      setSelectedVessel(vessel);
-                      setShowVesselPicker(false);
-                    }}
-                  >
-                    <Text style={styles.vesselOptionText}>{vessel.vessel_name}</Text>
-                    <Text style={[styles.vesselOptionText, { fontSize: 13, color: isDark ? colors.textSecondary : colors.textSecondaryLight, marginTop: 4 }]}>
-                      MMSI: {vessel.mmsi}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <View style={styles.modalButtons}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={1}
+            onPress={() => {
+              console.log('[LogbookScreen] User tapped outside vessel picker, closing');
+              setShowVesselPicker(false);
+            }}
+          />
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Vessel</Text>
+            <Text style={styles.modalSubtitle}>
+              {vessels.length === 0 ? 'No vessels available. Add a vessel first.' : `Choose from ${vessels.length} vessel${vessels.length !== 1 ? 's' : ''}`}
+            </Text>
+            <ScrollView style={styles.vesselPickerScrollView}>
+              {vessels.map((vessel, vesselIndex) => (
                 <TouchableOpacity
-                  style={[styles.modalButton, styles.cancelButton]}
+                  key={vesselIndex}
+                  style={styles.vesselOption}
                   onPress={() => {
-                    console.log('[LogbookScreen] User cancelled vessel selection');
+                    console.log('[LogbookScreen] User selected vessel:', vessel.vessel_name);
+                    setSelectedVessel(vessel);
                     setShowVesselPicker(false);
                   }}
                 >
-                  <Text style={[styles.modalButtonText, styles.cancelButtonText]}>
-                    Cancel
+                  <Text style={styles.vesselOptionText}>{vessel.vessel_name}</Text>
+                  <Text style={[styles.vesselOptionText, { fontSize: 13, color: isDark ? colors.textSecondary : colors.textSecondaryLight, marginTop: 4 }]}>
+                    MMSI: {vessel.mmsi}
                   </Text>
                 </TouchableOpacity>
-              </View>
+              ))}
+            </ScrollView>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  console.log('[LogbookScreen] User cancelled vessel selection');
+                  setShowVesselPicker(false);
+                }}
+              >
+                <Text style={[styles.modalButtonText, styles.cancelButtonText]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
       {showStartDatePicker && Platform.OS !== 'ios' && (
@@ -1624,36 +1623,35 @@ export default function LogbookScreen() {
           animationType="slide"
           onRequestClose={() => setShowStartDatePicker(false)}
         >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowStartDatePicker(false)}
-          >
-            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Select Start Date & Time</Text>
-                <DateTimePicker
-                  value={startDate || new Date()}
-                  mode="datetime"
-                  display="spinner"
-                  onChange={(event, selectedDate) => {
-                    if (selectedDate) {
-                      setStartDate(selectedDate);
-                    }
-                  }}
-                  textColor={isDark ? colors.text : colors.textLight}
-                />
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.saveButton]}
-                    onPress={() => setShowStartDatePicker(false)}
-                  >
-                    <Text style={[styles.modalButtonText, styles.saveButtonText]}>Done</Text>
-                  </TouchableOpacity>
-                </View>
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              activeOpacity={1}
+              onPress={() => setShowStartDatePicker(false)}
+            />
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select Start Date & Time</Text>
+              <DateTimePicker
+                value={startDate || new Date()}
+                mode="datetime"
+                display="spinner"
+                onChange={(event, selectedDate) => {
+                  if (selectedDate) {
+                    setStartDate(selectedDate);
+                  }
+                }}
+                textColor={isDark ? colors.text : colors.textLight}
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton]}
+                  onPress={() => setShowStartDatePicker(false)}
+                >
+                  <Text style={[styles.modalButtonText, styles.saveButtonText]}>Done</Text>
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
+            </View>
+          </View>
         </Modal>
       )}
 
@@ -1664,36 +1662,35 @@ export default function LogbookScreen() {
           animationType="slide"
           onRequestClose={() => setShowEndDatePicker(false)}
         >
-          <TouchableOpacity
-            style={styles.modalOverlay}
-            activeOpacity={1}
-            onPress={() => setShowEndDatePicker(false)}
-          >
-            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Select End Date & Time</Text>
-                <DateTimePicker
-                  value={endDate || new Date()}
-                  mode="datetime"
-                  display="spinner"
-                  onChange={(event, selectedDate) => {
-                    if (selectedDate) {
-                      setEndDate(selectedDate);
-                    }
-                  }}
-                  textColor={isDark ? colors.text : colors.textLight}
-                />
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.saveButton]}
-                    onPress={() => setShowEndDatePicker(false)}
-                  >
-                    <Text style={[styles.modalButtonText, styles.saveButtonText]}>Done</Text>
-                  </TouchableOpacity>
-                </View>
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              activeOpacity={1}
+              onPress={() => setShowEndDatePicker(false)}
+            />
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select End Date & Time</Text>
+              <DateTimePicker
+                value={endDate || new Date()}
+                mode="datetime"
+                display="spinner"
+                onChange={(event, selectedDate) => {
+                  if (selectedDate) {
+                    setEndDate(selectedDate);
+                  }
+                }}
+                textColor={isDark ? colors.text : colors.textLight}
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton]}
+                  onPress={() => setShowEndDatePicker(false)}
+                >
+                  <Text style={[styles.modalButtonText, styles.saveButtonText]}>Done</Text>
+                </TouchableOpacity>
               </View>
-            </TouchableOpacity>
-          </TouchableOpacity>
+            </View>
+          </View>
         </Modal>
       )}
     </View>
