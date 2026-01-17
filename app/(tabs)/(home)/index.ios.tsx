@@ -334,55 +334,79 @@ export default function SeaTimeScreen() {
                 style={[styles.vesselCard, styles.activeVesselCard]}
                 onPress={() => handleVesselPress(activeVessel.id)}
               >
-                <View style={styles.vesselHeader}>
-                  <View style={styles.vesselInfo}>
-                    <View style={styles.activeVesselBadge}>
-                      <View style={styles.activeIndicatorPulse} />
-                      <Text style={styles.activeVesselBadgeText}>TRACKING</Text>
-                    </View>
-                    <Text style={styles.vesselName}>{activeVessel.vessel_name}</Text>
-                    <Text style={styles.vesselMmsi}>MMSI: {activeVessel.mmsi}</Text>
-                    
-                    {/* Vessel Particulars */}
-                    <View style={styles.vesselParticulars}>
-                      {activeVessel.flag && (
-                        <Text style={styles.vesselDetail}>Flag: {activeVessel.flag}</Text>
-                      )}
-                      {activeVessel.official_number && (
-                        <Text style={styles.vesselDetail}>Official No.: {activeVessel.official_number}</Text>
-                      )}
-                      {activeVessel.vessel_type && (
-                        <Text style={styles.vesselDetail}>Type: {activeVessel.vessel_type}</Text>
-                      )}
-                      {activeVessel.length_metres && (
-                        <Text style={styles.vesselDetail}>Length: {activeVessel.length_metres}m</Text>
-                      )}
-                      {activeVessel.gross_tonnes && (
-                        <Text style={styles.vesselDetail}>Gross Tonnes: {activeVessel.gross_tonnes}</Text>
-                      )}
-                    </View>
-
-                    {/* Location in DMS format with timestamp */}
-                    {locationLoading ? (
-                      <Text style={styles.vesselLocation}>Loading location...</Text>
-                    ) : activeVesselLocation && (activeVesselLocation.latitude !== null || activeVesselLocation.longitude !== null) ? (
-                      (() => {
-                        const dmsLocation = formatLocationDMS(activeVesselLocation.latitude, activeVesselLocation.longitude);
-                        return dmsLocation ? (
-                          <View style={styles.locationContainer}>
-                            <Text style={styles.vesselLocation}>Lat: {dmsLocation.lat}</Text>
-                            <Text style={styles.vesselLocation}>Lon: {dmsLocation.lon}</Text>
-                            {activeVesselLocation.timestamp && (
-                              <Text style={styles.vesselTimestamp}>
-                                {formatTimestamp(activeVesselLocation.timestamp)}
-                              </Text>
-                            )}
-                          </View>
-                        ) : null;
-                      })()
-                    ) : null}
-                  </View>
+                <View style={styles.activeVesselBadge}>
+                  <View style={styles.activeIndicatorPulse} />
+                  <Text style={styles.activeVesselBadgeText}>TRACKING</Text>
                 </View>
+                
+                <Text style={styles.vesselName}>{activeVessel.vessel_name}</Text>
+                <Text style={styles.vesselMmsi}>MMSI: {activeVessel.mmsi}</Text>
+                
+                {/* Vessel Particulars in 2-column grid */}
+                <View style={styles.vesselParticularsGrid}>
+                  {activeVessel.flag && (
+                    <View style={styles.particularItem}>
+                      <Text style={styles.particularLabel}>Flag</Text>
+                      <Text style={styles.particularValue}>{activeVessel.flag}</Text>
+                    </View>
+                  )}
+                  {activeVessel.vessel_type && (
+                    <View style={styles.particularItem}>
+                      <Text style={styles.particularLabel}>Type</Text>
+                      <Text style={styles.particularValue}>{activeVessel.vessel_type}</Text>
+                    </View>
+                  )}
+                  {activeVessel.official_number && (
+                    <View style={styles.particularItem}>
+                      <Text style={styles.particularLabel}>Official No.</Text>
+                      <Text style={styles.particularValue}>{activeVessel.official_number}</Text>
+                    </View>
+                  )}
+                  {activeVessel.length_metres && (
+                    <View style={styles.particularItem}>
+                      <Text style={styles.particularLabel}>Length</Text>
+                      <Text style={styles.particularValue}>{activeVessel.length_metres}m</Text>
+                    </View>
+                  )}
+                  {activeVessel.gross_tonnes && (
+                    <View style={styles.particularItem}>
+                      <Text style={styles.particularLabel}>Gross Tonnes</Text>
+                      <Text style={styles.particularValue}>{activeVessel.gross_tonnes}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Location in DMS format with timestamp */}
+                {locationLoading ? (
+                  <View style={styles.locationSection}>
+                    <Text style={styles.locationSectionTitle}>Position</Text>
+                    <Text style={styles.vesselLocation}>Loading location...</Text>
+                  </View>
+                ) : activeVesselLocation && (activeVesselLocation.latitude !== null || activeVesselLocation.longitude !== null) ? (
+                  (() => {
+                    const dmsLocation = formatLocationDMS(activeVesselLocation.latitude, activeVesselLocation.longitude);
+                    return dmsLocation ? (
+                      <View style={styles.locationSection}>
+                        <Text style={styles.locationSectionTitle}>Position</Text>
+                        <View style={styles.locationGrid}>
+                          <View style={styles.locationItem}>
+                            <Text style={styles.locationLabel}>Latitude</Text>
+                            <Text style={styles.locationValue}>{dmsLocation.lat}</Text>
+                          </View>
+                          <View style={styles.locationItem}>
+                            <Text style={styles.locationLabel}>Longitude</Text>
+                            <Text style={styles.locationValue}>{dmsLocation.lon}</Text>
+                          </View>
+                        </View>
+                        {activeVesselLocation.timestamp && (
+                          <Text style={styles.vesselTimestamp}>
+                            Updated: {formatTimestamp(activeVesselLocation.timestamp)}
+                          </Text>
+                        )}
+                      </View>
+                    ) : null;
+                  })()
+                ) : null}
               </TouchableOpacity>
 
               {/* Map showing vessel location */}
@@ -727,7 +751,7 @@ function createStyles(isDark: boolean, topInset: number) {
       paddingVertical: 4,
       borderRadius: 4,
       alignSelf: 'flex-start',
-      marginBottom: 8,
+      marginBottom: 12,
       gap: 6,
     },
     activeIndicatorPulse: {
@@ -743,7 +767,7 @@ function createStyles(isDark: boolean, topInset: number) {
       letterSpacing: 0.5,
     },
     vesselName: {
-      fontSize: 18,
+      fontSize: 20,
       fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
       marginBottom: 4,
@@ -751,7 +775,79 @@ function createStyles(isDark: boolean, topInset: number) {
     vesselMmsi: {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 16,
+    },
+    vesselParticularsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginBottom: 16,
+      gap: 12,
+    },
+    particularItem: {
+      width: '48%',
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      padding: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    particularLabel: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
+      marginBottom: 4,
+    },
+    particularValue: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    locationSection: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      padding: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    locationSectionTitle: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
       marginBottom: 8,
+    },
+    locationGrid: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    locationItem: {
+      flex: 1,
+    },
+    locationLabel: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 4,
+    },
+    locationValue: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    },
+    vesselLocation: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 1,
+    },
+    vesselTimestamp: {
+      fontSize: 11,
+      color: colors.primary,
+      marginTop: 8,
+      fontWeight: '600',
     },
     vesselParticulars: {
       marginTop: 4,
@@ -761,20 +857,6 @@ function createStyles(isDark: boolean, topInset: number) {
       fontSize: 13,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginBottom: 2,
-    },
-    locationContainer: {
-      marginTop: 4,
-    },
-    vesselLocation: {
-      fontSize: 13,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 1,
-    },
-    vesselTimestamp: {
-      fontSize: 12,
-      color: colors.primary,
-      marginTop: 4,
-      fontWeight: '600',
     },
     mapContainer: {
       marginTop: 12,
