@@ -587,6 +587,26 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     }
 
+    // Update vessel with AIS data (callsign and flag if available)
+    if (ais_data.callsign || ais_data.flag) {
+      const updateData: Record<string, any> = { updated_at: new Date() };
+      if (ais_data.callsign) updateData.callsign = ais_data.callsign;
+      if (ais_data.flag && !vessel[0].flag) updateData.flag = ais_data.flag; // Only update flag if not already set
+
+      if (Object.keys(updateData).length > 1) {
+        const [updated_vessel] = await app.db
+          .update(schema.vessels)
+          .set(updateData)
+          .where(eq(schema.vessels.id, vesselId))
+          .returning();
+
+        app.logger.info(
+          { vesselId, callsign: ais_data.callsign, flag: ais_data.flag },
+          `Updated vessel with AIS data: callsign=${ais_data.callsign}, flag=${ais_data.flag}`
+        );
+      }
+    }
+
     // Store the AIS check result
     const check_time = new Date();
     const [ais_check] = await app.db

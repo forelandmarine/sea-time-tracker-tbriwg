@@ -5,6 +5,7 @@ export const vessels = pgTable('vessels', {
   id: uuid('id').primaryKey().defaultRandom(),
   mmsi: text('mmsi').notNull().unique(),
   vessel_name: text('vessel_name').notNull(),
+  callsign: text('callsign'), // Radio callsign from AIS data
   flag: text('flag'),
   official_number: text('official_number'),
   type: text('type'), // 'Motor' or 'Sail'

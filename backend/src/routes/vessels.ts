@@ -10,6 +10,7 @@ function transformVesselForResponse(vessel: any) {
     id: vessel.id,
     mmsi: vessel.mmsi,
     vessel_name: vessel.vessel_name,
+    callsign: vessel.callsign,
     flag: vessel.flag,
     official_number: vessel.official_number,
     vessel_type: vessel.type, // Map 'type' database field to 'vessel_type' in API response
@@ -36,6 +37,7 @@ export function register(app: App, fastify: FastifyInstance) {
               id: { type: 'string' },
               mmsi: { type: 'string' },
               vessel_name: { type: 'string' },
+              callsign: { type: ['string', 'null'] },
               flag: { type: ['string', 'null'] },
               official_number: { type: ['string', 'null'] },
               vessel_type: { type: ['string', 'null'] },
@@ -61,6 +63,7 @@ export function register(app: App, fastify: FastifyInstance) {
     Body: {
       mmsi: string;
       vessel_name: string;
+      callsign?: string;
       flag?: string;
       official_number?: string;
       type?: string;
@@ -78,6 +81,7 @@ export function register(app: App, fastify: FastifyInstance) {
         properties: {
           mmsi: { type: 'string' },
           vessel_name: { type: 'string' },
+          callsign: { type: 'string' },
           flag: { type: 'string' },
           official_number: { type: 'string' },
           type: { type: 'string', enum: ['Motor', 'Sail'] },
@@ -93,6 +97,7 @@ export function register(app: App, fastify: FastifyInstance) {
             id: { type: 'string' },
             mmsi: { type: 'string' },
             vessel_name: { type: 'string' },
+            callsign: { type: ['string', 'null'] },
             flag: { type: ['string', 'null'] },
             official_number: { type: ['string', 'null'] },
             vessel_type: { type: ['string', 'null'] },
@@ -110,6 +115,7 @@ export function register(app: App, fastify: FastifyInstance) {
     const {
       mmsi,
       vessel_name,
+      callsign,
       flag,
       official_number,
       type,
@@ -149,6 +155,7 @@ export function register(app: App, fastify: FastifyInstance) {
       .values({
         mmsi,
         vessel_name,
+        callsign,
         flag,
         official_number,
         type,
@@ -159,7 +166,7 @@ export function register(app: App, fastify: FastifyInstance) {
       .returning();
 
     app.logger.info(
-      { vesselId: vessel.id, mmsi, vessel_name, is_active },
+      { vesselId: vessel.id, mmsi, vessel_name, callsign, is_active },
       'Vessel created successfully'
     );
 
@@ -183,6 +190,7 @@ export function register(app: App, fastify: FastifyInstance) {
             id: { type: 'string' },
             mmsi: { type: 'string' },
             vessel_name: { type: 'string' },
+            callsign: { type: ['string', 'null'] },
             flag: { type: ['string', 'null'] },
             official_number: { type: ['string', 'null'] },
             vessel_type: { type: ['string', 'null'] },
@@ -278,6 +286,7 @@ export function register(app: App, fastify: FastifyInstance) {
     Params: { id: string };
     Body: {
       vessel_name?: string;
+      callsign?: string;
       flag?: string;
       official_number?: string;
       type?: string;
@@ -297,6 +306,7 @@ export function register(app: App, fastify: FastifyInstance) {
         type: 'object',
         properties: {
           vessel_name: { type: 'string' },
+          callsign: { type: 'string' },
           flag: { type: 'string' },
           official_number: { type: 'string' },
           type: { type: 'string', enum: ['Motor', 'Sail'] },
@@ -311,6 +321,7 @@ export function register(app: App, fastify: FastifyInstance) {
             id: { type: 'string' },
             mmsi: { type: 'string' },
             vessel_name: { type: 'string' },
+            callsign: { type: ['string', 'null'] },
             flag: { type: ['string', 'null'] },
             official_number: { type: ['string', 'null'] },
             vessel_type: { type: ['string', 'null'] },
@@ -328,6 +339,7 @@ export function register(app: App, fastify: FastifyInstance) {
     const { id } = request.params;
     const {
       vessel_name,
+      callsign,
       flag,
       official_number,
       type,
@@ -350,6 +362,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
     const updateData: Record<string, any> = { updated_at: new Date() };
     if (vessel_name !== undefined) updateData.vessel_name = vessel_name;
+    if (callsign !== undefined) updateData.callsign = callsign;
     if (flag !== undefined) updateData.flag = flag;
     if (official_number !== undefined) updateData.official_number = official_number;
     if (type !== undefined) updateData.type = type;
@@ -374,6 +387,7 @@ export function register(app: App, fastify: FastifyInstance) {
   fastify.put<{
     Params: { id: string };
     Body: {
+      callsign?: string;
       flag?: string;
       official_number?: string;
       type?: string;
@@ -384,7 +398,7 @@ export function register(app: App, fastify: FastifyInstance) {
     '/api/vessels/:id/particulars',
     {
       schema: {
-        description: 'Update vessel particulars (flag, official number, type, length, gross tonnes). Requires authentication.',
+        description: 'Update vessel particulars (callsign, flag, official number, type, length, gross tonnes). Requires authentication.',
         tags: ['vessels'],
         params: {
           type: 'object',
@@ -394,6 +408,7 @@ export function register(app: App, fastify: FastifyInstance) {
         body: {
           type: 'object',
           properties: {
+            callsign: { type: 'string' },
             flag: { type: 'string' },
             official_number: { type: 'string' },
             type: { type: 'string', enum: ['Motor', 'Sail'] },
@@ -408,6 +423,7 @@ export function register(app: App, fastify: FastifyInstance) {
               id: { type: 'string' },
               mmsi: { type: 'string' },
               vessel_name: { type: 'string' },
+              callsign: { type: ['string', 'null'] },
               flag: { type: ['string', 'null'] },
               official_number: { type: ['string', 'null'] },
               vessel_type: { type: ['string', 'null'] },
@@ -426,7 +442,7 @@ export function register(app: App, fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const { id } = request.params;
-      const { flag, official_number, type, length_metres, gross_tonnes } = request.body;
+      const { callsign, flag, official_number, type, length_metres, gross_tonnes } = request.body;
 
       app.logger.info({ vesselId: id }, 'Updating vessel particulars');
 
@@ -459,7 +475,7 @@ export function register(app: App, fastify: FastifyInstance) {
       }
 
       // Verify at least one field is provided for update
-      if (flag === undefined && official_number === undefined && type === undefined &&
+      if (callsign === undefined && flag === undefined && official_number === undefined && type === undefined &&
           length_metres === undefined && gross_tonnes === undefined) {
         app.logger.warn({ vesselId: id }, 'Vessel particulars update with no fields to update');
         return reply.code(400).send({ error: 'At least one field must be provided for update' });
@@ -478,6 +494,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
       // Build update data with only provided fields
       const updateData: Record<string, any> = { updated_at: new Date() };
+      if (callsign !== undefined) updateData.callsign = callsign;
       if (flag !== undefined) updateData.flag = flag;
       if (official_number !== undefined) updateData.official_number = official_number;
       if (type !== undefined) updateData.type = type;
