@@ -251,6 +251,7 @@ export default function ReportsScreen() {
       } catch (profileError: any) {
         console.log('Profile not available (authentication not set up):', profileError.message);
         // Profile is optional, continue without it
+        setProfile(null);
       }
       
       // Load summary
@@ -270,9 +271,19 @@ export default function ReportsScreen() {
     try {
       setRefreshing(true);
       
+      // Try to reload profile
+      try {
+        const profileData = await seaTimeApi.getUserProfile();
+        console.log('Profile refreshed:', profileData.email);
+        setProfile(profileData);
+      } catch (profileError: any) {
+        console.log('Profile not available on refresh:', profileError.message);
+        setProfile(null);
+      }
+      
+      // Reload summary
       const summaryData = await seaTimeApi.getReportSummary();
       console.log('Report summary refreshed:', summaryData);
-      
       setSummary(summaryData);
     } catch (error: any) {
       console.error('Failed to refresh reports data:', error);
