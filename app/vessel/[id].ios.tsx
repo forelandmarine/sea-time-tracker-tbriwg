@@ -30,6 +30,7 @@ interface Vessel {
   vessel_type?: string;
   length_metres?: number;
   gross_tonnes?: number;
+  callsign?: string;
 }
 
 interface SeaTimeEntry {
@@ -433,6 +434,7 @@ export default function VesselDetailScreen() {
     vessel_type: '',
     length_metres: '',
     gross_tonnes: '',
+    callsign: '',
   });
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -491,6 +493,7 @@ export default function VesselDetailScreen() {
       vessel_type: vessel.vessel_type || '',
       length_metres: vessel.length_metres?.toString() || '',
       gross_tonnes: vessel.gross_tonnes?.toString() || '',
+      callsign: vessel.callsign || '',
     });
     
     setEditModalVisible(true);
@@ -510,6 +513,7 @@ export default function VesselDetailScreen() {
       if (editForm.flag.trim()) updates.flag = editForm.flag.trim();
       if (editForm.official_number.trim()) updates.official_number = editForm.official_number.trim();
       if (editForm.vessel_type.trim()) updates.type = editForm.vessel_type.trim();
+      if (editForm.callsign.trim()) updates.callsign = editForm.callsign.trim();
       if (editForm.length_metres.trim()) {
         const length = parseFloat(editForm.length_metres);
         if (!isNaN(length) && length > 0) {
@@ -767,6 +771,13 @@ export default function VesselDetailScreen() {
           </View>
           
           <View style={styles.particularRow}>
+            <Text style={styles.particularLabel}>Call Sign</Text>
+            <Text style={vessel.callsign ? styles.particularValue : styles.particularValueEmpty}>
+              {vessel.callsign || 'Not specified'}
+            </Text>
+          </View>
+          
+          <View style={styles.particularRow}>
             <Text style={styles.particularLabel}>Flag</Text>
             <Text style={vessel.flag ? styles.particularValue : styles.particularValueEmpty}>
               {vessel.flag || 'Not specified'}
@@ -968,6 +979,17 @@ export default function VesselDetailScreen() {
               </View>
 
               <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={styles.modalScrollContent}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Call Sign</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.callsign}
+                    onChangeText={(text) => setEditForm({ ...editForm, callsign: text })}
+                    placeholder="e.g., GBAA"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  />
+                </View>
+
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Flag</Text>
                   <TextInput

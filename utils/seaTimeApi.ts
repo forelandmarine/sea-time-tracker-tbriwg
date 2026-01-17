@@ -21,6 +21,7 @@ function normalizeVessel(vessel: any) {
     vessel_type: vessel.vessel_type || vessel.type || undefined,
     length_metres: vessel.length_metres ? parseFloat(vessel.length_metres) : undefined,
     gross_tonnes: vessel.gross_tonnes ? parseFloat(vessel.gross_tonnes) : undefined,
+    callsign: vessel.callsign || undefined,
   };
 }
 
@@ -149,10 +150,11 @@ export async function createVessel(
   official_number?: string,
   type?: string,
   length_metres?: number,
-  gross_tonnes?: number
+  gross_tonnes?: number,
+  callsign?: string
 ) {
   checkBackendConfigured();
-  console.log('[API] Creating vessel:', { mmsi, vessel_name, is_active, flag, official_number, type, length_metres, gross_tonnes });
+  console.log('[API] Creating vessel:', { mmsi, vessel_name, is_active, flag, official_number, type, length_metres, gross_tonnes, callsign });
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/vessels`, {
     method: 'POST',
@@ -165,7 +167,8 @@ export async function createVessel(
       official_number,
       type,
       length_metres,
-      gross_tonnes
+      gross_tonnes,
+      callsign
     }),
   });
   
@@ -187,6 +190,7 @@ export async function updateVesselParticulars(
     type?: string;
     length_metres?: number;
     gross_tonnes?: number;
+    callsign?: string;
   }
 ) {
   checkBackendConfigured();
