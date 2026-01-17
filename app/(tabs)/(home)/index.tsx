@@ -35,6 +35,7 @@ interface Vessel {
   vessel_type?: string;
   length_metres?: number;
   gross_tonnes?: number;
+  callsign?: string;
 }
 
 interface VesselLocation {
@@ -339,6 +340,9 @@ export default function SeaTimeScreen() {
                 
                 <Text style={styles.vesselName}>{activeVessel.vessel_name}</Text>
                 <Text style={styles.vesselMmsi}>MMSI: {activeVessel.mmsi}</Text>
+                {activeVessel.callsign && (
+                  <Text style={styles.vesselCallsign}>Call Sign: {activeVessel.callsign}</Text>
+                )}
                 
                 {/* Vessel Particulars in 2-column grid */}
                 <View style={styles.vesselParticularsGrid}>
@@ -457,6 +461,9 @@ export default function SeaTimeScreen() {
                     <View style={styles.vesselInfo}>
                       <Text style={styles.vesselName}>{vessel.vessel_name}</Text>
                       <Text style={styles.vesselMmsi}>MMSI: {vessel.mmsi}</Text>
+                      {vessel.callsign && (
+                        <Text style={styles.vesselCallsign}>Call Sign: {vessel.callsign}</Text>
+                      )}
                       
                       {/* Vessel Particulars for historic vessels */}
                       <View style={styles.vesselParticulars}>
@@ -773,7 +780,13 @@ function createStyles(isDark: boolean) {
     vesselMmsi: {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 16,
+      marginBottom: 4,
+    },
+    vesselCallsign: {
+      fontSize: 14,
+      color: colors.primary,
+      fontWeight: '600',
+      marginBottom: 12,
     },
     vesselParticularsGrid: {
       flexDirection: 'row',
