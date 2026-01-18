@@ -536,7 +536,26 @@ export default function VesselDetailScreen() {
       await loadData();
     } catch (error: any) {
       console.error('[VesselDetailScreen] Failed to update vessel particulars:', error);
-      Alert.alert('Error', 'Failed to update vessel particulars: ' + error.message);
+      
+      // Check if it's an authentication error
+      if (error.message && (error.message.includes('401') || error.message.includes('Unauthorized') || error.message.includes('authentication'))) {
+        Alert.alert(
+          'Authentication Required',
+          'You need to sign in to edit vessel particulars. Please go to the Profile tab and sign in.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Go to Profile',
+              onPress: () => {
+                setEditModalVisible(false);
+                router.push('/(tabs)/profile');
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to update vessel particulars. Please try again.');
+      }
     }
   };
 
