@@ -4,6 +4,7 @@ import * as seaTimeApi from '@/utils/seaTimeApi';
 import React, { useState, useEffect } from 'react';
 import { colors } from '@/styles/commonStyles';
 import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   View,
   Text,
@@ -17,6 +18,7 @@ import {
   TextInput,
   Modal,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { Stack, useRouter } from 'expo-router';
@@ -32,6 +34,12 @@ interface UserProfile {
   created_at: string;
   createdAt: string;
   updatedAt: string;
+  address?: string | null;
+  tel_no?: string | null;
+  date_of_birth?: string | null;
+  srb_no?: string | null;
+  nationality?: string | null;
+  pya_membership_no?: string | null;
 }
 
 function createStyles(isDark: boolean) {
@@ -91,6 +99,13 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
     },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 12,
+      marginTop: 8,
+    },
     profileCard: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
@@ -103,9 +118,6 @@ function createStyles(isDark: boolean) {
       elevation: 3,
     },
     profileRow: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
       paddingVertical: 12,
       borderBottomWidth: 1,
       borderBottomColor: isDark ? colors.border : colors.borderLight,
@@ -122,6 +134,11 @@ function createStyles(isDark: boolean) {
       fontSize: 16,
       fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
+    },
+    profileValueEmpty: {
+      fontSize: 16,
+      fontStyle: 'italic',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
     button: {
       backgroundColor: colors.primary,
@@ -173,7 +190,8 @@ function createStyles(isDark: boolean) {
       borderRadius: 16,
       padding: 24,
       width: '90%',
-      maxWidth: 400,
+      maxWidth: 500,
+      maxHeight: '90%',
     },
     modalTitle: {
       fontSize: 20,
@@ -181,6 +199,9 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.text : colors.textLight,
       marginBottom: 20,
       textAlign: 'center',
+    },
+    modalScrollContent: {
+      paddingBottom: 20,
     },
     input: {
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
@@ -192,9 +213,33 @@ function createStyles(isDark: boolean) {
       borderWidth: 1,
       borderColor: isDark ? colors.border : colors.borderLight,
     },
+    inputMultiline: {
+      minHeight: 80,
+      textAlignVertical: 'top',
+    },
+    dateButton: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    dateButtonText: {
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
+    },
+    dateButtonPlaceholder: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    },
     modalButtons: {
       flexDirection: 'row',
       gap: 12,
+      marginTop: 8,
     },
     modalButton: {
       flex: 1,
@@ -222,6 +267,19 @@ function createStyles(isDark: boolean) {
       padding: 20,
       alignItems: 'center',
     },
+    infoBox: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 16,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+    },
+    infoText: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      lineHeight: 20,
+    },
   });
 }
 
@@ -237,6 +295,13 @@ export default function UserProfileScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+  const [editTelNo, setEditTelNo] = useState('');
+  const [editDateOfBirth, setEditDateOfBirth] = useState<Date | null>(null);
+  const [editSrbNo, setEditSrbNo] = useState('');
+  const [editNationality, setEditNationality] = useState('');
+  const [editPyaMembershipNo, setEditPyaMembershipNo] = useState('');
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
@@ -253,9 +318,9 @@ export default function UserProfileScreen() {
       console.log('Profile loaded:', profileData.email);
       
       setProfile(profileData);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to load profile data:', error);
-      Alert.alert('Error', 'Failed to load profile data');
+      Alert.alert('Error', error.message || 'Failed to load profile data');
     } finally {
       setLoading(false);
     }
@@ -266,6 +331,12 @@ export default function UserProfileScreen() {
     if (profile) {
       setEditName(profile.name);
       setEditEmail(profile.email);
+      setEditAddress(profile.address || '');
+      setEditTelNo(profile.tel_no || '');
+      setEditDateOfBirth(profile.date_of_birth ? new Date(profile.date_of_birth) : null);
+      setEditSrbNo(profile.srb_no || '');
+      setEditNationality(profile.nationality || '');
+      setEditPyaMembershipNo(profile.pya_membership_no || '');
       setEditModalVisible(true);
     }
   };
@@ -273,42 +344,45 @@ export default function UserProfileScreen() {
   const handleSaveProfile = async () => {
     console.log('User saving profile changes');
     try {
-      const updates: { name?: string; email?: string } = {};
+      const updates: any = {};
       
-      if (editName !== profile?.name) {
-        updates.name = editName;
+      if (editName !== profile?.name) updates.name = editName;
+      if (editEmail !== profile?.email) updates.email = editEmail;
+      if (editAddress !== (profile?.address || '')) updates.address = editAddress || null;
+      if (editTelNo !== (profile?.tel_no || '')) updates.tel_no = editTelNo || null;
+      if (editDateOfBirth && editDateOfBirth.toISOString() !== profile?.date_of_birth) {
+        updates.date_of_birth = editDateOfBirth.toISOString().split('T')[0];
       }
-      if (editEmail !== profile?.email) {
-        updates.email = editEmail;
-      }
+      if (editSrbNo !== (profile?.srb_no || '')) updates.srb_no = editSrbNo || null;
+      if (editNationality !== (profile?.nationality || '')) updates.nationality = editNationality || null;
+      if (editPyaMembershipNo !== (profile?.pya_membership_no || '')) updates.pya_membership_no = editPyaMembershipNo || null;
       
       if (Object.keys(updates).length === 0) {
         setEditModalVisible(false);
         return;
       }
       
+      console.log('Updating profile with:', updates);
       const updatedProfile = await seaTimeApi.updateUserProfile(updates);
       console.log('Profile updated successfully');
       setProfile(updatedProfile);
       setEditModalVisible(false);
       Alert.alert('Success', 'Profile updated successfully');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to update profile:', error);
-      Alert.alert('Error', 'Failed to update profile');
+      Alert.alert('Error', error.message || 'Failed to update profile');
     }
   };
 
   const handleChangeProfilePicture = async () => {
     console.log('User tapped Change Profile Picture button');
     
-    // Request permissions
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permission Required', 'Please grant permission to access your photos');
       return;
     }
     
-    // Launch image picker
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: 'images' as any,
       allowsEditing: true,
@@ -325,14 +399,13 @@ export default function UserProfileScreen() {
         const response = await seaTimeApi.uploadProfileImage(imageUri);
         console.log('Profile image uploaded:', response.url);
         
-        // Reload profile to get updated image URL
         const updatedProfile = await seaTimeApi.getUserProfile();
         setProfile(updatedProfile);
         
         Alert.alert('Success', 'Profile picture updated successfully');
-      } catch (error) {
+      } catch (error: any) {
         console.error('Failed to upload profile image:', error);
-        Alert.alert('Error', 'Failed to upload profile picture');
+        Alert.alert('Error', error.message || 'Failed to upload profile picture');
       } finally {
         setUploading(false);
       }
@@ -357,9 +430,9 @@ export default function UserProfileScreen() {
               await signOut();
               console.log('User signed out, navigating to auth screen');
               router.replace('/auth');
-            } catch (error) {
+            } catch (error: any) {
               console.error('Sign out failed:', error);
-              Alert.alert('Error', 'Failed to sign out');
+              Alert.alert('Error', error.message || 'Failed to sign out');
             }
           },
         },
@@ -367,7 +440,8 @@ export default function UserProfileScreen() {
     );
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null | undefined) => {
+    if (!dateString) return 'Not set';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-GB', {
       day: '2-digit',
@@ -439,27 +513,74 @@ export default function UserProfileScreen() {
           <Text style={styles.subtitle}>{profile?.email}</Text>
         </View>
 
+        <View style={styles.infoBox}>
+          <Text style={styles.infoText}>
+            Complete your profile for MCA-compliant sea service testimonials. All fields are used in official PDF reports.
+          </Text>
+        </View>
+
         {profile && (
-          <View style={styles.profileCard}>
-            <View style={styles.profileRow}>
-              <View>
+          <>
+            <Text style={styles.sectionTitle}>Basic Information</Text>
+            <View style={styles.profileCard}>
+              <View style={styles.profileRow}>
                 <Text style={styles.profileLabel}>Full Name</Text>
                 <Text style={styles.profileValue}>{profile.name}</Text>
               </View>
-            </View>
-            <View style={styles.profileRow}>
-              <View>
+              <View style={styles.profileRow}>
                 <Text style={styles.profileLabel}>Email Address</Text>
                 <Text style={styles.profileValue}>{profile.email}</Text>
               </View>
+              <View style={styles.profileRow}>
+                <Text style={styles.profileLabel}>Address</Text>
+                <Text style={profile.address ? styles.profileValue : styles.profileValueEmpty}>
+                  {profile.address || 'Not set'}
+                </Text>
+              </View>
+              <View style={styles.profileRow}>
+                <Text style={styles.profileLabel}>Telephone Number</Text>
+                <Text style={profile.tel_no ? styles.profileValue : styles.profileValueEmpty}>
+                  {profile.tel_no || 'Not set'}
+                </Text>
+              </View>
+              <View style={[styles.profileRow, styles.profileRowLast]}>
+                <Text style={styles.profileLabel}>Date of Birth</Text>
+                <Text style={profile.date_of_birth ? styles.profileValue : styles.profileValueEmpty}>
+                  {formatDate(profile.date_of_birth)}
+                </Text>
+              </View>
             </View>
-            <View style={[styles.profileRow, styles.profileRowLast]}>
-              <View>
+
+            <Text style={styles.sectionTitle}>Maritime Credentials</Text>
+            <View style={styles.profileCard}>
+              <View style={styles.profileRow}>
+                <Text style={styles.profileLabel}>SRB No. (Seafarers Registration Book)</Text>
+                <Text style={profile.srb_no ? styles.profileValue : styles.profileValueEmpty}>
+                  {profile.srb_no || 'Not set'}
+                </Text>
+              </View>
+              <View style={styles.profileRow}>
+                <Text style={styles.profileLabel}>Nationality</Text>
+                <Text style={profile.nationality ? styles.profileValue : styles.profileValueEmpty}>
+                  {profile.nationality || 'Not set'}
+                </Text>
+              </View>
+              <View style={[styles.profileRow, styles.profileRowLast]}>
+                <Text style={styles.profileLabel}>PYA Membership No.</Text>
+                <Text style={profile.pya_membership_no ? styles.profileValue : styles.profileValueEmpty}>
+                  {profile.pya_membership_no || 'Not set'}
+                </Text>
+              </View>
+            </View>
+
+            <Text style={styles.sectionTitle}>Account</Text>
+            <View style={styles.profileCard}>
+              <View style={[styles.profileRow, styles.profileRowLast]}>
                 <Text style={styles.profileLabel}>Member Since</Text>
                 <Text style={styles.profileValue}>{formatDate(profile.createdAt || profile.created_at)}</Text>
               </View>
             </View>
-          </View>
+          </>
         )}
 
         <TouchableOpacity 
@@ -482,27 +603,113 @@ export default function UserProfileScreen() {
           animationType="fade"
           onRequestClose={() => setEditModalVisible(false)}
         >
-          <View style={styles.modalOverlay}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalOverlay}
+          >
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Edit Profile</Text>
               
-              <TextInput
-                style={styles.input}
-                placeholder="Full Name"
-                placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                value={editName}
-                onChangeText={setEditName}
-              />
-              
-              <TextInput
-                style={styles.input}
-                placeholder="Email Address"
-                placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                value={editEmail}
-                onChangeText={setEditEmail}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
+              <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={styles.modalScrollContent}>
+                <Text style={styles.profileLabel}>Full Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Full Name"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  value={editName}
+                  onChangeText={setEditName}
+                />
+                
+                <Text style={styles.profileLabel}>Email Address *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Email Address"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  value={editEmail}
+                  onChangeText={setEditEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+                
+                <Text style={styles.profileLabel}>Address</Text>
+                <TextInput
+                  style={[styles.input, styles.inputMultiline]}
+                  placeholder="Full Address"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  value={editAddress}
+                  onChangeText={setEditAddress}
+                  multiline
+                  numberOfLines={3}
+                />
+                
+                <Text style={styles.profileLabel}>Telephone Number</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="+44 1234 567890"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  value={editTelNo}
+                  onChangeText={setEditTelNo}
+                  keyboardType="phone-pad"
+                />
+                
+                <Text style={styles.profileLabel}>Date of Birth</Text>
+                <TouchableOpacity 
+                  style={styles.dateButton}
+                  onPress={() => setShowDatePicker(true)}
+                >
+                  <Text style={editDateOfBirth ? styles.dateButtonText : styles.dateButtonPlaceholder}>
+                    {editDateOfBirth ? formatDate(editDateOfBirth.toISOString()) : 'Select Date'}
+                  </Text>
+                  <IconSymbol
+                    ios_icon_name="calendar"
+                    android_material_icon_name="calendar-today"
+                    size={20}
+                    color={colors.primary}
+                  />
+                </TouchableOpacity>
+                
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={editDateOfBirth || new Date()}
+                    mode="date"
+                    display="default"
+                    onChange={(event, selectedDate) => {
+                      setShowDatePicker(Platform.OS === 'ios');
+                      if (selectedDate) {
+                        setEditDateOfBirth(selectedDate);
+                      }
+                    }}
+                    maximumDate={new Date()}
+                  />
+                )}
+                
+                <Text style={styles.profileLabel}>SRB No. (Seafarers Registration Book)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="SRB Number"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  value={editSrbNo}
+                  onChangeText={setEditSrbNo}
+                />
+                
+                <Text style={styles.profileLabel}>Nationality</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., British"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  value={editNationality}
+                  onChangeText={setEditNationality}
+                />
+                
+                <Text style={styles.profileLabel}>PYA Membership No.</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="PYA Membership Number"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  value={editPyaMembershipNo}
+                  onChangeText={setEditPyaMembershipNo}
+                />
+              </ScrollView>
               
               <View style={styles.modalButtons}>
                 <TouchableOpacity
@@ -522,7 +729,7 @@ export default function UserProfileScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </Modal>
       </ScrollView>
     </>

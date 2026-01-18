@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || 'https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev';
-const TOKEN_KEY = 'seatime_auth_token'; // ✅ Fixed: Now matches AuthContext.tsx
+const TOKEN_KEY = 'seatime_auth_token';
 
 // Helper to normalize vessel data from API
 function normalizeVessel(vessel: any) {
@@ -85,7 +85,16 @@ export async function getUserProfile() {
   return response.json();
 }
 
-export async function updateUserProfile(updates: { name?: string; email?: string }) {
+export async function updateUserProfile(updates: { 
+  name?: string; 
+  email?: string;
+  address?: string | null;
+  tel_no?: string | null;
+  date_of_birth?: string | null;
+  srb_no?: string | null;
+  nationality?: string | null;
+  pya_membership_no?: string | null;
+}) {
   checkBackendConfigured();
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/profile`, {
@@ -461,6 +470,40 @@ export async function rejectSeaTimeEntry(entryId: string) {
   return response.json();
 }
 
+export async function updateSeaTimeEntry(
+  entryId: string,
+  updates: {
+    service_capacity?: string | null;
+    vessel_category?: string | null;
+    actual_days_at_sea?: number | null;
+    standby_service_days?: number | null;
+    shipyard_service_days?: number | null;
+    watchkeeping_days?: number | null;
+    leave_days?: number | null;
+    duties_and_tasks?: string | null;
+    area_cruised?: string | null;
+    notes?: string | null;
+    status?: string;
+  }
+) {
+  checkBackendConfigured();
+  console.log('[API] Updating sea time entry:', entryId, updates);
+  const headers = await getApiHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(updates),
+  });
+  
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to update entry');
+  }
+  
+  console.log('[API] Entry updated');
+  return response.json();
+}
+
 export async function deleteSeaTimeEntry(entryId: string) {
   checkBackendConfigured();
   console.log('[API] Deleting sea time entry:', entryId);
@@ -646,9 +689,6 @@ export async function createManualSeaTimeEntry(entry: {
 }
 
 // Get new sea time entries that haven't been notified yet
-// TODO: Backend Integration - GET /api/sea-time/new-entries
-// This endpoint will be created by the backend to return pending entries where notified=false
-// and mark them as notified=true
 export async function getNewSeaTimeEntries() {
   checkBackendConfigured();
   console.log('[API] Fetching new sea time entries for notifications');
@@ -658,7 +698,6 @@ export async function getNewSeaTimeEntries() {
     const response = await fetch(`${API_BASE_URL}/api/sea-time/new-entries`, options);
     
     if (!response.ok) {
-      // If endpoint doesn't exist yet, return empty array
       if (response.status === 404) {
         console.log('[API] New entries endpoint not yet available');
         return { newEntries: [] };
