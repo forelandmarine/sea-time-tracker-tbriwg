@@ -340,12 +340,15 @@ export default function SeaTimeScreen() {
                 
                 <Text style={styles.vesselName}>{activeVessel.vessel_name}</Text>
                 <Text style={styles.vesselMmsi}>MMSI: {activeVessel.mmsi}</Text>
-                {activeVessel.callsign && (
-                  <Text style={styles.vesselCallsign}>Call Sign: {activeVessel.callsign}</Text>
-                )}
                 
-                {/* Vessel Particulars in 2-column grid */}
+                {/* Vessel Particulars in 2-column grid - now includes call sign */}
                 <View style={styles.vesselParticularsGrid}>
+                  {activeVessel.callsign && (
+                    <View style={styles.particularItem}>
+                      <Text style={styles.particularLabel}>Call Sign</Text>
+                      <Text style={styles.particularValue}>{activeVessel.callsign}</Text>
+                    </View>
+                  )}
                   {activeVessel.flag && (
                     <View style={styles.particularItem}>
                       <Text style={styles.particularLabel}>Flag</Text>
@@ -461,12 +464,12 @@ export default function SeaTimeScreen() {
                     <View style={styles.vesselInfo}>
                       <Text style={styles.vesselName}>{vessel.vessel_name}</Text>
                       <Text style={styles.vesselMmsi}>MMSI: {vessel.mmsi}</Text>
-                      {vessel.callsign && (
-                        <Text style={styles.vesselCallsign}>Call Sign: {vessel.callsign}</Text>
-                      )}
                       
                       {/* Vessel Particulars for historic vessels */}
                       <View style={styles.vesselParticulars}>
+                        {vessel.callsign && (
+                          <Text style={styles.vesselDetail}>Call Sign: {vessel.callsign}</Text>
+                        )}
                         {vessel.flag && (
                           <Text style={styles.vesselDetail}>Flag: {vessel.flag}</Text>
                         )}
@@ -780,12 +783,6 @@ function createStyles(isDark: boolean) {
     vesselMmsi: {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 4,
-    },
-    vesselCallsign: {
-      fontSize: 14,
-      color: colors.primary,
-      fontWeight: '600',
       marginBottom: 12,
     },
     vesselParticularsGrid: {
