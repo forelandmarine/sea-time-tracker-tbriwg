@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || 'https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev';
-const TOKEN_KEY = 'auth_token';
+const TOKEN_KEY = 'seatime_auth_token'; // ✅ Fixed: Now matches AuthContext.tsx
 
 // Helper to normalize vessel data from API
 function normalizeVessel(vessel: any) {
@@ -54,6 +54,9 @@ async function getApiHeaders(): Promise<HeadersInit> {
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+    console.log('[API] Auth token added to request headers');
+  } else {
+    console.log('[API] No auth token found - request will be unauthenticated');
   }
   
   return headers;
@@ -204,11 +207,12 @@ export async function updateVesselParticulars(
   
   if (!response.ok) {
     const error = await response.json();
+    console.error('[API] Failed to update vessel particulars:', error);
     throw new Error(error.error || 'Failed to update vessel particulars');
   }
   
   const vessel = await response.json();
-  console.log('[API] Vessel particulars updated');
+  console.log('[API] Vessel particulars updated successfully');
   return normalizeVessel(vessel);
 }
 
