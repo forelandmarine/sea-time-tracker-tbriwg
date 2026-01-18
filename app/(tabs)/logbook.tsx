@@ -30,6 +30,12 @@ interface Vessel {
   vessel_name: string;
   is_active: boolean;
   created_at: string;
+  callsign?: string;
+  flag?: string;
+  official_number?: string;
+  vessel_type?: string;
+  length_metres?: number;
+  gross_tonnes?: number;
 }
 
 interface SeaTimeEntry {
@@ -180,6 +186,12 @@ const createStyles = (isDark: boolean) =>
       fontSize: 18,
       fontWeight: '700',
       color: isDark ? colors.text : colors.textLight,
+      marginBottom: 4,
+    },
+    vesselGroupCallsign: {
+      fontSize: 13,
+      color: colors.primary,
+      fontWeight: '600',
       marginBottom: 8,
     },
     vesselGroupStats: {
@@ -1150,6 +1162,11 @@ export default function LogbookScreen() {
                           <Text style={styles.vesselGroupTitle}>
                             {group.vessel?.vessel_name || 'Unknown Vessel'}
                           </Text>
+                          {group.vessel?.callsign && (
+                            <Text style={styles.vesselGroupCallsign}>
+                              Call Sign: {group.vessel.callsign}
+                            </Text>
+                          )}
                           <View style={styles.vesselGroupStats}>
                             <View style={styles.vesselStat}>
                               <Text style={styles.vesselStatText}>Entries:</Text>
@@ -1424,7 +1441,10 @@ export default function LogbookScreen() {
                               }}
                             >
                               <Text style={styles.vesselOptionText}>{item.vessel_name}</Text>
-                              <Text style={styles.vesselOptionSubtext}>MMSI: {item.mmsi}</Text>
+                              <Text style={styles.vesselOptionSubtext}>
+                                MMSI: {item.mmsi}
+                                {item.callsign && ` • Call Sign: ${item.callsign}`}
+                              </Text>
                             </TouchableOpacity>
                           )}
                           scrollEnabled={vessels.length > 4}
