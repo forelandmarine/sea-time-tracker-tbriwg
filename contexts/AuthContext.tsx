@@ -28,30 +28,50 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 // Platform-specific token storage
 const tokenStorage = {
   async getToken(): Promise<string | null> {
-    if (Platform.OS === 'web') {
-      return localStorage.getItem(TOKEN_KEY);
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+          return localStorage.getItem(TOKEN_KEY);
+        }
+        return null;
+      }
+      return await SecureStore.getItemAsync(TOKEN_KEY);
+    } catch (error) {
+      console.error('[Auth] Error getting token:', error);
+      return null;
     }
-    return await SecureStore.getItemAsync(TOKEN_KEY);
   },
   
   async setToken(token: string): Promise<void> {
-    console.log('[Auth] Storing token, length:', token?.length);
-    if (Platform.OS === 'web') {
-      localStorage.setItem(TOKEN_KEY, token);
-    } else {
-      await SecureStore.setItemAsync(TOKEN_KEY, token);
+    try {
+      console.log('[Auth] Storing token, length:', token?.length);
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+          localStorage.setItem(TOKEN_KEY, token);
+        }
+      } else {
+        await SecureStore.setItemAsync(TOKEN_KEY, token);
+      }
+      console.log('[Auth] Token stored successfully');
+    } catch (error) {
+      console.error('[Auth] Error storing token:', error);
     }
-    console.log('[Auth] Token stored successfully');
   },
   
   async removeToken(): Promise<void> {
-    console.log('[Auth] Removing token from storage');
-    if (Platform.OS === 'web') {
-      localStorage.removeItem(TOKEN_KEY);
-    } else {
-      await SecureStore.deleteItemAsync(TOKEN_KEY);
+    try {
+      console.log('[Auth] Removing token from storage');
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+          localStorage.removeItem(TOKEN_KEY);
+        }
+      } else {
+        await SecureStore.deleteItemAsync(TOKEN_KEY);
+      }
+      console.log('[Auth] Token removed successfully');
+    } catch (error) {
+      console.error('[Auth] Error removing token:', error);
     }
-    console.log('[Auth] Token removed successfully');
   },
 };
 
@@ -69,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.warn('[Auth] Auth check timeout - stopping loading state');
         setLoading(false);
       }
-    }, 10000); // 10 second timeout
+    }, 5000); // 5 second timeout (reduced from 10)
     
     return () => clearTimeout(timeout);
   }, []);
@@ -78,6 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[Auth] Checking authentication status...');
       console.log('[Auth] API URL:', API_URL);
+      console.log('[Auth] Platform:', Platform.OS);
       
       if (!API_URL) {
         console.warn('[Auth] Backend URL not configured, skipping auth check');
@@ -96,30 +117,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       console.log('[Auth] Token found, verifying with backend...');
-      // Verify token with backend
-      const response = await fetch(`${API_URL}/api/auth/user`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      
+      // Add timeout for fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      
+      try {
+        const response = await fetch(`${API_URL}/api/auth/user`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+          },
+          signal: controller.signal,
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log('[Auth] User authenticated:', data.user?.email || 'unknown');
-        setUser(data.user);
-      } else {
-        console.log('[Auth] Token invalid, clearing... Status:', response.status);
-        await tokenStorage.removeToken();
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[Auth] User authenticated:', data.user?.email || 'unknown');
+          setUser(data.user);
+        } else {
+          console.log('[Auth] Token invalid, clearing... Status:', response.status);
+          await tokenStorage.removeToken();
+          setUser(null);
+        }
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          console.warn('[Auth] Auth check timed out');
+        } else {
+          console.error('[Auth] Fetch error:', fetchError);
+        }
+        
+        // Don't clear token on network errors - might be temporary
+        if (fetchError instanceof TypeError && fetchError.message.includes('Network')) {
+          console.warn('[Auth] Network error during auth check, keeping token');
+        } else {
+          await tokenStorage.removeToken();
+        }
         setUser(null);
       }
     } catch (error) {
       console.error('[Auth] Check auth failed:', error);
-      // Don't clear token on network errors - might be temporary
-      if (error instanceof TypeError && error.message.includes('Network')) {
-        console.warn('[Auth] Network error during auth check, keeping token');
-      } else {
-        await tokenStorage.removeToken();
-      }
       setUser(null);
     } finally {
       setLoading(false);
@@ -330,7 +370,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const token = await tokenStorage.getToken();
       console.log('[Auth] Retrieved token for sign out, has token:', !!token);
       
-      if (token) {
+      if (token && API_URL) {
         console.log('[Auth] Calling backend sign-out endpoint...');
         try {
           const response = await fetch(`${API_URL}/api/auth/sign-out`, {
@@ -356,7 +396,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Continue with local sign-out even if backend call fails
         }
       } else {
-        console.log('[Auth] No token found, skipping backend call');
+        console.log('[Auth] No token or API URL, skipping backend call');
       }
 
       console.log('[Auth] Clearing local token and user state...');

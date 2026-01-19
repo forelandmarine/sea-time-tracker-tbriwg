@@ -26,14 +26,16 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 SplashScreen.preventAutoHideAsync();
 
 // Global error handler for unhandled errors - FIXED: Only run on client-side
-if (Platform.OS === 'web' && typeof window !== 'undefined') {
-  window.addEventListener('error', (event) => {
-    console.error('[App] Global error caught:', event.error);
-  });
-  
-  window.addEventListener('unhandledrejection', (event) => {
-    console.error('[App] Unhandled promise rejection:', event.reason);
-  });
+if (Platform.OS === 'web') {
+  if (typeof window !== 'undefined') {
+    window.addEventListener('error', (event) => {
+      console.error('[App] Global error caught:', event.error);
+    });
+    
+    window.addEventListener('unhandledrejection', (event) => {
+      console.error('[App] Unhandled promise rejection:', event.reason);
+    });
+  }
 }
 
 export const unstable_settings = {
@@ -48,6 +50,7 @@ function RootLayoutNav() {
   const pathname = usePathname();
   const { user, loading } = useAuth();
   const [isNavigating, setIsNavigating] = useState(false);
+  const [hasNavigated, setHasNavigated] = useState(false);
 
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -93,7 +96,7 @@ function RootLayoutNav() {
     }
   }, [loaded]);
 
-  // Simplified authentication routing - FIXED to prevent infinite loops
+  // Simplified authentication routing - FIXED to prevent infinite loops and handle web better
   useEffect(() => {
     if (!loaded || loading || isNavigating) {
       console.log('[App] Waiting for initialization...', { loaded, loading, isNavigating });
@@ -111,7 +114,8 @@ function RootLayoutNav() {
       isIndexRoute,
       pathname,
       segments: segments.join('/'),
-      platform: Platform.OS
+      platform: Platform.OS,
+      hasNavigated
     });
 
     // Skip navigation if we're on the index route (it will handle its own redirect)
@@ -120,25 +124,47 @@ function RootLayoutNav() {
       return;
     }
 
+    // Prevent multiple navigations
+    if (hasNavigated) {
+      console.log('[App] Already navigated once, skipping');
+      return;
+    }
+
     // Only navigate if we're in the wrong place
-    if (!user && !isAuthScreen) {
-      console.log('[App] ⚠️ User not authenticated, redirecting to /auth');
+    if (!user && !isAuthScreen && inAuthGroup) {
+      console.log('[App] ⚠️ User not authenticated but in tabs, redirecting to /auth');
       setIsNavigating(true);
-      setTimeout(() => {
+      setHasNavigated(true);
+      
+      // Use replace to avoid back button issues
+      if (Platform.OS === 'web') {
+        // On web, use a small delay to ensure DOM is ready
+        setTimeout(() => {
+          router.replace('/auth');
+          setIsNavigating(false);
+        }, 100);
+      } else {
         router.replace('/auth');
         setIsNavigating(false);
-      }, 100);
+      }
     } else if (user && isAuthScreen) {
-      console.log('[App] ✅ User authenticated, redirecting to /(tabs)');
+      console.log('[App] ✅ User authenticated but on auth screen, redirecting to /(tabs)');
       setIsNavigating(true);
-      setTimeout(() => {
+      setHasNavigated(true);
+      
+      if (Platform.OS === 'web') {
+        setTimeout(() => {
+          router.replace('/(tabs)');
+          setIsNavigating(false);
+        }, 100);
+      } else {
         router.replace('/(tabs)');
         setIsNavigating(false);
-      }, 100);
+      }
     } else {
       console.log('[App] ✅ User in correct location');
     }
-  }, [user, loading, loaded, pathname, segments, isNavigating]);
+  }, [user, loading, loaded, pathname, segments, isNavigating, hasNavigated]);
 
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
@@ -187,9 +213,9 @@ function RootLayoutNav() {
   }, [router]);
 
   React.useEffect(() => {
-    if (
-      !networkState.isConnected &&
-      networkState.isInternetReachable === false
+    if (Platform.OS !== 'web' && 
+        !networkState.isConnected &&
+        networkState.isInternetReachable === false
     ) {
       Alert.alert(
         "You are offline",

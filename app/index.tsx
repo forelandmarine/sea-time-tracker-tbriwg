@@ -10,6 +10,7 @@ export default function Index() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [mounted, setMounted] = useState(false);
+  const [shouldRedirect, setShouldRedirect] = useState(false);
 
   useEffect(() => {
     console.log('[Index] Component mounted');
@@ -21,15 +22,32 @@ export default function Index() {
     console.log('[Index] Loading:', loading);
   }, []);
 
+  // Wait for both mounted and loading to complete before redirecting
+  useEffect(() => {
+    if (mounted && !loading) {
+      console.log('[Index] Ready to redirect, user:', !!user);
+      
+      // Add a small delay on web to ensure everything is ready
+      if (Platform.OS === 'web') {
+        setTimeout(() => {
+          setShouldRedirect(true);
+        }, 100);
+      } else {
+        setShouldRedirect(true);
+      }
+    }
+  }, [mounted, loading, user]);
+
   console.log('[Index] Rendering index route', { 
     user: !!user, 
     loading, 
     mounted,
+    shouldRedirect,
     platform: Platform.OS 
   });
 
   // Show loading state while checking authentication or mounting
-  if (loading || !mounted) {
+  if (loading || !mounted || !shouldRedirect) {
     return (
       <View style={{ 
         flex: 1, 
