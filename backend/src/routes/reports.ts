@@ -5,12 +5,13 @@ import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
 import PDFDocument from "pdfkit";
 import { Readable } from "stream";
+import { extractUserIdFromRequest } from "../middleware/auth.js";
 
 export function register(app: App, fastify: FastifyInstance) {
   // GET /api/reports/csv - Generate CSV file of sea time entries with date filtering
   fastify.get<{ Querystring: { startDate?: string; endDate?: string } }>('/api/reports/csv', {
     schema: {
-      description: 'Generate CSV file of sea time entries for MCA testimonials',
+      description: 'Generate CSV file of sea time entries for MCA testimonials (requires authentication)',
       tags: ['reports'],
       querystring: {
         type: 'object',
@@ -21,17 +22,25 @@ export function register(app: App, fastify: FastifyInstance) {
       },
       response: {
         200: { type: 'string' },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'CSV report requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { startDate, endDate } = request.query;
 
-    app.logger.info({ startDate, endDate }, 'Generating CSV report');
+    app.logger.info({ userId, startDate, endDate }, 'Generating CSV report for user');
 
     let entries = await app.db.query.sea_time_entries.findMany({
       with: {
         vessel: true,
       },
+      where: eq(schema.sea_time_entries.user_id, userId),
     });
 
     // Filter by date if provided
@@ -101,7 +110,7 @@ export function register(app: App, fastify: FastifyInstance) {
   // GET /api/reports/summary - Return summary statistics with date filtering
   fastify.get<{ Querystring: { startDate?: string; endDate?: string } }>('/api/reports/summary', {
     schema: {
-      description: 'Get summary statistics of confirmed sea time entries with aggregations by vessel and month',
+      description: 'Get summary statistics of confirmed sea time entries with aggregations by vessel and month (requires authentication)',
       tags: ['reports'],
       querystring: {
         type: 'object',
@@ -138,17 +147,25 @@ export function register(app: App, fastify: FastifyInstance) {
             },
           },
         },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Summary report requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { startDate, endDate } = request.query;
 
-    app.logger.info({ startDate, endDate }, 'Generating summary report');
+    app.logger.info({ userId, startDate, endDate }, 'Generating summary report for user');
 
     let entries = await app.db.query.sea_time_entries.findMany({
       with: {
         vessel: true,
       },
+      where: eq(schema.sea_time_entries.user_id, userId),
     });
 
     // Filter by date if provided
@@ -236,10 +253,10 @@ export function register(app: App, fastify: FastifyInstance) {
     });
   });
 
-  // GET /api/reports/pdf - Generate PDF report with date filtering (public endpoint)
+  // GET /api/reports/pdf - Generate PDF report with date filtering
   fastify.get<{ Querystring: { startDate?: string; endDate?: string } }>('/api/reports/pdf', {
     schema: {
-      description: 'Generate PDF report of sea time entries with optional date filtering (public)',
+      description: 'Generate PDF report of sea time entries with optional date filtering (requires authentication)',
       tags: ['reports'],
       querystring: {
         type: 'object',
@@ -250,18 +267,26 @@ export function register(app: App, fastify: FastifyInstance) {
       },
       response: {
         200: { type: 'string' },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'PDF report requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { startDate, endDate } = request.query;
 
-    app.logger.info({ startDate, endDate }, 'Generating PDF report');
+    app.logger.info({ userId, startDate, endDate }, 'Generating PDF report for user');
 
-    // Fetch all sea time entries with vessel data
+    // Fetch sea time entries for authenticated user with vessel data
     let entries = await app.db.query.sea_time_entries.findMany({
       with: {
         vessel: true,
       },
+      where: eq(schema.sea_time_entries.user_id, userId),
     });
 
     // Filter by date if provided
@@ -280,8 +305,8 @@ export function register(app: App, fastify: FastifyInstance) {
     // Only include confirmed entries
     const confirmedEntries = entries.filter((entry) => entry.status === 'confirmed');
 
-    // Get all vessels
-    const allVessels = await app.db.select().from(schema.vessels);
+    // Get user's vessels only
+    const allVessels = await app.db.select().from(schema.vessels).where(eq(schema.vessels.user_id, userId));
 
     // Calculate summary statistics
     let totalHours = 0;

@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { eq, desc, and, gte, isNotNull, lt } from "drizzle-orm";
 import * as schema from "../db/schema.js";
 import type { App } from "../index.js";
+import { extractUserIdFromRequest } from "../middleware/auth.js";
 
 const MOVING_SPEED_THRESHOLD = 2; // knots
 const MYSHIPTRACKING_API_URL = 'https://api.myshiptracking.com/api/v2/vessel';
@@ -705,7 +706,7 @@ export function register(app: App, fastify: FastifyInstance) {
   // GET /api/ais/status/:vesselId - Return current movement status and recent checks
   fastify.get<{ Params: { vesselId: string } }>('/api/ais/status/:vesselId', {
     schema: {
-      description: 'Get current movement status and recent AIS checks',
+      description: 'Get current movement status and recent AIS checks (requires authentication)',
       tags: ['ais'],
       params: {
         type: 'object',
@@ -724,20 +725,37 @@ export function register(app: App, fastify: FastifyInstance) {
             },
           },
         },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'AIS status requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { vesselId } = request.params;
 
-    // Verify vessel exists
+    app.logger.info({ userId, vesselId }, 'Fetching AIS status for vessel');
+
+    // Verify vessel exists and belongs to user
     const vessel = await app.db
       .select()
       .from(schema.vessels)
       .where(eq(schema.vessels.id, vesselId));
 
     if (vessel.length === 0) {
+      app.logger.warn({ userId, vesselId }, 'Vessel not found for AIS status');
       return reply.code(404).send({ error: 'Vessel not found' });
+    }
+
+    // Verify ownership
+    if (vessel[0].user_id !== userId) {
+      app.logger.warn({ userId, vesselId }, 'Unauthorized AIS status access attempt');
+      return reply.code(403).send({ error: 'Not authorized to access this vessel' });
     }
 
     // Get latest check
@@ -762,6 +780,8 @@ export function register(app: App, fastify: FastifyInstance) {
       .orderBy(desc(schema.ais_checks.check_time))
       .limit(50);
 
+    app.logger.info({ userId, vesselId, checksCount: recent_checks.length }, 'AIS status retrieved');
+
     return reply.code(200).send({
       is_moving: latest_check.length > 0 ? latest_check[0].is_moving : false,
       current_check: latest_check.length > 0 ? latest_check[0] : null,
@@ -772,7 +792,7 @@ export function register(app: App, fastify: FastifyInstance) {
   // GET /api/ais/check/:vesselId - Manual AIS check (retrieve current location data)
   fastify.get<{ Params: { vesselId: string }; Querystring: { extended?: string } }>('/api/ais/check/:vesselId', {
     schema: {
-      description: 'Get current vessel location data from AIS',
+      description: 'Get current vessel location data from AIS (requires authentication)',
       tags: ['ais'],
       params: {
         type: 'object',
@@ -805,15 +825,22 @@ export function register(app: App, fastify: FastifyInstance) {
           },
         },
         401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
         502: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'AIS check requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { vesselId } = request.params;
     const extended = request.query.extended === 'true';
 
-    app.logger.info(`Manual AIS check requested for vessel: ${vesselId}`);
+    app.logger.info({ userId, vesselId }, `Manual AIS check requested for vessel: ${vesselId}`);
 
     // Validate API key
     if (!MYSHIPTRACKING_API_KEY) {
@@ -828,8 +855,14 @@ export function register(app: App, fastify: FastifyInstance) {
       .where(eq(schema.vessels.id, vesselId));
 
     if (vessel.length === 0) {
-      app.logger.warn(`Vessel not found: ${vesselId}`);
+      app.logger.warn({ userId, vesselId }, `Vessel not found: ${vesselId}`);
       return reply.code(404).send({ error: 'Vessel not found' });
+    }
+
+    // Verify ownership
+    if (vessel[0].user_id !== userId) {
+      app.logger.warn({ userId, vesselId }, 'Unauthorized AIS check attempt');
+      return reply.code(403).send({ error: 'Not authorized to access this vessel' });
     }
 
     const mmsi = vessel[0].mmsi;
@@ -956,7 +989,7 @@ export function register(app: App, fastify: FastifyInstance) {
   // GET /api/ais/debug/:vesselId - Get debug logs for vessel API calls
   fastify.get<{ Params: { vesselId: string }; Querystring: { limit?: string } }>('/api/ais/debug/:vesselId', {
     schema: {
-      description: 'Get debug logs for vessel AIS API calls',
+      description: 'Get debug logs for vessel AIS API calls (requires authentication)',
       tags: ['ais'],
       params: {
         type: 'object',
@@ -985,24 +1018,38 @@ export function register(app: App, fastify: FastifyInstance) {
             },
           },
         },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'AIS debug logs requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { vesselId } = request.params;
     const limit = request.query.limit ? parseInt(request.query.limit) : 10;
 
-    app.logger.info(`Retrieving debug logs for vessel ${vesselId}, limit: ${limit}`);
+    app.logger.info({ userId, vesselId }, `Retrieving debug logs for vessel ${vesselId}, limit: ${limit}`);
 
-    // Verify vessel exists
+    // Verify vessel exists and belongs to user
     const vessel = await app.db
       .select()
       .from(schema.vessels)
       .where(eq(schema.vessels.id, vesselId));
 
     if (vessel.length === 0) {
-      app.logger.warn(`Vessel not found: ${vesselId}`);
+      app.logger.warn({ userId, vesselId }, `Vessel not found: ${vesselId}`);
       return reply.code(404).send({ error: 'Vessel not found' });
+    }
+
+    // Verify ownership
+    if (vessel[0].user_id !== userId) {
+      app.logger.warn({ userId, vesselId }, 'Unauthorized AIS debug logs access attempt');
+      return reply.code(403).send({ error: 'Not authorized to access this vessel' });
     }
 
     // Fetch debug logs
@@ -1013,7 +1060,7 @@ export function register(app: App, fastify: FastifyInstance) {
       .orderBy(desc(schema.ais_debug_logs.request_time))
       .limit(Math.min(limit, 100));
 
-    app.logger.info(`Retrieved ${logs.length} debug logs for vessel ${vesselId}`);
+    app.logger.info({ userId, vesselId, logsCount: logs.length }, `Retrieved ${logs.length} debug logs for vessel ${vesselId}`);
 
     return reply.code(200).send(logs);
   });
@@ -1021,7 +1068,7 @@ export function register(app: App, fastify: FastifyInstance) {
   // GET /api/ais/scheduled-tasks - Get all scheduled tasks with vessel information
   fastify.get('/api/ais/scheduled-tasks', {
     schema: {
-      description: 'Get all scheduled AIS check tasks',
+      description: 'Get all scheduled AIS check tasks for authenticated user',
       tags: ['ais'],
       response: {
         200: {
@@ -1042,10 +1089,17 @@ export function register(app: App, fastify: FastifyInstance) {
             },
           },
         },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
-    app.logger.info('Retrieving all scheduled AIS check tasks');
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Scheduled tasks requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
+    app.logger.info({ userId }, 'Retrieving scheduled AIS check tasks for user');
 
     const tasks = await app.db
       .select({
@@ -1062,6 +1116,7 @@ export function register(app: App, fastify: FastifyInstance) {
       })
       .from(schema.scheduled_tasks)
       .innerJoin(schema.vessels, eq(schema.vessels.id, schema.scheduled_tasks.vessel_id))
+      .where(eq(schema.scheduled_tasks.user_id, userId))
       .orderBy(desc(schema.scheduled_tasks.next_run));
 
     const formattedTasks = tasks.map((task) => ({

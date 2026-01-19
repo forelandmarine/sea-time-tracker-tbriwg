@@ -195,7 +195,7 @@ export function register(app: App, fastify: FastifyInstance) {
   // PUT /api/vessels/:id/activate - Activate specified vessel and deactivate all others
   fastify.put<{ Params: { id: string } }>('/api/vessels/:id/activate', {
     schema: {
-      description: 'Activate a vessel and deactivate all others',
+      description: 'Activate a vessel and deactivate all others (requires authentication)',
       tags: ['vessels'],
       params: {
         type: 'object',
@@ -220,30 +220,44 @@ export function register(app: App, fastify: FastifyInstance) {
             updated_at: { type: 'string' },
           },
         },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Vessel activation requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { id } = request.params;
 
-    app.logger.info({ vesselId: id }, 'Activating vessel');
+    app.logger.info({ userId, vesselId: id }, 'Activating vessel');
 
-    // Check if vessel exists
+    // Check if vessel exists and belongs to user
     const vessel = await app.db
       .select()
       .from(schema.vessels)
       .where(eq(schema.vessels.id, id));
 
     if (vessel.length === 0) {
-      app.logger.warn({ vesselId: id }, 'Vessel not found for activation');
+      app.logger.warn({ userId, vesselId: id }, 'Vessel not found for activation');
       return reply.code(404).send({ error: 'Vessel not found' });
     }
 
-    // Deactivate all other vessels
+    // Verify ownership
+    if (vessel[0].user_id !== userId) {
+      app.logger.warn({ userId, vesselId: id }, 'Unauthorized vessel activation attempt');
+      return reply.code(403).send({ error: 'Not authorized to activate this vessel' });
+    }
+
+    // Deactivate all other vessels for this user
     await app.db
       .update(schema.vessels)
       .set({ is_active: false })
-      .where(eq(schema.vessels.is_active, true));
+      .where(eq(schema.vessels.user_id, userId));
 
     // Activate the specified vessel
     const [activated] = await app.db
@@ -253,7 +267,7 @@ export function register(app: App, fastify: FastifyInstance) {
       .returning();
 
     app.logger.info(
-      { vesselId: activated.id, vesselName: activated.vessel_name },
+      { userId, vesselId: activated.id, vesselName: activated.vessel_name },
       'Vessel activated successfully'
     );
 
@@ -329,7 +343,7 @@ export function register(app: App, fastify: FastifyInstance) {
     }
   }>('/api/vessels/:id', {
     schema: {
-      description: 'Update vessel information',
+      description: 'Update vessel information (requires authentication)',
       tags: ['vessels'],
       params: {
         type: 'object',
@@ -366,10 +380,18 @@ export function register(app: App, fastify: FastifyInstance) {
             updated_at: { type: 'string' },
           },
         },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Vessel update requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { id } = request.params;
     const {
       vessel_name,
@@ -381,17 +403,23 @@ export function register(app: App, fastify: FastifyInstance) {
       gross_tonnes,
     } = request.body;
 
-    app.logger.info({ vesselId: id }, 'Updating vessel');
+    app.logger.info({ userId, vesselId: id }, 'Updating vessel');
 
-    // Check if vessel exists
+    // Check if vessel exists and belongs to user
     const vessel = await app.db
       .select()
       .from(schema.vessels)
       .where(eq(schema.vessels.id, id));
 
     if (vessel.length === 0) {
-      app.logger.warn({ vesselId: id }, 'Vessel not found for update');
+      app.logger.warn({ userId, vesselId: id }, 'Vessel not found for update');
       return reply.code(404).send({ error: 'Vessel not found' });
+    }
+
+    // Verify ownership
+    if (vessel[0].user_id !== userId) {
+      app.logger.warn({ userId, vesselId: id }, 'Unauthorized vessel update attempt');
+      return reply.code(403).send({ error: 'Not authorized to update this vessel' });
     }
 
     const updateData: Record<string, any> = { updated_at: new Date() };
@@ -410,7 +438,7 @@ export function register(app: App, fastify: FastifyInstance) {
       .returning();
 
     app.logger.info(
-      { vesselId: updated.id, vesselName: updated.vessel_name },
+      { userId, vesselId: updated.id, vesselName: updated.vessel_name },
       'Vessel updated successfully'
     );
 
@@ -470,6 +498,7 @@ export function register(app: App, fastify: FastifyInstance) {
           },
           400: { type: 'object', properties: { error: { type: 'string' } } },
           401: { type: 'object', properties: { error: { type: 'string' } } },
+          403: { type: 'object', properties: { error: { type: 'string' } } },
           404: { type: 'object', properties: { error: { type: 'string' } } },
         },
       },
@@ -524,6 +553,12 @@ export function register(app: App, fastify: FastifyInstance) {
       if (vessel.length === 0) {
         app.logger.warn({ vesselId: id }, 'Vessel not found for particulars update');
         return reply.code(404).send({ error: 'Vessel not found' });
+      }
+
+      // Verify ownership
+      if (vessel[0].user_id !== session.userId) {
+        app.logger.warn({ userId: session.userId, vesselId: id }, 'Unauthorized vessel particulars update attempt');
+        return reply.code(403).send({ error: 'Not authorized to update this vessel' });
       }
 
       // Build update data with only provided fields

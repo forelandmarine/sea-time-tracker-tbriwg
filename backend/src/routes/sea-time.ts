@@ -3,6 +3,7 @@ import { eq, and, isNull, desc, lte, gte } from "drizzle-orm";
 import * as schema from "../db/schema.js";
 import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
+import { extractUserIdFromRequest } from "../middleware/auth.js";
 
 function calculateDurationHours(startTime: Date, endTime: Date): number {
   const diffMs = endTime.getTime() - startTime.getTime();
@@ -46,7 +47,7 @@ export function register(app: App, fastify: FastifyInstance) {
   // GET /api/sea-time - Return all sea time entries with vessel info
   fastify.get('/api/sea-time', {
     schema: {
-      description: 'Get all sea time entries with complete vessel information',
+      description: 'Get all sea time entries with complete vessel information (requires authentication)',
       tags: ['sea-time'],
       response: {
         200: {
@@ -82,26 +83,34 @@ export function register(app: App, fastify: FastifyInstance) {
             },
           },
         },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
-    app.logger.info('Retrieving all sea time entries');
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Sea time entries list requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
+    app.logger.info({ userId }, 'Retrieving sea time entries for user');
 
     const entries = await app.db.query.sea_time_entries.findMany({
       with: {
         vessel: true,
       },
+      where: eq(schema.sea_time_entries.user_id, userId),
       orderBy: desc(schema.sea_time_entries.start_time),
     });
 
-    app.logger.info({ count: entries.length }, 'Sea time entries retrieved');
+    app.logger.info({ userId, count: entries.length }, 'Sea time entries retrieved');
     return reply.code(200).send(entries.map(transformSeaTimeEntryForResponse));
   });
 
   // GET /api/vessels/:vesselId/sea-time - Return sea time entries for a specific vessel
   fastify.get<{ Params: { vesselId: string } }>('/api/vessels/:vesselId/sea-time', {
     schema: {
-      description: 'Get all sea time entries for a specific vessel',
+      description: 'Get all sea time entries for a specific vessel (requires authentication)',
       tags: ['sea-time'],
       params: {
         type: 'object',
@@ -136,20 +145,37 @@ export function register(app: App, fastify: FastifyInstance) {
             },
           },
         },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Sea time entries for vessel requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { vesselId } = request.params;
 
-    // Verify vessel exists
+    app.logger.info({ userId, vesselId }, 'Fetching sea time entries for vessel');
+
+    // Verify vessel exists and belongs to user
     const vessel = await app.db
       .select()
       .from(schema.vessels)
       .where(eq(schema.vessels.id, vesselId));
 
     if (vessel.length === 0) {
+      app.logger.warn({ userId, vesselId }, 'Vessel not found');
       return reply.code(404).send({ error: 'Vessel not found' });
+    }
+
+    // Check vessel ownership
+    if (vessel[0].user_id !== userId) {
+      app.logger.warn({ userId, vesselId }, 'Unauthorized access to vessel sea time entries');
+      return reply.code(403).send({ error: 'Not authorized to access this vessel' });
     }
 
     // Get all sea time entries for the vessel, ordered by most recent first
@@ -161,13 +187,14 @@ export function register(app: App, fastify: FastifyInstance) {
       orderBy: desc(schema.sea_time_entries.start_time),
     });
 
+    app.logger.info({ userId, vesselId, count: entries.length }, 'Sea time entries retrieved');
     return reply.code(200).send(entries);
   });
 
   // GET /api/sea-time/pending - Return pending entries awaiting confirmation
   fastify.get('/api/sea-time/pending', {
     schema: {
-      description: 'Get pending sea time entries awaiting confirmation',
+      description: 'Get pending sea time entries awaiting confirmation (requires authentication)',
       tags: ['sea-time'],
       response: {
         200: {
@@ -201,13 +228,23 @@ export function register(app: App, fastify: FastifyInstance) {
             },
           },
         },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
-    app.logger.info('Retrieving pending sea time entries');
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Pending sea time entries requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
+    app.logger.info({ userId }, 'Retrieving pending sea time entries for user');
 
     const entries = await app.db.query.sea_time_entries.findMany({
-      where: eq(schema.sea_time_entries.status, 'pending'),
+      where: and(
+        eq(schema.sea_time_entries.status, 'pending'),
+        eq(schema.sea_time_entries.user_id, userId)
+      ),
       with: {
         vessel: true,
       },
@@ -224,7 +261,7 @@ export function register(app: App, fastify: FastifyInstance) {
   // PUT /api/sea-time/:id/confirm - Confirm pending entry with optional notes
   fastify.put<{ Params: { id: string }; Body: { notes?: string } }>('/api/sea-time/:id/confirm', {
     schema: {
-      description: 'Confirm a pending sea time entry',
+      description: 'Confirm a pending sea time entry (requires authentication)',
       tags: ['sea-time'],
       params: {
         type: 'object',
@@ -237,14 +274,22 @@ export function register(app: App, fastify: FastifyInstance) {
       },
       response: {
         200: { type: 'object' },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Sea time entry confirm requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { id } = request.params;
     const { notes } = request.body;
 
-    app.logger.info({ entryId: id, notes }, `Confirming sea time entry: ${id}`);
+    app.logger.info({ userId, entryId: id }, `Confirming sea time entry: ${id}`);
 
     // Get the entry
     const entry = await app.db
@@ -253,11 +298,17 @@ export function register(app: App, fastify: FastifyInstance) {
       .where(eq(schema.sea_time_entries.id, id));
 
     if (entry.length === 0) {
-      app.logger.warn(`Sea time entry not found: ${id}`);
+      app.logger.warn({ userId, entryId: id }, `Sea time entry not found: ${id}`);
       return reply.code(404).send({ error: 'Sea time entry not found' });
     }
 
     const current_entry = entry[0];
+
+    // Verify ownership
+    if (current_entry.user_id !== userId) {
+      app.logger.warn({ userId, entryId: id }, 'Unauthorized sea time entry confirm attempt');
+      return reply.code(403).send({ error: 'Not authorized to confirm this entry' });
+    }
 
     // Set end_time to now and calculate duration
     const end_time = new Date();
@@ -276,6 +327,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
     app.logger.info(
       {
+        userId,
         entryId: id,
         vesselId: current_entry.vessel_id,
         startTime: current_entry.start_time.toISOString(),
@@ -292,7 +344,7 @@ export function register(app: App, fastify: FastifyInstance) {
   // PUT /api/sea-time/:id/reject - Reject pending entry with optional notes
   fastify.put<{ Params: { id: string }; Body: { notes?: string } }>('/api/sea-time/:id/reject', {
     schema: {
-      description: 'Reject a pending sea time entry',
+      description: 'Reject a pending sea time entry (requires authentication)',
       tags: ['sea-time'],
       params: {
         type: 'object',
@@ -305,14 +357,22 @@ export function register(app: App, fastify: FastifyInstance) {
       },
       response: {
         200: { type: 'object' },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Sea time entry reject requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { id } = request.params;
     const { notes } = request.body;
 
-    app.logger.info({ entryId: id, notes }, `Rejecting sea time entry: ${id}`);
+    app.logger.info({ userId, entryId: id }, `Rejecting sea time entry: ${id}`);
 
     // Get the entry
     const entry = await app.db
@@ -321,8 +381,14 @@ export function register(app: App, fastify: FastifyInstance) {
       .where(eq(schema.sea_time_entries.id, id));
 
     if (entry.length === 0) {
-      app.logger.warn(`Sea time entry not found: ${id}`);
+      app.logger.warn({ userId, entryId: id }, `Sea time entry not found: ${id}`);
       return reply.code(404).send({ error: 'Sea time entry not found' });
+    }
+
+    // Verify ownership
+    if (entry[0].user_id !== userId) {
+      app.logger.warn({ userId, entryId: id }, 'Unauthorized sea time entry reject attempt');
+      return reply.code(403).send({ error: 'Not authorized to reject this entry' });
     }
 
     const [updated] = await app.db
@@ -336,6 +402,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
     app.logger.info(
       {
+        userId,
         entryId: id,
         vesselId: entry[0].vessel_id,
         status: 'rejected',
@@ -349,7 +416,7 @@ export function register(app: App, fastify: FastifyInstance) {
   // DELETE /api/sea-time/:id - Delete entry
   fastify.delete<{ Params: { id: string } }>('/api/sea-time/:id', {
     schema: {
-      description: 'Delete a sea time entry',
+      description: 'Delete a sea time entry (requires authentication)',
       tags: ['sea-time'],
       params: {
         type: 'object',
@@ -358,13 +425,38 @@ export function register(app: App, fastify: FastifyInstance) {
       },
       response: {
         200: { type: 'object', properties: { id: { type: 'string' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Sea time entry delete requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { id } = request.params;
 
-    app.logger.info(`Deleting sea time entry: ${id}`);
+    app.logger.info({ userId, entryId: id }, `Deleting sea time entry: ${id}`);
+
+    // Get the entry first to verify ownership
+    const entry = await app.db
+      .select()
+      .from(schema.sea_time_entries)
+      .where(eq(schema.sea_time_entries.id, id));
+
+    if (entry.length === 0) {
+      app.logger.warn({ userId, entryId: id }, `Sea time entry not found: ${id}`);
+      return reply.code(404).send({ error: 'Sea time entry not found' });
+    }
+
+    // Verify ownership
+    if (entry[0].user_id !== userId) {
+      app.logger.warn({ userId, entryId: id }, 'Unauthorized sea time entry delete attempt');
+      return reply.code(403).send({ error: 'Not authorized to delete this entry' });
+    }
 
     const [deleted] = await app.db
       .delete(schema.sea_time_entries)
@@ -372,12 +464,12 @@ export function register(app: App, fastify: FastifyInstance) {
       .returning();
 
     if (!deleted) {
-      app.logger.warn(`Sea time entry not found: ${id}`);
+      app.logger.warn({ userId, entryId: id }, `Sea time entry not found: ${id}`);
       return reply.code(404).send({ error: 'Sea time entry not found' });
     }
 
     app.logger.info(
-      { entryId: deleted.id, vesselId: deleted.vessel_id },
+      { userId, entryId: deleted.id, vesselId: deleted.vessel_id },
       `Sea time entry deleted`
     );
 
@@ -804,7 +896,7 @@ export function register(app: App, fastify: FastifyInstance) {
   // GET /api/logbook - Get sea time entries in chronological order for logbook/calendar view
   fastify.get<{ Querystring: { startDate?: string; endDate?: string } }>('/api/logbook', {
     schema: {
-      description: 'Get sea time entries in chronological order for logbook/calendar view with optional date range filtering',
+      description: 'Get sea time entries in chronological order for logbook/calendar view with optional date range filtering (requires authentication)',
       tags: ['logbook'],
       querystring: {
         type: 'object',
@@ -846,17 +938,25 @@ export function register(app: App, fastify: FastifyInstance) {
             },
           },
         },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Logbook entries requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { startDate, endDate } = request.query;
 
-    app.logger.info({ startDate, endDate }, 'Retrieving logbook entries');
+    app.logger.info({ userId, startDate, endDate }, 'Retrieving logbook entries for user');
 
     let query = app.db.query.sea_time_entries.findMany({
       with: {
         vessel: true,
       },
+      where: eq(schema.sea_time_entries.user_id, userId),
       orderBy: desc(schema.sea_time_entries.start_time),
     });
 
@@ -875,7 +975,7 @@ export function register(app: App, fastify: FastifyInstance) {
       });
     }
 
-    app.logger.info({ count: entries.length }, 'Logbook entries retrieved');
+    app.logger.info({ userId, count: entries.length }, 'Logbook entries retrieved');
     return reply.code(200).send(entries);
   });
 
@@ -941,6 +1041,7 @@ export function register(app: App, fastify: FastifyInstance) {
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
         401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
@@ -980,15 +1081,21 @@ export function register(app: App, fastify: FastifyInstance) {
       return reply.code(401).send({ error: 'Session expired' });
     }
 
-    // Validate vessel exists
+    // Validate vessel exists and belongs to user
     const vessel = await app.db
       .select()
       .from(schema.vessels)
       .where(eq(schema.vessels.id, vessel_id));
 
     if (vessel.length === 0) {
-      app.logger.warn({ vessel_id }, 'Vessel not found for manual entry');
+      app.logger.warn({ userId: session.userId, vessel_id }, 'Vessel not found for manual entry');
       return reply.code(404).send({ error: 'Vessel not found' });
+    }
+
+    // Verify vessel ownership
+    if (vessel[0].user_id !== session.userId) {
+      app.logger.warn({ userId: session.userId, vessel_id }, 'Unauthorized access to vessel for manual entry');
+      return reply.code(403).send({ error: 'Not authorized to create entries for this vessel' });
     }
 
     // Validate start_time
