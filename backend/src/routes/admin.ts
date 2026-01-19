@@ -49,7 +49,7 @@ export function register(app: App, fastify: FastifyInstance) {
                     id: { type: 'string' },
                     start_time: { type: 'string', format: 'date-time' },
                     end_time: { type: ['string', 'null'], format: 'date-time' },
-                    duration_hours: { type: ['number', 'null'] },
+                    sea_days: { type: ['number', 'null'] },
                     status: { type: 'string', enum: ['pending', 'confirmed', 'rejected'] },
                     notes: { type: ['string', 'null'] },
                     created_at: { type: 'string', format: 'date-time' },
@@ -67,8 +67,7 @@ export function register(app: App, fastify: FastifyInstance) {
                   pendingEntries: { type: 'number' },
                   confirmedEntries: { type: 'number' },
                   rejectedEntries: { type: 'number' },
-                  totalConfirmedHours: { type: 'number' },
-                  totalConfirmedDays: { type: 'number' },
+                  totalConfirmedSeaDays: { type: 'number' },
                 },
               },
             },
@@ -133,14 +132,10 @@ export function register(app: App, fastify: FastifyInstance) {
           pendingEntries: seaTimeEntries.filter(e => e.status === 'pending').length,
           confirmedEntries: seaTimeEntries.filter(e => e.status === 'confirmed').length,
           rejectedEntries: seaTimeEntries.filter(e => e.status === 'rejected').length,
-          totalConfirmedHours: seaTimeEntries
-            .filter(e => e.status === 'confirmed' && e.duration_hours)
-            .reduce((sum, e) => sum + parseFloat(e.duration_hours?.toString() || '0'), 0),
-          totalConfirmedDays: 0,
+          totalConfirmedSeaDays: seaTimeEntries
+            .filter(e => e.status === 'confirmed' && e.sea_days)
+            .reduce((sum, e) => sum + (e.sea_days || 0), 0),
         };
-
-        // Calculate total confirmed days (hours / 24)
-        summary.totalConfirmedDays = parseFloat((summary.totalConfirmedHours / 24).toFixed(2));
 
         app.logger.info(
           { userId: user.id, vesselId: vessel?.id, summary },
@@ -165,7 +160,7 @@ export function register(app: App, fastify: FastifyInstance) {
             id: e.id,
             start_time: e.start_time.toISOString(),
             end_time: e.end_time ? e.end_time.toISOString() : null,
-            duration_hours: e.duration_hours ? parseFloat(e.duration_hours.toString()) : null,
+            sea_days: e.sea_days,
             status: e.status,
             notes: e.notes,
             created_at: e.created_at.toISOString(),

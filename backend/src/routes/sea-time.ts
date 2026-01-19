@@ -31,7 +31,7 @@ function transformSeaTimeEntryForResponse(entry: any) {
     vessel_id: entry.vessel_id,
     start_time: entry.start_time.toISOString ? entry.start_time.toISOString() : entry.start_time,
     end_time: entry.end_time ? (entry.end_time.toISOString ? entry.end_time.toISOString() : entry.end_time) : null,
-    duration_hours: entry.duration_hours,
+    sea_days: entry.sea_days,
     status: entry.status,
     notes: entry.notes,
     start_latitude: entry.start_latitude,
@@ -59,7 +59,7 @@ export function register(app: App, fastify: FastifyInstance) {
               vessel_id: { type: 'string' },
               start_time: { type: 'string', format: 'date-time' },
               end_time: { type: ['string', 'null'], format: 'date-time' },
-              duration_hours: { type: ['string', 'null'] },
+              sea_days: { type: ['number', 'null'] },
               status: { type: 'string', enum: ['pending', 'confirmed', 'rejected'] },
               notes: { type: ['string', 'null'] },
               start_latitude: { type: ['string', 'null'] },
@@ -127,7 +127,7 @@ export function register(app: App, fastify: FastifyInstance) {
               vessel_id: { type: 'string' },
               start_time: { type: 'string', format: 'date-time' },
               end_time: { type: ['string', 'null'], format: 'date-time' },
-              duration_hours: { type: ['string', 'null'] },
+              sea_days: { type: ['number', 'null'] },
               status: { type: 'string' },
               notes: { type: ['string', 'null'] },
               created_at: { type: 'string', format: 'date-time' },
@@ -188,7 +188,7 @@ export function register(app: App, fastify: FastifyInstance) {
     });
 
     app.logger.info({ userId, vesselId, count: entries.length }, 'Sea time entries retrieved');
-    return reply.code(200).send(entries);
+    return reply.code(200).send(entries.map(transformSeaTimeEntryForResponse));
   });
 
   // GET /api/sea-time/pending - Return pending entries awaiting confirmation
@@ -206,7 +206,7 @@ export function register(app: App, fastify: FastifyInstance) {
               vessel_id: { type: 'string' },
               start_time: { type: 'string', format: 'date-time' },
               end_time: { type: ['string', 'null'], format: 'date-time' },
-              duration_hours: { type: ['string', 'null'] },
+              sea_days: { type: ['number', 'null'] },
               status: { type: 'string' },
               notes: { type: ['string', 'null'] },
               created_at: { type: 'string', format: 'date-time' },
@@ -255,7 +255,7 @@ export function register(app: App, fastify: FastifyInstance) {
       { count: entries.length },
       `Retrieved ${entries.length} pending sea time entries`
     );
-    return reply.code(200).send(entries);
+    return reply.code(200).send(entries.map(transformSeaTimeEntryForResponse));
   });
 
   // GET /api/sea-time/new-entries - Return new entries created since a given time
@@ -415,15 +415,14 @@ export function register(app: App, fastify: FastifyInstance) {
       return reply.code(403).send({ error: 'Not authorized to confirm this entry' });
     }
 
-    // Set end_time to now and calculate duration
+    // Set end_time to now and set sea_days = 1
     const end_time = new Date();
-    const duration_hours = calculateDurationHours(current_entry.start_time, end_time);
 
     const [updated] = await app.db
       .update(schema.sea_time_entries)
       .set({
         end_time,
-        duration_hours: String(duration_hours),
+        sea_days: 1,
         status: 'confirmed',
         notes: notes || current_entry.notes,
       })
@@ -437,13 +436,13 @@ export function register(app: App, fastify: FastifyInstance) {
         vesselId: current_entry.vessel_id,
         startTime: current_entry.start_time.toISOString(),
         endTime: end_time.toISOString(),
-        durationHours: duration_hours,
+        seaDays: 1,
         status: 'confirmed',
       },
-      `Sea time entry confirmed: ${duration_hours} hours`
+      `Sea time entry confirmed: 1 sea day`
     );
 
-    return reply.code(200).send(updated);
+    return reply.code(200).send(transformSeaTimeEntryForResponse(updated));
   });
 
   // PUT /api/sea-time/:id/reject - Reject pending entry with optional notes
@@ -594,7 +593,7 @@ export function register(app: App, fastify: FastifyInstance) {
             vessel_id: { type: 'string' },
             start_time: { type: 'string', format: 'date-time' },
             end_time: { type: ['string', 'null'], format: 'date-time' },
-            duration_hours: { type: ['string', 'null'] },
+            sea_days: { type: ['number', 'null'] },
             status: { type: 'string' },
             notes: { type: ['string', 'null'] },
             created_at: { type: 'string', format: 'date-time' },
@@ -739,7 +738,6 @@ export function register(app: App, fastify: FastifyInstance) {
           start_longitude: String(startLng),
           end_latitude: String(endLat),
           end_longitude: String(endLng),
-          duration_hours: String(duration_hours),
           status: 'pending',
           notes: 'Test entry created from two most recent position records',
         })
@@ -756,7 +754,7 @@ export function register(app: App, fastify: FastifyInstance) {
         vessel,
       };
 
-      return reply.code(200).send(response);
+      return reply.code(200).send(transformSeaTimeEntryForResponse(response));
     } catch (error) {
       app.logger.error({ err: error }, 'Test endpoint: Error creating sea day entry');
       return reply.code(500).send({ error: 'Failed to create sea day entry' });
@@ -795,14 +793,14 @@ export function register(app: App, fastify: FastifyInstance) {
                   id: { type: 'string' },
                   vessel_id: { type: 'string' },
                   start_time: { type: 'string', format: 'date-time' },
-                  end_time: { type: 'string', format: 'date-time' },
-                  duration_hours: { type: 'string' },
+                  end_time: { type: ['string', 'null'], format: 'date-time' },
+                  sea_days: { type: ['number', 'null'] },
                   status: { type: 'string' },
                   notes: { type: 'string' },
-                  start_latitude: { type: 'string' },
-                  start_longitude: { type: 'string' },
-                  end_latitude: { type: 'string' },
-                  end_longitude: { type: 'string' },
+                  start_latitude: { type: ['string', 'null'] },
+                  start_longitude: { type: ['string', 'null'] },
+                  end_latitude: { type: ['string', 'null'] },
+                  end_longitude: { type: ['string', 'null'] },
                   created_at: { type: 'string', format: 'date-time' },
                 },
               },
@@ -897,7 +895,6 @@ export function register(app: App, fastify: FastifyInstance) {
           vessel_id: selectedVessel.id,
           start_time: entry1Start,
           end_time: entry1End,
-          duration_hours: '10.5',
           status: 'pending',
           notes: 'Coastal passage from Southampton to Portsmouth. Good weather conditions.',
           start_latitude: '50.9097',
@@ -910,7 +907,7 @@ export function register(app: App, fastify: FastifyInstance) {
       entries.push(sampleEntry1);
       app.logger.info({ entryId: sampleEntry1.id }, 'Sample entry 1 created');
 
-      // Entry 2: 7 days ago, 09:30 - 16:45 (7.25 hours)
+      // Entry 2: 7 days ago, 09:30 - 16:45
       const entry2Start = new Date(now);
       entry2Start.setDate(entry2Start.getDate() - 7);
       entry2Start.setHours(9, 30, 0, 0);
@@ -926,7 +923,6 @@ export function register(app: App, fastify: FastifyInstance) {
           vessel_id: selectedVessel.id,
           start_time: entry2Start,
           end_time: entry2End,
-          duration_hours: '7.25',
           status: 'pending',
           notes: 'Training voyage in the Solent. Practiced navigation and mooring.',
           start_latitude: '50.7964',
@@ -939,7 +935,7 @@ export function register(app: App, fastify: FastifyInstance) {
       entries.push(sampleEntry2);
       app.logger.info({ entryId: sampleEntry2.id }, 'Sample entry 2 created');
 
-      // Entry 3: 14 days ago, 07:00 - 19:15 (12.25 hours)
+      // Entry 3: 14 days ago, 07:00 - 19:15
       const entry3Start = new Date(now);
       entry3Start.setDate(entry3Start.getDate() - 14);
       entry3Start.setHours(7, 0, 0, 0);
@@ -955,7 +951,6 @@ export function register(app: App, fastify: FastifyInstance) {
           vessel_id: selectedVessel.id,
           start_time: entry3Start,
           end_time: entry3End,
-          duration_hours: '12.25',
           status: 'pending',
           notes: 'Extended passage to Isle of Wight. Overnight preparation and early departure.',
           start_latitude: '50.8429',
@@ -981,8 +976,8 @@ export function register(app: App, fastify: FastifyInstance) {
           id: entry.id,
           vessel_id: entry.vessel_id,
           start_time: entry.start_time.toISOString(),
-          end_time: entry.end_time.toISOString(),
-          duration_hours: entry.duration_hours,
+          end_time: entry.end_time ? entry.end_time.toISOString() : null,
+          sea_days: entry.sea_days,
           status: entry.status,
           notes: entry.notes,
           start_latitude: entry.start_latitude,
@@ -1020,7 +1015,7 @@ export function register(app: App, fastify: FastifyInstance) {
               vessel_id: { type: 'string' },
               start_time: { type: 'string' },
               end_time: { type: ['string', 'null'] },
-              duration_hours: { type: ['string', 'null'] },
+              sea_days: { type: ['number', 'null'] },
               status: { type: 'string' },
               notes: { type: ['string', 'null'] },
               start_latitude: { type: ['string', 'null'] },
@@ -1081,7 +1076,7 @@ export function register(app: App, fastify: FastifyInstance) {
     }
 
     app.logger.info({ userId, count: entries.length }, 'Logbook entries retrieved');
-    return reply.code(200).send(entries);
+    return reply.code(200).send(entries.map(transformSeaTimeEntryForResponse));
   });
 
   // POST /api/logbook/manual-entry - Create manual sea time entry (authenticated)
@@ -1090,6 +1085,7 @@ export function register(app: App, fastify: FastifyInstance) {
       vessel_id: string;
       start_time: string;
       end_time?: string;
+      sea_days?: number;
       notes?: string;
       start_latitude?: number;
       start_longitude?: number;
@@ -1098,7 +1094,7 @@ export function register(app: App, fastify: FastifyInstance) {
     };
   }>('/api/logbook/manual-entry', {
     schema: {
-      description: 'Create a manual sea time entry (requires authentication)',
+      description: 'Create a manual sea time entry (requires authentication). Sea days defaults to 1 if not provided.',
       tags: ['logbook'],
       body: {
         type: 'object',
@@ -1107,6 +1103,7 @@ export function register(app: App, fastify: FastifyInstance) {
           vessel_id: { type: 'string', description: 'UUID of the vessel' },
           start_time: { type: 'string', description: 'ISO 8601 start time' },
           end_time: { type: 'string', description: 'ISO 8601 end time (optional)' },
+          sea_days: { type: 'number', description: 'Number of sea days (default: 1)' },
           notes: { type: 'string', description: 'Optional notes' },
           start_latitude: { type: 'number', description: 'Start position latitude' },
           start_longitude: { type: 'number', description: 'Start position longitude' },
@@ -1122,7 +1119,7 @@ export function register(app: App, fastify: FastifyInstance) {
             vessel_id: { type: 'string' },
             start_time: { type: 'string' },
             end_time: { type: ['string', 'null'] },
-            duration_hours: { type: ['string', 'null'] },
+            sea_days: { type: ['number', 'null'] },
             status: { type: 'string' },
             notes: { type: ['string', 'null'] },
             start_latitude: { type: ['string', 'null'] },
@@ -1151,7 +1148,7 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    const { vessel_id, start_time, end_time, notes, start_latitude, start_longitude, end_latitude, end_longitude } = request.body;
+    const { vessel_id, start_time, end_time, sea_days = 1, notes, start_latitude, start_longitude, end_latitude, end_longitude } = request.body;
 
     app.logger.info(
       { vessel_id, start_time, end_time },
@@ -1217,7 +1214,6 @@ export function register(app: App, fastify: FastifyInstance) {
 
     // Validate and process end_time if provided
     let endDate: Date | null = null;
-    let durationHours: string | null = null;
 
     if (end_time) {
       try {
@@ -1232,12 +1228,7 @@ export function register(app: App, fastify: FastifyInstance) {
           return reply.code(400).send({ error: 'End time must be after start time' });
         }
 
-        // Calculate duration
-        const durationMs = endDate.getTime() - startDate.getTime();
-        const hours = durationMs / (1000 * 60 * 60);
-        durationHours = String(Math.round(hours * 100) / 100);
-
-        app.logger.info({ vessel_id, durationHours }, 'Calculated sea time duration');
+        app.logger.info({ vessel_id, sea_days }, 'Sea time duration validated');
       } catch (error) {
         app.logger.warn({ end_time }, 'Invalid end_time format');
         return reply.code(400).send({ error: 'Invalid end_time format' });
@@ -1253,7 +1244,7 @@ export function register(app: App, fastify: FastifyInstance) {
           vessel_id,
           start_time: startDate,
           end_time: endDate,
-          duration_hours: durationHours,
+          sea_days,
           status: 'confirmed', // Manually created entries are confirmed
           notes,
           start_latitude: start_latitude ? String(start_latitude) : null,
@@ -1270,7 +1261,7 @@ export function register(app: App, fastify: FastifyInstance) {
           vesselName: vessel[0].vessel_name,
           start_time,
           end_time: endDate?.toISOString(),
-          durationHours,
+          sea_days,
           status: 'confirmed',
         },
         'Manual sea time entry created successfully'
@@ -1282,7 +1273,7 @@ export function register(app: App, fastify: FastifyInstance) {
         vessel: vessel[0],
       };
 
-      return reply.code(201).send(response);
+      return reply.code(201).send(transformSeaTimeEntryForResponse(response));
     } catch (error) {
       app.logger.error({ err: error, vessel_id }, 'Failed to create manual sea time entry');
       return reply.code(400).send({ error: 'Failed to create sea time entry' });

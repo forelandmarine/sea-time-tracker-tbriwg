@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid, boolean, decimal, index } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, boolean, decimal, index, integer } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export const vessels = pgTable('vessels', {
@@ -27,7 +27,8 @@ export const sea_time_entries = pgTable('sea_time_entries', {
   vessel_id: uuid('vessel_id').notNull().references(() => vessels.id, { onDelete: 'cascade' }),
   start_time: timestamp('start_time').notNull(),
   end_time: timestamp('end_time'),
-  duration_hours: decimal('duration_hours', { precision: 10, scale: 2 }),
+  duration_hours: decimal('duration_hours', { precision: 10, scale: 2 }), // Deprecated - kept for backward compatibility
+  sea_days: integer('sea_days'), // Sea days count (1 for confirmed entries, null for pending/rejected)
   status: text('status').notNull().default('pending'),
   notes: text('notes'),
   start_latitude: decimal('start_latitude', { precision: 9, scale: 6 }),
