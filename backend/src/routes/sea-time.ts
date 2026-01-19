@@ -258,6 +258,111 @@ export function register(app: App, fastify: FastifyInstance) {
     return reply.code(200).send(entries);
   });
 
+  // GET /api/sea-time/new-entries - Return new entries created since a given time
+  fastify.get<{ Querystring: { since?: string } }>('/api/sea-time/new-entries', {
+    schema: {
+      description: 'Get new sea time entries created since the last check (requires authentication)',
+      tags: ['sea-time'],
+      querystring: {
+        type: 'object',
+        properties: {
+          since: { type: 'string', format: 'date-time', description: 'ISO timestamp - if not provided, returns entries from last 24 hours' },
+        },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            entries: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  vessel_id: { type: 'string' },
+                  start_time: { type: 'string', format: 'date-time' },
+                  end_time: { type: ['string', 'null'], format: 'date-time' },
+                  duration_hours: { type: ['string', 'null'] },
+                  status: { type: 'string', enum: ['pending', 'confirmed', 'rejected'] },
+                  notes: { type: ['string', 'null'] },
+                  created_at: { type: 'string', format: 'date-time' },
+                  start_latitude: { type: ['string', 'null'] },
+                  start_longitude: { type: ['string', 'null'] },
+                  end_latitude: { type: ['string', 'null'] },
+                  end_longitude: { type: ['string', 'null'] },
+                  vessel: {
+                    type: 'object',
+                    properties: {
+                      id: { type: 'string' },
+                      mmsi: { type: 'string' },
+                      vessel_name: { type: 'string' },
+                      callsign: { type: ['string', 'null'] },
+                      flag: { type: ['string', 'null'] },
+                      vessel_type: { type: ['string', 'null'] },
+                      is_active: { type: 'boolean' },
+                      created_at: { type: 'string', format: 'date-time' },
+                    },
+                  },
+                },
+              },
+            },
+            count: { type: 'number' },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'New sea time entries requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
+    const { since } = request.query;
+
+    // Determine the cutoff time
+    let cutoffTime: Date;
+    if (since) {
+      try {
+        cutoffTime = new Date(since);
+        if (isNaN(cutoffTime.getTime())) {
+          app.logger.warn({ since }, 'Invalid since parameter format');
+          return reply.code(400).send({ error: 'Invalid since parameter format - must be ISO timestamp' });
+        }
+      } catch (error) {
+        app.logger.warn({ since }, 'Error parsing since parameter');
+        return reply.code(400).send({ error: 'Invalid since parameter' });
+      }
+    } else {
+      // Default to last 24 hours
+      cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    }
+
+    app.logger.info({ userId, since: cutoffTime.toISOString() }, 'Retrieving new sea time entries since cutoff time');
+
+    const entries = await app.db.query.sea_time_entries.findMany({
+      where: and(
+        eq(schema.sea_time_entries.user_id, userId),
+        gte(schema.sea_time_entries.created_at, cutoffTime)
+      ),
+      with: {
+        vessel: true,
+      },
+      orderBy: desc(schema.sea_time_entries.created_at),
+    });
+
+    app.logger.info(
+      { userId, count: entries.length, cutoffTime: cutoffTime.toISOString() },
+      `Retrieved ${entries.length} new sea time entries`
+    );
+
+    return reply.code(200).send({
+      entries: entries.map(transformSeaTimeEntryForResponse),
+      count: entries.length,
+    });
+  });
+
   // PUT /api/sea-time/:id/confirm - Confirm pending entry with optional notes
   fastify.put<{ Params: { id: string }; Body: { notes?: string } }>('/api/sea-time/:id/confirm', {
     schema: {
