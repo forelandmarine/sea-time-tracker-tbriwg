@@ -2,7 +2,7 @@
 import "react-native-reanimated";
 import React, { useEffect, useState } from "react";
 import { useFonts } from "expo-font";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -33,8 +33,8 @@ function RootLayoutNav() {
   const networkState = useNetworkState();
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
   const { user, loading } = useAuth();
-  const [hasNavigated, setHasNavigated] = useState(false);
 
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -72,57 +72,36 @@ function RootLayoutNav() {
     }
   }, [loaded]);
 
-  // Simplified authentication routing - only navigate once when auth state is determined
+  // Simplified authentication routing
   useEffect(() => {
     if (!loaded || loading) {
       console.log('[App] Waiting for initialization...', { loaded, loading });
       return;
     }
 
-    // Don't navigate if we've already done the initial navigation
-    if (hasNavigated) {
-      console.log('[App] Already navigated, skipping');
-      return;
-    }
-
     const inAuthGroup = segments[0] === '(tabs)';
-    const isAuthScreen = segments[0] === 'auth';
+    const isAuthScreen = pathname === '/auth';
 
     console.log('[App] Auth routing check:', { 
       user: !!user, 
       inAuthGroup,
       isAuthScreen,
+      pathname,
       segments: segments.join('/'),
       platform: Platform.OS
     });
 
-    // Only navigate if we're in the wrong place
+    // Navigate based on auth state
     if (!user && !isAuthScreen) {
-      console.log('[App] Redirecting to auth - user not authenticated');
-      setHasNavigated(true);
-      
-      // Use setTimeout to avoid navigation during render on web
-      setTimeout(() => {
-        router.replace('/auth');
-      }, Platform.OS === 'web' ? 100 : 0);
+      console.log('[App] ⚠️ User not authenticated, redirecting to /auth');
+      router.replace('/auth');
     } else if (user && isAuthScreen) {
-      console.log('[App] Redirecting to tabs - user authenticated');
-      setHasNavigated(true);
-      
-      // Use setTimeout to avoid navigation during render on web
-      setTimeout(() => {
-        router.replace('/(tabs)');
-      }, Platform.OS === 'web' ? 100 : 0);
+      console.log('[App] ✅ User authenticated, redirecting to /(tabs)');
+      router.replace('/(tabs)');
     } else {
-      console.log('[App] User in correct location, no navigation needed');
-      setHasNavigated(true);
+      console.log('[App] ✅ User in correct location');
     }
-  }, [user, loading, loaded, hasNavigated]);
-
-  // Reset hasNavigated when user state changes (login/logout)
-  useEffect(() => {
-    setHasNavigated(false);
-  }, [user?.id]);
+  }, [user, loading, loaded, pathname, segments]);
 
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
@@ -188,7 +167,7 @@ function RootLayoutNav() {
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff' }}>
         <Text style={{ fontSize: 18, color: colorScheme === 'dark' ? '#fff' : '#000', marginBottom: 10 }}>SeaTime Tracker</Text>
         <Text style={{ fontSize: 14, color: colorScheme === 'dark' ? '#999' : '#666' }}>
-          {!loaded ? 'Loading...' : 'Checking authentication...'}
+          {!loaded ? 'Loading fonts...' : 'Checking authentication...'}
         </Text>
       </View>
     );
