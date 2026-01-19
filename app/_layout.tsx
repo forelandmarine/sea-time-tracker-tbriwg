@@ -2,7 +2,7 @@
 import "react-native-reanimated";
 import React, { useEffect, useState } from "react";
 import { useFonts } from "expo-font";
-import { Stack, useRouter, useSegments, Redirect } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -34,7 +34,7 @@ function RootLayoutNav() {
   const router = useRouter();
   const segments = useSegments();
   const { user, loading } = useAuth();
-  const [isNavigating, setIsNavigating] = useState(false);
+  const [hasNavigated, setHasNavigated] = useState(false);
 
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -72,10 +72,16 @@ function RootLayoutNav() {
     }
   }, [loaded]);
 
-  // Simplified authentication routing - prevent cycling
+  // Simplified authentication routing - only navigate once when auth state is determined
   useEffect(() => {
-    if (!loaded || loading || isNavigating) {
-      console.log('[App] Waiting...', { loaded, loading, isNavigating });
+    if (!loaded || loading) {
+      console.log('[App] Waiting for initialization...', { loaded, loading });
+      return;
+    }
+
+    // Don't navigate if we've already done the initial navigation
+    if (hasNavigated) {
+      console.log('[App] Already navigated, skipping');
       return;
     }
 
@@ -91,18 +97,32 @@ function RootLayoutNav() {
     });
 
     // Only navigate if we're in the wrong place
-    if (!user && inAuthGroup) {
+    if (!user && !isAuthScreen) {
       console.log('[App] Redirecting to auth - user not authenticated');
-      setIsNavigating(true);
-      router.replace('/auth');
-      setTimeout(() => setIsNavigating(false), 500);
+      setHasNavigated(true);
+      
+      // Use setTimeout to avoid navigation during render on web
+      setTimeout(() => {
+        router.replace('/auth');
+      }, Platform.OS === 'web' ? 100 : 0);
     } else if (user && isAuthScreen) {
       console.log('[App] Redirecting to tabs - user authenticated');
-      setIsNavigating(true);
-      router.replace('/(tabs)');
-      setTimeout(() => setIsNavigating(false), 500);
+      setHasNavigated(true);
+      
+      // Use setTimeout to avoid navigation during render on web
+      setTimeout(() => {
+        router.replace('/(tabs)');
+      }, Platform.OS === 'web' ? 100 : 0);
+    } else {
+      console.log('[App] User in correct location, no navigation needed');
+      setHasNavigated(true);
     }
-  }, [user, loading, segments, loaded, isNavigating]);
+  }, [user, loading, loaded, hasNavigated]);
+
+  // Reset hasNavigated when user state changes (login/logout)
+  useEffect(() => {
+    setHasNavigated(false);
+  }, [user?.id]);
 
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
