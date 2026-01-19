@@ -2,7 +2,7 @@
 import "react-native-reanimated";
 import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -33,6 +33,7 @@ function RootLayoutNav() {
   const networkState = useNetworkState();
   const router = useRouter();
   const segments = useSegments();
+  const pathname = usePathname();
   const { user, loading } = useAuth();
 
   const [loaded, error] = useFonts({
@@ -71,44 +72,41 @@ function RootLayoutNav() {
     }
   }, [loaded]);
 
-  // Handle authentication routing
+  // Handle authentication routing - simplified for web compatibility
   useEffect(() => {
-    if (!loaded || loading) return;
+    if (!loaded || loading) {
+      console.log('[App] Waiting for app to load... loaded:', loaded, 'loading:', loading);
+      return;
+    }
 
     const inAuthGroup = segments[0] === '(tabs)';
     const isAuthScreen = segments[0] === 'auth';
-    const isRootOrEmpty = segments.length === 0 || segments[0] === '';
 
     console.log('[App] Auth routing check:', { 
       user: !!user, 
       loading, 
       inAuthGroup,
       isAuthScreen,
-      isRootOrEmpty,
+      pathname,
       segments: segments.join('/'),
       platform: Platform.OS
     });
 
-    // If user is not authenticated
-    if (!user) {
-      // Only redirect to auth if trying to access protected routes
-      if (inAuthGroup) {
-        console.log('[App] User not authenticated, redirecting to auth from tabs');
-        router.replace('/auth');
-      } else if (isRootOrEmpty) {
-        // On initial load, redirect to auth
-        console.log('[App] User not authenticated, redirecting to auth from root');
-        router.replace('/auth');
-      }
-    } else {
-      // User is authenticated
-      if (isAuthScreen || isRootOrEmpty) {
-        // Redirect authenticated users away from auth screen or root
-        console.log('[App] User authenticated, redirecting to tabs');
-        router.replace('/(tabs)');
-      }
+    // Simple routing logic
+    if (!user && inAuthGroup) {
+      // User not authenticated and trying to access protected routes
+      console.log('[App] Redirecting to auth - user not authenticated');
+      setTimeout(() => router.replace('/auth'), 100);
+    } else if (user && isAuthScreen) {
+      // User authenticated and on auth screen
+      console.log('[App] Redirecting to tabs - user already authenticated');
+      setTimeout(() => router.replace('/(tabs)'), 100);
+    } else if (!user && !isAuthScreen && segments.length === 0) {
+      // Initial load without auth
+      console.log('[App] Initial load - redirecting to auth');
+      setTimeout(() => router.replace('/auth'), 100);
     }
-  }, [user, loading, segments, loaded, router]);
+  }, [user, loading, segments, loaded, pathname]);
 
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
@@ -168,7 +166,7 @@ function RootLayoutNav() {
     }
   }, [networkState.isConnected, networkState.isInternetReachable]);
 
-  if (!loaded || loading) {
+  if (!loaded) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff' }}>
         <Text style={{ fontSize: 18, color: colorScheme === 'dark' ? '#fff' : '#000', marginBottom: 10 }}>SeaTime Tracker</Text>
@@ -223,7 +221,7 @@ function RootLayoutNav() {
         value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
       >
         <GestureHandlerRootView style={{ flex: 1 }}>
-          <Stack>
+          <Stack screenOptions={{ headerShown: false }}>
             {/* Authentication Screen */}
             <Stack.Screen 
               name="auth" 
