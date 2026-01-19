@@ -460,6 +460,61 @@ function createStyles(isDark: boolean) {
     saveButtonText: {
       color: '#FFFFFF',
     },
+    // Delete confirmation modal styles
+    deleteModalContent: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 16,
+      padding: 24,
+      width: '90%',
+      maxWidth: 400,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 8,
+    },
+    deleteModalTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    deleteModalMessage: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 24,
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    deleteModalButtons: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    deleteModalButton: {
+      flex: 1,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+    },
+    deleteCancelButton: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    deleteConfirmButton: {
+      backgroundColor: colors.error,
+    },
+    deleteModalButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    deleteCancelButtonText: {
+      color: isDark ? colors.text : colors.textLight,
+    },
+    deleteConfirmButtonText: {
+      color: '#FFFFFF',
+    },
   });
 }
 
@@ -470,6 +525,7 @@ export default function VesselDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [editForm, setEditForm] = useState({
     flag: '',
     official_number: '',
@@ -680,7 +736,7 @@ export default function VesselDetailScreen() {
     }
   };
 
-  const handleDeleteVessel = async () => {
+  const handleDeleteVessel = () => {
     console.log('[VesselDetailScreen] 🔴 DELETE BUTTON CLICKED - handleDeleteVessel called');
     
     if (!vessel) {
@@ -689,40 +745,38 @@ export default function VesselDetailScreen() {
     }
 
     console.log('[VesselDetailScreen] Vessel to delete:', vessel.id, vessel.vessel_name);
-    console.log('[VesselDetailScreen] Showing confirmation alert...');
+    console.log('[VesselDetailScreen] Opening delete confirmation modal...');
+    
+    // Show custom modal instead of Alert.alert (which doesn't work on web)
+    setDeleteModalVisible(true);
+  };
 
-    Alert.alert(
-      'Delete Vessel',
-      `Are you sure you want to delete ${vessel.vessel_name}? This will also delete all associated sea time entries.`,
-      [
-        { 
-          text: 'Cancel', 
-          style: 'cancel',
-          onPress: () => {
-            console.log('[VesselDetailScreen] User cancelled deletion');
-          }
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            console.log('[VesselDetailScreen] 🔴 User confirmed deletion - calling deleteVessel API');
-            try {
-              console.log('[VesselDetailScreen] Calling seaTimeApi.deleteVessel with ID:', vessel.id);
-              await seaTimeApi.deleteVessel(vessel.id);
-              console.log('[VesselDetailScreen] ✅ Delete API call successful');
-              Alert.alert('Success', 'Vessel deleted');
-              router.back();
-            } catch (error: any) {
-              console.error('[VesselDetailScreen] ❌ Failed to delete vessel:', error);
-              console.error('[VesselDetailScreen] Error message:', error.message);
-              console.error('[VesselDetailScreen] Error stack:', error.stack);
-              Alert.alert('Error', 'Failed to delete vessel: ' + error.message);
-            }
-          },
-        },
-      ]
-    );
+  const confirmDeleteVessel = async () => {
+    console.log('[VesselDetailScreen] 🔴 User confirmed deletion - calling deleteVessel API');
+    
+    if (!vessel) {
+      console.error('[VesselDetailScreen] No vessel data available for deletion');
+      return;
+    }
+
+    try {
+      console.log('[VesselDetailScreen] Calling seaTimeApi.deleteVessel with ID:', vessel.id);
+      setDeleteModalVisible(false);
+      await seaTimeApi.deleteVessel(vessel.id);
+      console.log('[VesselDetailScreen] ✅ Delete API call successful');
+      Alert.alert('Success', 'Vessel deleted successfully');
+      router.back();
+    } catch (error: any) {
+      console.error('[VesselDetailScreen] ❌ Failed to delete vessel:', error);
+      console.error('[VesselDetailScreen] Error message:', error.message);
+      console.error('[VesselDetailScreen] Error stack:', error.stack);
+      Alert.alert('Error', 'Failed to delete vessel: ' + error.message);
+    }
+  };
+
+  const cancelDeleteVessel = () => {
+    console.log('[VesselDetailScreen] User cancelled deletion');
+    setDeleteModalVisible(false);
   };
 
   const formatDate = (dateString: string) => {
@@ -1202,6 +1256,51 @@ export default function VesselDetailScreen() {
             </TouchableOpacity>
           </TouchableOpacity>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelDeleteVessel}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={cancelDeleteVessel}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={styles.deleteModalContent}
+            >
+              <Text style={styles.deleteModalTitle}>Delete Vessel</Text>
+              <Text style={styles.deleteModalMessage}>
+                Are you sure you want to delete {vessel?.vessel_name}? This will also delete all associated sea time entries. This action cannot be undone.
+              </Text>
+              <View style={styles.deleteModalButtons}>
+                <TouchableOpacity
+                  style={[styles.deleteModalButton, styles.deleteCancelButton]}
+                  onPress={cancelDeleteVessel}
+                >
+                  <Text style={[styles.deleteModalButtonText, styles.deleteCancelButtonText]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.deleteModalButton, styles.deleteConfirmButton]}
+                  onPress={confirmDeleteVessel}
+                >
+                  <Text style={[styles.deleteModalButtonText, styles.deleteConfirmButtonText]}>
+                    Delete
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
       </Modal>
     </View>
   );
