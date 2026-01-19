@@ -452,49 +452,118 @@ export function register(app: App, fastify: FastifyInstance) {
           user = users[0];
           app.logger.info({ userId: user.id, appleUserId }, 'Existing Apple user authenticated');
         } else {
-          // New user - create account
-          app.logger.debug({ appleUserId }, 'No existing account found, creating new user');
-          isNewUser = true;
-          const userId = crypto.randomUUID();
+          // No existing Apple account - check if user exists by email
+          if (email) {
+            app.logger.debug({ email }, 'Looking up existing user by email');
+            const existingUsers = await app.db
+              .select()
+              .from(authSchema.user)
+              .where(eq(authSchema.user.email, email));
 
-          // Determine name
-          let name = 'Apple User';
-          if (userData?.name?.firstName) {
-            name = userData.name.firstName;
-            if (userData.name.lastName) {
-              name += ` ${userData.name.lastName}`;
+            if (existingUsers.length > 0) {
+              // User exists with this email - link Apple account
+              user = existingUsers[0];
+              app.logger.info({ userId: user.id, appleUserId, email }, 'Found existing user by email');
+
+              // Create account linked to Apple ID for this user
+              const accountId = crypto.randomUUID();
+              await app.db
+                .insert(authSchema.account)
+                .values({
+                  id: accountId,
+                  userId: user.id,
+                  providerId: 'apple',
+                  accountId: appleUserId,
+                });
+
+              app.logger.info({ userId: user.id, appleUserId }, 'Apple account linked to existing user');
+            } else {
+              // User doesn't exist - create new user
+              isNewUser = true;
+              const userId = crypto.randomUUID();
+
+              // Determine name
+              let name = 'Apple User';
+              if (userData?.name?.firstName) {
+                name = userData.name.firstName;
+                if (userData.name.lastName) {
+                  name += ` ${userData.name.lastName}`;
+                }
+              }
+
+              app.logger.info({ appleUserId, email, name }, 'Creating new Apple user');
+
+              const [newUser] = await app.db
+                .insert(authSchema.user)
+                .values({
+                  id: userId,
+                  email,
+                  name,
+                  emailVerified: true,
+                })
+                .returning();
+
+              user = newUser;
+              app.logger.debug({ userId, appleUserId }, 'User record created');
+
+              // Create account linked to Apple ID
+              const accountId = crypto.randomUUID();
+              await app.db
+                .insert(authSchema.account)
+                .values({
+                  id: accountId,
+                  userId,
+                  providerId: 'apple',
+                  accountId: appleUserId,
+                });
+
+              app.logger.info({ userId, appleUserId }, 'Apple account record created');
             }
+          } else {
+            // No Apple account and no email - create new user with generated email
+            app.logger.debug({ appleUserId }, 'No existing account or email provided, creating new user');
+            isNewUser = true;
+            const userId = crypto.randomUUID();
+
+            // Determine name
+            let name = 'Apple User';
+            if (userData?.name?.firstName) {
+              name = userData.name.firstName;
+              if (userData.name?.lastName) {
+                name += ` ${userData.name.lastName}`;
+              }
+            }
+
+            const userEmail = `apple_${appleUserId}@seatime.com`;
+
+            app.logger.info({ appleUserId, email: userEmail, name }, 'Creating new Apple user with generated email');
+
+            const [newUser] = await app.db
+              .insert(authSchema.user)
+              .values({
+                id: userId,
+                email: userEmail,
+                name,
+                emailVerified: false,
+              })
+              .returning();
+
+            user = newUser;
+            app.logger.debug({ userId, appleUserId }, 'User record created');
+
+            // Create account linked to Apple ID
+            const accountId = crypto.randomUUID();
+            await app.db
+              .insert(authSchema.account)
+              .values({
+                id: accountId,
+                userId,
+                providerId: 'apple',
+                accountId: appleUserId,
+              });
+
+            app.logger.info({ userId, appleUserId }, 'Apple account record created');
           }
-
-          const userEmail = email || `apple_${appleUserId}@seatime.com`;
-
-          app.logger.info({ appleUserId, email: userEmail, name }, 'Creating new Apple user');
-
-          const [newUser] = await app.db
-            .insert(authSchema.user)
-            .values({
-              id: userId,
-              email: userEmail,
-              name,
-              emailVerified: !!email,
-            })
-            .returning();
-
-          user = newUser;
-          app.logger.debug({ userId, appleUserId }, 'User record created');
-
-          // Create account linked to Apple ID
-          const accountId = crypto.randomUUID();
-          await app.db
-            .insert(authSchema.account)
-            .values({
-              id: accountId,
-              userId,
-              providerId: 'apple',
-              accountId: appleUserId,
-            });
-
-          app.logger.info({ userId, appleUserId }, 'Apple account record created');
         }
 
         // Step 4: Create session
