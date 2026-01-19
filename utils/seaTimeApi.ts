@@ -245,33 +245,69 @@ export async function activateVessel(vesselId: string) {
   return normalizeVessel(vessel);
 }
 
-export async function deleteVessel(vesselId: string) {
+export async function deleteVessel(vesselId: string): Promise<void> {
   checkBackendConfigured();
-  console.log('[API] Deleting vessel:', vesselId);
-  const token = await getAuthToken();
+  console.log('[API] ⚠️ DELETE VESSEL CALLED - Starting deletion for vessel:', vesselId);
+  console.log('[API] Backend URL:', API_BASE_URL);
   
-  // For DELETE requests, we need to send the request without Content-Type: application/json
-  // or with an empty body to avoid Fastify's FST_ERR_CTP_EMPTY_JSON_BODY error
-  const headers: HeadersInit = {};
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-    console.log('[API] Auth token added to delete request');
+  try {
+    const token = await getAuthToken();
+    console.log('[API] Auth token retrieved:', token ? 'YES' : 'NO');
+    
+    const url = `${API_BASE_URL}/api/vessels/${vesselId}`;
+    console.log('[API] DELETE request URL:', url);
+    
+    // For DELETE requests, we need to send the request without Content-Type: application/json
+    // or with an empty body to avoid Fastify's FST_ERR_CTP_EMPTY_JSON_BODY error
+    const headers: HeadersInit = {};
+    
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+      console.log('[API] Auth token added to delete request');
+    } else {
+      console.warn('[API] ⚠️ No auth token - delete may fail if endpoint requires authentication');
+    }
+    
+    console.log('[API] Sending DELETE request...');
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers,
+    });
+    
+    console.log('[API] DELETE response status:', response.status);
+    console.log('[API] DELETE response ok:', response.ok);
+    
+    if (!response.ok) {
+      let errorMessage = 'Failed to delete vessel';
+      try {
+        const error = await response.json();
+        console.error('[API] DELETE error response:', error);
+        errorMessage = error.error || errorMessage;
+      } catch (e) {
+        console.error('[API] Failed to parse error response:', e);
+        const textError = await response.text();
+        console.error('[API] Error response text:', textError);
+      }
+      throw new Error(errorMessage);
+    }
+    
+    console.log('[API] ✅ Vessel deleted successfully');
+    
+    // Try to parse response, but don't fail if it's empty
+    try {
+      const result = await response.json();
+      console.log('[API] Delete response:', result);
+    } catch (e) {
+      console.log('[API] No JSON response body (this is OK for DELETE)');
+    }
+  } catch (error) {
+    console.error('[API] ❌ DELETE VESSEL FAILED:', error);
+    console.error('[API] Error details:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    throw error;
   }
-  
-  const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}`, {
-    method: 'DELETE',
-    headers,
-  });
-  
-  if (!response.ok) {
-    const error = await response.json();
-    console.error('[API] Failed to delete vessel:', error);
-    throw new Error(error.error || 'Failed to delete vessel');
-  }
-  
-  console.log('[API] Vessel deleted successfully');
-  return response.json();
 }
 
 // Sea Time APIs
