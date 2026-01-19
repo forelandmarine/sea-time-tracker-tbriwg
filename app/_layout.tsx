@@ -71,16 +71,17 @@ function RootLayoutNav() {
     }
   }, [loaded]);
 
-  // Simplified authentication routing
+  // Simplified authentication routing - only redirect when both loaded and auth check complete
   useEffect(() => {
     if (!loaded || loading) {
+      console.log('[App] Waiting for app to load...', { loaded, loading });
       return;
     }
 
     const inAuthGroup = segments[0] === '(tabs)';
     const isAuthScreen = segments[0] === 'auth';
 
-    console.log('[App] Auth routing:', { 
+    console.log('[App] Auth routing check:', { 
       user: !!user, 
       inAuthGroup,
       isAuthScreen,
@@ -88,15 +89,24 @@ function RootLayoutNav() {
       platform: Platform.OS
     });
 
-    // Only redirect if user is not authenticated and trying to access protected routes
-    if (!user && inAuthGroup) {
-      console.log('[App] Redirecting to auth - user not authenticated');
-      router.replace('/auth');
-    } 
-    // Only redirect if user is authenticated and on auth screen
-    else if (user && isAuthScreen) {
-      console.log('[App] Redirecting to tabs - user already authenticated');
-      router.replace('/(tabs)');
+    // On web, use replace to avoid navigation issues
+    if (Platform.OS === 'web') {
+      if (!user && !isAuthScreen) {
+        console.log('[App] [Web] Redirecting to auth - user not authenticated');
+        setTimeout(() => router.replace('/auth'), 100);
+      } else if (user && isAuthScreen) {
+        console.log('[App] [Web] Redirecting to tabs - user already authenticated');
+        setTimeout(() => router.replace('/(tabs)'), 100);
+      }
+    } else {
+      // Native platforms can use immediate navigation
+      if (!user && inAuthGroup) {
+        console.log('[App] [Native] Redirecting to auth - user not authenticated');
+        router.replace('/auth');
+      } else if (user && isAuthScreen) {
+        console.log('[App] [Native] Redirecting to tabs - user already authenticated');
+        router.replace('/(tabs)');
+      }
     }
   }, [user, loading, segments, loaded]);
 
@@ -158,11 +168,14 @@ function RootLayoutNav() {
     }
   }, [networkState.isConnected, networkState.isInternetReachable]);
 
-  if (!loaded) {
+  // Show loading screen while fonts are loading OR auth is checking
+  if (!loaded || loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff' }}>
         <Text style={{ fontSize: 18, color: colorScheme === 'dark' ? '#fff' : '#000', marginBottom: 10 }}>SeaTime Tracker</Text>
-        <Text style={{ fontSize: 14, color: colorScheme === 'dark' ? '#999' : '#666' }}>Loading...</Text>
+        <Text style={{ fontSize: 14, color: colorScheme === 'dark' ? '#999' : '#666' }}>
+          {!loaded ? 'Loading...' : 'Checking authentication...'}
+        </Text>
       </View>
     );
   }
