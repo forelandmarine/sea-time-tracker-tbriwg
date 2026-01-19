@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import * as schema from "../db/schema.js";
 import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
+import { extractUserIdFromRequest, verifyVesselOwnership } from "../middleware/auth.js";
 
 // Helper function to transform vessel object for API response
 function transformVesselForResponse(vessel: any) {
@@ -23,10 +24,10 @@ function transformVesselForResponse(vessel: any) {
 }
 
 export function register(app: App, fastify: FastifyInstance) {
-  // GET /api/vessels - Return all vessels with is_active field
+  // GET /api/vessels - Return all vessels for authenticated user
   fastify.get('/api/vessels', {
     schema: {
-      description: 'Get all vessels',
+      description: 'Get all vessels (requires authentication)',
       tags: ['vessels'],
       response: {
         200: {
@@ -49,12 +50,22 @@ export function register(app: App, fastify: FastifyInstance) {
             },
           },
         },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
-    app.logger.info({}, 'Fetching all vessels');
-    const vessels = await app.db.select().from(schema.vessels);
-    app.logger.info({ count: vessels.length }, 'Vessels fetched');
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Vessel list requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
+    app.logger.info({ userId }, 'Fetching vessels for user');
+    const vessels = await app.db
+      .select()
+      .from(schema.vessels)
+      .where(eq(schema.vessels.user_id, userId));
+    app.logger.info({ userId, count: vessels.length }, 'Vessels fetched');
     return vessels.map(transformVesselForResponse);
   });
 
@@ -73,7 +84,7 @@ export function register(app: App, fastify: FastifyInstance) {
     }
   }>('/api/vessels', {
     schema: {
-      description: 'Create a new vessel with complete vessel information. If is_active=true, deactivates all other vessels.',
+      description: 'Create a new vessel with complete vessel information. If is_active=true, deactivates all other vessels. (Requires authentication)',
       tags: ['vessels'],
       body: {
         type: 'object',
@@ -108,10 +119,17 @@ export function register(app: App, fastify: FastifyInstance) {
             updated_at: { type: 'string' },
           },
         },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
         409: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Vessel creation requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const {
       mmsi,
       vessel_name,
@@ -125,11 +143,11 @@ export function register(app: App, fastify: FastifyInstance) {
     } = request.body;
 
     app.logger.info(
-      { mmsi, vessel_name, flag, official_number, type, length_metres, gross_tonnes },
+      { userId, mmsi, vessel_name, flag, official_number, type, length_metres, gross_tonnes },
       'Creating new vessel'
     );
 
-    // Check if MMSI already exists
+    // Check if MMSI already exists for this user
     const existing = await app.db
       .select()
       .from(schema.vessels)
@@ -140,19 +158,20 @@ export function register(app: App, fastify: FastifyInstance) {
       return reply.code(409).send({ error: 'MMSI already exists' });
     }
 
-    // If creating as active, deactivate all others
+    // If creating as active, deactivate all others for this user
     if (is_active) {
       await app.db
         .update(schema.vessels)
         .set({ is_active: false })
-        .where(eq(schema.vessels.is_active, true));
+        .where(eq(schema.vessels.user_id, userId));
 
-      app.logger.info('Deactivated all other vessels for new active vessel');
+      app.logger.info({ userId }, 'Deactivated all other vessels for new active vessel');
     }
 
     const [vessel] = await app.db
       .insert(schema.vessels)
       .values({
+        user_id: userId,
         mmsi,
         vessel_name,
         callsign,
@@ -166,7 +185,7 @@ export function register(app: App, fastify: FastifyInstance) {
       .returning();
 
     app.logger.info(
-      { vesselId: vessel.id, mmsi, vessel_name, callsign, is_active },
+      { vesselId: vessel.id, userId, mmsi, vessel_name, callsign, is_active },
       'Vessel created successfully'
     );
 
@@ -241,10 +260,10 @@ export function register(app: App, fastify: FastifyInstance) {
     return reply.code(200).send(transformVesselForResponse(activated));
   });
 
-  // DELETE /api/vessels/:id - Delete vessel
+  // DELETE /api/vessels/:id - Delete vessel (requires authentication and ownership)
   fastify.delete<{ Params: { id: string } }>('/api/vessels/:id', {
     schema: {
-      description: 'Delete a vessel',
+      description: 'Delete a vessel (requires authentication)',
       tags: ['vessels'],
       params: {
         type: 'object',
@@ -255,13 +274,28 @@ export function register(app: App, fastify: FastifyInstance) {
       },
       response: {
         200: { type: 'object', properties: { id: { type: 'string' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Vessel deletion requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
     const { id } = request.params;
 
-    app.logger.info({ vesselId: id }, 'Deleting vessel');
+    app.logger.info({ userId, vesselId: id }, 'Deleting vessel');
+
+    // Check ownership first
+    const isOwner = await verifyVesselOwnership(app, id, userId);
+    if (!isOwner) {
+      app.logger.warn({ userId, vesselId: id }, 'Unauthorized vessel deletion attempt');
+      return reply.code(403).send({ error: 'Not authorized to delete this vessel' });
+    }
 
     const [deleted] = await app.db
       .delete(schema.vessels)
@@ -274,7 +308,7 @@ export function register(app: App, fastify: FastifyInstance) {
     }
 
     app.logger.info(
-      { vesselId: deleted.id, vesselName: deleted.vessel_name },
+      { userId, vesselId: deleted.id, vesselName: deleted.vessel_name },
       'Vessel deleted successfully'
     );
 

@@ -17,6 +17,7 @@ function maskAPIKey(key: string): string {
 async function logAPICall(
   app: App,
   vesselId: string,
+  userId: string,
   mmsi: string,
   url: string,
   requestTime: Date,
@@ -29,6 +30,7 @@ async function logAPICall(
     await app.db
       .insert(schema.ais_debug_logs)
       .values({
+        user_id: userId,
         vessel_id: vesselId,
         mmsi,
         api_url: url,
@@ -134,7 +136,8 @@ export async function fetchVesselAISData(
   logger: any,
   vesselId?: string,
   app?: App,
-  extended: boolean = false
+  extended: boolean = false,
+  userId?: string
 ): Promise<AISVesselData> {
   try {
     // Build request URL with MMSI parameter and optional extended response
@@ -167,8 +170,8 @@ export async function fetchVesselAISData(
       authStatus = 'connection_error';
       errorMessage = String(fetchError);
       logger.error(`Connection error calling MyShipTracking API for MMSI ${mmsi}: ${fetchError}`);
-      if (vesselId && app) {
-        await logAPICall(app, vesselId, mmsi, url, requestTime, 'connection_error', null, authStatus, errorMessage);
+      if (vesselId && app && userId) {
+        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, 'connection_error', null, authStatus, errorMessage);
       }
       return {
         name: null,
@@ -203,9 +206,9 @@ export async function fetchVesselAISData(
       authStatus = 'authentication_failed';
       errorMessage = 'Invalid API key';
       logger.error(`MyShipTracking API authentication failed (401) for MMSI ${mmsi} - invalid API key`);
-      if (vesselId && app) {
+      if (vesselId && app && userId) {
         const responseBody = await response.text();
-        await logAPICall(app, vesselId, mmsi, url, requestTime, '401', responseBody, authStatus, errorMessage);
+        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '401', responseBody, authStatus, errorMessage);
       }
       return {
         name: null,
@@ -232,9 +235,9 @@ export async function fetchVesselAISData(
       authStatus = 'rate_limited';
       errorMessage = 'Rate limit exceeded';
       logger.warn(`MyShipTracking API rate limit exceeded (429) for MMSI ${mmsi}`);
-      if (vesselId && app) {
+      if (vesselId && app && userId) {
         const responseBody = await response.text();
-        await logAPICall(app, vesselId, mmsi, url, requestTime, '429', responseBody, authStatus, errorMessage);
+        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '429', responseBody, authStatus, errorMessage);
       }
       return {
         name: null,
@@ -261,9 +264,9 @@ export async function fetchVesselAISData(
       authStatus = 'success';
       errorMessage = 'Vessel not found in AIS system';
       logger.warn(`MyShipTracking API returned 404 - vessel with MMSI ${mmsi} not found in AIS system`);
-      if (vesselId && app) {
+      if (vesselId && app && userId) {
         const responseBody = await response.text();
-        await logAPICall(app, vesselId, mmsi, url, requestTime, '404', responseBody, authStatus, errorMessage);
+        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '404', responseBody, authStatus, errorMessage);
       }
       return {
         name: null,
@@ -290,9 +293,9 @@ export async function fetchVesselAISData(
       authStatus = 'success';
       errorMessage = `HTTP ${response.status} ${response.statusText}`;
       logger.error(`MyShipTracking API error for MMSI ${mmsi}: ${response.status} ${response.statusText}`);
-      if (vesselId && app) {
+      if (vesselId && app && userId) {
         const responseBody = await response.text();
-        await logAPICall(app, vesselId, mmsi, url, requestTime, String(response.status), responseBody, authStatus, errorMessage);
+        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, String(response.status), responseBody, authStatus, errorMessage);
       }
       return {
         name: null,
@@ -332,10 +335,10 @@ export async function fetchVesselAISData(
     logger.info(`AIS Response Fields - ETA: ${(data as any).eta}, Ship Type: ${(data as any).vessel_type || (data as any).ship_type}, Flag: ${(data as any).flag}`);
     logger.info(`AIS Response Fields - Callsign: ${(data as any).callsign}, Built: ${(data as any).built}, Received: ${(data as any).received}`);
 
-    if (vesselId && app) {
+    if (vesselId && app && userId) {
       // Store full response without truncation
       const responseBody = JSON.stringify(rawResponse);
-      await logAPICall(app, vesselId, mmsi, url, requestTime, '200', responseBody, authStatus, null);
+      await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '200', responseBody, authStatus, null);
     }
 
     // Helper function to extract value from either top-level or nested object
@@ -567,10 +570,11 @@ export function register(app: App, fastify: FastifyInstance) {
     }
 
     const mmsi = vessel[0].mmsi;
+    const userId = vessel[0].user_id;
     app.logger.info(`Processing AIS check for active vessel: ${vessel[0].vessel_name} (MMSI: ${mmsi})`);
 
     // Fetch real-time AIS data from MyShipTracking API with extended response
-    const ais_data = await fetchVesselAISData(mmsi, MYSHIPTRACKING_API_KEY, app.logger, vesselId, app, true);
+    const ais_data = await fetchVesselAISData(mmsi, MYSHIPTRACKING_API_KEY, app.logger, vesselId, app, true, userId);
 
     // Check for API errors and return appropriate status codes
     if (ais_data.error) {
@@ -612,6 +616,7 @@ export function register(app: App, fastify: FastifyInstance) {
     const [ais_check] = await app.db
       .insert(schema.ais_checks)
       .values({
+        user_id: userId,
         vessel_id: vesselId,
         check_time,
         is_moving: ais_data.is_moving,
@@ -650,6 +655,7 @@ export function register(app: App, fastify: FastifyInstance) {
         const [new_entry] = await app.db
           .insert(schema.sea_time_entries)
           .values({
+            user_id: userId,
             vessel_id: vesselId,
             start_time: check_time,
             status: 'pending',
@@ -907,6 +913,8 @@ export function register(app: App, fastify: FastifyInstance) {
       return reply.code(404).send({ error: 'Vessel not found' });
     }
 
+    const userId = vessel[0].user_id;
+
     // Delete any existing scheduled tasks for this vessel
     await app.db
       .delete(schema.scheduled_tasks)
@@ -925,6 +933,7 @@ export function register(app: App, fastify: FastifyInstance) {
     const [task] = await app.db
       .insert(schema.scheduled_tasks)
       .values({
+        user_id: userId,
         task_type: 'ais_check',
         vessel_id,
         interval_hours: String(interval_hours),

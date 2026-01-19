@@ -3,6 +3,7 @@ import { relations } from 'drizzle-orm';
 
 export const vessels = pgTable('vessels', {
   id: uuid('id').primaryKey().defaultRandom(),
+  user_id: text('user_id'), // User ownership - required for data sandboxing (nullable for backward compatibility with existing data)
   mmsi: text('mmsi').notNull().unique(),
   vessel_name: text('vessel_name').notNull(),
   callsign: text('callsign'), // Radio callsign from AIS data
@@ -15,12 +16,14 @@ export const vessels = pgTable('vessels', {
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull(),
 }, (table) => [
+  index('vessels_user_id_idx').on(table.user_id),
   index('vessels_mmsi_idx').on(table.mmsi),
   index('vessels_is_active_idx').on(table.is_active),
 ]);
 
 export const sea_time_entries = pgTable('sea_time_entries', {
   id: uuid('id').primaryKey().defaultRandom(),
+  user_id: text('user_id'), // User ownership - required for data sandboxing (nullable for backward compatibility with existing data)
   vessel_id: uuid('vessel_id').notNull().references(() => vessels.id, { onDelete: 'cascade' }),
   start_time: timestamp('start_time').notNull(),
   end_time: timestamp('end_time'),
@@ -33,12 +36,14 @@ export const sea_time_entries = pgTable('sea_time_entries', {
   end_longitude: decimal('end_longitude', { precision: 10, scale: 6 }),
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
+  index('sea_time_entries_user_id_idx').on(table.user_id),
   index('sea_time_entries_vessel_id_idx').on(table.vessel_id),
   index('sea_time_entries_status_idx').on(table.status),
 ]);
 
 export const ais_checks = pgTable('ais_checks', {
   id: uuid('id').primaryKey().defaultRandom(),
+  user_id: text('user_id'), // User ownership - required for data sandboxing (nullable for backward compatibility with existing data)
   vessel_id: uuid('vessel_id').notNull().references(() => vessels.id, { onDelete: 'cascade' }),
   check_time: timestamp('check_time').notNull(),
   is_moving: boolean('is_moving').notNull(),
@@ -47,6 +52,7 @@ export const ais_checks = pgTable('ais_checks', {
   longitude: decimal('longitude', { precision: 10, scale: 6 }),
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
+  index('ais_checks_user_id_idx').on(table.user_id),
   index('ais_checks_vessel_time_idx').on(table.vessel_id, table.check_time),
 ]);
 
@@ -71,6 +77,7 @@ export const ais_checksRelations = relations(ais_checks, ({ one }) => ({
 
 export const ais_debug_logs = pgTable('ais_debug_logs', {
   id: uuid('id').primaryKey().defaultRandom(),
+  user_id: text('user_id'), // User ownership - required for data sandboxing (nullable for backward compatibility with existing data)
   vessel_id: uuid('vessel_id').notNull().references(() => vessels.id, { onDelete: 'cascade' }),
   mmsi: text('mmsi').notNull(),
   api_url: text('api_url').notNull(),
@@ -81,12 +88,14 @@ export const ais_debug_logs = pgTable('ais_debug_logs', {
   error_message: text('error_message'),
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
+  index('ais_debug_logs_user_id_idx').on(table.user_id),
   index('ais_debug_logs_vessel_request_time_idx').on(table.vessel_id, table.request_time),
   index('ais_debug_logs_mmsi_request_idx').on(table.mmsi),
 ]);
 
 export const scheduled_tasks = pgTable('scheduled_tasks', {
   id: uuid('id').primaryKey().defaultRandom(),
+  user_id: text('user_id'), // User ownership - required for data sandboxing (nullable for backward compatibility with existing data)
   task_type: text('task_type').notNull(), // e.g., 'ais_check'
   vessel_id: uuid('vessel_id').notNull().references(() => vessels.id, { onDelete: 'cascade' }),
   interval_hours: text('interval_hours').notNull(),
@@ -95,6 +104,7 @@ export const scheduled_tasks = pgTable('scheduled_tasks', {
   is_active: boolean('is_active').notNull().default(true),
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
+  index('scheduled_tasks_user_id_idx').on(table.user_id),
   index('scheduled_tasks_vessel_task_idx').on(table.vessel_id, table.task_type),
   index('scheduled_tasks_next_run_task_idx').on(table.next_run),
   index('scheduled_tasks_active_idx').on(table.is_active),

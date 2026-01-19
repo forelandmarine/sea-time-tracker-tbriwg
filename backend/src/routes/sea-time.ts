@@ -534,6 +534,7 @@ export function register(app: App, fastify: FastifyInstance) {
       const [new_entry] = await app.db
         .insert(schema.sea_time_entries)
         .values({
+          user_id: vessel[0].user_id,
           vessel_id: vessel.id,
           start_time: olderRecord.check_time,
           end_time: newestRecord.check_time,
@@ -612,14 +613,45 @@ export function register(app: App, fastify: FastifyInstance) {
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
     app.logger.info({}, 'Generating sample sea time entries for testing');
 
     try {
+      // Authenticate user
+      const authHeader = request.headers.authorization;
+      const token = authHeader?.replace('Bearer ', '');
+
+      if (!token) {
+        app.logger.warn({}, 'Generate samples request without authentication');
+        return reply.code(401).send({ error: 'Authentication required' });
+      }
+
+      // Find user session
+      const sessions = await app.db
+        .select()
+        .from(authSchema.session)
+        .where(eq(authSchema.session.token, token));
+
+      if (sessions.length === 0) {
+        app.logger.warn({}, 'Invalid token for generate samples');
+        return reply.code(401).send({ error: 'Invalid or expired token' });
+      }
+
+      const session = sessions[0];
+
+      // Check if session is expired
+      if (session.expiresAt < new Date()) {
+        app.logger.warn({ sessionId: session.id }, 'Session expired for generate samples');
+        return reply.code(401).send({ error: 'Session expired' });
+      }
+
+      const userId = session.userId;
+
       // Check if user has any vessels
-      let vessels = await app.db.select().from(schema.vessels);
+      let vessels = await app.db.select().from(schema.vessels).where(eq(schema.vessels.user_id, userId));
 
       let selectedVessel;
 
@@ -630,6 +662,7 @@ export function register(app: App, fastify: FastifyInstance) {
         const [newVessel] = await app.db
           .insert(schema.vessels)
           .values({
+            user_id: userId,
             mmsi: '235012345',
             vessel_name: 'MV Sample Yacht',
             is_active: true,
@@ -663,6 +696,7 @@ export function register(app: App, fastify: FastifyInstance) {
       const [sampleEntry1] = await app.db
         .insert(schema.sea_time_entries)
         .values({
+          user_id: userId,
           vessel_id: selectedVessel.id,
           start_time: entry1Start,
           end_time: entry1End,
@@ -691,6 +725,7 @@ export function register(app: App, fastify: FastifyInstance) {
       const [sampleEntry2] = await app.db
         .insert(schema.sea_time_entries)
         .values({
+          user_id: userId,
           vessel_id: selectedVessel.id,
           start_time: entry2Start,
           end_time: entry2End,
@@ -719,6 +754,7 @@ export function register(app: App, fastify: FastifyInstance) {
       const [sampleEntry3] = await app.db
         .insert(schema.sea_time_entries)
         .values({
+          user_id: userId,
           vessel_id: selectedVessel.id,
           start_time: entry3Start,
           end_time: entry3End,
@@ -1001,6 +1037,7 @@ export function register(app: App, fastify: FastifyInstance) {
       const [entry] = await app.db
         .insert(schema.sea_time_entries)
         .values({
+          user_id: session.userId,
           vessel_id,
           start_time: startDate,
           end_time: endDate,

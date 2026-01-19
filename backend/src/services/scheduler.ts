@@ -135,6 +135,7 @@ async function processScheduledTask(
   const [ais_check] = await app.db
     .insert(schema.ais_checks)
     .values({
+      user_id: vessel.user_id,
       vessel_id: vesselId,
       check_time,
       is_moving: ais_data.is_moving,
@@ -159,7 +160,7 @@ async function processScheduledTask(
   );
 
   // Handle sea time entry lifecycle based on movement analysis
-  await handleSeaTimeEntries(app, vesselId, vessel_name, mmsi, ais_data.is_moving, check_time, taskId);
+  await handleSeaTimeEntries(app, vessel, vesselId, vessel_name, mmsi, ais_data.is_moving, check_time, taskId);
 
   // Update the scheduled task with new run times
   const intervalHours = parseInt(interval_hours);
@@ -193,6 +194,7 @@ async function processScheduledTask(
  */
 async function handleSeaTimeEntries(
   app: App,
+  vessel: typeof schema.vessels.$inferSelect,
   vesselId: string,
   vessel_name: string,
   mmsi: string,
@@ -303,6 +305,7 @@ async function handleSeaTimeEntries(
       const [new_entry] = await app.db
         .insert(schema.sea_time_entries)
         .values({
+          user_id: vessel.user_id,
           vessel_id: vesselId,
           start_time: previousCheck.check_time,
           end_time: currentCheck.check_time,
