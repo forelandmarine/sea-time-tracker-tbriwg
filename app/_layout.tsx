@@ -2,7 +2,7 @@
 import "react-native-reanimated";
 import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -17,7 +17,7 @@ import {
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { BACKEND_URL } from "@/utils/api";
 import { registerForPushNotificationsAsync } from "@/utils/notifications";
 
@@ -28,10 +28,13 @@ export const unstable_settings = {
   initialRouteName: "(tabs)",
 };
 
-export default function RootLayout() {
+function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const networkState = useNetworkState();
   const router = useRouter();
+  const segments = useSegments();
+  const { user, loading } = useAuth();
+
   const [loaded] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
@@ -56,6 +59,30 @@ export default function RootLayout() {
       }
     }
   }, [loaded]);
+
+  // Handle authentication routing
+  useEffect(() => {
+    if (!loaded || loading) return;
+
+    const inAuthGroup = segments[0] === '(tabs)';
+
+    console.log('[App] Auth routing check:', { 
+      user: !!user, 
+      loading, 
+      inAuthGroup, 
+      segments: segments.join('/') 
+    });
+
+    if (!user && inAuthGroup) {
+      // User is not signed in and trying to access protected routes
+      console.log('[App] User not authenticated, redirecting to auth');
+      router.replace('/auth');
+    } else if (user && segments[0] === 'auth') {
+      // User is signed in but on auth screen
+      console.log('[App] User authenticated, redirecting to tabs');
+      router.replace('/(tabs)');
+    }
+  }, [user, loading, segments, loaded, router]);
 
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
@@ -150,53 +177,122 @@ export default function RootLayout() {
       <ThemeProvider
         value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
       >
-        <AuthProvider>
-          <WidgetProvider>
-            <GestureHandlerRootView>
-              <Stack>
-                {/* Authentication Screen */}
-                <Stack.Screen 
-                  name="auth" 
-                  options={{ 
-                    headerShown: false,
-                    title: "Sign In",
-                  }} 
-                />
+        <GestureHandlerRootView>
+          <Stack>
+            {/* Authentication Screen */}
+            <Stack.Screen 
+              name="auth" 
+              options={{ 
+                headerShown: false,
+                title: "Sign In",
+              }} 
+            />
 
-                {/* Main app with tabs */}
-                <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            {/* Main app with tabs */}
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
-                {/* Modal Demo Screens */}
-                <Stack.Screen
-                  name="modal"
-                  options={{
-                    presentation: "modal",
-                    title: "Standard Modal",
-                  }}
-                />
-                <Stack.Screen
-                  name="formsheet"
-                  options={{
-                    presentation: "formSheet",
-                    title: "Form Sheet Modal",
-                    sheetGrabberVisible: true,
-                    sheetAllowedDetents: [0.5, 0.8, 1.0],
-                    sheetCornerRadius: 20,
-                  }}
-                />
-                <Stack.Screen
-                  name="transparent-modal"
-                  options={{
-                    presentation: "transparentModal",
-                    headerShown: false,
-                  }}
-                />
-              </Stack>
-              <SystemBars style={"auto"} />
-            </GestureHandlerRootView>
-          </WidgetProvider>
-        </AuthProvider>
+            {/* Vessel detail screens */}
+            <Stack.Screen 
+              name="vessel/[id]" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+              }} 
+            />
+
+            {/* User profile screen */}
+            <Stack.Screen 
+              name="user-profile" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+              }} 
+            />
+
+            {/* MCA Requirements screen */}
+            <Stack.Screen 
+              name="mca-requirements" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+              }} 
+            />
+
+            {/* Scheduled tasks screen */}
+            <Stack.Screen 
+              name="scheduled-tasks" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+              }} 
+            />
+
+            {/* Debug logs screen */}
+            <Stack.Screen 
+              name="debug/[vesselId]" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+              }} 
+            />
+
+            {/* Admin verify screen */}
+            <Stack.Screen 
+              name="admin-verify" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+              }} 
+            />
+
+            {/* Test login screen */}
+            <Stack.Screen 
+              name="test-login" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+              }} 
+            />
+
+            {/* Modal Demo Screens */}
+            <Stack.Screen
+              name="modal"
+              options={{
+                presentation: "modal",
+                title: "Standard Modal",
+              }}
+            />
+            <Stack.Screen
+              name="formsheet"
+              options={{
+                presentation: "formSheet",
+                title: "Form Sheet Modal",
+                sheetGrabberVisible: true,
+                sheetAllowedDetents: [0.5, 0.8, 1.0],
+                sheetCornerRadius: 20,
+              }}
+            />
+            <Stack.Screen
+              name="transparent-modal"
+              options={{
+                presentation: "transparentModal",
+                headerShown: false,
+              }}
+            />
+          </Stack>
+          <SystemBars style={"auto"} />
+        </GestureHandlerRootView>
       </ThemeProvider>
     </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <WidgetProvider>
+        <RootLayoutNav />
+      </WidgetProvider>
+    </AuthProvider>
   );
 }

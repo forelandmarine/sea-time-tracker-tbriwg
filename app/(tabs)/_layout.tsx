@@ -1,6 +1,6 @@
 
-import { Tabs, useRouter, useSegments } from 'expo-router';
-import React, { useEffect, useCallback } from 'react';
+import { Tabs } from 'expo-router';
+import React from 'react';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { useColorScheme, ActivityIndicator, View } from 'react-native';
@@ -10,25 +10,8 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const { user, loading } = useAuth();
-  const router = useRouter();
-  const segments = useSegments();
 
-  const checkAuth = useCallback(() => {
-    if (loading) return;
-
-    const inAuthGroup = segments[0] === '(tabs)';
-
-    if (!user && inAuthGroup) {
-      // User is not signed in and trying to access protected routes
-      console.log('[TabLayout] User not authenticated, redirecting to auth');
-      router.replace('/auth');
-    }
-  }, [user, loading, segments, router]);
-
-  useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
-
+  // Show loading indicator while checking auth
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? colors.background : colors.backgroundLight }}>
@@ -37,6 +20,7 @@ export default function TabLayout() {
     );
   }
 
+  // If no user, return null - the root layout will handle redirect
   if (!user) {
     return null;
   }
