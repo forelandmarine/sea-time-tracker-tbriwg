@@ -47,7 +47,6 @@ export default function ConfirmationsScreen() {
   const [entries, setEntries] = useState<SeaTimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [generatingSamples, setGeneratingSamples] = useState(false);
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -141,26 +140,6 @@ export default function ConfirmationsScreen() {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
-  };
-
-  const handleGenerateSamples = async () => {
-    try {
-      console.log('[Confirmations] User generating sample entries');
-      setGeneratingSamples(true);
-      const result = await seaTimeApi.generateSampleSeaTimeEntries();
-      console.log('[Confirmations] Generated samples:', result);
-      await loadData();
-      Alert.alert(
-        'Success',
-        `Generated ${result.entries?.length || 3} sample sea time entries for review`,
-        [{ text: 'OK' }]
-      );
-    } catch (error: any) {
-      console.error('[Confirmations] Failed to generate samples:', error);
-      Alert.alert('Error', 'Failed to generate sample entries: ' + error.message);
-    } finally {
-      setGeneratingSamples(false);
-    }
   };
 
   const handleConfirmEntry = async (entryId: string) => {
@@ -351,30 +330,6 @@ export default function ConfirmationsScreen() {
               <Text style={styles.emptySubtext}>
                 No pending sea time entries to review
               </Text>
-              
-              {/* Generate Samples Button */}
-              <TouchableOpacity
-                style={styles.generateButton}
-                onPress={handleGenerateSamples}
-                disabled={generatingSamples}
-              >
-                {generatingSamples ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <React.Fragment>
-                    <IconSymbol
-                      ios_icon_name="plus.circle"
-                      android_material_icon_name="add-circle"
-                      size={20}
-                      color="#fff"
-                    />
-                    <Text style={styles.generateButtonText}>Generate Sample Entries</Text>
-                  </React.Fragment>
-                )}
-              </TouchableOpacity>
-              <Text style={styles.generateHint}>
-                Create 3 sample sea time entries for testing
-              </Text>
             </View>
           ) : (
             entries.map((entry) => {
@@ -557,29 +512,6 @@ function createStyles(isDark: boolean, topInset: number) {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginTop: 8,
-      textAlign: 'center',
-    },
-    generateButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.primary,
-      paddingHorizontal: 24,
-      paddingVertical: 14,
-      borderRadius: 10,
-      marginTop: 24,
-      gap: 8,
-      minWidth: 200,
-    },
-    generateButtonText: {
-      color: '#fff',
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    generateHint: {
-      fontSize: 12,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 12,
       textAlign: 'center',
     },
     entryCard: {
