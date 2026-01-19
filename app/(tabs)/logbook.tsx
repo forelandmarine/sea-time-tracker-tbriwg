@@ -576,6 +576,9 @@ export default function LogbookScreen() {
   const [showVesselPicker, setShowVesselPicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
+  // Edit mode state
+  const [editingEntry, setEditingEntry] = useState<SeaTimeEntry | null>(null);
+
   // Form state
   const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -605,15 +608,6 @@ export default function LogbookScreen() {
       ]);
       console.log('[LogbookScreen] Received entries:', entriesData.length, 'vessels:', vesselsData.length);
       
-      // Debug: Log full entry data to see what we're getting
-      console.log('[LogbookScreen] Full entry data sample:', JSON.stringify(entriesData[0], null, 2));
-      console.log('[LogbookScreen] Entry statuses:', entriesData.map(e => ({ 
-        id: e.id, 
-        status: e.status, 
-        statusType: typeof e.status,
-        vessel: e.vessel?.vessel_name 
-      })));
-      
       setEntries(entriesData);
       setVessels(vesselsData);
     } catch (error) {
@@ -633,6 +627,48 @@ export default function LogbookScreen() {
 
   const handleAddEntry = () => {
     console.log('[LogbookScreen] User tapped Add Entry button');
+    setEditingEntry(null);
+    setShowAddModal(true);
+  };
+
+  const handleEditEntry = (entry: SeaTimeEntry) => {
+    console.log('[LogbookScreen] User tapped to edit entry:', entry.id);
+    setEditingEntry(entry);
+    
+    // Pre-fill form with existing data
+    setSelectedVessel(entry.vessel);
+    setStartDate(new Date(entry.start_time));
+    setEndDate(entry.end_time ? new Date(entry.end_time) : null);
+    
+    // Parse notes to extract service type and voyage locations
+    const notesText = entry.notes || '';
+    const lines = notesText.split('\n');
+    
+    let extractedServiceType: ServiceType = 'seagoing';
+    let extractedFrom = '';
+    let extractedTo = '';
+    let remainingNotes: string[] = [];
+    
+    lines.forEach(line => {
+      if (line.startsWith('Service Type:')) {
+        const type = line.replace('Service Type:', '').trim().toLowerCase();
+        if (type === 'seagoing' || type === 'standby' || type === 'yard') {
+          extractedServiceType = type as ServiceType;
+        }
+      } else if (line.startsWith('From:')) {
+        extractedFrom = line.replace('From:', '').trim();
+      } else if (line.startsWith('To:')) {
+        extractedTo = line.replace('To:', '').trim();
+      } else if (line.trim()) {
+        remainingNotes.push(line);
+      }
+    });
+    
+    setServiceType(extractedServiceType);
+    setVoyageFrom(extractedFrom);
+    setVoyageTo(extractedTo);
+    setNotes(remainingNotes.join('\n'));
+    
     setShowAddModal(true);
   };
 
@@ -689,39 +725,40 @@ export default function LogbookScreen() {
       const noteParts = [serviceTypeNote, voyageFromNote, voyageToNote, notes].filter(Boolean);
       const fullNotes = noteParts.join('\n');
 
-      console.log('[LogbookScreen] Creating manual sea time entry:', {
-        vessel_id: selectedVessel.id,
-        start_time: startDate.toISOString(),
-        end_time: endDate?.toISOString() || null,
-        notes: fullNotes,
-        start_latitude: fromCoords.lat,
-        start_longitude: fromCoords.lon,
-        end_latitude: toCoords.lat,
-        end_longitude: toCoords.lon,
-      });
+      if (editingEntry) {
+        // Update existing entry
+        console.log('[LogbookScreen] Updating sea time entry:', editingEntry.id);
+        await seaTimeApi.updateSeaTimeEntry(editingEntry.id, {
+          notes: fullNotes,
+        });
+        Alert.alert('Success', 'Sea time entry updated successfully');
+      } else {
+        // Create new entry
+        console.log('[LogbookScreen] Creating manual sea time entry');
+        await seaTimeApi.createManualSeaTimeEntry({
+          vessel_id: selectedVessel.id,
+          start_time: startDate.toISOString(),
+          end_time: endDate?.toISOString() || null,
+          notes: fullNotes,
+          start_latitude: fromCoords.lat,
+          start_longitude: fromCoords.lon,
+          end_latitude: toCoords.lat,
+          end_longitude: toCoords.lon,
+        });
+        Alert.alert('Success', 'Sea time entry added successfully');
+      }
 
-      await seaTimeApi.createManualSeaTimeEntry({
-        vessel_id: selectedVessel.id,
-        start_time: startDate.toISOString(),
-        end_time: endDate?.toISOString() || null,
-        notes: fullNotes,
-        start_latitude: fromCoords.lat,
-        start_longitude: fromCoords.lon,
-        end_latitude: toCoords.lat,
-        end_longitude: toCoords.lon,
-      });
-
-      Alert.alert('Success', 'Sea time entry added successfully');
       setShowAddModal(false);
       resetForm();
       loadData();
     } catch (error: any) {
-      console.error('[LogbookScreen] Error creating entry:', error);
-      Alert.alert('Error', error.message || 'Failed to create sea time entry');
+      console.error('[LogbookScreen] Error saving entry:', error);
+      Alert.alert('Error', error.message || 'Failed to save sea time entry');
     }
   };
 
   const resetForm = () => {
+    setEditingEntry(null);
     setSelectedVessel(null);
     setStartDate(null);
     setEndDate(null);
@@ -840,14 +877,6 @@ export default function LogbookScreen() {
     console.log('[LogbookScreen] Marking calendar - Total entries:', entries.length, 'Confirmed:', confirmedEntries.length);
     
     confirmedEntries.forEach((entry) => {
-      console.log('[LogbookScreen] Processing entry for calendar:', {
-        id: entry.id,
-        vessel: entry.vessel?.vessel_name,
-        start: entry.start_time,
-        end: entry.end_time,
-        status: entry.status
-      });
-      
       const startDate = new Date(entry.start_time);
       const endDate = entry.end_time ? new Date(entry.end_time) : new Date();
       
@@ -1026,7 +1055,11 @@ export default function LogbookScreen() {
               {getEntriesForDate(selectedDate).length > 0 ? (
                 <React.Fragment>
                   {getEntriesForDate(selectedDate).map((entry) => (
-                    <View key={entry.id} style={styles.selectedDateEntry}>
+                    <TouchableOpacity
+                      key={entry.id}
+                      style={styles.selectedDateEntry}
+                      onPress={() => handleEditEntry(entry)}
+                    >
                       <View style={styles.entryHeader}>
                         <Text style={styles.vesselName}>
                           {entry.vessel?.vessel_name || 'Unknown Vessel'}
@@ -1076,7 +1109,7 @@ export default function LogbookScreen() {
                           <Text style={styles.entryText}>{entry.notes}</Text>
                         </View>
                       )}
-                    </View>
+                    </TouchableOpacity>
                   ))}
                 </React.Fragment>
               ) : (
@@ -1180,7 +1213,11 @@ export default function LogbookScreen() {
                         </View>
                         
                         {group.entries.map((entry) => (
-                          <View key={entry.id} style={styles.entryCard}>
+                          <TouchableOpacity
+                            key={entry.id}
+                            style={styles.entryCard}
+                            onPress={() => handleEditEntry(entry)}
+                          >
                             <View style={styles.entryHeader}>
                               <View
                                 style={[
@@ -1227,7 +1264,7 @@ export default function LogbookScreen() {
                                 <Text style={styles.entryText}>{entry.notes}</Text>
                               </View>
                             )}
-                          </View>
+                          </TouchableOpacity>
                         ))}
                       </React.Fragment>
                     );
@@ -1317,21 +1354,25 @@ export default function LogbookScreen() {
           >
             <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Add Sea Time Entry</Text>
+                <Text style={styles.modalTitle}>
+                  {editingEntry ? 'Edit Sea Time Entry' : 'Add Sea Time Entry'}
+                </Text>
                 <Text style={styles.modalSubtitle}>
-                  Manually record your sea time with voyage details
+                  {editingEntry ? 'Update your sea time record' : 'Manually record your sea time with voyage details'}
                 </Text>
 
                 <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={styles.modalScrollContent}>
-                  <TouchableOpacity style={styles.mcaButton} onPress={handleViewMCARequirements}>
-                    <IconSymbol
-                      ios_icon_name="info.circle"
-                      android_material_icon_name="info"
-                      size={20}
-                      color={colors.primary}
-                    />
-                    <Text style={styles.mcaButtonText}>View MCA Requirements</Text>
-                  </TouchableOpacity>
+                  {!editingEntry && (
+                    <TouchableOpacity style={styles.mcaButton} onPress={handleViewMCARequirements}>
+                      <IconSymbol
+                        ios_icon_name="info.circle"
+                        android_material_icon_name="info"
+                        size={20}
+                        color={colors.primary}
+                      />
+                      <Text style={styles.mcaButtonText}>View MCA Requirements</Text>
+                    </TouchableOpacity>
+                  )}
 
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Service Type</Text>
@@ -1397,85 +1438,94 @@ export default function LogbookScreen() {
                     )}
                   </View>
 
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Vessel</Text>
-                    <TouchableOpacity
-                      style={styles.pickerButton}
-                      onPress={() => {
-                        console.log('[LogbookScreen] User tapped vessel picker button, toggling dropdown, vessels available:', vessels.length);
-                        setShowVesselPicker(!showVesselPicker);
-                      }}
-                    >
-                      <Text
-                        style={
-                          selectedVessel
-                            ? styles.pickerButtonText
-                            : styles.pickerButtonPlaceholder
-                        }
+                  {!editingEntry && (
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Vessel</Text>
+                      <TouchableOpacity
+                        style={styles.pickerButton}
+                        onPress={() => {
+                          console.log('[LogbookScreen] User tapped vessel picker button, toggling dropdown, vessels available:', vessels.length);
+                          setShowVesselPicker(!showVesselPicker);
+                        }}
                       >
-                        {selectedVessel ? selectedVessel.vessel_name : 'Select a vessel'}
-                      </Text>
-                      <IconSymbol
-                        ios_icon_name="chevron.down"
-                        android_material_icon_name="arrow-drop-down"
-                        size={20}
-                        color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                      />
-                    </TouchableOpacity>
-                    
-                    {showVesselPicker && vessels.length > 0 && (
-                      <View style={styles.vesselPickerContainer}>
-                        <FlatList
-                          data={vessels}
-                          keyExtractor={(item) => item.id}
-                          renderItem={({ item, index }) => (
-                            <TouchableOpacity
-                              style={[
-                                styles.vesselOption,
-                                index === vessels.length - 1 && styles.vesselOptionLast,
-                              ]}
-                              onPress={() => {
-                                console.log('[LogbookScreen] User selected vessel:', item.vessel_name);
-                                setSelectedVessel(item);
-                                setShowVesselPicker(false);
-                              }}
-                            >
-                              <Text style={styles.vesselOptionText}>{item.vessel_name}</Text>
-                              <Text style={styles.vesselOptionSubtext}>
-                                MMSI: {item.mmsi}
-                                {item.callsign && ` • Call Sign: ${item.callsign}`}
-                              </Text>
-                            </TouchableOpacity>
-                          )}
-                          scrollEnabled={vessels.length > 4}
-                          nestedScrollEnabled={true}
+                        <Text
+                          style={
+                            selectedVessel
+                              ? styles.pickerButtonText
+                              : styles.pickerButtonPlaceholder
+                          }
+                        >
+                          {selectedVessel ? selectedVessel.vessel_name : 'Select a vessel'}
+                        </Text>
+                        <IconSymbol
+                          ios_icon_name="chevron.down"
+                          android_material_icon_name="arrow-drop-down"
+                          size={20}
+                          color={isDark ? colors.textSecondary : colors.textSecondaryLight}
                         />
-                      </View>
-                    )}
-                    
-                    {showVesselPicker && vessels.length === 0 && (
-                      <View style={styles.vesselPickerContainer}>
-                        <View style={styles.vesselOption}>
-                          <Text style={styles.vesselOptionText}>No vessels available</Text>
-                          <Text style={styles.vesselOptionSubtext}>Add a vessel first from the Home tab</Text>
+                      </TouchableOpacity>
+                      
+                      {showVesselPicker && vessels.length > 0 && (
+                        <View style={styles.vesselPickerContainer}>
+                          <FlatList
+                            data={vessels}
+                            keyExtractor={(item) => item.id}
+                            renderItem={({ item, index }) => (
+                              <TouchableOpacity
+                                style={[
+                                  styles.vesselOption,
+                                  index === vessels.length - 1 && styles.vesselOptionLast,
+                                ]}
+                                onPress={() => {
+                                  console.log('[LogbookScreen] User selected vessel:', item.vessel_name);
+                                  setSelectedVessel(item);
+                                  setShowVesselPicker(false);
+                                }}
+                              >
+                                <Text style={styles.vesselOptionText}>{item.vessel_name}</Text>
+                                <Text style={styles.vesselOptionSubtext}>
+                                  MMSI: {item.mmsi}
+                                  {item.callsign && ` • Call Sign: ${item.callsign}`}
+                                </Text>
+                              </TouchableOpacity>
+                            )}
+                            scrollEnabled={vessels.length > 4}
+                            nestedScrollEnabled={true}
+                          />
                         </View>
+                      )}
+                      
+                      {showVesselPicker && vessels.length === 0 && (
+                        <View style={styles.vesselPickerContainer}>
+                          <View style={styles.vesselOption}>
+                            <Text style={styles.vesselOptionText}>No vessels available</Text>
+                            <Text style={styles.vesselOptionSubtext}>Add a vessel first from the Home tab</Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {editingEntry && (
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.inputLabel}>Vessel</Text>
+                      <View style={styles.pickerButton}>
+                        <Text style={styles.pickerButtonText}>
+                          {selectedVessel?.vessel_name || 'Unknown Vessel'}
+                        </Text>
                       </View>
-                    )}
-                  </View>
+                      <Text style={styles.helperText}>
+                        Vessel cannot be changed when editing
+                      </Text>
+                    </View>
+                  )}
 
                   <View style={styles.divider} />
 
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Start Date & Time</Text>
-                    <TouchableOpacity
-                      style={styles.dateTimeButton}
-                      onPress={() => setShowStartDatePicker(true)}
-                    >
-                      <Text
-                        style={
-                          startDate ? styles.dateTimeText : styles.dateTimePlaceholder
-                        }
-                      >
+                    <View style={styles.dateTimeButton}>
+                      <Text style={startDate ? styles.dateTimeText : styles.dateTimePlaceholder}>
                         {startDate ? formatDateTime(startDate) : 'Select start date & time'}
                       </Text>
                       <IconSymbol
@@ -1484,7 +1534,12 @@ export default function LogbookScreen() {
                         size={20}
                         color={isDark ? colors.textSecondary : colors.textSecondaryLight}
                       />
-                    </TouchableOpacity>
+                    </View>
+                    {editingEntry && (
+                      <Text style={styles.helperText}>
+                        Start date cannot be changed when editing
+                      </Text>
+                    )}
                   </View>
 
                   <View style={styles.inputGroup}>
@@ -1492,13 +1547,8 @@ export default function LogbookScreen() {
                       End Date & Time{' '}
                       <Text style={styles.inputLabelOptional}>(Optional)</Text>
                     </Text>
-                    <TouchableOpacity
-                      style={styles.dateTimeButton}
-                      onPress={() => setShowEndDatePicker(true)}
-                    >
-                      <Text
-                        style={endDate ? styles.dateTimeText : styles.dateTimePlaceholder}
-                      >
+                    <View style={styles.dateTimeButton}>
+                      <Text style={endDate ? styles.dateTimeText : styles.dateTimePlaceholder}>
                         {endDate ? formatDateTime(endDate) : 'Select end date & time'}
                       </Text>
                       <IconSymbol
@@ -1507,7 +1557,12 @@ export default function LogbookScreen() {
                         size={20}
                         color={isDark ? colors.textSecondary : colors.textSecondaryLight}
                       />
-                    </TouchableOpacity>
+                    </View>
+                    {editingEntry && (
+                      <Text style={styles.helperText}>
+                        End date cannot be changed when editing
+                      </Text>
+                    )}
                   </View>
 
                   <View style={styles.divider} />
@@ -1572,7 +1627,7 @@ export default function LogbookScreen() {
                   <TouchableOpacity
                     style={[styles.modalButton, styles.cancelButton]}
                     onPress={() => {
-                      console.log('[LogbookScreen] User cancelled add entry');
+                      console.log('[LogbookScreen] User cancelled');
                       setShowAddModal(false);
                       resetForm();
                     }}
@@ -1585,7 +1640,9 @@ export default function LogbookScreen() {
                     style={[styles.modalButton, styles.saveButton]}
                     onPress={handleSaveEntry}
                   >
-                    <Text style={[styles.modalButtonText, styles.saveButtonText]}>Save</Text>
+                    <Text style={[styles.modalButtonText, styles.saveButtonText]}>
+                      {editingEntry ? 'Update' : 'Save'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1594,7 +1651,7 @@ export default function LogbookScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {showStartDatePicker && Platform.OS !== 'ios' && (
+      {showStartDatePicker && Platform.OS !== 'ios' && !editingEntry && (
         <DateTimePicker
           value={startDate || new Date()}
           mode="date"
@@ -1613,7 +1670,7 @@ export default function LogbookScreen() {
         />
       )}
 
-      {showStartTimePicker && Platform.OS !== 'ios' && (
+      {showStartTimePicker && Platform.OS !== 'ios' && !editingEntry && (
         <DateTimePicker
           value={startDate || new Date()}
           mode="time"
@@ -1630,7 +1687,7 @@ export default function LogbookScreen() {
         />
       )}
 
-      {showEndDatePicker && Platform.OS !== 'ios' && (
+      {showEndDatePicker && Platform.OS !== 'ios' && !editingEntry && (
         <DateTimePicker
           value={endDate || new Date()}
           mode="date"
@@ -1649,7 +1706,7 @@ export default function LogbookScreen() {
         />
       )}
 
-      {showEndTimePicker && Platform.OS !== 'ios' && (
+      {showEndTimePicker && Platform.OS !== 'ios' && !editingEntry && (
         <DateTimePicker
           value={endDate || new Date()}
           mode="time"
@@ -1666,7 +1723,7 @@ export default function LogbookScreen() {
         />
       )}
 
-      {showStartDatePicker && Platform.OS === 'ios' && (
+      {showStartDatePicker && Platform.OS === 'ios' && !editingEntry && (
         <Modal
           visible={showStartDatePicker}
           transparent
@@ -1705,7 +1762,7 @@ export default function LogbookScreen() {
         </Modal>
       )}
 
-      {showEndDatePicker && Platform.OS === 'ios' && (
+      {showEndDatePicker && Platform.OS === 'ios' && !editingEntry && (
         <Modal
           visible={showEndDatePicker}
           transparent
