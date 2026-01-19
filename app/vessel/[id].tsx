@@ -50,6 +50,25 @@ interface SeaTimeEntry {
   end_longitude?: number | null;
 }
 
+interface AISData {
+  name: string | null;
+  mmsi: string | null;
+  imo: string | null;
+  speed_knots: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  course: number | null;
+  heading: number | null;
+  timestamp: string | null;
+  status: string | null;
+  destination: string | null;
+  eta: string | null;
+  callsign: string | null;
+  ship_type: string | null;
+  flag: string | null;
+  is_moving: boolean;
+}
+
 function createStyles(isDark: boolean) {
   return StyleSheet.create({
     container: {
@@ -572,6 +591,97 @@ function createStyles(isDark: boolean) {
     activateConfirmButtonText: {
       color: '#FFFFFF',
     },
+    // AIS Data Modal styles
+    aisModalContent: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 16,
+      padding: 24,
+      width: '90%',
+      maxWidth: 500,
+      maxHeight: '80%',
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 8,
+    },
+    aisModalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    aisModalTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      flex: 1,
+    },
+    aisStatusBadge: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 12,
+      marginLeft: 8,
+    },
+    aisStatusText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: '#FFFFFF',
+    },
+    aisSection: {
+      marginBottom: 16,
+    },
+    aisSectionTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    aisDataRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+    },
+    aisDataRowLast: {
+      borderBottomWidth: 0,
+    },
+    aisDataLabel: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      fontWeight: '500',
+      flex: 1,
+    },
+    aisDataValue: {
+      fontSize: 14,
+      color: isDark ? colors.text : colors.textLight,
+      fontWeight: '600',
+      flex: 1,
+      textAlign: 'right',
+    },
+    aisDataValueEmpty: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      fontStyle: 'italic',
+      flex: 1,
+      textAlign: 'right',
+    },
+    aisCloseButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    aisCloseButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
+    },
   });
 }
 
@@ -585,6 +695,8 @@ export default function VesselDetailScreen() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [activateModalVisible, setActivateModalVisible] = useState(false);
+  const [aisModalVisible, setAisModalVisible] = useState(false);
+  const [aisData, setAisData] = useState<AISData | null>(null);
   const [activateModalMessage, setActivateModalMessage] = useState('');
   const [editForm, setEditForm] = useState({
     flag: '',
@@ -810,22 +922,9 @@ export default function VesselDetailScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
 
-      // Handle null values gracefully
-      const speedText = result.speed_knots !== null && result.speed_knots !== undefined
-        ? result.speed_knots.toFixed(1) + ' knots'
-        : 'Unknown';
-      
-      const positionText =
-        result.latitude !== null && result.latitude !== undefined &&
-        result.longitude !== null && result.longitude !== undefined
-          ? `${result.latitude.toFixed(4)}, ${result.longitude.toFixed(4)}`
-          : 'Unknown';
-
-      const message = result.is_moving
-        ? `Vessel is moving\n\nSpeed: ${speedText}\nPosition: ${positionText}`
-        : `Vessel is not moving\n\nSpeed: ${speedText}\nPosition: ${positionText}`;
-
-      Alert.alert(`AIS Check - ${vessel.vessel_name}`, message);
+      // Store AIS data and show modal
+      setAisData(result);
+      setAisModalVisible(true);
       
       // Reload data to get any updated vessel information (like callsign from AIS)
       console.log('[VesselDetailScreen] Reloading vessel data to get any AIS updates...');
@@ -939,6 +1038,16 @@ export default function VesselDetailScreen() {
   const handleViewDebugLogs = () => {
     console.log('[VesselDetailScreen] User tapped View Debug Logs button');
     router.push(`/debug/${id}` as any);
+  };
+
+  const formatAISValue = (value: any, suffix: string = ''): string => {
+    if (value === null || value === undefined) return 'Unknown';
+    return `${value}${suffix}`;
+  };
+
+  const formatCoordinates = (lat: number | null, lon: number | null): string => {
+    if (lat === null || lon === null) return 'Unknown';
+    return `${lat.toFixed(6)}°, ${lon.toFixed(6)}°`;
   };
 
   if (loading || !vessel) {
@@ -1460,6 +1569,189 @@ export default function VesselDetailScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* AIS Data Modal */}
+      <Modal
+        visible={aisModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setAisModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setAisModalVisible(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={styles.aisModalContent}
+            >
+              <View style={styles.aisModalHeader}>
+                <Text style={styles.aisModalTitle}>AIS Data - {vessel?.vessel_name}</Text>
+                <View style={[
+                  styles.aisStatusBadge,
+                  { backgroundColor: aisData?.is_moving ? colors.success : colors.warning }
+                ]}>
+                  <Text style={styles.aisStatusText}>
+                    {aisData?.is_moving ? 'MOVING' : 'STATIONARY'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.closeButton}
+                  onPress={() => setAisModalVisible(false)}
+                >
+                  <IconSymbol
+                    ios_icon_name="xmark.circle.fill"
+                    android_material_icon_name="cancel"
+                    size={28}
+                    color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={styles.modalScrollContent}>
+                {/* Vessel Information */}
+                <View style={styles.aisSection}>
+                  <View style={styles.aisSectionTitle}>
+                    <IconSymbol
+                      ios_icon_name="info.circle"
+                      android_material_icon_name="info"
+                      size={18}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.aisSectionTitle}>Vessel Information</Text>
+                  </View>
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>Name</Text>
+                    <Text style={aisData?.name ? styles.aisDataValue : styles.aisDataValueEmpty}>
+                      {formatAISValue(aisData?.name)}
+                    </Text>
+                  </View>
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>MMSI</Text>
+                    <Text style={aisData?.mmsi ? styles.aisDataValue : styles.aisDataValueEmpty}>
+                      {formatAISValue(aisData?.mmsi)}
+                    </Text>
+                  </View>
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>IMO</Text>
+                    <Text style={aisData?.imo ? styles.aisDataValue : styles.aisDataValueEmpty}>
+                      {formatAISValue(aisData?.imo)}
+                    </Text>
+                  </View>
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>Call Sign</Text>
+                    <Text style={aisData?.callsign ? styles.aisDataValue : styles.aisDataValueEmpty}>
+                      {formatAISValue(aisData?.callsign)}
+                    </Text>
+                  </View>
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>Flag</Text>
+                    <Text style={aisData?.flag ? styles.aisDataValue : styles.aisDataValueEmpty}>
+                      {formatAISValue(aisData?.flag)}
+                    </Text>
+                  </View>
+                  <View style={[styles.aisDataRow, styles.aisDataRowLast]}>
+                    <Text style={styles.aisDataLabel}>Ship Type</Text>
+                    <Text style={aisData?.ship_type ? styles.aisDataValue : styles.aisDataValueEmpty}>
+                      {formatAISValue(aisData?.ship_type)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Position & Navigation */}
+                <View style={styles.aisSection}>
+                  <View style={styles.aisSectionTitle}>
+                    <IconSymbol
+                      ios_icon_name="location.fill"
+                      android_material_icon_name="location-on"
+                      size={18}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.aisSectionTitle}>Position & Navigation</Text>
+                  </View>
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>Position</Text>
+                    <Text style={aisData?.latitude && aisData?.longitude ? styles.aisDataValue : styles.aisDataValueEmpty}>
+                      {formatCoordinates(aisData?.latitude || null, aisData?.longitude || null)}
+                    </Text>
+                  </View>
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>Speed</Text>
+                    <Text style={aisData?.speed_knots !== null ? styles.aisDataValue : styles.aisDataValueEmpty}>
+                      {formatAISValue(aisData?.speed_knots, ' knots')}
+                    </Text>
+                  </View>
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>Course</Text>
+                    <Text style={aisData?.course !== null ? styles.aisDataValue : styles.aisDataValueEmpty}>
+                      {formatAISValue(aisData?.course, '°')}
+                    </Text>
+                  </View>
+                  <View style={[styles.aisDataRow, styles.aisDataRowLast]}>
+                    <Text style={styles.aisDataLabel}>Heading</Text>
+                    <Text style={aisData?.heading !== null ? styles.aisDataValue : styles.aisDataValueEmpty}>
+                      {formatAISValue(aisData?.heading, '°')}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Voyage Information */}
+                <View style={styles.aisSection}>
+                  <View style={styles.aisSectionTitle}>
+                    <IconSymbol
+                      ios_icon_name="map"
+                      android_material_icon_name="map"
+                      size={18}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.aisSectionTitle}>Voyage Information</Text>
+                  </View>
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>Status</Text>
+                    <Text style={aisData?.status ? styles.aisDataValue : styles.aisDataValueEmpty}>
+                      {formatAISValue(aisData?.status)}
+                    </Text>
+                  </View>
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>Destination</Text>
+                    <Text style={aisData?.destination ? styles.aisDataValue : styles.aisDataValueEmpty}>
+                      {formatAISValue(aisData?.destination)}
+                    </Text>
+                  </View>
+                  <View style={[styles.aisDataRow, styles.aisDataRowLast]}>
+                    <Text style={styles.aisDataLabel}>ETA</Text>
+                    <Text style={aisData?.eta ? styles.aisDataValue : styles.aisDataValueEmpty}>
+                      {formatAISValue(aisData?.eta)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Timestamp */}
+                {aisData?.timestamp && (
+                  <View style={styles.aisSection}>
+                    <View style={styles.aisDataRow}>
+                      <Text style={styles.aisDataLabel}>Last Updated</Text>
+                      <Text style={styles.aisDataValue}>
+                        {new Date(aisData.timestamp).toLocaleString()}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </ScrollView>
+
+              <TouchableOpacity
+                style={styles.aisCloseButton}
+                onPress={() => setAisModalVisible(false)}
+              >
+                <Text style={styles.aisCloseButtonText}>Close</Text>
+              </TouchableOpacity>
             </TouchableOpacity>
           </TouchableOpacity>
         </View>
