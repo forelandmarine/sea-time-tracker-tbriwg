@@ -5,56 +5,40 @@
     "slug": "seatime-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png",
+    "icon": "./assets/images/final_quest_240x240.png",
+    "scheme": "seatimetracker",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "owner": "foreland-marine",
     "splash": {
-      "image": "./assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png",
+      "image": "./assets/images/final_quest_240x240.png",
       "resizeMode": "contain",
-      "backgroundColor": "#000000"
+      "backgroundColor": "#ffffff"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.seatimetracker.app",
-      "buildNumber": "1",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "SeaTime Tracker needs your location to track vessel movements and sea time.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "SeaTime Tracker needs your location to track vessel movements and sea time in the background.",
-        "UIBackgroundModes": [
-          "location",
-          "fetch",
-          "remote-notification"
-        ]
-      },
-      "config": {
-        "usesNonExemptEncryption": false
-      },
-      "usesAppleSignIn": true
+      "bundleIdentifier": "com.forelandmarine.seatimetracker",
+      "appleTeamId": "YOUR_CORRECT_TEAM_ID_HERE"
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png",
-        "backgroundColor": "#000000"
+        "foregroundImage": "./assets/images/final_quest_240x240.png",
+        "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
-      "package": "com.seatimetracker.app",
-      "versionCode": 1
+      "package": "com.forelandmarine.seatimetracker"
     },
     "web": {
-      "favicon": "./assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png",
-      "bundler": "metro"
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/images/final_quest_240x240.png"
     },
     "plugins": [
-      "expo-font",
       "expo-router",
-      "expo-web-browser",
-      "expo-apple-authentication",
+      "expo-secure-store",
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png",
-          "color": "#000000"
+          "icon": "./assets/images/final_quest_240x240.png",
+          "color": "#ffffff"
         }
       ],
       [
@@ -62,26 +46,26 @@
         {
           "username": "foreland-marine"
         }
-      ]
+      ],
+      "expo-apple-authentication"
     ],
-    "scheme": "seatimetracker",
     "experiments": {
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
-      "backendUrl": "https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev",
+      "router": {
+        "origin": false
+      },
       "eas": {
         "projectId": "d982d462-52e2-493e-a176-8f75b09d5ef9"
-      }
-    },
-    "runtimeVersion": {
-      "policy": "appVersion"
+      },
+      "backendUrl": "https://seatime-tracker-backend.specular.app"
     },
     "updates": {
       "url": "https://u.expo.dev/d982d462-52e2-493e-a176-8f75b09d5ef9"
     },
-    "owner": "foreland-marine"
-  },
-  "scheme": "seatimetracker"
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
 }
