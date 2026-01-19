@@ -194,28 +194,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithApple = async (identityToken: string, appleUser?: any) => {
     try {
       console.log('[Auth] Signing in with Apple');
+      console.log('[Auth] Identity token length:', identityToken?.length);
+      console.log('[Auth] Apple user data:', JSON.stringify(appleUser));
+      console.log('[Auth] API URL:', API_URL);
+
+      if (!identityToken) {
+        throw new Error('No identity token provided');
+      }
+
+      const requestBody = { 
+        identityToken,
+        user: appleUser,
+      };
+      console.log('[Auth] Request body:', JSON.stringify(requestBody));
+
       const response = await fetch(`${API_URL}/api/auth/sign-in/apple`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          identityToken,
-          user: appleUser,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       console.log('[Auth] Apple sign in response status:', response.status);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('[Auth] Apple sign in failed with error:', errorData);
+        const errorText = await response.text();
+        console.error('[Auth] Apple sign in failed. Status:', response.status, 'Response:', errorText);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          throw new Error(`Apple sign in failed with status ${response.status}: ${errorText}`);
+        }
+        
         throw new Error(errorData.error || 'Apple sign in failed');
       }
 
       const data = await response.json();
       console.log('[Auth] Apple sign in response received, full data:', JSON.stringify(data));
       console.log('[Auth] Session object:', JSON.stringify(data.session));
+      console.log('[Auth] Is new user:', data.isNewUser);
 
       if (!data.session || !data.session.token) {
         console.error('[Auth] Missing session or token. Full response:', JSON.stringify(data));
@@ -224,11 +244,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       await tokenStorage.setToken(data.session.token);
       setUser(data.user);
-      console.log('[Auth] Apple sign in successful');
+      console.log('[Auth] Apple sign in successful, user:', data.user.email);
     } catch (error: any) {
       console.error('[Auth] Apple sign in failed:', {
         message: error?.message,
         name: error?.name,
+        stack: error?.stack,
         error: error
       });
       throw error;

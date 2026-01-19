@@ -62,6 +62,18 @@ export default function AuthScreen() {
   const handleAppleSignIn = async () => {
     try {
       console.log('[AuthScreen] User tapped Sign in with Apple button');
+      console.log('[AuthScreen] Checking Apple Authentication availability...');
+      
+      // Check if Apple Authentication is available
+      const isAvailable = await AppleAuthentication.isAvailableAsync();
+      console.log('[AuthScreen] Apple Authentication available:', isAvailable);
+      
+      if (!isAvailable) {
+        Alert.alert('Error', 'Sign in with Apple is not available on this device');
+        return;
+      }
+
+      console.log('[AuthScreen] Requesting Apple credentials...');
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
@@ -69,8 +81,21 @@ export default function AuthScreen() {
         ],
       });
 
-      console.log('[AuthScreen] Apple credential received');
-      await signInWithApple(credential.identityToken!, {
+      console.log('[AuthScreen] Apple credential received:', {
+        hasIdentityToken: !!credential.identityToken,
+        hasEmail: !!credential.email,
+        hasFullName: !!credential.fullName,
+        user: credential.user,
+      });
+
+      if (!credential.identityToken) {
+        console.error('[AuthScreen] No identity token received from Apple');
+        Alert.alert('Error', 'Failed to get Apple authentication token');
+        return;
+      }
+
+      console.log('[AuthScreen] Sending Apple credentials to backend...');
+      await signInWithApple(credential.identityToken, {
         email: credential.email,
         name: credential.fullName,
       });
@@ -81,8 +106,12 @@ export default function AuthScreen() {
       if (error.code === 'ERR_CANCELED') {
         console.log('[AuthScreen] User cancelled Apple sign in');
       } else {
-        console.error('[AuthScreen] Apple sign in failed:', error);
-        Alert.alert('Error', 'Apple sign in failed');
+        console.error('[AuthScreen] Apple sign in failed:', {
+          code: error.code,
+          message: error.message,
+          error: error,
+        });
+        Alert.alert('Error', `Apple sign in failed: ${error.message || 'Unknown error'}`);
       }
     }
   };

@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "SeaTime Tracker",
@@ -28,7 +29,8 @@
       },
       "config": {
         "usesNonExemptEncryption": false
-      }
+      },
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {
@@ -47,6 +49,7 @@
       "expo-font",
       "expo-router",
       "expo-web-browser",
+      "expo-apple-authentication",
       [
         "expo-notifications",
         {
