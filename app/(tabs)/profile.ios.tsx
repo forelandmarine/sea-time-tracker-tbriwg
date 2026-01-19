@@ -123,18 +123,6 @@ const createStyles = (isDark: boolean, topInset: number) =>
       fontSize: 16,
       fontWeight: '600',
     },
-    adminButton: {
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      padding: 15,
-      alignItems: 'center',
-      marginTop: 10,
-    },
-    adminButtonText: {
-      color: '#ffffff',
-      fontSize: 16,
-      fontWeight: '600',
-    },
   });
 
 export default function ProfileScreen() {
@@ -180,11 +168,6 @@ export default function ProfileScreen() {
   const handleMCARequirements = () => {
     console.log('User tapped MCA Requirements');
     router.push('/mca-requirements');
-  };
-
-  const handleAdminVerify = () => {
-    console.log('User tapped Admin Verify');
-    router.push('/admin-verify');
   };
 
   const handleSignOut = async () => {
@@ -318,10 +301,6 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
         </View>
-
-        <TouchableOpacity style={styles.adminButton} onPress={handleAdminVerify}>
-          <Text style={styles.adminButtonText}>Admin Verification</Text>
-        </TouchableOpacity>
 
         <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
           <Text style={styles.signOutButtonText}>Sign Out</Text>
