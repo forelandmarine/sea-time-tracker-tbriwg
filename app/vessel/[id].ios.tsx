@@ -639,27 +639,42 @@ export default function VesselDetailScreen() {
   };
 
   const handleDeleteVessel = async () => {
+    console.log('[VesselDetailScreen] 🔴 DELETE BUTTON CLICKED - handleDeleteVessel called');
+    
     if (!vessel) {
-      console.error('[VesselDetailScreen] No vessel data available');
+      console.error('[VesselDetailScreen] No vessel data available for deletion');
       return;
     }
+
+    console.log('[VesselDetailScreen] Vessel to delete:', vessel.id, vessel.vessel_name);
+    console.log('[VesselDetailScreen] Showing confirmation alert...');
 
     Alert.alert(
       'Delete Vessel',
       `Are you sure you want to delete ${vessel.vessel_name}? This will also delete all associated sea time entries.`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => {
+            console.log('[VesselDetailScreen] User cancelled deletion');
+          }
+        },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            console.log('[VesselDetailScreen] 🔴 User confirmed deletion - calling deleteVessel API');
             try {
-              console.log('[VesselDetailScreen] Deleting vessel:', vessel.id);
+              console.log('[VesselDetailScreen] Calling seaTimeApi.deleteVessel with ID:', vessel.id);
               await seaTimeApi.deleteVessel(vessel.id);
+              console.log('[VesselDetailScreen] ✅ Delete API call successful');
               Alert.alert('Success', 'Vessel deleted');
               router.back();
             } catch (error: any) {
-              console.error('[VesselDetailScreen] Failed to delete vessel:', error);
+              console.error('[VesselDetailScreen] ❌ Failed to delete vessel:', error);
+              console.error('[VesselDetailScreen] Error message:', error.message);
+              console.error('[VesselDetailScreen] Error stack:', error.stack);
               Alert.alert('Error', 'Failed to delete vessel: ' + error.message);
             }
           },
