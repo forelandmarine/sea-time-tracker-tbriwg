@@ -16,9 +16,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors } from '@/styles/commonStyles';
-import { IconSymbol } from '@/components/IconSymbol';
 import * as AppleAuthentication from 'expo-apple-authentication';
-import Constants from 'expo-constants';
 
 export default function AuthScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -86,55 +84,6 @@ export default function AuthScreen() {
         console.error('[AuthScreen] Apple sign in failed:', error);
         Alert.alert('Error', 'Apple sign in failed');
       }
-    }
-  };
-
-  const handleCreateTestUser = async () => {
-    setLoading(true);
-    try {
-      console.log('[AuthScreen] User tapped Create Test Account button');
-      const API_URL = Constants.expoConfig?.extra?.backendUrl || '';
-      
-      // Create test user via backend endpoint
-      const response = await fetch(`${API_URL}/api/auth/test-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create test user');
-      }
-
-      const data = await response.json();
-      console.log('[AuthScreen] Test user response:', data.message);
-      
-      // The backend returns a session token, so we can use it directly
-      // Store the token and user
-      const { user, session } = data;
-      
-      // Import token storage from AuthContext
-      const TOKEN_KEY = 'seatime_auth_token';
-      if (Platform.OS === 'web') {
-        localStorage.setItem(TOKEN_KEY, session.token);
-      } else {
-        const SecureStore = await import('expo-secure-store');
-        await SecureStore.setItemAsync(TOKEN_KEY, session.token);
-      }
-      
-      Alert.alert(
-        'Test Account Ready',
-        `Email: test@seatime.com\nPassword: testpassword123\n\n${data.message}`,
-        [{ text: 'OK', onPress: () => router.replace('/(tabs)') }]
-      );
-    } catch (error: any) {
-      console.error('[AuthScreen] Create test user failed:', error);
-      Alert.alert('Error', error.message || 'Failed to create test user');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -218,33 +167,6 @@ export default function AuthScreen() {
               ? 'Already have an account? Sign In'
               : "Don't have an account? Sign Up"}
           </Text>
-        </TouchableOpacity>
-
-        <View style={styles.divider}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OR</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <TouchableOpacity
-          style={[styles.button, styles.testButton]}
-          onPress={handleCreateTestUser}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={colors.primary} />
-          ) : (
-            <>
-              <IconSymbol
-                ios_icon_name="person.badge.key"
-                android_material_icon_name="person"
-                size={20}
-                color={colors.primary}
-                style={styles.testButtonIcon}
-              />
-              <Text style={styles.testButtonText}>Create Test Account</Text>
-            </>
-          )}
         </TouchableOpacity>
 
         {Platform.OS === 'ios' && (
@@ -377,22 +299,6 @@ function createStyles(isDark: boolean) {
     appleButton: {
       width: '100%',
       height: 50,
-    },
-    testButton: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderWidth: 2,
-      borderColor: colors.primary,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    testButtonIcon: {
-      marginRight: 8,
-    },
-    testButtonText: {
-      color: colors.primary,
-      fontSize: 16,
-      fontWeight: '600',
     },
     footer: {
       marginTop: 40,
