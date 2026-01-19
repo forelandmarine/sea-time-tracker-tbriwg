@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "SeaTime Tracker",
@@ -66,6 +67,5 @@
     "updates": {
       "enabled": false
     }
-  },
-  "scheme": "SeaTime Tracker"
+  }
 }

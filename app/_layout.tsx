@@ -25,8 +25,8 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-// Global error handler for unhandled errors
-if (Platform.OS === 'web') {
+// Global error handler for unhandled errors - FIXED: Only run on client-side
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
   window.addEventListener('error', (event) => {
     console.error('[App] Global error caught:', event.error);
   });
