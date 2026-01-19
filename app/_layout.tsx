@@ -1,8 +1,8 @@
 
 import "react-native-reanimated";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useFonts } from "expo-font";
-import { Stack, useRouter, useSegments } from "expo-router";
+import { Stack, useRouter, useSegments, Redirect } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -34,6 +34,7 @@ function RootLayoutNav() {
   const router = useRouter();
   const segments = useSegments();
   const { user, loading } = useAuth();
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -71,10 +72,10 @@ function RootLayoutNav() {
     }
   }, [loaded]);
 
-  // Simplified authentication routing - only redirect when both loaded and auth check complete
+  // Simplified authentication routing - prevent cycling
   useEffect(() => {
-    if (!loaded || loading) {
-      console.log('[App] Waiting for app to load...', { loaded, loading });
+    if (!loaded || loading || isNavigating) {
+      console.log('[App] Waiting...', { loaded, loading, isNavigating });
       return;
     }
 
@@ -89,26 +90,19 @@ function RootLayoutNav() {
       platform: Platform.OS
     });
 
-    // On web, use replace to avoid navigation issues
-    if (Platform.OS === 'web') {
-      if (!user && !isAuthScreen) {
-        console.log('[App] [Web] Redirecting to auth - user not authenticated');
-        setTimeout(() => router.replace('/auth'), 100);
-      } else if (user && isAuthScreen) {
-        console.log('[App] [Web] Redirecting to tabs - user already authenticated');
-        setTimeout(() => router.replace('/(tabs)'), 100);
-      }
-    } else {
-      // Native platforms can use immediate navigation
-      if (!user && inAuthGroup) {
-        console.log('[App] [Native] Redirecting to auth - user not authenticated');
-        router.replace('/auth');
-      } else if (user && isAuthScreen) {
-        console.log('[App] [Native] Redirecting to tabs - user already authenticated');
-        router.replace('/(tabs)');
-      }
+    // Only navigate if we're in the wrong place
+    if (!user && inAuthGroup) {
+      console.log('[App] Redirecting to auth - user not authenticated');
+      setIsNavigating(true);
+      router.replace('/auth');
+      setTimeout(() => setIsNavigating(false), 500);
+    } else if (user && isAuthScreen) {
+      console.log('[App] Redirecting to tabs - user authenticated');
+      setIsNavigating(true);
+      router.replace('/(tabs)');
+      setTimeout(() => setIsNavigating(false), 500);
     }
-  }, [user, loading, segments, loaded]);
+  }, [user, loading, segments, loaded, isNavigating]);
 
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
