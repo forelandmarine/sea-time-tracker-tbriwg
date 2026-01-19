@@ -1,7 +1,7 @@
 
-import { colors } from '@/styles/commonStyles';
+import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
-import CartoMap from '@/components/CartoMap';
+import * as seaTimeApi from '@/utils/seaTimeApi';
 import {
   View,
   Text,
@@ -18,9 +18,9 @@ import {
   KeyboardAvoidingView,
   Dimensions,
 } from 'react-native';
+import { colors } from '@/styles/commonStyles';
 import React, { useState, useEffect, useCallback } from 'react';
-import * as seaTimeApi from '@/utils/seaTimeApi';
-import { useRouter } from 'expo-router';
+import CartoMap from '@/components/CartoMap';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -304,7 +304,7 @@ export default function SeaTimeScreen() {
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Header */}
+        {/* Header - matching other pages layout */}
         <View style={styles.header}>
           <View style={styles.headerTitleContainer}>
             <Image
@@ -314,7 +314,7 @@ export default function SeaTimeScreen() {
             />
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
-                SeaTime Tracker
+                Home
               </Text>
               <Text style={styles.headerSubtitle}>Track Your Days at Sea with AIS</Text>
             </View>
@@ -712,9 +712,7 @@ function createStyles(isDark: boolean) {
     header: {
       padding: 20,
       paddingTop: Platform.OS === 'android' ? 48 : 20,
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.border : colors.borderLight,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
     headerTitleContainer: {
       flexDirection: 'row',

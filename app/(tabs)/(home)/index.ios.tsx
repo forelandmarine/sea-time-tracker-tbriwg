@@ -306,7 +306,7 @@ export default function SeaTimeScreen() {
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Header - removed grey background and border */}
+        {/* Header - matching other pages layout */}
         <View style={styles.header}>
           <View style={styles.headerTitleContainer}>
             <Image
@@ -316,7 +316,7 @@ export default function SeaTimeScreen() {
             />
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
-                SeaTime Tracker
+                Home
               </Text>
               <Text style={styles.headerSubtitle}>Track Your Days at Sea with AIS</Text>
             </View>
