@@ -12,10 +12,12 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import * as seaTimeApi from '@/utils/seaTimeApi';
+import * as Haptics from 'expo-haptics';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState, useEffect, useCallback } from 'react';
 
@@ -537,6 +539,7 @@ export default function VesselDetailScreen() {
   const [entries, setEntries] = useState<SeaTimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [checkingAIS, setCheckingAIS] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [activateModalVisible, setActivateModalVisible] = useState(false);
@@ -733,7 +736,16 @@ export default function VesselDetailScreen() {
       return;
     }
 
+    // Prevent double-taps
+    if (checkingAIS) {
+      console.log('[VesselDetailScreen] AIS check already in progress, ignoring duplicate tap');
+      return;
+    }
+
     try {
+      // Haptic feedback
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
       console.log('[VesselDetailScreen] 🔍 CHECK AIS BUTTON CLICKED');
       console.log('[VesselDetailScreen] Using vessel from particulars:');
       console.log('[VesselDetailScreen] - Vessel ID:', vessel.id);
@@ -743,11 +755,15 @@ export default function VesselDetailScreen() {
       console.log('[VesselDetailScreen] Calling checkVesselAIS with vessel ID:', vessel.id);
       console.log('[VesselDetailScreen] Backend will look up MMSI from database for this vessel ID');
       
+      setCheckingAIS(true);
       const result = await seaTimeApi.checkVesselAIS(vessel.id);
       
       console.log('[VesselDetailScreen] ✅ AIS check completed successfully');
       console.log('[VesselDetailScreen] Result:', result);
       
+      // Success haptic feedback
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
       // Handle null values gracefully
       const speedText = result.speed_knots !== null && result.speed_knots !== undefined
         ? result.speed_knots.toFixed(1) + ' knots'
@@ -770,7 +786,13 @@ export default function VesselDetailScreen() {
       await loadData();
     } catch (error: any) {
       console.error('[VesselDetailScreen] ❌ AIS check failed:', error);
+      
+      // Error haptic feedback
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+
       Alert.alert('AIS Check Failed', error.message);
+    } finally {
+      setCheckingAIS(false);
     }
   };
 
@@ -1001,20 +1023,29 @@ export default function VesselDetailScreen() {
         <TouchableOpacity
           style={[
             styles.checkAISButton,
-            !vessel.is_active && styles.checkAISButtonDisabled
+            (!vessel.is_active || checkingAIS) && styles.checkAISButtonDisabled
           ]}
           onPress={handleCheckAIS}
-          disabled={!vessel.is_active}
+          disabled={!vessel.is_active || checkingAIS}
         >
-          <IconSymbol
-            ios_icon_name="location.circle"
-            android_material_icon_name="my-location"
-            size={20}
-            color="#fff"
-          />
-          <Text style={styles.checkAISButtonText}>
-            {vessel.is_active ? 'Check AIS' : 'Activate Vessel to Check AIS'}
-          </Text>
+          {checkingAIS ? (
+            <>
+              <ActivityIndicator size="small" color="#fff" />
+              <Text style={styles.checkAISButtonText}>Checking AIS...</Text>
+            </>
+          ) : (
+            <>
+              <IconSymbol
+                ios_icon_name="location.circle"
+                android_material_icon_name="my-location"
+                size={20}
+                color="#fff"
+              />
+              <Text style={styles.checkAISButtonText}>
+                {vessel.is_active ? 'Check AIS' : 'Activate Vessel to Check AIS'}
+              </Text>
+            </>
+          )}
         </TouchableOpacity>
 
         <View style={styles.statsContainer}>
