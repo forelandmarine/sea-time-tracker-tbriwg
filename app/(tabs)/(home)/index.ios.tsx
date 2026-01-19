@@ -54,6 +54,7 @@ export default function SeaTimeScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [newVesselName, setNewVesselName] = useState('');
   const [newMMSI, setNewMMSI] = useState('');
+  const [newCallSign, setNewCallSign] = useState('');
   const [newFlag, setNewFlag] = useState('');
   const [newOfficialNumber, setNewOfficialNumber] = useState('');
   const [newVesselType, setNewVesselType] = useState('');
@@ -139,6 +140,7 @@ export default function SeaTimeScreen() {
       console.log('Creating new vessel:', { 
         mmsi: newMMSI, 
         name: newVesselName,
+        callsign: newCallSign,
         flag: newFlag,
         official_number: newOfficialNumber,
         vessel_type: newVesselType,
@@ -154,12 +156,14 @@ export default function SeaTimeScreen() {
         newOfficialNumber.trim() || undefined,
         newVesselType || undefined,
         newLengthMetres ? parseFloat(newLengthMetres) : undefined,
-        newGrossTonnes ? parseFloat(newGrossTonnes) : undefined
+        newGrossTonnes ? parseFloat(newGrossTonnes) : undefined,
+        newCallSign.trim() || undefined
       );
       
       setModalVisible(false);
       setNewMMSI('');
       setNewVesselName('');
+      setNewCallSign('');
       setNewFlag('');
       setNewOfficialNumber('');
       setNewVesselType('');
@@ -555,6 +559,19 @@ export default function SeaTimeScreen() {
                     value={newMMSI}
                     onChangeText={setNewMMSI}
                     keyboardType="numeric"
+                    returnKeyType="next"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Call Sign</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., GBAA"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newCallSign}
+                    onChangeText={setNewCallSign}
+                    autoCapitalize="characters"
                     returnKeyType="next"
                   />
                 </View>
@@ -974,6 +991,7 @@ function createStyles(isDark: boolean, topInset: number) {
     },
     modalScrollContent: {
       padding: 20,
+      paddingTop: SCREEN_HEIGHT * 0.1,
       paddingBottom: 40,
     },
     inputGroup: {
