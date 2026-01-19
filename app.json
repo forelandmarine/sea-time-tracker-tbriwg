@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "SeaTime Tracker",
@@ -39,12 +40,6 @@
           "color": "#ffffff"
         }
       ],
-      [
-        "expo-updates",
-        {
-          "username": "foreland-marine"
-        }
-      ],
       "expo-apple-authentication"
     ],
     "experiments": {
@@ -58,11 +53,6 @@
         "projectId": "d982d462-52e2-493e-a176-8f75b09d5ef9"
       },
       "backendUrl": "https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev"
-    },
-    "updates": {
-      "url": "https://u.expo.dev/d982d462-52e2-493e-a176-8f75b09d5ef9"
-    },
-    "runtimeVersion": "1.0.0"
-  },
-  "scheme": "SeaTime Tracker"
+    }
+  }
 }
