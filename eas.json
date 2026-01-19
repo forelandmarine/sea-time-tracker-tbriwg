@@ -24,8 +24,7 @@
       "ios": {
         "simulator": false,
         "resourceClass": "m-medium",
-        "autoIncrement": true,
-        "credentialsSource": "local"
+        "autoIncrement": true
       },
       "channel": "production"
     }
