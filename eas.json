@@ -9,14 +9,16 @@
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
-        "simulator": true
+        "simulator": true,
+        "appleTeamId": "43GZCFFPR9"
       }
     },
     "preview": {
       "distribution": "internal",
       "ios": {
         "simulator": false,
-        "resourceClass": "m-medium"
+        "resourceClass": "m-medium",
+        "appleTeamId": "43GZCFFPR9"
       },
       "channel": "preview"
     },
@@ -24,7 +26,8 @@
       "ios": {
         "simulator": false,
         "resourceClass": "m-medium",
-        "autoIncrement": true
+        "autoIncrement": true,
+        "appleTeamId": "43GZCFFPR9"
       },
       "channel": "production"
     }
