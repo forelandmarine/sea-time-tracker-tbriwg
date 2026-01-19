@@ -10,6 +10,11 @@ function calculateDurationHours(startTime: Date, endTime: Date): number {
   return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100; // Round to 2 decimal places
 }
 
+// Helper function to calculate sea days (1 if duration >= 4 hours, 0 otherwise)
+function calculateSeaDays(durationHours: number): number {
+  return durationHours >= 4 ? 1 : 0;
+}
+
 // Helper function to transform vessel object for API response
 function transformVesselForResponse(vessel: any) {
   return {
@@ -26,11 +31,20 @@ function transformVesselForResponse(vessel: any) {
 
 // Helper function to transform sea time entry for API response
 function transformSeaTimeEntryForResponse(entry: any) {
+  // Calculate duration_hours if both start_time and end_time are present
+  let duration_hours = null;
+  if (entry.start_time && entry.end_time) {
+    const startTime = entry.start_time instanceof Date ? entry.start_time : new Date(entry.start_time);
+    const endTime = entry.end_time instanceof Date ? entry.end_time : new Date(entry.end_time);
+    duration_hours = calculateDurationHours(startTime, endTime);
+  }
+
   return {
     id: entry.id,
     vessel_id: entry.vessel_id,
     start_time: entry.start_time.toISOString ? entry.start_time.toISOString() : entry.start_time,
     end_time: entry.end_time ? (entry.end_time.toISOString ? entry.end_time.toISOString() : entry.end_time) : null,
+    duration_hours: duration_hours,
     sea_days: entry.sea_days,
     status: entry.status,
     notes: entry.notes,
@@ -59,6 +73,7 @@ export function register(app: App, fastify: FastifyInstance) {
               vessel_id: { type: 'string' },
               start_time: { type: 'string', format: 'date-time' },
               end_time: { type: ['string', 'null'], format: 'date-time' },
+              duration_hours: { type: ['number', 'null'] },
               sea_days: { type: ['number', 'null'] },
               status: { type: 'string', enum: ['pending', 'confirmed', 'rejected'] },
               notes: { type: ['string', 'null'] },
@@ -127,6 +142,7 @@ export function register(app: App, fastify: FastifyInstance) {
               vessel_id: { type: 'string' },
               start_time: { type: 'string', format: 'date-time' },
               end_time: { type: ['string', 'null'], format: 'date-time' },
+              duration_hours: { type: ['number', 'null'] },
               sea_days: { type: ['number', 'null'] },
               status: { type: 'string' },
               notes: { type: ['string', 'null'] },
@@ -206,6 +222,7 @@ export function register(app: App, fastify: FastifyInstance) {
               vessel_id: { type: 'string' },
               start_time: { type: 'string', format: 'date-time' },
               end_time: { type: ['string', 'null'], format: 'date-time' },
+              duration_hours: { type: ['number', 'null'] },
               sea_days: { type: ['number', 'null'] },
               status: { type: 'string' },
               notes: { type: ['string', 'null'] },
@@ -282,7 +299,8 @@ export function register(app: App, fastify: FastifyInstance) {
                   vessel_id: { type: 'string' },
                   start_time: { type: 'string', format: 'date-time' },
                   end_time: { type: ['string', 'null'], format: 'date-time' },
-                  duration_hours: { type: ['string', 'null'] },
+                  duration_hours: { type: ['number', 'null'] },
+                  sea_days: { type: ['number', 'null'] },
                   status: { type: 'string', enum: ['pending', 'confirmed', 'rejected'] },
                   notes: { type: ['string', 'null'] },
                   created_at: { type: 'string', format: 'date-time' },
@@ -415,14 +433,19 @@ export function register(app: App, fastify: FastifyInstance) {
       return reply.code(403).send({ error: 'Not authorized to confirm this entry' });
     }
 
-    // Set end_time to now and set sea_days = 1
+    // Set end_time to now and calculate sea_days based on duration
     const end_time = new Date();
+
+    // Calculate duration and sea_days
+    const duration_hours = calculateDurationHours(current_entry.start_time, end_time);
+    const calculated_sea_days = calculateSeaDays(duration_hours);
 
     const [updated] = await app.db
       .update(schema.sea_time_entries)
       .set({
         end_time,
-        sea_days: 1,
+        duration_hours: String(duration_hours),
+        sea_days: calculated_sea_days,
         status: 'confirmed',
         notes: notes || current_entry.notes,
       })
@@ -436,10 +459,100 @@ export function register(app: App, fastify: FastifyInstance) {
         vesselId: current_entry.vessel_id,
         startTime: current_entry.start_time.toISOString(),
         endTime: end_time.toISOString(),
-        seaDays: 1,
+        durationHours: duration_hours,
+        seaDays: calculated_sea_days,
         status: 'confirmed',
       },
-      `Sea time entry confirmed: 1 sea day`
+      `Sea time entry confirmed: ${duration_hours} hours, ${calculated_sea_days} sea day(s)`
+    );
+
+    return reply.code(200).send(transformSeaTimeEntryForResponse(updated));
+  });
+
+  // PUT /api/sea-time/:id - Update sea time entry (allows updating sea_days and other fields)
+  fastify.put<{ Params: { id: string }; Body: { sea_days?: number; notes?: string } }>('/api/sea-time/:id', {
+    schema: {
+      description: 'Update a sea time entry (requires authentication). Allows updating sea_days and notes.',
+      tags: ['sea-time'],
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string' } },
+      },
+      body: {
+        type: 'object',
+        properties: {
+          sea_days: { type: 'number', description: 'Number of sea days (0 or 1)' },
+          notes: { type: 'string', description: 'Optional notes' },
+        },
+      },
+      response: {
+        200: { type: 'object' },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Sea time entry update requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
+    const { id } = request.params;
+    const { sea_days, notes } = request.body;
+
+    app.logger.info({ userId, entryId: id, sea_days, notes }, 'Updating sea time entry');
+
+    // Get the entry
+    const entry = await app.db
+      .select()
+      .from(schema.sea_time_entries)
+      .where(eq(schema.sea_time_entries.id, id));
+
+    if (entry.length === 0) {
+      app.logger.warn({ userId, entryId: id }, `Sea time entry not found: ${id}`);
+      return reply.code(404).send({ error: 'Sea time entry not found' });
+    }
+
+    const current_entry = entry[0];
+
+    // Verify ownership
+    if (current_entry.user_id !== userId) {
+      app.logger.warn({ userId, entryId: id }, 'Unauthorized sea time entry update attempt');
+      return reply.code(403).send({ error: 'Not authorized to update this entry' });
+    }
+
+    // Prepare update object
+    const updateData: any = {};
+    if (sea_days !== undefined) {
+      updateData.sea_days = sea_days;
+    }
+    if (notes !== undefined) {
+      updateData.notes = notes;
+    }
+
+    // If no fields to update, return the current entry
+    if (Object.keys(updateData).length === 0) {
+      app.logger.warn({ userId, entryId: id }, 'No fields to update in sea time entry');
+      return reply.code(200).send(transformSeaTimeEntryForResponse(current_entry));
+    }
+
+    const [updated] = await app.db
+      .update(schema.sea_time_entries)
+      .set(updateData)
+      .where(eq(schema.sea_time_entries.id, id))
+      .returning();
+
+    app.logger.info(
+      {
+        userId,
+        entryId: id,
+        vesselId: current_entry.vessel_id,
+        updatedFields: updateData,
+      },
+      `Sea time entry updated successfully`
     );
 
     return reply.code(200).send(transformSeaTimeEntryForResponse(updated));
@@ -593,6 +706,7 @@ export function register(app: App, fastify: FastifyInstance) {
             vessel_id: { type: 'string' },
             start_time: { type: 'string', format: 'date-time' },
             end_time: { type: ['string', 'null'], format: 'date-time' },
+            duration_hours: { type: ['number', 'null'] },
             sea_days: { type: ['number', 'null'] },
             status: { type: 'string' },
             notes: { type: ['string', 'null'] },
@@ -707,9 +821,10 @@ export function register(app: App, fastify: FastifyInstance) {
         });
       }
 
-      // Calculate duration in hours
+      // Calculate duration in hours and sea_days
       const duration_ms = newestRecord.check_time.getTime() - olderRecord.check_time.getTime();
       const duration_hours = Math.round((duration_ms / (1000 * 60 * 60)) * 100) / 100;
+      const sea_days = calculateSeaDays(duration_hours);
 
       app.logger.info(
         {
@@ -722,6 +837,7 @@ export function register(app: App, fastify: FastifyInstance) {
           endLat,
           endLng,
           durationHours: duration_hours,
+          seaDays: sea_days,
         },
         `Test endpoint: Creating sea day entry from two most recent positions`
       );
@@ -734,6 +850,8 @@ export function register(app: App, fastify: FastifyInstance) {
           vessel_id: vessel.id,
           start_time: olderRecord.check_time,
           end_time: newestRecord.check_time,
+          duration_hours: String(duration_hours),
+          sea_days: sea_days,
           start_latitude: String(startLat),
           start_longitude: String(startLng),
           end_latitude: String(endLat),
@@ -744,7 +862,7 @@ export function register(app: App, fastify: FastifyInstance) {
         .returning();
 
       app.logger.info(
-        { entryId: new_entry.id, vesselId: vessel.id, vesselName: vessel.vessel_name, durationHours: duration_hours },
+        { entryId: new_entry.id, vesselId: vessel.id, vesselName: vessel.vessel_name, durationHours: duration_hours, seaDays: sea_days },
         `Test endpoint: Sea day entry created successfully`
       );
 
@@ -794,6 +912,7 @@ export function register(app: App, fastify: FastifyInstance) {
                   vessel_id: { type: 'string' },
                   start_time: { type: 'string', format: 'date-time' },
                   end_time: { type: ['string', 'null'], format: 'date-time' },
+                  duration_hours: { type: ['number', 'null'] },
                   sea_days: { type: ['number', 'null'] },
                   status: { type: 'string' },
                   notes: { type: 'string' },
@@ -888,6 +1007,9 @@ export function register(app: App, fastify: FastifyInstance) {
       entry1End.setDate(entry1End.getDate() - 2);
       entry1End.setHours(18, 30, 0, 0);
 
+      const entry1Duration = calculateDurationHours(entry1Start, entry1End);
+      const entry1SeaDays = calculateSeaDays(entry1Duration);
+
       const [sampleEntry1] = await app.db
         .insert(schema.sea_time_entries)
         .values({
@@ -895,6 +1017,8 @@ export function register(app: App, fastify: FastifyInstance) {
           vessel_id: selectedVessel.id,
           start_time: entry1Start,
           end_time: entry1End,
+          duration_hours: String(entry1Duration),
+          sea_days: entry1SeaDays,
           status: 'pending',
           notes: 'Coastal passage from Southampton to Portsmouth. Good weather conditions.',
           start_latitude: '50.9097',
@@ -905,9 +1029,9 @@ export function register(app: App, fastify: FastifyInstance) {
         .returning();
 
       entries.push(sampleEntry1);
-      app.logger.info({ entryId: sampleEntry1.id }, 'Sample entry 1 created');
+      app.logger.info({ entryId: sampleEntry1.id, durationHours: entry1Duration, seaDays: entry1SeaDays }, 'Sample entry 1 created');
 
-      // Entry 2: 7 days ago, 09:30 - 16:45
+      // Entry 2: 7 days ago, 09:30 - 16:45 (7.25 hours)
       const entry2Start = new Date(now);
       entry2Start.setDate(entry2Start.getDate() - 7);
       entry2Start.setHours(9, 30, 0, 0);
@@ -916,6 +1040,9 @@ export function register(app: App, fastify: FastifyInstance) {
       entry2End.setDate(entry2End.getDate() - 7);
       entry2End.setHours(16, 45, 0, 0);
 
+      const entry2Duration = calculateDurationHours(entry2Start, entry2End);
+      const entry2SeaDays = calculateSeaDays(entry2Duration);
+
       const [sampleEntry2] = await app.db
         .insert(schema.sea_time_entries)
         .values({
@@ -923,6 +1050,8 @@ export function register(app: App, fastify: FastifyInstance) {
           vessel_id: selectedVessel.id,
           start_time: entry2Start,
           end_time: entry2End,
+          duration_hours: String(entry2Duration),
+          sea_days: entry2SeaDays,
           status: 'pending',
           notes: 'Training voyage in the Solent. Practiced navigation and mooring.',
           start_latitude: '50.7964',
@@ -933,9 +1062,9 @@ export function register(app: App, fastify: FastifyInstance) {
         .returning();
 
       entries.push(sampleEntry2);
-      app.logger.info({ entryId: sampleEntry2.id }, 'Sample entry 2 created');
+      app.logger.info({ entryId: sampleEntry2.id, durationHours: entry2Duration, seaDays: entry2SeaDays }, 'Sample entry 2 created');
 
-      // Entry 3: 14 days ago, 07:00 - 19:15
+      // Entry 3: 14 days ago, 07:00 - 19:15 (12.25 hours)
       const entry3Start = new Date(now);
       entry3Start.setDate(entry3Start.getDate() - 14);
       entry3Start.setHours(7, 0, 0, 0);
@@ -944,6 +1073,9 @@ export function register(app: App, fastify: FastifyInstance) {
       entry3End.setDate(entry3End.getDate() - 14);
       entry3End.setHours(19, 15, 0, 0);
 
+      const entry3Duration = calculateDurationHours(entry3Start, entry3End);
+      const entry3SeaDays = calculateSeaDays(entry3Duration);
+
       const [sampleEntry3] = await app.db
         .insert(schema.sea_time_entries)
         .values({
@@ -951,6 +1083,8 @@ export function register(app: App, fastify: FastifyInstance) {
           vessel_id: selectedVessel.id,
           start_time: entry3Start,
           end_time: entry3End,
+          duration_hours: String(entry3Duration),
+          sea_days: entry3SeaDays,
           status: 'pending',
           notes: 'Extended passage to Isle of Wight. Overnight preparation and early departure.',
           start_latitude: '50.8429',
@@ -961,7 +1095,7 @@ export function register(app: App, fastify: FastifyInstance) {
         .returning();
 
       entries.push(sampleEntry3);
-      app.logger.info({ entryId: sampleEntry3.id }, 'Sample entry 3 created');
+      app.logger.info({ entryId: sampleEntry3.id, durationHours: entry3Duration, seaDays: entry3SeaDays }, 'Sample entry 3 created');
 
       app.logger.info(
         { vesselId: selectedVessel.id, entryCount: entries.length },
@@ -972,20 +1106,29 @@ export function register(app: App, fastify: FastifyInstance) {
         success: true,
         message: 'Sample sea time entries generated successfully',
         vessel: transformVesselForResponse(selectedVessel),
-        entries: entries.map((entry) => ({
-          id: entry.id,
-          vessel_id: entry.vessel_id,
-          start_time: entry.start_time.toISOString(),
-          end_time: entry.end_time ? entry.end_time.toISOString() : null,
-          sea_days: entry.sea_days,
-          status: entry.status,
-          notes: entry.notes,
-          start_latitude: entry.start_latitude,
-          start_longitude: entry.start_longitude,
-          end_latitude: entry.end_latitude,
-          end_longitude: entry.end_longitude,
-          created_at: entry.created_at.toISOString(),
-        })),
+        entries: entries.map((entry) => {
+          // Calculate duration_hours from start and end times
+          let duration_hours = null;
+          if (entry.start_time && entry.end_time) {
+            duration_hours = calculateDurationHours(entry.start_time, entry.end_time);
+          }
+
+          return {
+            id: entry.id,
+            vessel_id: entry.vessel_id,
+            start_time: entry.start_time.toISOString(),
+            end_time: entry.end_time ? entry.end_time.toISOString() : null,
+            duration_hours: duration_hours,
+            sea_days: entry.sea_days,
+            status: entry.status,
+            notes: entry.notes,
+            start_latitude: entry.start_latitude,
+            start_longitude: entry.start_longitude,
+            end_latitude: entry.end_latitude,
+            end_longitude: entry.end_longitude,
+            created_at: entry.created_at.toISOString(),
+          };
+        }),
       });
     } catch (error) {
       app.logger.error({ err: error }, 'Failed to generate sample sea time entries');
@@ -1015,6 +1158,7 @@ export function register(app: App, fastify: FastifyInstance) {
               vessel_id: { type: 'string' },
               start_time: { type: 'string' },
               end_time: { type: ['string', 'null'] },
+              duration_hours: { type: ['number', 'null'] },
               sea_days: { type: ['number', 'null'] },
               status: { type: 'string' },
               notes: { type: ['string', 'null'] },
@@ -1119,6 +1263,7 @@ export function register(app: App, fastify: FastifyInstance) {
             vessel_id: { type: 'string' },
             start_time: { type: 'string' },
             end_time: { type: ['string', 'null'] },
+            duration_hours: { type: ['number', 'null'] },
             sea_days: { type: ['number', 'null'] },
             status: { type: 'string' },
             notes: { type: ['string', 'null'] },
@@ -1214,6 +1359,8 @@ export function register(app: App, fastify: FastifyInstance) {
 
     // Validate and process end_time if provided
     let endDate: Date | null = null;
+    let calculated_duration_hours: string | null = null;
+    let calculated_sea_days = sea_days;
 
     if (end_time) {
       try {
@@ -1228,7 +1375,12 @@ export function register(app: App, fastify: FastifyInstance) {
           return reply.code(400).send({ error: 'End time must be after start time' });
         }
 
-        app.logger.info({ vessel_id, sea_days }, 'Sea time duration validated');
+        // Calculate duration_hours and sea_days from the actual times
+        const duration_hours = calculateDurationHours(startDate, endDate);
+        calculated_duration_hours = String(duration_hours);
+        calculated_sea_days = calculateSeaDays(duration_hours);
+
+        app.logger.info({ vessel_id, durationHours: duration_hours, seaDays: calculated_sea_days }, 'Sea time duration calculated');
       } catch (error) {
         app.logger.warn({ end_time }, 'Invalid end_time format');
         return reply.code(400).send({ error: 'Invalid end_time format' });
@@ -1244,7 +1396,8 @@ export function register(app: App, fastify: FastifyInstance) {
           vessel_id,
           start_time: startDate,
           end_time: endDate,
-          sea_days,
+          duration_hours: calculated_duration_hours,
+          sea_days: calculated_sea_days,
           status: 'confirmed', // Manually created entries are confirmed
           notes,
           start_latitude: start_latitude ? String(start_latitude) : null,
@@ -1261,7 +1414,8 @@ export function register(app: App, fastify: FastifyInstance) {
           vesselName: vessel[0].vessel_name,
           start_time,
           end_time: endDate?.toISOString(),
-          sea_days,
+          durationHours: calculated_duration_hours,
+          seaDays: calculated_sea_days,
           status: 'confirmed',
         },
         'Manual sea time entry created successfully'

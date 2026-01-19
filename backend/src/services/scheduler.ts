@@ -301,6 +301,11 @@ async function handleSeaTimeEntries(
       .limit(1);
 
     if (openEntry.length === 0) {
+      // Calculate duration and sea_days
+      const duration_ms = currentCheck.check_time.getTime() - previousCheck.check_time.getTime();
+      const duration_hours = Math.round((duration_ms / (1000 * 60 * 60)) * 100) / 100;
+      const sea_days = duration_hours >= 4 ? 1 : 0; // Calculate sea_days: 1 if >= 4 hours, else 0
+
       // Create new sea time entry with coordinates from both checks
       const [new_entry] = await app.db
         .insert(schema.sea_time_entries)
@@ -309,6 +314,8 @@ async function handleSeaTimeEntries(
           vessel_id: vesselId,
           start_time: previousCheck.check_time,
           end_time: currentCheck.check_time,
+          duration_hours: String(duration_hours),
+          sea_days: sea_days,
           start_latitude: String(previousLat),
           start_longitude: String(previousLng),
           end_latitude: String(currentLat),
@@ -316,9 +323,6 @@ async function handleSeaTimeEntries(
           status: 'pending',
         })
         .returning();
-
-      const duration_ms = currentCheck.check_time.getTime() - previousCheck.check_time.getTime();
-      const duration_hours = Math.round((duration_ms / (1000 * 60 * 60)) * 100) / 100;
 
       app.logger.info(
         {
@@ -334,8 +338,9 @@ async function handleSeaTimeEntries(
           endLng: currentLng,
           locationDelta: Math.round(maxDiff * 10000) / 10000,
           durationHours: duration_hours,
+          seaDays: sea_days,
         },
-        `Created sea day entry for vessel ${vessel_name}: location changed ${Math.round(maxDiff * 10000) / 10000}° (threshold: ${LOCATION_CHANGE_THRESHOLD}°), duration: ${duration_hours} hours`
+        `Created sea day entry for vessel ${vessel_name}: location changed ${Math.round(maxDiff * 10000) / 10000}° (threshold: ${LOCATION_CHANGE_THRESHOLD}°), duration: ${duration_hours} hours, sea days: ${sea_days}`
       );
     } else {
       app.logger.debug(
