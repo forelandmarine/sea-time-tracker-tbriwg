@@ -56,6 +56,12 @@
           "icon": "./assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png",
           "color": "#000000"
         }
+      ],
+      [
+        "expo-updates",
+        {
+          "username": "foreland-marine"
+        }
       ]
     ],
     "scheme": "seatimetracker",
@@ -73,7 +79,7 @@
       "policy": "appVersion"
     },
     "updates": {
-      "enabled": false
+      "url": "https://u.expo.dev/d982d462-52e2-493e-a176-8f75b09d5ef9"
     },
     "owner": "foreland-marine"
   },

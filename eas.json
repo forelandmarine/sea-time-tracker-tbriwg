@@ -17,13 +17,15 @@
       "ios": {
         "simulator": false,
         "resourceClass": "m-medium"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "ios": {
         "simulator": false,
         "resourceClass": "m-medium",
-        "autoIncrement": true
+        "autoIncrement": true,
+        "credentialsSource": "remote"
       },
       "channel": "production"
     }
