@@ -248,7 +248,17 @@ export async function activateVessel(vesselId: string) {
 export async function deleteVessel(vesselId: string) {
   checkBackendConfigured();
   console.log('[API] Deleting vessel:', vesselId);
-  const headers = await getApiHeaders();
+  const token = await getAuthToken();
+  
+  // For DELETE requests, we need to send the request without Content-Type: application/json
+  // or with an empty body to avoid Fastify's FST_ERR_CTP_EMPTY_JSON_BODY error
+  const headers: HeadersInit = {};
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+    console.log('[API] Auth token added to delete request');
+  }
+  
   const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}`, {
     method: 'DELETE',
     headers,
@@ -256,10 +266,11 @@ export async function deleteVessel(vesselId: string) {
   
   if (!response.ok) {
     const error = await response.json();
+    console.error('[API] Failed to delete vessel:', error);
     throw new Error(error.error || 'Failed to delete vessel');
   }
   
-  console.log('[API] Vessel deleted');
+  console.log('[API] Vessel deleted successfully');
   return response.json();
 }
 
@@ -507,7 +518,16 @@ export async function updateSeaTimeEntry(
 export async function deleteSeaTimeEntry(entryId: string) {
   checkBackendConfigured();
   console.log('[API] Deleting sea time entry:', entryId);
-  const headers = await getApiHeaders();
+  const token = await getAuthToken();
+  
+  // For DELETE requests, we need to send the request without Content-Type: application/json
+  // to avoid Fastify's FST_ERR_CTP_EMPTY_JSON_BODY error
+  const headers: HeadersInit = {};
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
   const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}`, {
     method: 'DELETE',
     headers,
