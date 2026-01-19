@@ -449,6 +449,7 @@ export function register(app: App, fastify: FastifyInstance) {
   fastify.put<{
     Params: { id: string };
     Body: {
+      vessel_name?: string;
       callsign?: string;
       flag?: string;
       official_number?: string;
@@ -460,7 +461,7 @@ export function register(app: App, fastify: FastifyInstance) {
     '/api/vessels/:id/particulars',
     {
       schema: {
-        description: 'Update vessel particulars (callsign, flag, official number, type, length, gross tonnes). Requires authentication.',
+        description: 'Update vessel particulars (vessel_name, callsign, flag, official number, type, length, gross tonnes). Requires authentication.',
         tags: ['vessels'],
         params: {
           type: 'object',
@@ -470,6 +471,7 @@ export function register(app: App, fastify: FastifyInstance) {
         body: {
           type: 'object',
           properties: {
+            vessel_name: { type: 'string' },
             callsign: { type: 'string' },
             flag: { type: 'string' },
             official_number: { type: 'string' },
@@ -505,7 +507,7 @@ export function register(app: App, fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const { id } = request.params;
-      const { callsign, flag, official_number, type, length_metres, gross_tonnes } = request.body;
+      const { vessel_name, callsign, flag, official_number, type, length_metres, gross_tonnes } = request.body;
 
       app.logger.info({ vesselId: id }, 'Updating vessel particulars');
 
@@ -538,7 +540,7 @@ export function register(app: App, fastify: FastifyInstance) {
       }
 
       // Verify at least one field is provided for update
-      if (callsign === undefined && flag === undefined && official_number === undefined && type === undefined &&
+      if (vessel_name === undefined && callsign === undefined && flag === undefined && official_number === undefined && type === undefined &&
           length_metres === undefined && gross_tonnes === undefined) {
         app.logger.warn({ vesselId: id }, 'Vessel particulars update with no fields to update');
         return reply.code(400).send({ error: 'At least one field must be provided for update' });
@@ -563,6 +565,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
       // Build update data with only provided fields
       const updateData: Record<string, any> = { updated_at: new Date() };
+      if (vessel_name !== undefined) updateData.vessel_name = vessel_name;
       if (callsign !== undefined) updateData.callsign = callsign;
       if (flag !== undefined) updateData.flag = flag;
       if (official_number !== undefined) updateData.official_number = official_number;
