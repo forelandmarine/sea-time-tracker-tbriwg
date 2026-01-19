@@ -148,10 +148,24 @@ export default function SeaTimeScreen() {
         gross_tonnes: newGrossTonnes
       });
       
+      // Check if there are any existing vessels
+      const hasNoActiveVessel = !vessels.some(v => v.is_active);
+      const isFirstVessel = vessels.length === 0;
+      
+      // Automatically activate if this is the first vessel OR if there's no active vessel
+      const shouldActivate = isFirstVessel || hasNoActiveVessel;
+      
+      console.log('Vessel activation logic:', {
+        isFirstVessel,
+        hasNoActiveVessel,
+        shouldActivate,
+        totalVessels: vessels.length
+      });
+      
       await seaTimeApi.createVessel(
         newMMSI.trim(), 
         newVesselName.trim(), 
-        false,
+        shouldActivate,
         newFlag.trim() || undefined,
         newOfficialNumber.trim() || undefined,
         newVesselType || undefined,
@@ -170,7 +184,12 @@ export default function SeaTimeScreen() {
       setNewLengthMetres('');
       setNewGrossTonnes('');
       await loadData();
-      Alert.alert('Success', 'Vessel added successfully');
+      
+      if (shouldActivate) {
+        Alert.alert('Success', `${newVesselName.trim()} has been added and is now being tracked`);
+      } else {
+        Alert.alert('Success', 'Vessel added successfully');
+      }
     } catch (error: any) {
       console.error('Failed to add vessel:', error);
       Alert.alert('Error', 'Failed to add vessel: ' + error.message);
