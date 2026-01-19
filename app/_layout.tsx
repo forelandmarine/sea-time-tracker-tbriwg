@@ -35,15 +35,24 @@ function RootLayoutNav() {
   const segments = useSegments();
   const { user, loading } = useAuth();
 
-  const [loaded] = useFonts({
+  const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
+
+  useEffect(() => {
+    if (error) {
+      console.error('[App] ❌ Font loading error:', error);
+      // Hide splash screen even if fonts fail to load
+      SplashScreen.hideAsync();
+    }
+  }, [error]);
 
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
       console.log('[App] ✅ Backend URL configured:', BACKEND_URL);
       console.log('[App] ✅ App ready with authentication');
+      console.log('[App] Platform:', Platform.OS);
       
       // Request notification permissions (only on native platforms)
       if (Platform.OS !== 'web') {
@@ -53,6 +62,8 @@ function RootLayoutNav() {
           } else {
             console.log('[App] ⚠️ Notification permissions not granted');
           }
+        }).catch((err) => {
+          console.error('[App] ❌ Notification permission error:', err);
         });
       } else {
         console.log('[App] ℹ️ Notifications not supported on web');
@@ -166,6 +177,20 @@ function RootLayoutNav() {
     );
   }
 
+  if (error) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff', padding: 20 }}>
+        <Text style={{ fontSize: 18, color: 'red', marginBottom: 10, textAlign: 'center' }}>Error Loading App</Text>
+        <Text style={{ fontSize: 14, color: colorScheme === 'dark' ? '#999' : '#666', textAlign: 'center' }}>
+          {error.message || 'An error occurred while loading the app'}
+        </Text>
+        <Text style={{ fontSize: 12, color: colorScheme === 'dark' ? '#666' : '#999', marginTop: 20, textAlign: 'center' }}>
+          Please restart the app
+        </Text>
+      </View>
+    );
+  }
+
   const CustomDefaultTheme: Theme = {
     ...DefaultTheme,
     dark: false,
@@ -197,7 +222,7 @@ function RootLayoutNav() {
       <ThemeProvider
         value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
       >
-        <GestureHandlerRootView>
+        <GestureHandlerRootView style={{ flex: 1 }}>
           <Stack>
             {/* Authentication Screen */}
             <Stack.Screen 
