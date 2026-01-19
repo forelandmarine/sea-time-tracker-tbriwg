@@ -1,3 +1,4 @@
+
 {
   "cli": {
     "version": ">= 5.0.0"
@@ -13,21 +14,25 @@
     "preview": {
       "distribution": "internal",
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "resourceClass": "m-medium"
       }
     },
     "production": {
       "ios": {
-        "simulator": false
-      }
+        "simulator": false,
+        "resourceClass": "m-medium",
+        "autoIncrement": true
+      },
+      "channel": "production"
     }
   },
   "submit": {
     "production": {
       "ios": {
-        "appleId": "YOUR_APPLE_ID_HERE",
-        "ascAppId": "YOUR_ASC_APP_ID_HERE",
-        "appleTeamId": "YOUR_TEAM_ID_HERE"
+        "appleId": "YOUR_APPLE_ID_EMAIL@example.com",
+        "ascAppId": "YOUR_ASC_APP_ID",
+        "appleTeamId": "YOUR_APPLE_TEAM_ID"
       }
     }
   }
