@@ -699,6 +699,7 @@ export default function VesselDetailScreen() {
   const [aisData, setAisData] = useState<AISData | null>(null);
   const [activateModalMessage, setActivateModalMessage] = useState('');
   const [editForm, setEditForm] = useState({
+    vessel_name: '',
     flag: '',
     official_number: '',
     vessel_type: '',
@@ -758,6 +759,7 @@ export default function VesselDetailScreen() {
     
     // Pre-fill the form with current values
     setEditForm({
+      vessel_name: vessel.vessel_name || '',
       flag: vessel.flag || '',
       official_number: vessel.official_number || '',
       vessel_type: vessel.vessel_type || '',
@@ -780,6 +782,7 @@ export default function VesselDetailScreen() {
       // Prepare the update payload
       const updates: any = {};
       
+      if (editForm.vessel_name.trim()) updates.vessel_name = editForm.vessel_name.trim();
       if (editForm.flag.trim()) updates.flag = editForm.flag.trim();
       if (editForm.official_number.trim()) updates.official_number = editForm.official_number.trim();
       if (editForm.vessel_type.trim()) updates.type = editForm.vessel_type.trim();
@@ -1373,6 +1376,17 @@ export default function VesselDetailScreen() {
               </View>
 
               <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={styles.modalScrollContent}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Vessel Name</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={editForm.vessel_name}
+                    onChangeText={(text) => setEditForm({ ...editForm, vessel_name: text })}
+                    placeholder="e.g., My Yacht"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  />
+                </View>
+
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Call Sign</Text>
                   <TextInput

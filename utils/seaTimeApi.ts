@@ -197,6 +197,7 @@ export async function createVessel(
 export async function updateVesselParticulars(
   vesselId: string,
   updates: {
+    vessel_name?: string;
     flag?: string;
     official_number?: string;
     type?: string;
