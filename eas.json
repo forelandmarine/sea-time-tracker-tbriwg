@@ -1,3 +1,4 @@
+
 {
   "cli": {
     "version": ">= 5.0.0",
@@ -24,18 +25,12 @@
         "simulator": false,
         "resourceClass": "m-medium",
         "autoIncrement": true,
-        "credentialsSource": "local",
-        "appleTeamId": "43GZCFFPR9",
-        "pushNotificationKeyId": "N6429B59C3"
+        "credentialsSource": "local"
       },
       "channel": "production"
     }
   },
   "submit": {
-    "production": {
-      "ios": {
-        "appleTeamId": "43GZCFFPR9"
-      }
-    }
+    "production": {}
   }
 }
