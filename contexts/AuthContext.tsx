@@ -62,16 +62,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Check for existing session on mount
   useEffect(() => {
     checkAuth();
+    
+    // Safety timeout - if auth check takes too long, stop loading
+    const timeout = setTimeout(() => {
+      if (loading) {
+        console.warn('[Auth] Auth check timeout - stopping loading state');
+        setLoading(false);
+      }
+    }, 10000); // 10 second timeout
+    
+    return () => clearTimeout(timeout);
   }, []);
 
   const checkAuth = async () => {
     try {
       console.log('[Auth] Checking authentication status...');
+      console.log('[Auth] API URL:', API_URL);
+      
+      if (!API_URL) {
+        console.warn('[Auth] Backend URL not configured, skipping auth check');
+        setLoading(false);
+        setUser(null);
+        return;
+      }
+
       const token = await tokenStorage.getToken();
       
       if (!token) {
         console.log('[Auth] No token found');
         setLoading(false);
+        setUser(null);
         return;
       }
 
@@ -85,7 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('[Auth] User authenticated:', data.user.email);
+        console.log('[Auth] User authenticated:', data.user?.email || 'unknown');
         setUser(data.user);
       } else {
         console.log('[Auth] Token invalid, clearing... Status:', response.status);
@@ -94,7 +114,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (error) {
       console.error('[Auth] Check auth failed:', error);
-      await tokenStorage.removeToken();
+      // Don't clear token on network errors - might be temporary
+      if (error instanceof TypeError && error.message.includes('Network')) {
+        console.warn('[Auth] Network error during auth check, keeping token');
+      } else {
+        await tokenStorage.removeToken();
+      }
       setUser(null);
     } finally {
       setLoading(false);

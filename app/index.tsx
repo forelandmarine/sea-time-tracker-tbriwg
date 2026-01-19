@@ -1,37 +1,57 @@
 
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { View, Text, useColorScheme } from 'react-native';
+import { View, Text, useColorScheme, ActivityIndicator, Platform } from 'react-native';
 import { colors } from '@/styles/commonStyles';
+import React, { useEffect, useState } from 'react';
 
 export default function Index() {
   const { user, loading } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const [mounted, setMounted] = useState(false);
 
-  console.log('[Index] Rendering index route', { user: !!user, loading });
+  useEffect(() => {
+    console.log('[Index] Component mounted');
+    setMounted(true);
+    
+    // Log platform and environment info
+    console.log('[Index] Platform:', Platform.OS);
+    console.log('[Index] User:', !!user);
+    console.log('[Index] Loading:', loading);
+  }, []);
 
-  // Show loading state while checking authentication
-  if (loading) {
+  console.log('[Index] Rendering index route', { 
+    user: !!user, 
+    loading, 
+    mounted,
+    platform: Platform.OS 
+  });
+
+  // Show loading state while checking authentication or mounting
+  if (loading || !mounted) {
     return (
       <View style={{ 
         flex: 1, 
         justifyContent: 'center', 
         alignItems: 'center', 
-        backgroundColor: isDark ? colors.background : colors.backgroundLight 
+        backgroundColor: isDark ? '#000' : '#fff'
       }}>
         <Text style={{ 
-          fontSize: 18, 
-          color: isDark ? colors.text : colors.textLight,
-          marginBottom: 10 
+          fontSize: 24, 
+          fontWeight: 'bold',
+          color: isDark ? '#fff' : '#000',
+          marginBottom: 20 
         }}>
           SeaTime Tracker
         </Text>
+        <ActivityIndicator size="large" color={isDark ? '#fff' : '#000'} />
         <Text style={{ 
           fontSize: 14, 
-          color: isDark ? colors.textSecondary : colors.textSecondaryLight 
+          color: isDark ? '#999' : '#666',
+          marginTop: 20
         }}>
-          Loading...
+          {loading ? 'Checking authentication...' : 'Initializing...'}
         </Text>
       </View>
     );

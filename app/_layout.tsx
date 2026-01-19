@@ -20,12 +20,24 @@ import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { BACKEND_URL } from "@/utils/api";
 import { registerForPushNotificationsAsync } from "@/utils/notifications";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
+// Global error handler for unhandled errors
+if (Platform.OS === 'web') {
+  window.addEventListener('error', (event) => {
+    console.error('[App] Global error caught:', event.error);
+  });
+  
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('[App] Unhandled promise rejection:', event.reason);
+  });
+}
+
 export const unstable_settings = {
-  initialRouteName: "(tabs)",
+  initialRouteName: "index",
 };
 
 function RootLayoutNav() {
@@ -52,9 +64,17 @@ function RootLayoutNav() {
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
-      console.log('[App] ✅ Backend URL configured:', BACKEND_URL);
-      console.log('[App] ✅ App ready with authentication');
+      console.log('[App] ========================================');
+      console.log('[App] ✅ App Initialized');
       console.log('[App] Platform:', Platform.OS);
+      console.log('[App] Backend URL:', BACKEND_URL || 'NOT CONFIGURED');
+      console.log('[App] Backend configured:', !!BACKEND_URL);
+      console.log('[App] ========================================');
+      
+      if (!BACKEND_URL) {
+        console.warn('[App] ⚠️ WARNING: Backend URL is not configured!');
+        console.warn('[App] The app may not function correctly without a backend.');
+      }
       
       // Request notification permissions (only on native platforms)
       if (Platform.OS !== 'web') {
@@ -82,15 +102,23 @@ function RootLayoutNav() {
 
     const inAuthGroup = segments[0] === '(tabs)';
     const isAuthScreen = pathname === '/auth';
+    const isIndexRoute = pathname === '/' || pathname === '';
 
     console.log('[App] Auth routing check:', { 
       user: !!user, 
       inAuthGroup,
       isAuthScreen,
+      isIndexRoute,
       pathname,
       segments: segments.join('/'),
       platform: Platform.OS
     });
+
+    // Skip navigation if we're on the index route (it will handle its own redirect)
+    if (isIndexRoute) {
+      console.log('[App] On index route, letting it handle navigation');
+      return;
+    }
 
     // Only navigate if we're in the wrong place
     if (!user && !isAuthScreen) {
@@ -229,6 +257,14 @@ function RootLayoutNav() {
       >
         <GestureHandlerRootView style={{ flex: 1 }}>
           <Stack screenOptions={{ headerShown: false }}>
+            {/* Index/Root Route */}
+            <Stack.Screen 
+              name="index" 
+              options={{ 
+                headerShown: false,
+              }} 
+            />
+
             {/* Authentication Screen */}
             <Stack.Screen 
               name="auth" 
@@ -339,10 +375,12 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <AuthProvider>
-      <WidgetProvider>
-        <RootLayoutNav />
-      </WidgetProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <WidgetProvider>
+          <RootLayoutNav />
+        </WidgetProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }

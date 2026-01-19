@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors } from '@/styles/commonStyles';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { BACKEND_URL } from '@/utils/api';
 
 export default function AuthScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -29,7 +30,22 @@ export default function AuthScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
 
+  useEffect(() => {
+    console.log('[AuthScreen] Mounted');
+    console.log('[AuthScreen] Backend URL:', BACKEND_URL || 'NOT CONFIGURED');
+    console.log('[AuthScreen] Platform:', Platform.OS);
+  }, []);
+
   const handleEmailAuth = async () => {
+    if (!BACKEND_URL) {
+      Alert.alert(
+        'Backend Not Configured',
+        'The app backend is not configured. Please ensure the backend URL is set in app.json.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     if (!email || !password) {
       Alert.alert('Error', 'Please enter email and password');
       return;
@@ -53,7 +69,14 @@ export default function AuthScreen() {
       router.replace('/(tabs)');
     } catch (error: any) {
       console.error('[AuthScreen] Authentication failed:', error);
-      Alert.alert('Error', error.message || 'Authentication failed');
+      
+      // Provide more helpful error messages
+      let errorMessage = error.message || 'Authentication failed';
+      if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
+        errorMessage = 'Cannot connect to server. Please check your internet connection.';
+      }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -128,6 +151,14 @@ export default function AuthScreen() {
         />
         <Text style={styles.title}>SeaTime Tracker</Text>
         <Text style={styles.subtitle}>By Foreland Marine</Text>
+        
+        {!BACKEND_URL && (
+          <View style={styles.warningBanner}>
+            <Text style={styles.warningText}>
+              ⚠️ Backend not configured. Authentication may not work.
+            </Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.form}>
@@ -338,6 +369,20 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
       marginBottom: 4,
+    },
+    warningBanner: {
+      backgroundColor: '#FFF3CD',
+      borderRadius: 8,
+      padding: 12,
+      marginTop: 16,
+      borderWidth: 1,
+      borderColor: '#FFC107',
+    },
+    warningText: {
+      color: '#856404',
+      fontSize: 14,
+      textAlign: 'center',
+      fontWeight: '500',
     },
   });
 }
