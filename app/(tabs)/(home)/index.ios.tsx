@@ -306,7 +306,7 @@ export default function SeaTimeScreen() {
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Header - matching other pages layout */}
+        {/* Header - matching Logbook light header color */}
         <View style={styles.header}>
           <View style={styles.headerTitleContainer}>
             <Image
@@ -714,7 +714,9 @@ function createStyles(isDark: boolean, topInset: number) {
     header: {
       padding: 20,
       paddingTop: topInset + 12,
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
     headerTitleContainer: {
       flexDirection: 'row',
