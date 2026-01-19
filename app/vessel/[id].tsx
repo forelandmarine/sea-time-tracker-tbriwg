@@ -610,7 +610,7 @@ export default function VesselDetailScreen() {
       }
 
       setVessel(currentVessel);
-      console.log('[VesselDetailScreen] Vessel loaded:', currentVessel.vessel_name);
+      console.log('[VesselDetailScreen] Vessel loaded:', currentVessel.vessel_name, 'MMSI:', currentVessel.mmsi);
 
       const seaTimeEntries = await seaTimeApi.getVesselSeaTime(id);
       console.log('[VesselDetailScreen] Sea time entries loaded:', seaTimeEntries.length);
@@ -776,8 +776,19 @@ export default function VesselDetailScreen() {
     }
 
     try {
-      console.log('[VesselDetailScreen] Checking AIS for vessel:', vessel.id);
+      console.log('[VesselDetailScreen] 🔍 CHECK AIS BUTTON CLICKED');
+      console.log('[VesselDetailScreen] Using vessel from particulars:');
+      console.log('[VesselDetailScreen] - Vessel ID:', vessel.id);
+      console.log('[VesselDetailScreen] - Vessel Name:', vessel.vessel_name);
+      console.log('[VesselDetailScreen] - MMSI:', vessel.mmsi);
+      console.log('[VesselDetailScreen] - Call Sign:', vessel.callsign || 'Not set');
+      console.log('[VesselDetailScreen] Calling checkVesselAIS with vessel ID:', vessel.id);
+      console.log('[VesselDetailScreen] Backend will look up MMSI from database for this vessel ID');
+      
       const result = await seaTimeApi.checkVesselAIS(vessel.id);
+      
+      console.log('[VesselDetailScreen] ✅ AIS check completed successfully');
+      console.log('[VesselDetailScreen] Result:', result);
       
       // Handle null values gracefully
       const speedText = result.speed_knots !== null && result.speed_knots !== undefined
@@ -795,9 +806,12 @@ export default function VesselDetailScreen() {
         : `Vessel is not moving\n\nSpeed: ${speedText}\nPosition: ${positionText}`;
 
       Alert.alert(`AIS Check - ${vessel.vessel_name}`, message);
+      
+      // Reload data to get any updated vessel information (like callsign from AIS)
+      console.log('[VesselDetailScreen] Reloading vessel data to get any AIS updates...');
       await loadData();
     } catch (error: any) {
-      console.error('[VesselDetailScreen] AIS check failed:', error);
+      console.error('[VesselDetailScreen] ❌ AIS check failed:', error);
       Alert.alert('AIS Check Failed', error.message);
     }
   };
