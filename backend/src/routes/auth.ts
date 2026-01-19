@@ -343,45 +343,87 @@ export function register(app: App, fastify: FastifyInstance) {
               isNewUser: { type: 'boolean' },
             },
           },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
           401: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
         },
       },
     },
     async (request, reply) => {
       const { identityToken, user: userData } = request.body;
 
-      app.logger.info({}, 'Apple Sign-In attempt');
+      app.logger.info({ tokenLength: identityToken?.length }, 'Apple Sign-In attempt');
+
+      // Step 1: Parse and validate JWT token format
+      if (!identityToken || typeof identityToken !== 'string') {
+        app.logger.warn({ tokenType: typeof identityToken }, 'Invalid token format: not a string');
+        return reply.code(400).send({
+          error: 'Invalid token format: identityToken must be a string',
+        });
+      }
+
+      // Decode JWT token
+      let decodedToken: any = {};
+      try {
+        const parts = identityToken.split('.');
+        app.logger.debug({ parts: parts.length }, 'JWT token structure check');
+
+        if (parts.length !== 3) {
+          app.logger.warn({ parts: parts.length }, 'Invalid JWT: expected 3 parts, got ' + parts.length);
+          return reply.code(400).send({
+            error: 'Invalid token format: JWT must have 3 parts (header.payload.signature)',
+          });
+        }
+
+        const payload = parts[1];
+        if (!payload) {
+          app.logger.warn({}, 'Invalid JWT: empty payload');
+          return reply.code(400).send({
+            error: 'Invalid token format: empty payload',
+          });
+        }
+
+        let decoded: string;
+        try {
+          decoded = Buffer.from(payload, 'base64').toString('utf-8');
+        } catch (e) {
+          app.logger.warn({ err: e }, 'Base64 decoding failed');
+          return reply.code(400).send({
+            error: 'Invalid token format: unable to decode base64 payload',
+          });
+        }
+
+        try {
+          decodedToken = JSON.parse(decoded);
+        } catch (e) {
+          app.logger.warn({ err: e, payload: decoded.substring(0, 100) }, 'JSON parsing failed');
+          return reply.code(400).send({
+            error: 'Invalid token format: payload is not valid JSON',
+          });
+        }
+      } catch (error) {
+        app.logger.error({ err: error }, 'Unexpected error during token decoding');
+        return reply.code(500).send({
+          error: 'Failed to decode authentication token',
+        });
+      }
+
+      // Step 2: Extract claims from decoded token
+      const appleUserId = decodedToken.sub || decodedToken.user_id;
+      const email = decodedToken.email || userData?.email;
+
+      if (!appleUserId) {
+        app.logger.warn({ claims: Object.keys(decodedToken) }, 'Token missing required user identifier (sub or user_id)');
+        return reply.code(400).send({
+          error: 'Invalid token: missing user identifier',
+        });
+      }
+
+      app.logger.info({ appleUserId, hasEmail: !!email }, 'Apple token decoded successfully');
 
       try {
-        // Verify the identity token (simplified - decode JWT)
-        let decodedToken: any = {};
-        try {
-          const parts = identityToken.split('.');
-          if (parts.length === 3) {
-            const payload = parts[1];
-            const decoded = Buffer.from(payload, 'base64').toString('utf-8');
-            decodedToken = JSON.parse(decoded);
-          }
-        } catch (e) {
-          app.logger.warn({}, 'Failed to decode Apple token');
-          return reply.code(401).send({
-            error: 'Invalid Apple token',
-          });
-        }
-
-        const appleUserId = decodedToken.sub || decodedToken.user_id;
-        const email = decodedToken.email || userData?.email;
-
-        if (!appleUserId) {
-          app.logger.warn({}, 'Apple token missing user ID');
-          return reply.code(401).send({
-            error: 'Invalid Apple token',
-          });
-        }
-
-        app.logger.info({ appleUserId, email }, 'Apple token verified');
-
-        // Check if user already exists with this Apple ID
+        // Step 3: Check if user already exists with this Apple ID
+        app.logger.debug({ appleUserId }, 'Looking up existing Apple account');
         const accounts = await app.db
           .select()
           .from(authSchema.account)
@@ -391,23 +433,27 @@ export function register(app: App, fastify: FastifyInstance) {
         let isNewUser = false;
 
         if (accounts.length > 0) {
-          // Existing user
+          // Existing user - sign in
+          app.logger.debug({ appleUserId }, 'Apple account found');
           const account = accounts[0];
+
           const users = await app.db
             .select()
             .from(authSchema.user)
             .where(eq(authSchema.user.id, account.userId));
 
           if (users.length === 0) {
-            return reply.code(401).send({
-              error: 'User not found',
+            app.logger.error({ userId: account.userId, appleUserId }, 'Account exists but user not found');
+            return reply.code(500).send({
+              error: 'Account data is inconsistent',
             });
           }
 
           user = users[0];
-          app.logger.info({ userId: user.id, appleUserId }, 'Existing Apple user');
+          app.logger.info({ userId: user.id, appleUserId }, 'Existing Apple user authenticated');
         } else {
           // New user - create account
+          app.logger.debug({ appleUserId }, 'No existing account found, creating new user');
           isNewUser = true;
           const userId = crypto.randomUUID();
 
@@ -435,6 +481,7 @@ export function register(app: App, fastify: FastifyInstance) {
             .returning();
 
           user = newUser;
+          app.logger.debug({ userId, appleUserId }, 'User record created');
 
           // Create account linked to Apple ID
           const accountId = crypto.randomUUID();
@@ -447,10 +494,11 @@ export function register(app: App, fastify: FastifyInstance) {
               accountId: appleUserId,
             });
 
-          app.logger.info({ userId, appleUserId }, 'Apple account created');
+          app.logger.info({ userId, appleUserId }, 'Apple account record created');
         }
 
-        // Create session
+        // Step 4: Create session
+        app.logger.debug({ userId: user.id }, 'Creating session');
         const sessionId = crypto.randomUUID();
         const token = crypto.randomBytes(32).toString('hex');
         const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -466,7 +514,7 @@ export function register(app: App, fastify: FastifyInstance) {
           .returning();
 
         app.logger.info(
-          { userId: user.id, sessionId, isNewUser },
+          { userId: user.id, sessionId, isNewUser, appleUserId },
           'Apple authentication successful'
         );
 
@@ -488,9 +536,9 @@ export function register(app: App, fastify: FastifyInstance) {
           isNewUser,
         });
       } catch (error) {
-        app.logger.error({ err: error }, 'Apple Sign-In error');
-        return reply.code(401).send({
-          error: 'Apple authentication failed',
+        app.logger.error({ err: error, appleUserId }, 'Database error during Apple Sign-In');
+        return reply.code(500).send({
+          error: 'Authentication service error',
         });
       }
     }
