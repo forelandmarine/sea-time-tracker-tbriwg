@@ -515,6 +515,61 @@ function createStyles(isDark: boolean) {
     deleteConfirmButtonText: {
       color: '#FFFFFF',
     },
+    // Activate confirmation modal styles
+    activateModalContent: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 16,
+      padding: 24,
+      width: '90%',
+      maxWidth: 400,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+      elevation: 8,
+    },
+    activateModalTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    activateModalMessage: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 24,
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    activateModalButtons: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    activateModalButton: {
+      flex: 1,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+    },
+    activateCancelButton: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    activateConfirmButton: {
+      backgroundColor: colors.primary,
+    },
+    activateModalButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    activateCancelButtonText: {
+      color: isDark ? colors.text : colors.textLight,
+    },
+    activateConfirmButtonText: {
+      color: '#FFFFFF',
+    },
   });
 }
 
@@ -526,6 +581,8 @@ export default function VesselDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [activateModalVisible, setActivateModalVisible] = useState(false);
+  const [activateModalMessage, setActivateModalMessage] = useState('');
   const [editForm, setEditForm] = useState({
     flag: '',
     official_number: '',
@@ -658,6 +715,8 @@ export default function VesselDetailScreen() {
   };
 
   const handleActivateVessel = async () => {
+    console.log('[VesselDetailScreen] User tapped Activate Vessel button');
+    
     if (!vessel) {
       console.error('[VesselDetailScreen] No vessel data available');
       return;
@@ -671,31 +730,38 @@ export default function VesselDetailScreen() {
         ? `Start tracking ${vessel.vessel_name}? This will deactivate ${activeVessel.vessel_name}.`
         : `Start tracking ${vessel.vessel_name}? The app will monitor this vessel's AIS data.`;
 
-      Alert.alert(
-        'Activate Vessel',
-        message,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Activate',
-            onPress: async () => {
-              try {
-                console.log('[VesselDetailScreen] Activating vessel:', vessel.id);
-                await seaTimeApi.activateVessel(vessel.id);
-                await loadData();
-                Alert.alert('Success', `${vessel.vessel_name} is now being tracked`);
-              } catch (error: any) {
-                console.error('[VesselDetailScreen] Failed to activate vessel:', error);
-                Alert.alert('Error', 'Failed to activate vessel: ' + error.message);
-              }
-            },
-          },
-        ]
-      );
+      console.log('[VesselDetailScreen] Opening activate confirmation modal');
+      setActivateModalMessage(message);
+      setActivateModalVisible(true);
     } catch (error: any) {
       console.error('[VesselDetailScreen] Error checking active vessels:', error);
       Alert.alert('Error', 'Failed to check active vessels: ' + error.message);
     }
+  };
+
+  const confirmActivateVessel = async () => {
+    console.log('[VesselDetailScreen] User confirmed vessel activation');
+    
+    if (!vessel) {
+      console.error('[VesselDetailScreen] No vessel data available');
+      return;
+    }
+
+    try {
+      console.log('[VesselDetailScreen] Activating vessel:', vessel.id);
+      setActivateModalVisible(false);
+      await seaTimeApi.activateVessel(vessel.id);
+      await loadData();
+      Alert.alert('Success', `${vessel.vessel_name} is now being tracked`);
+    } catch (error: any) {
+      console.error('[VesselDetailScreen] Failed to activate vessel:', error);
+      Alert.alert('Error', 'Failed to activate vessel: ' + error.message);
+    }
+  };
+
+  const cancelActivateVessel = () => {
+    console.log('[VesselDetailScreen] User cancelled vessel activation');
+    setActivateModalVisible(false);
   };
 
   const handleCheckAIS = async () => {
@@ -1256,6 +1322,51 @@ export default function VesselDetailScreen() {
             </TouchableOpacity>
           </TouchableOpacity>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Activate Confirmation Modal */}
+      <Modal
+        visible={activateModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelActivateVessel}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={cancelActivateVessel}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={styles.activateModalContent}
+            >
+              <Text style={styles.activateModalTitle}>Activate Vessel</Text>
+              <Text style={styles.activateModalMessage}>
+                {activateModalMessage}
+              </Text>
+              <View style={styles.activateModalButtons}>
+                <TouchableOpacity
+                  style={[styles.activateModalButton, styles.activateCancelButton]}
+                  onPress={cancelActivateVessel}
+                >
+                  <Text style={[styles.activateModalButtonText, styles.activateCancelButtonText]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.activateModalButton, styles.activateConfirmButton]}
+                  onPress={confirmActivateVessel}
+                >
+                  <Text style={[styles.activateModalButtonText, styles.activateConfirmButtonText]}>
+                    Activate
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
       </Modal>
 
       {/* Delete Confirmation Modal */}
