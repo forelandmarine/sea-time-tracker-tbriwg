@@ -16,8 +16,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.forelandmarine.seatimetracker",
-      "appleTeamId": "YOUR_CORRECT_TEAM_ID_HERE"
+      "bundleIdentifier": "com.forelandmarine.seatimetracker"
     },
     "android": {
       "adaptiveIcon": {
