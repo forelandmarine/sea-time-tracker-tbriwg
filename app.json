@@ -1,8 +1,7 @@
-
 {
   "expo": {
     "name": "SeaTime Tracker",
-    "slug": "seatime-tracker",
+    "slug": "SeaTime Tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/9f505c5e-26b6-4025-b589-af78f238fc80.png",
@@ -21,7 +20,11 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSLocationWhenInUseUsageDescription": "SeaTime Tracker needs your location to track vessel movements and sea time.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "SeaTime Tracker needs your location to track vessel movements and sea time in the background.",
-        "UIBackgroundModes": ["location", "fetch", "remote-notification"]
+        "UIBackgroundModes": [
+          "location",
+          "fetch",
+          "remote-notification"
+        ]
       },
       "config": {
         "usesNonExemptEncryption": false
@@ -70,5 +73,6 @@
       "enabled": false
     },
     "owner": "YOUR_EXPO_USERNAME"
-  }
+  },
+  "scheme": "SeaTime Tracker"
 }

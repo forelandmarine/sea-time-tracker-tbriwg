@@ -287,7 +287,7 @@ export default function SeaTimeScreen() {
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Header */}
+        {/* Header - removed grey background and border */}
         <View style={styles.header}>
           <View style={styles.headerTitleContainer}>
             <Image
@@ -695,9 +695,7 @@ function createStyles(isDark: boolean, topInset: number) {
     header: {
       padding: 20,
       paddingTop: topInset + 12,
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.border : colors.borderLight,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
     headerTitleContainer: {
       flexDirection: 'row',
@@ -991,7 +989,7 @@ function createStyles(isDark: boolean, topInset: number) {
     },
     modalScrollContent: {
       padding: 20,
-      paddingTop: SCREEN_HEIGHT * 0.1,
+      paddingTop: 30,
       paddingBottom: 40,
     },
     inputGroup: {
