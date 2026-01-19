@@ -45,11 +45,13 @@ const tokenStorage = {
   },
   
   async removeToken(): Promise<void> {
+    console.log('[Auth] Removing token from storage');
     if (Platform.OS === 'web') {
       localStorage.removeItem(TOKEN_KEY);
     } else {
       await SecureStore.deleteItemAsync(TOKEN_KEY);
     }
+    console.log('[Auth] Token removed successfully');
   },
 };
 
@@ -257,29 +259,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    console.log('[Auth] ========== SIGN OUT STARTED ==========');
     try {
-      console.log('[Auth] Signing out');
       const token = await tokenStorage.getToken();
+      console.log('[Auth] Retrieved token for sign out, has token:', !!token);
       
       if (token) {
-        // Call logout endpoint (optional - for token invalidation)
-        await fetch(`${API_URL}/api/auth/sign-out`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-          body: JSON.stringify({}),
-        });
+        console.log('[Auth] Calling backend sign-out endpoint...');
+        try {
+          const response = await fetch(`${API_URL}/api/auth/sign-out`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({}),
+          });
+          
+          console.log('[Auth] Backend sign-out response status:', response.status);
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log('[Auth] Backend sign-out successful:', data);
+          } else {
+            const errorText = await response.text();
+            console.warn('[Auth] Backend sign-out failed:', response.status, errorText);
+          }
+        } catch (fetchError) {
+          console.error('[Auth] Backend sign-out request failed:', fetchError);
+          // Continue with local sign-out even if backend call fails
+        }
+      } else {
+        console.log('[Auth] No token found, skipping backend call');
       }
 
+      console.log('[Auth] Clearing local token and user state...');
       await tokenStorage.removeToken();
       setUser(null);
-      console.log('[Auth] Sign out successful');
+      console.log('[Auth] ========== SIGN OUT COMPLETED ==========');
     } catch (error) {
-      console.error('[Auth] Sign out failed:', error);
-      // Still clear local state even if API call fails
-      await tokenStorage.removeToken();
-      setUser(null);
+      console.error('[Auth] Sign out error:', error);
+      // Still clear local state even if there's an error
+      try {
+        await tokenStorage.removeToken();
+        setUser(null);
+        console.log('[Auth] Local state cleared despite error');
+      } catch (clearError) {
+        console.error('[Auth] Failed to clear local state:', clearError);
+      }
+      throw error;
     }
   };
 

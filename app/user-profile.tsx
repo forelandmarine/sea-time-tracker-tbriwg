@@ -421,18 +421,22 @@ export default function UserProfileScreen() {
         {
           text: 'Cancel',
           style: 'cancel',
+          onPress: () => {
+            console.log('User cancelled sign out');
+          },
         },
         {
           text: 'Sign Out',
           style: 'destructive',
           onPress: async () => {
+            console.log('User confirmed sign out, executing sign out...');
             try {
               await signOut();
-              console.log('User signed out, navigating to auth screen');
+              console.log('Sign out completed successfully, navigating to auth screen');
               router.replace('/auth');
             } catch (error: any) {
-              console.error('Sign out failed:', error);
-              Alert.alert('Error', error.message || 'Failed to sign out');
+              console.error('Sign out failed with error:', error);
+              Alert.alert('Error', error.message || 'Failed to sign out. Please try again.');
             }
           },
         },
