@@ -106,7 +106,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[Auth] Signing in:', email);
       console.log('[Auth] API URL:', API_URL);
       
-      const response = await fetch(`${API_URL}/api/auth/sign-in/email`, {
+      if (!API_URL) {
+        throw new Error('Backend URL is not configured. Please check app.json extra.backendUrl');
+      }
+
+      const url = `${API_URL}/api/auth/sign-in/email`;
+      console.log('[Auth] Full request URL:', url);
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -147,6 +154,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         stack: error?.stack,
         error: error
       });
+      
+      // Provide more helpful error messages
+      if (error.message === 'Network request failed' || error.name === 'TypeError') {
+        throw new Error('Cannot connect to server. Please check your internet connection and ensure the backend is running.');
+      }
+      
       throw error;
     }
   };
@@ -154,7 +167,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signUp = async (email: string, password: string, name?: string) => {
     try {
       console.log('[Auth] Signing up:', email);
-      const response = await fetch(`${API_URL}/api/auth/sign-up/email`, {
+      console.log('[Auth] API URL:', API_URL);
+      
+      if (!API_URL) {
+        throw new Error('Backend URL is not configured. Please check app.json extra.backendUrl');
+      }
+
+      const url = `${API_URL}/api/auth/sign-up/email`;
+      console.log('[Auth] Full request URL:', url);
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -189,6 +211,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: error?.name,
         error: error
       });
+      
+      // Provide more helpful error messages
+      if (error.message === 'Network request failed' || error.name === 'TypeError') {
+        throw new Error('Cannot connect to server. Please check your internet connection and ensure the backend is running.');
+      }
+      
       throw error;
     }
   };
@@ -200,6 +228,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[Auth] Apple user data:', JSON.stringify(appleUser));
       console.log('[Auth] API URL:', API_URL);
 
+      if (!API_URL) {
+        throw new Error('Backend URL is not configured. Please check app.json extra.backendUrl');
+      }
+
       if (!identityToken) {
         throw new Error('No identity token provided');
       }
@@ -210,7 +242,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       };
       console.log('[Auth] Request body:', JSON.stringify(requestBody));
 
-      const response = await fetch(`${API_URL}/api/auth/sign-in/apple`, {
+      const url = `${API_URL}/api/auth/sign-in/apple`;
+      console.log('[Auth] Full request URL:', url);
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -254,6 +289,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         stack: error?.stack,
         error: error
       });
+      
+      // Provide more helpful error messages
+      if (error.message === 'Network request failed' || error.name === 'TypeError') {
+        throw new Error('Cannot connect to server. Please check your internet connection and ensure the backend is running.');
+      }
+      
       throw error;
     }
   };

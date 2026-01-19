@@ -1,8 +1,7 @@
-
 {
   "expo": {
     "name": "SeaTime Tracker",
-    "slug": "seatime-tracker",
+    "slug": "SeaTime Tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/final_quest_240x240.png",
@@ -59,11 +58,12 @@
       "eas": {
         "projectId": "d982d462-52e2-493e-a176-8f75b09d5ef9"
       },
-      "backendUrl": "https://seatime-tracker-backend.specular.app"
+      "backendUrl": "http://localhost:8082"
     },
     "updates": {
       "url": "https://u.expo.dev/d982d462-52e2-493e-a176-8f75b09d5ef9"
     },
     "runtimeVersion": "1.0.0"
-  }
+  },
+  "scheme": "SeaTime Tracker"
 }
