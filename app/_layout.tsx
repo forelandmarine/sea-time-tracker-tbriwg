@@ -2,7 +2,7 @@
 import "react-native-reanimated";
 import React, { useEffect } from "react";
 import { useFonts } from "expo-font";
-import { Stack, useRouter, useSegments, usePathname } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -33,7 +33,6 @@ function RootLayoutNav() {
   const networkState = useNetworkState();
   const router = useRouter();
   const segments = useSegments();
-  const pathname = usePathname();
   const { user, loading } = useAuth();
 
   const [loaded, error] = useFonts({
@@ -72,41 +71,34 @@ function RootLayoutNav() {
     }
   }, [loaded]);
 
-  // Handle authentication routing - simplified for web compatibility
+  // Simplified authentication routing
   useEffect(() => {
     if (!loaded || loading) {
-      console.log('[App] Waiting for app to load... loaded:', loaded, 'loading:', loading);
       return;
     }
 
     const inAuthGroup = segments[0] === '(tabs)';
     const isAuthScreen = segments[0] === 'auth';
 
-    console.log('[App] Auth routing check:', { 
+    console.log('[App] Auth routing:', { 
       user: !!user, 
-      loading, 
       inAuthGroup,
       isAuthScreen,
-      pathname,
       segments: segments.join('/'),
       platform: Platform.OS
     });
 
-    // Simple routing logic
+    // Only redirect if user is not authenticated and trying to access protected routes
     if (!user && inAuthGroup) {
-      // User not authenticated and trying to access protected routes
       console.log('[App] Redirecting to auth - user not authenticated');
-      setTimeout(() => router.replace('/auth'), 100);
-    } else if (user && isAuthScreen) {
-      // User authenticated and on auth screen
+      router.replace('/auth');
+    } 
+    // Only redirect if user is authenticated and on auth screen
+    else if (user && isAuthScreen) {
       console.log('[App] Redirecting to tabs - user already authenticated');
-      setTimeout(() => router.replace('/(tabs)'), 100);
-    } else if (!user && !isAuthScreen && segments.length === 0) {
-      // Initial load without auth
-      console.log('[App] Initial load - redirecting to auth');
-      setTimeout(() => router.replace('/auth'), 100);
+      router.replace('/(tabs)');
     }
-  }, [user, loading, segments, loaded, pathname]);
+  }, [user, loading, segments, loaded]);
 
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
