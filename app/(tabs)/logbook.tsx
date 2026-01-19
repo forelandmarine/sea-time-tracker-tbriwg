@@ -44,6 +44,7 @@ interface SeaTimeEntry {
   start_time: string;
   end_time: string | null;
   duration_hours: number | string | null;
+  sea_days: number | null;
   status: 'pending' | 'confirmed' | 'rejected';
   notes: string | null;
   created_at: string;
@@ -264,6 +265,19 @@ const createStyles = (isDark: boolean) =>
       fontWeight: '600',
       color: colors.primary,
       marginTop: 8,
+    },
+    seaDayBadge: {
+      backgroundColor: colors.primary + '20',
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 8,
+      alignSelf: 'flex-start',
+      marginTop: 8,
+    },
+    seaDayText: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.primary,
     },
     emptyContainer: {
       flex: 1,
@@ -834,20 +848,24 @@ export default function LogbookScreen() {
     return `${wholeHours}h ${minutes}m`;
   };
 
-  const formatDays = (hours: number | string | null | undefined): string => {
-    const h = toNumber(hours);
-    const days = (h / 24).toFixed(1);
-    return `${days} days`;
+  const formatSeaDay = (seaDays: number | null | undefined, durationHours: number | string | null | undefined): string => {
+    const days = seaDays ?? 0;
+    const hours = toNumber(durationHours);
+    
+    if (days === 1) {
+      return '✓ Sea Day Qualified';
+    } else if (hours > 0 && hours < 4) {
+      return `${formatDuration(hours)} (< 4h, no sea day)`;
+    } else if (hours === 0) {
+      return 'In progress';
+    }
+    return 'No sea day';
   };
 
-  const calculateTotalHours = () => {
+  const calculateTotalSeaDays = () => {
     return entries
       .filter((e) => e.status === 'confirmed')
-      .reduce((sum, entry) => sum + toNumber(entry.duration_hours), 0);
-  };
-
-  const calculateTotalDays = () => {
-    return (calculateTotalHours() / 24).toFixed(1);
+      .reduce((sum, entry) => sum + (entry.sea_days ?? 0), 0);
   };
 
   const handleDatePress = (day: any) => {
@@ -1106,11 +1124,11 @@ export default function LogbookScreen() {
                         </Text>
                       </View>
 
-                      {entry.duration_hours !== null && (
-                        <Text style={styles.durationText}>
-                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
+                      <View style={styles.seaDayBadge}>
+                        <Text style={styles.seaDayText}>
+                          {formatSeaDay(entry.sea_days, entry.duration_hours)}
                         </Text>
-                      )}
+                      </View>
 
                       {entry.notes && (
                         <View style={styles.entryRow}>
@@ -1175,14 +1193,8 @@ export default function LogbookScreen() {
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryTitle}>Summary</Text>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Total Confirmed Days</Text>
-                  <Text style={styles.summaryValue}>{calculateTotalDays()}</Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Total Confirmed Hours</Text>
-                  <Text style={styles.summaryValue}>
-                    {calculateTotalHours().toFixed(1)}h
-                  </Text>
+                  <Text style={styles.summaryLabel}>Total Sea Days</Text>
+                  <Text style={styles.summaryValue}>{calculateTotalSeaDays()}</Text>
                 </View>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Confirmed Entries</Text>
@@ -1198,11 +1210,10 @@ export default function LogbookScreen() {
                 <React.Fragment>
                   <Text style={styles.sectionTitle}>Sea Time Records by Vessel</Text>
                   {Object.entries(groupedByVessel).map(([vesselId, group]) => {
-                    const vesselTotalHours = group.entries.reduce(
-                      (sum, entry) => sum + toNumber(entry.duration_hours),
+                    const vesselTotalSeaDays = group.entries.reduce(
+                      (sum, entry) => sum + (entry.sea_days ?? 0),
                       0
                     );
-                    const vesselTotalDays = (vesselTotalHours / 24).toFixed(1);
                     
                     return (
                       <React.Fragment key={vesselId}>
@@ -1221,8 +1232,8 @@ export default function LogbookScreen() {
                               <Text style={styles.vesselStatValue}>{group.entries.length}</Text>
                             </View>
                             <View style={styles.vesselStat}>
-                              <Text style={styles.vesselStatText}>Total:</Text>
-                              <Text style={styles.vesselStatValue}>{vesselTotalDays} days</Text>
+                              <Text style={styles.vesselStatText}>Sea Days:</Text>
+                              <Text style={styles.vesselStatValue}>{vesselTotalSeaDays}</Text>
                             </View>
                           </View>
                         </View>
@@ -1261,11 +1272,11 @@ export default function LogbookScreen() {
                               </Text>
                             </View>
 
-                            {entry.duration_hours !== null && (
-                              <Text style={styles.durationText}>
-                                {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
+                            <View style={styles.seaDayBadge}>
+                              <Text style={styles.seaDayText}>
+                                {formatSeaDay(entry.sea_days, entry.duration_hours)}
                               </Text>
-                            )}
+                            </View>
 
                             {entry.notes && (
                               <View style={styles.entryRow}>
@@ -1330,11 +1341,11 @@ export default function LogbookScreen() {
                         </Text>
                       </View>
 
-                      {entry.duration_hours !== null && (
-                        <Text style={styles.durationText}>
-                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
+                      <View style={styles.seaDayBadge}>
+                        <Text style={styles.seaDayText}>
+                          {formatSeaDay(entry.sea_days, entry.duration_hours)}
                         </Text>
-                      )}
+                      </View>
                     </TouchableOpacity>
                   ))}
                 </React.Fragment>
@@ -1373,7 +1384,7 @@ export default function LogbookScreen() {
                   {editingEntry ? 'Edit Sea Time Entry' : 'Add Sea Time Entry'}
                 </Text>
                 <Text style={styles.modalSubtitle}>
-                  {editingEntry ? 'Update your sea time record' : 'Manually record your sea time with voyage details'}
+                  {editingEntry ? 'Update your sea time record' : 'Manually record your sea time with voyage details. A sea day = 4+ hours underway.'}
                 </Text>
 
                 <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={styles.modalScrollContent}>
