@@ -35,6 +35,7 @@ function RootLayoutNav() {
   const segments = useSegments();
   const pathname = usePathname();
   const { user, loading } = useAuth();
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -72,10 +73,10 @@ function RootLayoutNav() {
     }
   }, [loaded]);
 
-  // Simplified authentication routing
+  // Simplified authentication routing - FIXED to prevent infinite loops
   useEffect(() => {
-    if (!loaded || loading) {
-      console.log('[App] Waiting for initialization...', { loaded, loading });
+    if (!loaded || loading || isNavigating) {
+      console.log('[App] Waiting for initialization...', { loaded, loading, isNavigating });
       return;
     }
 
@@ -91,17 +92,25 @@ function RootLayoutNav() {
       platform: Platform.OS
     });
 
-    // Navigate based on auth state
+    // Only navigate if we're in the wrong place
     if (!user && !isAuthScreen) {
       console.log('[App] ⚠️ User not authenticated, redirecting to /auth');
-      router.replace('/auth');
+      setIsNavigating(true);
+      setTimeout(() => {
+        router.replace('/auth');
+        setIsNavigating(false);
+      }, 100);
     } else if (user && isAuthScreen) {
       console.log('[App] ✅ User authenticated, redirecting to /(tabs)');
-      router.replace('/(tabs)');
+      setIsNavigating(true);
+      setTimeout(() => {
+        router.replace('/(tabs)');
+        setIsNavigating(false);
+      }, 100);
     } else {
       console.log('[App] ✅ User in correct location');
     }
-  }, [user, loading, loaded, pathname, segments]);
+  }, [user, loading, loaded, pathname, segments, isNavigating]);
 
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
