@@ -6,7 +6,7 @@ import { Stack, useRouter, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, Alert, Platform } from "react-native";
+import { useColorScheme, Alert, Platform, View, Text } from "react-native";
 import { useNetworkState } from "expo-network";
 import * as Notifications from 'expo-notifications';
 import {
@@ -65,22 +65,37 @@ function RootLayoutNav() {
     if (!loaded || loading) return;
 
     const inAuthGroup = segments[0] === '(tabs)';
+    const isAuthScreen = segments[0] === 'auth';
+    const isRootOrEmpty = segments.length === 0 || segments[0] === '';
 
     console.log('[App] Auth routing check:', { 
       user: !!user, 
       loading, 
-      inAuthGroup, 
-      segments: segments.join('/') 
+      inAuthGroup,
+      isAuthScreen,
+      isRootOrEmpty,
+      segments: segments.join('/'),
+      platform: Platform.OS
     });
 
-    if (!user && inAuthGroup) {
-      // User is not signed in and trying to access protected routes
-      console.log('[App] User not authenticated, redirecting to auth');
-      router.replace('/auth');
-    } else if (user && segments[0] === 'auth') {
-      // User is signed in but on auth screen
-      console.log('[App] User authenticated, redirecting to tabs');
-      router.replace('/(tabs)');
+    // If user is not authenticated
+    if (!user) {
+      // Only redirect to auth if trying to access protected routes
+      if (inAuthGroup) {
+        console.log('[App] User not authenticated, redirecting to auth from tabs');
+        router.replace('/auth');
+      } else if (isRootOrEmpty) {
+        // On initial load, redirect to auth
+        console.log('[App] User not authenticated, redirecting to auth from root');
+        router.replace('/auth');
+      }
+    } else {
+      // User is authenticated
+      if (isAuthScreen || isRootOrEmpty) {
+        // Redirect authenticated users away from auth screen or root
+        console.log('[App] User authenticated, redirecting to tabs');
+        router.replace('/(tabs)');
+      }
     }
   }, [user, loading, segments, loaded, router]);
 
@@ -142,8 +157,13 @@ function RootLayoutNav() {
     }
   }, [networkState.isConnected, networkState.isInternetReachable]);
 
-  if (!loaded) {
-    return null;
+  if (!loaded || loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff' }}>
+        <Text style={{ fontSize: 18, color: colorScheme === 'dark' ? '#fff' : '#000', marginBottom: 10 }}>SeaTime Tracker</Text>
+        <Text style={{ fontSize: 14, color: colorScheme === 'dark' ? '#999' : '#666' }}>Loading...</Text>
+      </View>
+    );
   }
 
   const CustomDefaultTheme: Theme = {
