@@ -26,7 +26,8 @@
         "resourceClass": "m-medium",
         "autoIncrement": true,
         "credentialsSource": "local",
-        "appleTeamId": "43GZCFFPR9"
+        "appleTeamId": "43GZCFFPR9",
+        "pushNotificationKeyId": "N6429B59C3"
       },
       "channel": "production"
     }
