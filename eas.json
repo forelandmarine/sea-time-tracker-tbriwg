@@ -25,12 +25,17 @@
         "simulator": false,
         "resourceClass": "m-medium",
         "autoIncrement": true,
-        "credentialsSource": "remote"
+        "credentialsSource": "local",
+        "appleTeamId": "43GZCFFPR9"
       },
       "channel": "production"
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleTeamId": "43GZCFFPR9"
+      }
+    }
   }
 }
