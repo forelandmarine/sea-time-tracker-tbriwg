@@ -54,6 +54,7 @@ export default function ConfirmationsScreen() {
   const [showServiceTypeModal, setShowServiceTypeModal] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<SeaTimeEntry | null>(null);
   const [selectedServiceType, setSelectedServiceType] = useState<ServiceType>('actual_sea_service');
+  const [processingEntryId, setProcessingEntryId] = useState<string | null>(null);
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -159,34 +160,51 @@ export default function ConfirmationsScreen() {
 
     try {
       console.log('[Confirmations] Confirming entry with service type:', selectedServiceType);
+      setProcessingEntryId(selectedEntry.id);
       await seaTimeApi.confirmSeaTimeEntry(selectedEntry.id, selectedServiceType);
       setShowServiceTypeModal(false);
       setSelectedEntry(null);
+      setProcessingEntryId(null);
       await loadData();
       Alert.alert('Success', 'Sea time entry confirmed');
     } catch (error: any) {
       console.error('[Confirmations] Failed to confirm entry:', error);
+      setProcessingEntryId(null);
       Alert.alert('Error', 'Failed to confirm entry: ' + error.message);
     }
   };
 
-  const handleRejectEntry = async (entryId: string) => {
+  const handleRejectEntry = (entryId: string) => {
+    console.log('[Confirmations] User tapped Reject button for entry:', entryId);
     Alert.alert(
       'Reject Entry',
       'Are you sure you want to reject this sea time entry?',
       [
-        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => console.log('[Confirmations] User cancelled rejection')
+        },
         {
           text: 'Reject',
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('[Confirmations] User rejecting entry:', entryId);
+              console.log('[Confirmations] User confirmed rejection, calling API for entry:', entryId);
+              setProcessingEntryId(entryId);
               await seaTimeApi.rejectSeaTimeEntry(entryId);
+              console.log('[Confirmations] Entry rejected successfully');
+              setProcessingEntryId(null);
               await loadData();
               Alert.alert('Success', 'Sea time entry rejected');
             } catch (error: any) {
               console.error('[Confirmations] Failed to reject entry:', error);
+              console.error('[Confirmations] Error details:', {
+                message: error.message,
+                stack: error.stack,
+                name: error.name
+              });
+              setProcessingEntryId(null);
               Alert.alert('Error', 'Failed to reject entry: ' + error.message);
             }
           },
@@ -364,11 +382,13 @@ export default function ConfirmationsScreen() {
           ) : (
             entries.map((entry) => {
               const isExpanded = expandedEntries.has(entry.id);
+              const isProcessing = processingEntryId === entry.id;
               return (
                 <View key={entry.id} style={styles.entryCard}>
                   <TouchableOpacity
                     style={styles.entryHeader}
                     onPress={() => toggleExpanded(entry.id)}
+                    disabled={isProcessing}
                   >
                     <View style={styles.entryHeaderLeft}>
                       <Text style={styles.vesselName}>
@@ -440,28 +460,42 @@ export default function ConfirmationsScreen() {
 
                   <View style={styles.entryActions}>
                     <TouchableOpacity
-                      style={[styles.actionButton, styles.confirmButton]}
+                      style={[styles.actionButton, styles.confirmButton, isProcessing && styles.disabledButton]}
                       onPress={() => handleConfirmEntry(entry)}
+                      disabled={isProcessing}
                     >
-                      <IconSymbol
-                        ios_icon_name="checkmark"
-                        android_material_icon_name="check"
-                        size={20}
-                        color="#fff"
-                      />
-                      <Text style={styles.actionButtonText}>Confirm</Text>
+                      {isProcessing ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <IconSymbol
+                            ios_icon_name="checkmark"
+                            android_material_icon_name="check"
+                            size={20}
+                            color="#fff"
+                          />
+                          <Text style={styles.actionButtonText}>Confirm</Text>
+                        </>
+                      )}
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.actionButton, styles.rejectButton]}
+                      style={[styles.actionButton, styles.rejectButton, isProcessing && styles.disabledButton]}
                       onPress={() => handleRejectEntry(entry.id)}
+                      disabled={isProcessing}
                     >
-                      <IconSymbol
-                        ios_icon_name="xmark"
-                        android_material_icon_name="close"
-                        size={20}
-                        color="#fff"
-                      />
-                      <Text style={styles.actionButtonText}>Reject</Text>
+                      {isProcessing ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <>
+                          <IconSymbol
+                            ios_icon_name="xmark"
+                            android_material_icon_name="close"
+                            size={20}
+                            color="#fff"
+                          />
+                          <Text style={styles.actionButtonText}>Reject</Text>
+                        </>
+                      )}
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -697,6 +731,9 @@ function createStyles(isDark: boolean) {
     },
     rejectButton: {
       backgroundColor: colors.error,
+    },
+    disabledButton: {
+      opacity: 0.6,
     },
     actionButtonText: {
       color: '#fff',
