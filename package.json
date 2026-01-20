@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "dev": "EXPO_NO_TELEMETRY=1 EXPO_OFFLINE=1 expo start --offline",
+    "dev": "EXPO_NO_TELEMETRY=1 expo start --tunnel",
     "android": "EXPO_NO_TELEMETRY=1 EXPO_OFFLINE=1 expo start --android --offline",
     "ios": "EXPO_NO_TELEMETRY=1 EXPO_OFFLINE=1 expo start --ios --offline",
     "web": "expo start --web",

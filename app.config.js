@@ -54,9 +54,6 @@ module.exports = {
       router: {
         origin: false,
       },
-      eas: {
-        projectId: 'd982d462-52e2-493e-a176-8f75b09d5ef9',
-      },
       backendUrl: 'https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev',
     },
     runtimeVersion: {
