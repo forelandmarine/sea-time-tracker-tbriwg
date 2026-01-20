@@ -74,16 +74,20 @@ async function getFetchOptions(method: string = 'GET'): Promise<RequestInit> {
 
 // Get user profile
 export async function getUserProfile() {
-  console.log('Fetching user profile from /api/profile');
+  console.log('Fetching user profile from /api/auth/user');
   const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/profile`, options);
+  const response = await fetch(`${API_BASE_URL}/api/auth/user`, options);
   
   if (!response.ok) {
     const error = await response.json();
     throw new Error(error.error || 'Failed to fetch profile');
   }
   
-  return response.json();
+  const data = await response.json();
+  console.log('User profile response:', data);
+  
+  // The backend returns { user: {...} }, so extract the user object
+  return data.user || data;
 }
 
 // Update user profile
