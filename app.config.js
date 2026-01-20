@@ -4,7 +4,8 @@ const IS_DEV = process.env.APP_VARIANT === 'development';
 module.exports = {
   expo: {
     name: IS_DEV ? 'SeaTime Tracker (Dev)' : 'SeaTime Tracker',
-    slug: 'seatimetracker',
+    slug: 'seatime-tracker',
+    owner: 'forelandmarine',
     version: '1.0.0',
     orientation: 'portrait',
     icon: './assets/images/f0500a31-f8b9-4d46-8b57-62c3847deff7.png',
@@ -20,6 +21,10 @@ module.exports = {
       bundleIdentifier: IS_DEV
         ? 'com.forelandmarine.seatimetracker.dev'
         : 'com.forelandmarine.seatimetracker',
+      appleTeamId: '43GZCFFPR9',
+      infoPlist: {
+        ITSAppUsesNonExemptEncryption: false,
+      },
     },
     android: {
       adaptiveIcon: {
@@ -55,6 +60,9 @@ module.exports = {
         origin: false,
       },
       backendUrl: 'https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev',
+      eas: {
+        projectId: 'd982d462-52e2-493e-a176-8f75b09d5ef9',
+      },
     },
     runtimeVersion: {
       policy: 'appVersion',
