@@ -1,18 +1,33 @@
 
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { View, Text, useColorScheme, ActivityIndicator } from 'react-native';
-import React from 'react';
+import { View, Text, useColorScheme, ActivityIndicator, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+
+// Check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
 
 export default function Index() {
   const { user, loading } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const [clientMounted, setClientMounted] = useState(false);
 
-  console.log('[Index] Rendering - user:', !!user, 'loading:', loading);
+  // Wait for client-side mount on web
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      if (isBrowser) {
+        setClientMounted(true);
+      }
+    } else {
+      setClientMounted(true);
+    }
+  }, []);
 
-  // Show loading state while checking authentication
-  if (loading) {
+  console.log('[Index] Rendering - user:', !!user, 'loading:', loading, 'clientMounted:', clientMounted);
+
+  // Show loading state while checking authentication or waiting for client mount
+  if (loading || !clientMounted) {
     return (
       <View style={{ 
         flex: 1, 
@@ -34,7 +49,7 @@ export default function Index() {
           color: isDark ? '#999' : '#666',
           marginTop: 20
         }}>
-          Checking authentication...
+          {!clientMounted ? 'Initializing...' : 'Checking authentication...'}
         </Text>
       </View>
     );

@@ -25,13 +25,17 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+
 // Platform-specific token storage
 const tokenStorage = {
   async getToken(): Promise<string | null> {
     try {
       if (Platform.OS === 'web') {
-        if (typeof localStorage === 'undefined') {
-          console.log('[Auth] localStorage not available');
+        // Only access localStorage in browser environment
+        if (!isBrowser || typeof localStorage === 'undefined') {
+          console.log('[Auth] localStorage not available (SSR or non-browser)');
           return null;
         }
         return localStorage.getItem(TOKEN_KEY);
@@ -47,8 +51,9 @@ const tokenStorage = {
     try {
       console.log('[Auth] Storing token, length:', token?.length);
       if (Platform.OS === 'web') {
-        if (typeof localStorage === 'undefined') {
-          console.warn('[Auth] localStorage not available');
+        // Only access localStorage in browser environment
+        if (!isBrowser || typeof localStorage === 'undefined') {
+          console.warn('[Auth] localStorage not available (SSR or non-browser)');
           return;
         }
         localStorage.setItem(TOKEN_KEY, token);
@@ -66,8 +71,9 @@ const tokenStorage = {
     try {
       console.log('[Auth] Removing token from storage');
       if (Platform.OS === 'web') {
-        if (typeof localStorage === 'undefined') {
-          console.warn('[Auth] localStorage not available');
+        // Only access localStorage in browser environment
+        if (!isBrowser || typeof localStorage === 'undefined') {
+          console.warn('[Auth] localStorage not available (SSR or non-browser)');
           return;
         }
         localStorage.removeItem(TOKEN_KEY);
@@ -85,15 +91,37 @@ const tokenStorage = {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  // Wait for client-side mount on web
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      // On web, wait for browser to be ready
+      if (isBrowser) {
+        setMounted(true);
+      }
+    } else {
+      // On native, we're always mounted
+      setMounted(true);
+    }
+  }, []);
 
   // Check for existing session on mount
   useEffect(() => {
+    if (!mounted) {
+      return;
+    }
+    
     console.log('[Auth] Starting auth check...');
     checkAuth();
-  }, []);
+  }, [mounted]);
 
   // Safety timeout - if auth check takes too long, stop loading
   useEffect(() => {
+    if (!mounted) {
+      return;
+    }
+
     const timeout = setTimeout(() => {
       if (loading) {
         console.warn('[Auth] Auth check timeout - stopping loading state');
@@ -102,13 +130,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 5000); // 5 second timeout
     
     return () => clearTimeout(timeout);
-  }, [loading]);
+  }, [loading, mounted]);
 
   const checkAuth = async () => {
     try {
       console.log('[Auth] Checking authentication status...');
       console.log('[Auth] API URL:', API_URL);
       console.log('[Auth] Platform:', Platform.OS);
+      console.log('[Auth] Is browser:', isBrowser);
       
       if (!API_URL) {
         console.warn('[Auth] Backend URL not configured, skipping auth check');
