@@ -41,10 +41,24 @@ function RootLayoutNav() {
   const pathname = usePathname();
   const { user, loading } = useAuth();
   const [isNavigating, setIsNavigating] = useState(false);
+  const [webMounted, setWebMounted] = useState(Platform.OS !== 'web');
 
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
+
+  // Wait for web to fully mount before doing anything
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      console.log('[App] Web platform detected, waiting for mount...');
+      // Small delay to ensure we're fully client-side
+      const timer = setTimeout(() => {
+        console.log('[App] Web mounted');
+        setWebMounted(true);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   useEffect(() => {
     if (error) {
@@ -57,7 +71,7 @@ function RootLayoutNav() {
   }, [error]);
 
   useEffect(() => {
-    if (loaded) {
+    if (loaded && webMounted) {
       if (Platform.OS !== 'web') {
         SplashScreen.hideAsync().catch(() => {});
       }
@@ -67,6 +81,7 @@ function RootLayoutNav() {
       console.log('[App] Platform:', Platform.OS);
       console.log('[App] Backend URL:', BACKEND_URL || 'NOT CONFIGURED');
       console.log('[App] Backend configured:', !!BACKEND_URL);
+      console.log('[App] Web mounted:', webMounted);
       console.log('[App] ========================================');
       
       if (!BACKEND_URL) {
@@ -89,11 +104,11 @@ function RootLayoutNav() {
         console.log('[App] ℹ️ Notifications not supported on web');
       }
     }
-  }, [loaded]);
+  }, [loaded, webMounted]);
 
   // Simplified authentication routing - Let index.tsx handle redirects
   useEffect(() => {
-    if (!loaded || loading || isNavigating) {
+    if (!loaded || !webMounted || loading || isNavigating) {
       return;
     }
 
@@ -107,7 +122,8 @@ function RootLayoutNav() {
       isAuthScreen,
       isIndexRoute,
       pathname,
-      platform: Platform.OS
+      platform: Platform.OS,
+      webMounted
     });
 
     // Let index route handle its own redirect
@@ -125,7 +141,7 @@ function RootLayoutNav() {
         setIsNavigating(false);
       }, 100);
     }
-  }, [user, loading, loaded, pathname, segments, isNavigating]);
+  }, [user, loading, loaded, webMounted, pathname, segments, isNavigating]);
 
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
@@ -183,13 +199,13 @@ function RootLayoutNav() {
     }
   }, [networkState.isConnected, networkState.isInternetReachable]);
 
-  // Show loading screen while fonts are loading OR auth is checking
-  if (!loaded || loading) {
+  // Show loading screen while fonts are loading OR auth is checking OR web is mounting
+  if (!loaded || loading || !webMounted) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff' }}>
         <Text style={{ fontSize: 18, color: colorScheme === 'dark' ? '#fff' : '#000', marginBottom: 10 }}>SeaTime Tracker</Text>
         <Text style={{ fontSize: 14, color: colorScheme === 'dark' ? '#999' : '#666' }}>
-          {!loaded ? 'Loading fonts...' : 'Checking authentication...'}
+          {!loaded ? 'Loading fonts...' : !webMounted ? 'Initializing...' : 'Checking authentication...'}
         </Text>
       </View>
     );
