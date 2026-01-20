@@ -1,7 +1,8 @@
 {
   "cli": {
     "version": ">= 5.0.0",
-    "appVersionSource": "local"
+    "appVersionSource": "local",
+    "requireCommit": false
   },
   "build": {
     "development": {
@@ -15,8 +16,7 @@
       "distribution": "internal",
       "ios": {
         "simulator": false,
-        "resourceClass": "m-medium",
-        "appleTeamId": "43GZCFFPR9"
+        "resourceClass": "m-medium"
       },
       "channel": "preview"
     },
@@ -24,8 +24,7 @@
       "ios": {
         "simulator": false,
         "resourceClass": "m-medium",
-        "autoIncrement": true,
-        "appleTeamId": "43GZCFFPR9"
+        "autoIncrement": true
       },
       "channel": "production"
     }
