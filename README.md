@@ -29,3 +29,8 @@ For detailed documentation on recent fixes, see:
 - `TROUBLESHOOTING.md` - Common issues and solutions
 - `README_OFFLINE_MODE.md` - Offline development mode setup
 
+---
+
+## Additional Notes
+
+This application provides a comprehensive solution for maritime professionals to track and document their sea service time efficiently. The automated AIS tracking reduces manual entry while maintaining accuracy for official documentation.
