@@ -440,9 +440,12 @@ export default function ProfileScreen() {
     );
   }
 
-  const imageUrl = profile.imageUrl || profile.image;
+  // Construct full image URL from relative path
+  const imageUrl = profile.imageUrl || (profile.image ? `${seaTimeApi.API_BASE_URL}/${profile.image}` : null);
   const displayName = profile.name || 'User';
   const initials = getInitials(profile.name);
+
+  console.log('Profile image URL:', imageUrl);
 
   return (
     <View style={styles.container}>

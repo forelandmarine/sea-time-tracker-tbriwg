@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
-const API_BASE_URL =
+export const API_BASE_URL =
   Constants.expoConfig?.extra?.backendUrl || 'http://localhost:3000';
 const TOKEN_KEY = 'seatime_auth_token';
 

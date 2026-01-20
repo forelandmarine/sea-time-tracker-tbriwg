@@ -488,18 +488,23 @@ export default function UserProfileScreen() {
               <View style={styles.profileImagePlaceholder}>
                 <ActivityIndicator size="large" color={colors.primary} />
               </View>
-            ) : profile?.imageUrl || profile?.image ? (
-              <Image source={{ uri: profile.imageUrl || profile.image || '' }} style={styles.profileImage} />
-            ) : (
-              <View style={styles.profileImagePlaceholder}>
-                <IconSymbol
-                  ios_icon_name="person.circle.fill"
-                  android_material_icon_name="account-circle"
-                  size={80}
-                  color={colors.primary}
-                />
-              </View>
-            )}
+            ) : (() => {
+              // Construct full image URL from relative path
+              const imageUrl = profile?.imageUrl || (profile?.image ? `${seaTimeApi.API_BASE_URL}/${profile.image}` : null);
+              console.log('User profile image URL:', imageUrl);
+              return imageUrl ? (
+                <Image source={{ uri: imageUrl }} style={styles.profileImage} />
+              ) : (
+                <View style={styles.profileImagePlaceholder}>
+                  <IconSymbol
+                    ios_icon_name="person.circle.fill"
+                    android_material_icon_name="account-circle"
+                    size={80}
+                    color={colors.primary}
+                  />
+                </View>
+              );
+            })()}
             <TouchableOpacity 
               style={styles.editImageButton}
               onPress={handleChangeProfilePicture}
