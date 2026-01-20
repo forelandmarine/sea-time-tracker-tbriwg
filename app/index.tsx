@@ -1,46 +1,18 @@
 
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { View, Text, useColorScheme, ActivityIndicator, Platform } from 'react-native';
-import React, { useEffect, useState } from 'react';
-
-// Check if we're in a browser environment (not SSR)
-const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined' && typeof window.navigator !== 'undefined';
+import { View, Text, useColorScheme, ActivityIndicator } from 'react-native';
+import React from 'react';
 
 export default function Index() {
   const { user, loading } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    // Skip SSR on web
-    if (Platform.OS === 'web' && !isBrowser) {
-      console.log('[Index] Skipping mount during SSR');
-      return;
-    }
+  console.log('[Index] Rendering - user:', !!user, 'loading:', loading);
 
-    console.log('[Index] Component mounted');
-    console.log('[Index] Platform:', Platform.OS);
-    console.log('[Index] Is Browser:', isBrowser);
-    
-    // Small delay to ensure everything is ready
-    const timer = setTimeout(() => {
-      setMounted(true);
-    }, 50);
-    
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Log state changes
-  useEffect(() => {
-    if (mounted) {
-      console.log('[Index] State:', { user: !!user, loading, mounted });
-    }
-  }, [user, loading, mounted]);
-
-  // Show loading state while checking authentication or mounting
-  if (loading || !mounted) {
+  // Show loading state while checking authentication
+  if (loading) {
     return (
       <View style={{ 
         flex: 1, 
@@ -62,7 +34,7 @@ export default function Index() {
           color: isDark ? '#999' : '#666',
           marginTop: 20
         }}>
-          {loading ? 'Checking authentication...' : 'Initializing...'}
+          Checking authentication...
         </Text>
       </View>
     );

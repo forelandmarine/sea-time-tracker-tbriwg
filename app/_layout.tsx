@@ -22,19 +22,8 @@ import { BACKEND_URL } from "@/utils/api";
 import { registerForPushNotificationsAsync } from "@/utils/notifications";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-// Check if we're in a browser environment (not SSR)
-const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined' && typeof window.navigator !== 'undefined';
-
-// Type declaration for window property
-declare global {
-  interface Window {
-    __EXPO_ERROR_HANDLERS_SETUP__?: boolean;
-  }
-}
-
 // Prevent the splash screen from auto-hiding before asset loading is complete.
-// Only call this on client-side
-if (isBrowser || Platform.OS !== 'web') {
+if (Platform.OS !== 'web') {
   SplashScreen.preventAutoHideAsync().catch((err) => {
     console.warn('[App] Could not prevent splash screen auto-hide:', err);
   });
@@ -61,7 +50,7 @@ function RootLayoutNav() {
     if (error) {
       console.error('[App] ❌ Font loading error:', error);
       // Hide splash screen even if fonts fail to load
-      if (isBrowser || Platform.OS !== 'web') {
+      if (Platform.OS !== 'web') {
         SplashScreen.hideAsync().catch(() => {});
       }
     }
@@ -69,14 +58,13 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (loaded) {
-      if (isBrowser || Platform.OS !== 'web') {
+      if (Platform.OS !== 'web') {
         SplashScreen.hideAsync().catch(() => {});
       }
       
       console.log('[App] ========================================');
       console.log('[App] ✅ App Initialized');
       console.log('[App] Platform:', Platform.OS);
-      console.log('[App] Is Browser:', isBrowser);
       console.log('[App] Backend URL:', BACKEND_URL || 'NOT CONFIGURED');
       console.log('[App] Backend configured:', !!BACKEND_URL);
       console.log('[App] ========================================');
@@ -103,45 +91,8 @@ function RootLayoutNav() {
     }
   }, [loaded]);
 
-  // Set up global error handlers - only on client-side
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !isBrowser) {
-      return;
-    }
-
-    // Only set up once
-    if (window.__EXPO_ERROR_HANDLERS_SETUP__) {
-      return;
-    }
-
-    console.log('[App] Setting up global error handlers');
-    window.__EXPO_ERROR_HANDLERS_SETUP__ = true;
-    
-    const errorHandler = (event: ErrorEvent) => {
-      console.error('[App] Global error caught:', event.error);
-    };
-    
-    const rejectionHandler = (event: PromiseRejectionEvent) => {
-      console.error('[App] Unhandled promise rejection:', event.reason);
-    };
-    
-    window.addEventListener('error', errorHandler);
-    window.addEventListener('unhandledrejection', rejectionHandler);
-
-    return () => {
-      window.removeEventListener('error', errorHandler);
-      window.removeEventListener('unhandledrejection', rejectionHandler);
-    };
-  }, []);
-
   // Simplified authentication routing - Let index.tsx handle redirects
   useEffect(() => {
-    // Skip during SSR on web
-    if (Platform.OS === 'web' && !isBrowser) {
-      console.log('[App] Skipping auth routing during SSR');
-      return;
-    }
-
     if (!loaded || loading || isNavigating) {
       return;
     }

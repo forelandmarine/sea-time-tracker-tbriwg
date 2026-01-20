@@ -25,24 +25,16 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Check if we're in a browser environment (not SSR)
-const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined' && typeof window.navigator !== 'undefined';
-
 // Platform-specific token storage
 const tokenStorage = {
   async getToken(): Promise<string | null> {
     try {
       if (Platform.OS === 'web') {
-        if (!isBrowser) {
-          console.log('[Auth] Cannot access localStorage during SSR');
+        if (typeof localStorage === 'undefined') {
+          console.log('[Auth] localStorage not available');
           return null;
         }
-        try {
-          return localStorage.getItem(TOKEN_KEY);
-        } catch (e) {
-          console.warn('[Auth] localStorage not available:', e);
-          return null;
-        }
+        return localStorage.getItem(TOKEN_KEY);
       }
       return await SecureStore.getItemAsync(TOKEN_KEY);
     } catch (error) {
@@ -55,16 +47,12 @@ const tokenStorage = {
     try {
       console.log('[Auth] Storing token, length:', token?.length);
       if (Platform.OS === 'web') {
-        if (!isBrowser) {
-          console.warn('[Auth] Cannot store token during SSR');
+        if (typeof localStorage === 'undefined') {
+          console.warn('[Auth] localStorage not available');
           return;
         }
-        try {
-          localStorage.setItem(TOKEN_KEY, token);
-          console.log('[Auth] Token stored successfully in localStorage');
-        } catch (e) {
-          console.error('[Auth] localStorage.setItem failed:', e);
-        }
+        localStorage.setItem(TOKEN_KEY, token);
+        console.log('[Auth] Token stored successfully in localStorage');
       } else {
         await SecureStore.setItemAsync(TOKEN_KEY, token);
         console.log('[Auth] Token stored successfully in SecureStore');
@@ -78,16 +66,12 @@ const tokenStorage = {
     try {
       console.log('[Auth] Removing token from storage');
       if (Platform.OS === 'web') {
-        if (!isBrowser) {
-          console.warn('[Auth] Cannot remove token during SSR');
+        if (typeof localStorage === 'undefined') {
+          console.warn('[Auth] localStorage not available');
           return;
         }
-        try {
-          localStorage.removeItem(TOKEN_KEY);
-          console.log('[Auth] Token removed successfully from localStorage');
-        } catch (e) {
-          console.error('[Auth] localStorage.removeItem failed:', e);
-        }
+        localStorage.removeItem(TOKEN_KEY);
+        console.log('[Auth] Token removed successfully from localStorage');
       } else {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         console.log('[Auth] Token removed successfully from SecureStore');
@@ -104,21 +88,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check for existing session on mount
   useEffect(() => {
-    // Skip during SSR
-    if (Platform.OS === 'web' && !isBrowser) {
-      console.log('[Auth] Skipping auth check during SSR');
-      setLoading(false);
-      return;
-    }
-
     console.log('[Auth] Starting auth check...');
-    
-    // Small delay to ensure everything is ready
-    const initTimer = setTimeout(() => {
-      checkAuth();
-    }, 100);
-    
-    return () => clearTimeout(initTimer);
+    checkAuth();
   }, []);
 
   // Safety timeout - if auth check takes too long, stop loading
@@ -138,7 +109,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.log('[Auth] Checking authentication status...');
       console.log('[Auth] API URL:', API_URL);
       console.log('[Auth] Platform:', Platform.OS);
-      console.log('[Auth] Is browser:', isBrowser);
       
       if (!API_URL) {
         console.warn('[Auth] Backend URL not configured, skipping auth check');
