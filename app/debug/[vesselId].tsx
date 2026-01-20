@@ -166,27 +166,6 @@ function createStyles(isDark: boolean) {
       marginBottom: 4,
       fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
-    infoBanner: {
-      flexDirection: 'row',
-      backgroundColor: isDark ? 'rgba(0, 122, 255, 0.15)' : 'rgba(0, 122, 255, 0.1)',
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 20,
-      borderWidth: 1,
-      borderColor: isDark ? 'rgba(0, 122, 255, 0.3)' : 'rgba(0, 122, 255, 0.2)',
-    },
-    infoIcon: {
-      marginRight: 12,
-      marginTop: 2,
-    },
-    infoTextContainer: {
-      flex: 1,
-    },
-    infoText: {
-      fontSize: 14,
-      lineHeight: 20,
-      color: textColor,
-    },
   });
 }
 
@@ -333,22 +312,6 @@ export default function DebugScreen() {
             <Text style={styles.subtitle}>
               Detailed API call history and responses for vessel monitoring
             </Text>
-          </View>
-
-          <View style={styles.infoBanner}>
-            <IconSymbol
-              ios_icon_name="info.circle.fill"
-              android_material_icon_name="info"
-              size={24}
-              color={colors.primary}
-              style={styles.infoIcon}
-            />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoText}>
-                These logs show all API calls made to the MyShipTracking AIS service for this vessel. 
-                Use this information to troubleshoot tracking issues and verify data accuracy.
-              </Text>
-            </View>
           </View>
 
           {logs.length === 0 && !loading ? (
