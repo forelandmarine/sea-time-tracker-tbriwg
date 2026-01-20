@@ -1065,6 +1065,25 @@ export default function VesselDetailScreen() {
   const totalHours = calculateTotalHours();
   const totalDays = calculateTotalDays();
 
+  // Pre-calculate values for AIS modal to avoid accessing null properties in JSX
+  const aisName = formatAISValue(aisData?.name);
+  const aisMMSI = formatAISValue(aisData?.mmsi);
+  const aisIMO = formatAISValue(aisData?.imo);
+  const aisCallsign = formatAISValue(aisData?.callsign);
+  const aisFlag = formatAISValue(aisData?.flag);
+  const aisShipType = formatAISValue(aisData?.ship_type);
+  const aisSpeed = formatAISValue(aisData?.speed_knots, ' knots');
+  const aisCourse = formatAISValue(aisData?.course, '°');
+  const aisHeading = formatAISValue(aisData?.heading, '°');
+  const aisStatus = formatAISValue(aisData?.status);
+  const aisDestination = formatAISValue(aisData?.destination);
+  const aisETA = formatAISValue(aisData?.eta);
+  const aisIsMoving = aisData?.is_moving ?? false;
+  const aisHasCoordinates = aisData && aisData.latitude !== null && aisData.longitude !== null;
+  const aisLatitude = aisData?.latitude ?? 0;
+  const aisLongitude = aisData?.longitude ?? 0;
+  const aisTimestamp = aisData?.timestamp;
+
   return (
     <View style={styles.container}>
       <Stack.Screen
@@ -1589,43 +1608,43 @@ export default function VesselDetailScreen() {
                     <View
                       style={[
                         styles.aisStatusBadge,
-                        { backgroundColor: aisData?.is_moving ? colors.success : colors.warning },
+                        { backgroundColor: aisIsMoving ? colors.success : colors.warning },
                       ]}
                     >
                       <Text style={styles.aisStatusText}>
-                        {aisData?.is_moving ? 'MOVING' : 'STATIONARY'}
+                        {aisIsMoving ? 'MOVING' : 'STATIONARY'}
                       </Text>
                     </View>
                   </View>
 
                   <View style={styles.aisDataRow}>
                     <Text style={styles.aisDataLabel}>Name:</Text>
-                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.name)}</Text>
+                    <Text style={styles.aisDataValue}>{aisName}</Text>
                   </View>
 
                   <View style={styles.aisDataRow}>
                     <Text style={styles.aisDataLabel}>MMSI:</Text>
-                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.mmsi)}</Text>
+                    <Text style={styles.aisDataValue}>{aisMMSI}</Text>
                   </View>
 
                   <View style={styles.aisDataRow}>
                     <Text style={styles.aisDataLabel}>IMO:</Text>
-                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.imo)}</Text>
+                    <Text style={styles.aisDataValue}>{aisIMO}</Text>
                   </View>
 
                   <View style={styles.aisDataRow}>
                     <Text style={styles.aisDataLabel}>Call Sign:</Text>
-                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.callsign)}</Text>
+                    <Text style={styles.aisDataValue}>{aisCallsign}</Text>
                   </View>
 
                   <View style={styles.aisDataRow}>
                     <Text style={styles.aisDataLabel}>Flag:</Text>
-                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.flag)}</Text>
+                    <Text style={styles.aisDataValue}>{aisFlag}</Text>
                   </View>
 
                   <View style={styles.aisDataRow}>
                     <Text style={styles.aisDataLabel}>Ship Type:</Text>
-                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.ship_type)}</Text>
+                    <Text style={styles.aisDataValue}>{aisShipType}</Text>
                   </View>
                 </View>
 
@@ -1637,27 +1656,27 @@ export default function VesselDetailScreen() {
 
                   <View style={styles.aisDataRow}>
                     <Text style={styles.aisDataLabel}>Speed:</Text>
-                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.speed_knots, ' knots')}</Text>
+                    <Text style={styles.aisDataValue}>{aisSpeed}</Text>
                   </View>
 
                   <View style={styles.aisDataRow}>
                     <Text style={styles.aisDataLabel}>Course:</Text>
-                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.course, '°')}</Text>
+                    <Text style={styles.aisDataValue}>{aisCourse}</Text>
                   </View>
 
                   <View style={styles.aisDataRow}>
                     <Text style={styles.aisDataLabel}>Heading:</Text>
-                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.heading, '°')}</Text>
+                    <Text style={styles.aisDataValue}>{aisHeading}</Text>
                   </View>
 
-                  {aisData?.latitude !== null && aisData?.longitude !== null && (
+                  {aisHasCoordinates && (
                     <View style={styles.aisCoordinatesContainer}>
                       <Text style={styles.aisCoordinatesTitle}>📍 Vessel Position</Text>
                       <Text style={styles.aisCoordinatesText}>
-                        Latitude: {aisData.latitude.toFixed(6)}°
+                        Latitude: {aisLatitude.toFixed(6)}°
                       </Text>
                       <Text style={styles.aisCoordinatesText}>
-                        Longitude: {aisData.longitude.toFixed(6)}°
+                        Longitude: {aisLongitude.toFixed(6)}°
                       </Text>
                     </View>
                   )}
@@ -1671,24 +1690,24 @@ export default function VesselDetailScreen() {
 
                   <View style={styles.aisDataRow}>
                     <Text style={styles.aisDataLabel}>Status:</Text>
-                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.status)}</Text>
+                    <Text style={styles.aisDataValue}>{aisStatus}</Text>
                   </View>
 
                   <View style={styles.aisDataRow}>
                     <Text style={styles.aisDataLabel}>Destination:</Text>
-                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.destination)}</Text>
+                    <Text style={styles.aisDataValue}>{aisDestination}</Text>
                   </View>
 
                   <View style={styles.aisDataRow}>
                     <Text style={styles.aisDataLabel}>ETA:</Text>
-                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.eta)}</Text>
+                    <Text style={styles.aisDataValue}>{aisETA}</Text>
                   </View>
 
-                  {aisData?.timestamp && (
+                  {aisTimestamp && (
                     <View style={styles.aisDataRow}>
                       <Text style={styles.aisDataLabel}>Last Updated:</Text>
                       <Text style={styles.aisDataValue}>
-                        {new Date(aisData.timestamp).toLocaleString()}
+                        {new Date(aisTimestamp).toLocaleString()}
                       </Text>
                     </View>
                   )}
