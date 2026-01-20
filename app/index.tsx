@@ -2,58 +2,45 @@
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { View, Text, useColorScheme, ActivityIndicator, Platform } from 'react-native';
-import { colors } from '@/styles/commonStyles';
 import React, { useEffect, useState } from 'react';
+
+// Check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
 
 export default function Index() {
   const { user, loading } = useAuth();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [mounted, setMounted] = useState(false);
-  const [shouldRedirect, setShouldRedirect] = useState(false);
 
   useEffect(() => {
     // Skip SSR on web
-    if (Platform.OS === 'web' && typeof window === 'undefined') {
+    if (Platform.OS === 'web' && !isBrowser) {
       console.log('[Index] Skipping mount during SSR');
       return;
     }
 
     console.log('[Index] Component mounted');
-    setMounted(true);
-    
-    // Log platform and environment info
     console.log('[Index] Platform:', Platform.OS);
-    console.log('[Index] User:', !!user);
-    console.log('[Index] Loading:', loading);
+    console.log('[Index] Is Browser:', isBrowser);
+    
+    // Small delay to ensure everything is ready
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 50);
+    
+    return () => clearTimeout(timer);
   }, []);
 
-  // Wait for both mounted and loading to complete before redirecting
+  // Log state changes
   useEffect(() => {
-    if (mounted && !loading) {
-      console.log('[Index] Ready to redirect, user:', !!user);
-      
-      // Add a small delay on web to ensure everything is ready
-      if (Platform.OS === 'web') {
-        setTimeout(() => {
-          setShouldRedirect(true);
-        }, 150);
-      } else {
-        setShouldRedirect(true);
-      }
+    if (mounted) {
+      console.log('[Index] State:', { user: !!user, loading, mounted });
     }
-  }, [mounted, loading, user]);
-
-  console.log('[Index] Rendering index route', { 
-    user: !!user, 
-    loading, 
-    mounted,
-    shouldRedirect,
-    platform: Platform.OS 
-  });
+  }, [user, loading, mounted]);
 
   // Show loading state while checking authentication or mounting
-  if (loading || !mounted || !shouldRedirect) {
+  if (loading || !mounted) {
     return (
       <View style={{ 
         flex: 1, 

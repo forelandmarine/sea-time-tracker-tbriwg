@@ -22,6 +22,9 @@ import { BACKEND_URL } from "@/utils/api";
 import { registerForPushNotificationsAsync } from "@/utils/notifications";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
+// Check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+
 // Type declaration for window property
 declare global {
   interface Window {
@@ -32,8 +35,8 @@ declare global {
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
-// Global error handler for unhandled errors - FIXED: Only run on client-side
-if (Platform.OS === 'web' && typeof window !== 'undefined') {
+// Global error handler for unhandled errors - Only run on client-side
+if (Platform.OS === 'web' && isBrowser) {
   // Only set up once
   if (!window.__EXPO_ERROR_HANDLERS_SETUP__) {
     window.__EXPO_ERROR_HANDLERS_SETUP__ = true;
@@ -60,7 +63,6 @@ function RootLayoutNav() {
   const pathname = usePathname();
   const { user, loading } = useAuth();
   const [isNavigating, setIsNavigating] = useState(false);
-  const [hasNavigated, setHasNavigated] = useState(false);
 
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -80,6 +82,7 @@ function RootLayoutNav() {
       console.log('[App] ========================================');
       console.log('[App] ✅ App Initialized');
       console.log('[App] Platform:', Platform.OS);
+      console.log('[App] Is Browser:', isBrowser);
       console.log('[App] Backend URL:', BACKEND_URL || 'NOT CONFIGURED');
       console.log('[App] Backend configured:', !!BACKEND_URL);
       console.log('[App] ========================================');
@@ -106,16 +109,15 @@ function RootLayoutNav() {
     }
   }, [loaded]);
 
-  // Simplified authentication routing - FIXED to prevent infinite loops and handle web better
+  // Simplified authentication routing - Let index.tsx handle redirects
   useEffect(() => {
     // Skip during SSR on web
-    if (Platform.OS === 'web' && typeof window === 'undefined') {
+    if (Platform.OS === 'web' && !isBrowser) {
       console.log('[App] Skipping auth routing during SSR');
       return;
     }
 
     if (!loaded || loading || isNavigating) {
-      console.log('[App] Waiting for initialization...', { loaded, loading, isNavigating });
       return;
     }
 
@@ -129,64 +131,30 @@ function RootLayoutNav() {
       isAuthScreen,
       isIndexRoute,
       pathname,
-      segments: segments.join('/'),
-      platform: Platform.OS,
-      hasNavigated
+      platform: Platform.OS
     });
 
-    // Skip navigation if we're on the index route (it will handle its own redirect)
+    // Let index route handle its own redirect
     if (isIndexRoute) {
-      console.log('[App] On index route, letting it handle navigation');
       return;
     }
 
-    // Prevent multiple navigations
-    if (hasNavigated) {
-      console.log('[App] Already navigated once, skipping');
-      return;
-    }
-
-    // Only navigate if we're in the wrong place
-    if (!user && !isAuthScreen && inAuthGroup) {
+    // Only protect tab routes - redirect to auth if not authenticated
+    if (!user && inAuthGroup && !isNavigating) {
       console.log('[App] ⚠️ User not authenticated but in tabs, redirecting to /auth');
       setIsNavigating(true);
-      setHasNavigated(true);
       
-      // Use replace to avoid back button issues
-      if (Platform.OS === 'web') {
-        // On web, use a small delay to ensure DOM is ready
-        setTimeout(() => {
-          router.replace('/auth');
-          setIsNavigating(false);
-        }, 150);
-      } else {
+      setTimeout(() => {
         router.replace('/auth');
         setIsNavigating(false);
-      }
-    } else if (user && isAuthScreen) {
-      console.log('[App] ✅ User authenticated but on auth screen, redirecting to /(tabs)');
-      setIsNavigating(true);
-      setHasNavigated(true);
-      
-      if (Platform.OS === 'web') {
-        setTimeout(() => {
-          router.replace('/(tabs)');
-          setIsNavigating(false);
-        }, 150);
-      } else {
-        router.replace('/(tabs)');
-        setIsNavigating(false);
-      }
-    } else {
-      console.log('[App] ✅ User in correct location');
+      }, 100);
     }
-  }, [user, loading, loaded, pathname, segments, isNavigating, hasNavigated]);
+  }, [user, loading, loaded, pathname, segments, isNavigating]);
 
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
   useEffect(() => {
     if (Platform.OS === 'web') {
-      console.log('[App] Skipping notification listeners on web');
       return;
     }
 
@@ -195,7 +163,7 @@ function RootLayoutNav() {
     // Check if app was opened from a notification
     Notifications.getLastNotificationResponseAsync().then((response) => {
       if (response?.notification) {
-        console.log('[App] App opened from notification:', response.notification.request.content.data);
+        console.log('[App] App opened from notification');
         const data = response.notification.request.content.data;
         
         // Navigate to confirmations tab if notification has the screen data
@@ -212,7 +180,7 @@ function RootLayoutNav() {
 
     // Listen for notification taps while app is running
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      console.log('[App] Notification tapped:', response.notification.request.content.data);
+      console.log('[App] Notification tapped');
       const data = response.notification.request.content.data;
       
       // Navigate to confirmations tab
@@ -223,7 +191,6 @@ function RootLayoutNav() {
     });
 
     return () => {
-      console.log('[App] Removing notification response listener');
       subscription.remove();
     };
   }, [router]);

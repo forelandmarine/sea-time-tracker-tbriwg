@@ -25,15 +25,23 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Check if we're in a browser environment
+const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+
 // Platform-specific token storage
 const tokenStorage = {
   async getToken(): Promise<string | null> {
     try {
       if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
-          return localStorage.getItem(TOKEN_KEY);
+        if (!isBrowser) {
+          return null;
         }
-        return null;
+        try {
+          return localStorage.getItem(TOKEN_KEY);
+        } catch (e) {
+          console.warn('[Auth] localStorage not available:', e);
+          return null;
+        }
       }
       return await SecureStore.getItemAsync(TOKEN_KEY);
     } catch (error) {
@@ -46,13 +54,20 @@ const tokenStorage = {
     try {
       console.log('[Auth] Storing token, length:', token?.length);
       if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        if (!isBrowser) {
+          console.warn('[Auth] Cannot store token during SSR');
+          return;
+        }
+        try {
           localStorage.setItem(TOKEN_KEY, token);
+          console.log('[Auth] Token stored successfully in localStorage');
+        } catch (e) {
+          console.error('[Auth] localStorage.setItem failed:', e);
         }
       } else {
         await SecureStore.setItemAsync(TOKEN_KEY, token);
+        console.log('[Auth] Token stored successfully in SecureStore');
       }
-      console.log('[Auth] Token stored successfully');
     } catch (error) {
       console.error('[Auth] Error storing token:', error);
     }
@@ -62,13 +77,20 @@ const tokenStorage = {
     try {
       console.log('[Auth] Removing token from storage');
       if (Platform.OS === 'web') {
-        if (typeof window !== 'undefined' && typeof localStorage !== 'undefined') {
+        if (!isBrowser) {
+          console.warn('[Auth] Cannot remove token during SSR');
+          return;
+        }
+        try {
           localStorage.removeItem(TOKEN_KEY);
+          console.log('[Auth] Token removed successfully from localStorage');
+        } catch (e) {
+          console.error('[Auth] localStorage.removeItem failed:', e);
         }
       } else {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
+        console.log('[Auth] Token removed successfully from SecureStore');
       }
-      console.log('[Auth] Token removed successfully');
     } catch (error) {
       console.error('[Auth] Error removing token:', error);
     }
@@ -78,34 +100,48 @@ const tokenStorage = {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   // Check for existing session on mount
   useEffect(() => {
-    // Only run on client-side (not during SSR)
-    if (Platform.OS === 'web' && typeof window === 'undefined') {
+    // Skip during SSR
+    if (Platform.OS === 'web' && !isBrowser) {
       console.log('[Auth] Skipping auth check during SSR');
       setLoading(false);
       return;
     }
 
-    checkAuth();
+    // Mark as mounted
+    setMounted(true);
     
-    // Safety timeout - if auth check takes too long, stop loading
+    // Small delay to ensure everything is ready
+    const initTimer = setTimeout(() => {
+      checkAuth();
+    }, 100);
+    
+    return () => clearTimeout(initTimer);
+  }, []);
+
+  // Safety timeout - if auth check takes too long, stop loading
+  useEffect(() => {
+    if (!mounted) return;
+    
     const timeout = setTimeout(() => {
       if (loading) {
         console.warn('[Auth] Auth check timeout - stopping loading state');
         setLoading(false);
       }
-    }, 5000); // 5 second timeout (reduced from 10)
+    }, 3000); // 3 second timeout
     
     return () => clearTimeout(timeout);
-  }, []);
+  }, [loading, mounted]);
 
   const checkAuth = async () => {
     try {
       console.log('[Auth] Checking authentication status...');
       console.log('[Auth] API URL:', API_URL);
       console.log('[Auth] Platform:', Platform.OS);
+      console.log('[Auth] Is browser:', isBrowser);
       
       if (!API_URL) {
         console.warn('[Auth] Backend URL not configured, skipping auth check');
@@ -127,7 +163,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Add timeout for fetch request
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
       
       try {
         const response = await fetch(`${API_URL}/api/auth/user`, {
@@ -202,17 +238,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      console.log('[Auth] Sign in response received, full data:', JSON.stringify(data));
+      console.log('[Auth] Sign in response received');
       console.log('[Auth] User:', data.user?.email);
-      console.log('[Auth] Session object:', JSON.stringify(data.session));
-      console.log('[Auth] Session data:', { 
-        hasSession: !!data.session, 
-        hasToken: !!data.session?.token,
-        tokenLength: data.session?.token?.length 
-      });
 
       if (!data.session || !data.session.token) {
-        console.error('[Auth] Missing session or token. Full response:', JSON.stringify(data));
+        console.error('[Auth] Missing session or token');
         throw new Error('No session token received from server');
       }
 
@@ -220,12 +250,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.user);
       console.log('[Auth] Sign in successful, user state updated');
     } catch (error: any) {
-      console.error('[Auth] Sign in failed:', {
-        message: error?.message,
-        name: error?.name,
-        stack: error?.stack,
-        error: error
-      });
+      console.error('[Auth] Sign in failed:', error?.message);
       
       // Provide more helpful error messages
       if (error.message === 'Network request failed' || error.name === 'TypeError') {
@@ -265,12 +290,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      console.log('[Auth] Sign up response received, full data:', JSON.stringify(data));
+      console.log('[Auth] Sign up response received');
       console.log('[Auth] User:', data.user?.email);
-      console.log('[Auth] Session object:', JSON.stringify(data.session));
 
       if (!data.session || !data.session.token) {
-        console.error('[Auth] Missing session or token. Full response:', JSON.stringify(data));
+        console.error('[Auth] Missing session or token');
         throw new Error('No session token received from server');
       }
 
@@ -278,11 +302,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.user);
       console.log('[Auth] Sign up successful');
     } catch (error: any) {
-      console.error('[Auth] Sign up failed:', {
-        message: error?.message,
-        name: error?.name,
-        error: error
-      });
+      console.error('[Auth] Sign up failed:', error?.message);
       
       // Provide more helpful error messages
       if (error.message === 'Network request failed' || error.name === 'TypeError') {
@@ -297,7 +317,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[Auth] Signing in with Apple');
       console.log('[Auth] Identity token length:', identityToken?.length);
-      console.log('[Auth] Apple user data:', JSON.stringify(appleUser));
       console.log('[Auth] API URL:', API_URL);
 
       if (!API_URL) {
@@ -312,7 +331,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         identityToken,
         user: appleUser,
       };
-      console.log('[Auth] Request body:', JSON.stringify(requestBody));
 
       const url = `${API_URL}/api/auth/sign-in/apple`;
       console.log('[Auth] Full request URL:', url);
@@ -329,25 +347,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('[Auth] Apple sign in failed. Status:', response.status, 'Response:', errorText);
+        console.error('[Auth] Apple sign in failed. Status:', response.status);
         
         let errorData;
         try {
           errorData = JSON.parse(errorText);
         } catch (e) {
-          throw new Error(`Apple sign in failed with status ${response.status}: ${errorText}`);
+          throw new Error(`Apple sign in failed with status ${response.status}`);
         }
         
         throw new Error(errorData.error || 'Apple sign in failed');
       }
 
       const data = await response.json();
-      console.log('[Auth] Apple sign in response received, full data:', JSON.stringify(data));
-      console.log('[Auth] Session object:', JSON.stringify(data.session));
+      console.log('[Auth] Apple sign in response received');
       console.log('[Auth] Is new user:', data.isNewUser);
 
       if (!data.session || !data.session.token) {
-        console.error('[Auth] Missing session or token. Full response:', JSON.stringify(data));
+        console.error('[Auth] Missing session or token');
         throw new Error('No session token received from server');
       }
 
@@ -355,12 +372,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.user);
       console.log('[Auth] Apple sign in successful, user:', data.user.email);
     } catch (error: any) {
-      console.error('[Auth] Apple sign in failed:', {
-        message: error?.message,
-        name: error?.name,
-        stack: error?.stack,
-        error: error
-      });
+      console.error('[Auth] Apple sign in failed:', error?.message);
       
       // Provide more helpful error messages
       if (error.message === 'Network request failed' || error.name === 'TypeError') {
