@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "SeaTime Tracker",
-    "slug": "SeaTime Tracker",
+    "slug": "seatimetracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/f0500a31-f8b9-4d46-8b57-62c3847deff7.png",
@@ -67,9 +67,6 @@
       "enabled": false,
       "checkAutomatically": "ON_ERROR_RECOVERY",
       "fallbackToCacheTimeout": 0
-    },
-    "developmentClient": {
-      "silentLaunch": true
     }
   }
 }

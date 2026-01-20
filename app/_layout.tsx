@@ -22,12 +22,22 @@ import { BACKEND_URL } from "@/utils/api";
 import { registerForPushNotificationsAsync } from "@/utils/notifications";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
+// Type declaration for window property
+declare global {
+  interface Window {
+    __EXPO_ERROR_HANDLERS_SETUP__?: boolean;
+  }
+}
+
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
 
 // Global error handler for unhandled errors - FIXED: Only run on client-side
-if (Platform.OS === 'web') {
-  if (typeof window !== 'undefined') {
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  // Only set up once
+  if (!window.__EXPO_ERROR_HANDLERS_SETUP__) {
+    window.__EXPO_ERROR_HANDLERS_SETUP__ = true;
+    
     window.addEventListener('error', (event) => {
       console.error('[App] Global error caught:', event.error);
     });
@@ -98,6 +108,12 @@ function RootLayoutNav() {
 
   // Simplified authentication routing - FIXED to prevent infinite loops and handle web better
   useEffect(() => {
+    // Skip during SSR on web
+    if (Platform.OS === 'web' && typeof window === 'undefined') {
+      console.log('[App] Skipping auth routing during SSR');
+      return;
+    }
+
     if (!loaded || loading || isNavigating) {
       console.log('[App] Waiting for initialization...', { loaded, loading, isNavigating });
       return;
@@ -142,7 +158,7 @@ function RootLayoutNav() {
         setTimeout(() => {
           router.replace('/auth');
           setIsNavigating(false);
-        }, 100);
+        }, 150);
       } else {
         router.replace('/auth');
         setIsNavigating(false);
@@ -156,7 +172,7 @@ function RootLayoutNav() {
         setTimeout(() => {
           router.replace('/(tabs)');
           setIsNavigating(false);
-        }, 100);
+        }, 150);
       } else {
         router.replace('/(tabs)');
         setIsNavigating(false);

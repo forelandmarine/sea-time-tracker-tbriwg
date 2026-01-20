@@ -1,4 +1,3 @@
-
 {
   "cli": {
     "version": ">= 5.0.0",
@@ -9,8 +8,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "ios": {
-        "simulator": true,
-        "appleTeamId": "43GZCFFPR9"
+        "simulator": true
       }
     },
     "preview": {

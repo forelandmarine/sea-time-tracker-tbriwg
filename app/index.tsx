@@ -13,6 +13,12 @@ export default function Index() {
   const [shouldRedirect, setShouldRedirect] = useState(false);
 
   useEffect(() => {
+    // Skip SSR on web
+    if (Platform.OS === 'web' && typeof window === 'undefined') {
+      console.log('[Index] Skipping mount during SSR');
+      return;
+    }
+
     console.log('[Index] Component mounted');
     setMounted(true);
     
@@ -31,7 +37,7 @@ export default function Index() {
       if (Platform.OS === 'web') {
         setTimeout(() => {
           setShouldRedirect(true);
-        }, 100);
+        }, 150);
       } else {
         setShouldRedirect(true);
       }

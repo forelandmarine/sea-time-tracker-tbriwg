@@ -81,6 +81,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check for existing session on mount
   useEffect(() => {
+    // Only run on client-side (not during SSR)
+    if (Platform.OS === 'web' && typeof window === 'undefined') {
+      console.log('[Auth] Skipping auth check during SSR');
+      setLoading(false);
+      return;
+    }
+
     checkAuth();
     
     // Safety timeout - if auth check takes too long, stop loading
