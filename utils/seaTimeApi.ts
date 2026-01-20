@@ -306,11 +306,11 @@ export const getVesselAISStatus = async (vesselId: string) => {
   return data;
 };
 
-// Get AIS location for a vessel
+// Get AIS location for a vessel - FIXED: Use correct endpoint
 export const getVesselAISLocation = async (vesselId: string, extended: boolean = false) => {
   console.log('[seaTimeApi] Fetching AIS location for vessel:', vesselId, 'extended:', extended);
   const options = await getFetchOptions('GET');
-  const url = `${API_BASE_URL}/api/ais/location/${vesselId}${extended ? '?extended=true' : ''}`;
+  const url = `${API_BASE_URL}/api/ais/check/${vesselId}${extended ? '?extended=true' : ''}`;
   const response = await fetch(url, options);
 
   if (!response.ok) {
