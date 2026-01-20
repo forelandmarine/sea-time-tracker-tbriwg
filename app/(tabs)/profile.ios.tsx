@@ -34,6 +34,19 @@ interface UserProfile {
   updatedAt: string;
 }
 
+interface SeaTimeSummary {
+  total_hours: number;
+  total_days: number;
+  entries_by_vessel: Array<{
+    vessel_name: string;
+    total_hours: number;
+  }>;
+  entries_by_month: Array<{
+    month: string;
+    total_hours: number;
+  }>;
+}
+
 const createStyles = (isDark: boolean, topInset: number) =>
   StyleSheet.create({
     container: {
@@ -93,6 +106,53 @@ const createStyles = (isDark: boolean, topInset: number) =>
       padding: 15,
       marginBottom: 10,
     },
+    summaryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? '#444' : '#e0e0e0',
+    },
+    summaryRowLast: {
+      borderBottomWidth: 0,
+    },
+    summaryLabel: {
+      fontSize: 15,
+      color: colors.text,
+      flex: 1,
+    },
+    summaryValue: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    totalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 12,
+      backgroundColor: isDark ? '#333' : '#f0f0f0',
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      marginTop: 8,
+    },
+    totalLabel: {
+      fontSize: 16,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    totalValue: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    loadingText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      paddingVertical: 10,
+    },
     menuItem: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -145,7 +205,9 @@ const createStyles = (isDark: boolean, topInset: number) =>
 
 export default function ProfileScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [summary, setSummary] = useState<SeaTimeSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingSummary, setLoadingSummary] = useState(true);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [downloadingCSV, setDownloadingCSV] = useState(false);
   const colorScheme = useColorScheme();
@@ -159,6 +221,7 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     loadProfile();
+    loadSummary();
   }, []);
 
   const loadProfile = async () => {
@@ -172,6 +235,19 @@ export default function ProfileScreen() {
       Alert.alert('Error', 'Failed to load profile');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadSummary = async () => {
+    console.log('Loading sea time summary');
+    try {
+      const data = await seaTimeApi.getReportSummary();
+      console.log('Sea time summary loaded:', data);
+      setSummary(data);
+    } catch (error) {
+      console.error('Failed to load sea time summary:', error);
+    } finally {
+      setLoadingSummary(false);
     }
   };
 
@@ -326,6 +402,45 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.profileName}>{profile.name}</Text>
           <Text style={styles.profileEmail}>{profile.email}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Sea Time Summary</Text>
+          <View style={styles.card}>
+            {loadingSummary ? (
+              <Text style={styles.loadingText}>Loading summary...</Text>
+            ) : summary ? (
+              <>
+                {summary.entries_by_vessel.map((vessel, index) => (
+                  <View 
+                    key={index} 
+                    style={[
+                      styles.summaryRow,
+                      index === summary.entries_by_vessel.length - 1 && styles.summaryRowLast
+                    ]}
+                  >
+                    <Text style={styles.summaryLabel}>{vessel.vessel_name}</Text>
+                    <Text style={styles.summaryValue}>
+                      {(vessel.total_hours / 24).toFixed(2)} days
+                    </Text>
+                  </View>
+                ))}
+                
+                {summary.entries_by_vessel.length === 0 && (
+                  <Text style={styles.loadingText}>No confirmed sea time entries yet</Text>
+                )}
+
+                {summary.entries_by_vessel.length > 0 && (
+                  <View style={styles.totalRow}>
+                    <Text style={styles.totalLabel}>Total Sea Time</Text>
+                    <Text style={styles.totalValue}>{summary.total_days.toFixed(2)} days</Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <Text style={styles.loadingText}>Unable to load summary</Text>
+            )}
+          </View>
         </View>
 
         <View style={styles.section}>
