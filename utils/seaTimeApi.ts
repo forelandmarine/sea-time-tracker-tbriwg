@@ -71,7 +71,9 @@ export const getUserProfile = async () => {
 
   const data = await response.json();
   console.log('[seaTimeApi] User profile fetched successfully');
-  return data;
+  
+  // Backend returns { user: {...} }, extract the user object
+  return data.user || data;
 };
 
 // Update user profile
