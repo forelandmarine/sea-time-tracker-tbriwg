@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || 'https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev';
-const TOKEN_KEY = 'auth_token';
+const TOKEN_KEY = 'seatime_auth_token'; // Must match AuthContext.tsx
 
 // Normalize vessel data from API response
 function normalizeVessel(vessel: any) {
