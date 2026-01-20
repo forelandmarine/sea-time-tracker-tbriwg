@@ -137,10 +137,12 @@ const createStyles = (isDark: boolean) =>
       marginBottom: 10,
     },
     card: {
-      backgroundColor: isDark ? '#2a2a2a' : '#ffffff',
+      backgroundColor: isDark ? '#1A3A52' : '#E3F2FD',
       borderRadius: 12,
       padding: 15,
       marginBottom: 10,
+      borderWidth: 1,
+      borderColor: isDark ? '#2A5A7A' : '#90CAF9',
     },
     summaryRow: {
       flexDirection: 'row',
@@ -148,14 +150,14 @@ const createStyles = (isDark: boolean) =>
       alignItems: 'center',
       paddingVertical: 8,
       borderBottomWidth: 1,
-      borderBottomColor: isDark ? '#444' : '#e0e0e0',
+      borderBottomColor: isDark ? '#2A5A7A' : '#BBDEFB',
     },
     summaryRowLast: {
       borderBottomWidth: 0,
     },
     summaryLabel: {
       fontSize: 15,
-      color: colors.text,
+      color: isDark ? colors.text : colors.textLight,
       flex: 1,
     },
     summaryValue: {
@@ -168,7 +170,7 @@ const createStyles = (isDark: boolean) =>
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingVertical: 12,
-      backgroundColor: isDark ? '#333' : '#f0f0f0',
+      backgroundColor: isDark ? '#0D2A3F' : '#BBDEFB',
       borderRadius: 8,
       paddingHorizontal: 12,
       marginTop: 8,
@@ -176,7 +178,7 @@ const createStyles = (isDark: boolean) =>
     totalLabel: {
       fontSize: 16,
       fontWeight: '700',
-      color: colors.text,
+      color: isDark ? colors.text : colors.textLight,
     },
     totalValue: {
       fontSize: 18,
@@ -185,7 +187,7 @@ const createStyles = (isDark: boolean) =>
     },
     loadingText: {
       fontSize: 14,
-      color: colors.textSecondary,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
       paddingVertical: 10,
     },
@@ -194,7 +196,7 @@ const createStyles = (isDark: boolean) =>
       alignItems: 'center',
       paddingVertical: 15,
       borderBottomWidth: 1,
-      borderBottomColor: isDark ? '#444' : '#e0e0e0',
+      borderBottomColor: isDark ? '#2A5A7A' : '#BBDEFB',
     },
     menuItemLast: {
       borderBottomWidth: 0,
@@ -205,7 +207,7 @@ const createStyles = (isDark: boolean) =>
     menuItemText: {
       flex: 1,
       fontSize: 16,
-      color: colors.text,
+      color: isDark ? colors.text : colors.textLight,
     },
     menuItemChevron: {
       marginLeft: 10,
