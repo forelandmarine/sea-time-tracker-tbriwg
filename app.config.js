@@ -64,7 +64,7 @@ module.exports = {
     },
     updates: {
       enabled: false,
-      checkAutomatically: 'ON_ERROR_RECOVERY',
+      checkAutomatically: 'NEVER',
       fallbackToCacheTimeout: 0,
     },
     developmentClient: {
