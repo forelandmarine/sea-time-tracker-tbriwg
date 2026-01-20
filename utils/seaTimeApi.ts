@@ -4,48 +4,52 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || 'https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev';
-const TOKEN_KEY = 'seatime_auth_token';
+const TOKEN_KEY = 'auth_token';
 
-// Helper to normalize vessel data from API
+// Normalize vessel data from API response
 function normalizeVessel(vessel: any) {
   if (!vessel) return null;
   
   return {
     id: vessel.id,
     mmsi: vessel.mmsi,
-    vessel_name: vessel.vessel_name,
-    is_active: vessel.is_active,
+    vessel_name: vessel.vessel_name || vessel.name,
+    is_active: vessel.is_active ?? false,
     created_at: vessel.created_at,
-    flag: vessel.flag || undefined,
-    official_number: vessel.official_number || undefined,
-    vessel_type: vessel.vessel_type || vessel.type || undefined,
-    length_metres: vessel.length_metres ? parseFloat(vessel.length_metres) : undefined,
-    gross_tonnes: vessel.gross_tonnes ? parseFloat(vessel.gross_tonnes) : undefined,
-    callsign: vessel.callsign || undefined,
+    callsign: vessel.callsign || null,
+    flag: vessel.flag || null,
+    official_number: vessel.official_number || null,
+    vessel_type: vessel.vessel_type || vessel.type || null,
+    length_metres: vessel.length_metres ? Number(vessel.length_metres) : null,
+    gross_tonnes: vessel.gross_tonnes ? Number(vessel.gross_tonnes) : null,
   };
 }
 
 // Check if backend is configured
-function checkBackendConfigured() {
-  if (!API_BASE_URL) {
-    throw new Error('Backend URL not configured. Please check app.json configuration.');
-  }
+export function checkBackendConfigured(): boolean {
+  console.log('Checking backend configuration:', API_BASE_URL);
+  return !!API_BASE_URL && API_BASE_URL !== 'YOUR_BACKEND_URL_HERE';
 }
 
 // Get auth token from secure storage
-async function getAuthToken(): Promise<string | null> {
+export async function getAuthToken(): Promise<string | null> {
   try {
     if (Platform.OS === 'web') {
-      return localStorage.getItem(TOKEN_KEY);
+      // For web, use localStorage
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return window.localStorage.getItem(TOKEN_KEY);
+      }
+      return null;
     }
+    // For native, use SecureStore
     return await SecureStore.getItemAsync(TOKEN_KEY);
   } catch (error) {
-    console.error('Failed to get auth token:', error);
+    console.error('Error getting auth token:', error);
     return null;
   }
 }
 
-// Get headers with auth token
+// Get API headers with auth token
 async function getApiHeaders(): Promise<HeadersInit> {
   const token = await getAuthToken();
   const headers: HeadersInit = {
@@ -54,9 +58,6 @@ async function getApiHeaders(): Promise<HeadersInit> {
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
-    console.log('[API] Auth token added to request headers');
-  } else {
-    console.log('[API] No auth token found - request will be unauthenticated');
   }
   
   return headers;
@@ -71,20 +72,21 @@ async function getFetchOptions(method: string = 'GET'): Promise<RequestInit> {
   };
 }
 
-// User Profile APIs
+// Get user profile
 export async function getUserProfile() {
-  checkBackendConfigured();
+  console.log('Fetching user profile from /api/profile');
   const options = await getFetchOptions('GET');
   const response = await fetch(`${API_BASE_URL}/api/profile`, options);
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error || 'Failed to fetch user profile');
+    throw new Error(error.error || 'Failed to fetch profile');
   }
   
   return response.json();
 }
 
+// Update user profile
 export async function updateUserProfile(updates: { 
   name?: string; 
   email?: string;
@@ -95,7 +97,7 @@ export async function updateUserProfile(updates: {
   nationality?: string | null;
   pya_membership_no?: string | null;
 }) {
-  checkBackendConfigured();
+  console.log('Updating user profile:', updates);
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/profile`, {
     method: 'PUT',
@@ -111,8 +113,9 @@ export async function updateUserProfile(updates: {
   return response.json();
 }
 
+// Upload profile image
 export async function uploadProfileImage(imageUri: string) {
-  checkBackendConfigured();
+  console.log('Uploading profile image');
   const token = await getAuthToken();
   
   const formData = new FormData();
@@ -138,50 +141,29 @@ export async function uploadProfileImage(imageUri: string) {
   return response.json();
 }
 
-// Vessel APIs
+// Get all vessels
 export async function getVessels() {
-  checkBackendConfigured();
-  console.log('[API] Fetching vessels from:', `${API_BASE_URL}/api/vessels`);
+  console.log('Fetching vessels from /api/vessels');
   const options = await getFetchOptions('GET');
   const response = await fetch(`${API_BASE_URL}/api/vessels`, options);
   
   if (!response.ok) {
-    throw new Error('Failed to fetch vessels');
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch vessels');
   }
   
   const vessels = await response.json();
-  console.log('[API] Received vessels:', vessels.length);
   return vessels.map(normalizeVessel);
 }
 
-export async function createVessel(
-  mmsi: string, 
-  vessel_name: string, 
-  is_active: boolean = false,
-  flag?: string,
-  official_number?: string,
-  type?: string,
-  length_metres?: number,
-  gross_tonnes?: number,
-  callsign?: string
-) {
-  checkBackendConfigured();
-  console.log('[API] Creating vessel:', { mmsi, vessel_name, is_active, flag, official_number, type, length_metres, gross_tonnes, callsign });
+// Create a new vessel
+export async function createVessel(mmsi: string, vessel_name: string, is_active: boolean = false) {
+  console.log('Creating vessel:', { mmsi, vessel_name, is_active });
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/vessels`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ 
-      mmsi, 
-      vessel_name, 
-      is_active,
-      flag,
-      official_number,
-      type,
-      length_metres,
-      gross_tonnes,
-      callsign
-    }),
+    body: JSON.stringify({ mmsi, vessel_name, is_active }),
   });
   
   if (!response.ok) {
@@ -190,13 +172,11 @@ export async function createVessel(
   }
   
   const vessel = await response.json();
-  console.log('[API] Vessel created:', vessel.id);
   return normalizeVessel(vessel);
 }
 
-export async function updateVesselParticulars(
-  vesselId: string,
-  updates: {
+// Update vessel particulars
+export async function updateVesselParticulars(vesselId: string, updates: {
     vessel_name?: string;
     flag?: string;
     official_number?: string;
@@ -204,10 +184,8 @@ export async function updateVesselParticulars(
     length_metres?: number;
     gross_tonnes?: number;
     callsign?: string;
-  }
-) {
-  checkBackendConfigured();
-  console.log('[API] Updating vessel particulars:', vesselId, updates);
+  }) {
+  console.log('Updating vessel particulars:', vesselId, updates);
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}/particulars`, {
     method: 'PUT',
@@ -217,18 +195,16 @@ export async function updateVesselParticulars(
   
   if (!response.ok) {
     const error = await response.json();
-    console.error('[API] Failed to update vessel particulars:', error);
-    throw new Error(error.error || 'Failed to update vessel particulars');
+    throw new Error(error.error || 'Failed to update vessel');
   }
   
   const vessel = await response.json();
-  console.log('[API] Vessel particulars updated successfully');
   return normalizeVessel(vessel);
 }
 
+// Activate a vessel
 export async function activateVessel(vesselId: string) {
-  checkBackendConfigured();
-  console.log('[API] Activating vessel:', vesselId);
+  console.log('Activating vessel:', vesselId);
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}/activate`, {
     method: 'PUT',
@@ -242,95 +218,44 @@ export async function activateVessel(vesselId: string) {
   }
   
   const vessel = await response.json();
-  console.log('[API] Vessel activated');
   return normalizeVessel(vessel);
 }
 
-export async function deleteVessel(vesselId: string): Promise<void> {
-  checkBackendConfigured();
-  console.log('[API] ⚠️ DELETE VESSEL CALLED - Starting deletion for vessel:', vesselId);
-  console.log('[API] Backend URL:', API_BASE_URL);
+// Delete a vessel
+export async function deleteVessel(vesselId: string) {
+  console.log('Deleting vessel:', vesselId);
+  const headers = await getApiHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}`, {
+    method: 'DELETE',
+    headers,
+    body: JSON.stringify({}),
+  });
   
-  try {
-    const token = await getAuthToken();
-    console.log('[API] Auth token retrieved:', token ? 'YES' : 'NO');
-    
-    const url = `${API_BASE_URL}/api/vessels/${vesselId}`;
-    console.log('[API] DELETE request URL:', url);
-    
-    // For DELETE requests, we need to send the request without Content-Type: application/json
-    // or with an empty body to avoid Fastify's FST_ERR_CTP_EMPTY_JSON_BODY error
-    const headers: HeadersInit = {};
-    
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-      console.log('[API] Auth token added to delete request');
-    } else {
-      console.warn('[API] ⚠️ No auth token - delete may fail if endpoint requires authentication');
-    }
-    
-    console.log('[API] Sending DELETE request...');
-    const response = await fetch(url, {
-      method: 'DELETE',
-      headers,
-    });
-    
-    console.log('[API] DELETE response status:', response.status);
-    console.log('[API] DELETE response ok:', response.ok);
-    
-    if (!response.ok) {
-      let errorMessage = 'Failed to delete vessel';
-      try {
-        const error = await response.json();
-        console.error('[API] DELETE error response:', error);
-        errorMessage = error.error || errorMessage;
-      } catch (e) {
-        console.error('[API] Failed to parse error response:', e);
-        const textError = await response.text();
-        console.error('[API] Error response text:', textError);
-      }
-      throw new Error(errorMessage);
-    }
-    
-    console.log('[API] ✅ Vessel deleted successfully');
-    
-    // Try to parse response, but don't fail if it's empty
-    try {
-      const result = await response.json();
-      console.log('[API] Delete response:', result);
-    } catch (e) {
-      console.log('[API] No JSON response body (this is OK for DELETE)');
-    }
-  } catch (error) {
-    console.error('[API] ❌ DELETE VESSEL FAILED:', error);
-    console.error('[API] Error details:', {
-      message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-    });
-    throw error;
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to delete vessel');
   }
+  
+  return response.json();
 }
 
-// Sea Time APIs
+// Get sea time entries for a vessel
 export async function getVesselSeaTime(vesselId: string) {
-  checkBackendConfigured();
-  console.log('[API] Fetching sea time for vessel:', vesselId);
+  console.log('Fetching sea time for vessel:', vesselId);
   const options = await getFetchOptions('GET');
   const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}/sea-time`, options);
   
   if (!response.ok) {
-    throw new Error('Failed to fetch vessel sea time');
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch sea time');
   }
   
-  const entries = await response.json();
-  console.log('[API] Received sea time entries:', entries.length);
-  return entries;
+  return response.json();
 }
 
-// AIS APIs
+// Check vessel AIS
 export async function checkVesselAIS(vesselId: string) {
-  checkBackendConfigured();
-  console.log('[API] Checking AIS for vessel:', vesselId);
+  console.log('Checking AIS for vessel:', vesselId);
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/ais/check/${vesselId}`, {
     method: 'POST',
@@ -343,45 +268,41 @@ export async function checkVesselAIS(vesselId: string) {
     throw new Error(error.error || 'Failed to check AIS');
   }
   
-  const result = await response.json();
-  console.log('[API] AIS check result:', result);
-  return result;
+  return response.json();
 }
 
+// Get vessel AIS status
 export async function getVesselAISStatus(vesselId: string) {
-  checkBackendConfigured();
-  console.log('[API] Fetching AIS status for vessel:', vesselId);
+  console.log('Fetching AIS status for vessel:', vesselId);
   const options = await getFetchOptions('GET');
   const response = await fetch(`${API_BASE_URL}/api/ais/status/${vesselId}`, options);
   
   if (!response.ok) {
-    throw new Error('Failed to fetch AIS status');
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch AIS status');
   }
   
-  const status = await response.json();
-  console.log('[API] AIS status:', status);
-  return status;
+  return response.json();
 }
 
+// Get vessel AIS location
 export async function getVesselAISLocation(vesselId: string, extended: boolean = false) {
-  checkBackendConfigured();
-  console.log('[API] Fetching AIS location for vessel:', vesselId, 'extended:', extended);
+  console.log('Fetching AIS location for vessel:', vesselId, 'extended:', extended);
   const options = await getFetchOptions('GET');
   const url = `${API_BASE_URL}/api/ais/check/${vesselId}${extended ? '?extended=true' : ''}`;
   const response = await fetch(url, options);
   
   if (!response.ok) {
-    throw new Error('Failed to fetch AIS location');
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch AIS location');
   }
   
-  const location = await response.json();
-  console.log('[API] AIS location:', location);
-  return location;
+  return response.json();
 }
 
+// Schedule AIS checks
 export async function scheduleAISChecks(vesselId: string, intervalHours: number) {
-  checkBackendConfigured();
-  console.log('[API] Scheduling AIS checks for vessel:', vesselId, 'interval:', intervalHours);
+  console.log('Scheduling AIS checks:', { vesselId, intervalHours });
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/ais/schedule-check`, {
     method: 'POST',
@@ -394,29 +315,26 @@ export async function scheduleAISChecks(vesselId: string, intervalHours: number)
     throw new Error(error.error || 'Failed to schedule AIS checks');
   }
   
-  const task = await response.json();
-  console.log('[API] AIS checks scheduled:', task);
-  return task;
+  return response.json();
 }
 
+// Get scheduled tasks
 export async function getScheduledTasks() {
-  checkBackendConfigured();
-  console.log('[API] Fetching scheduled tasks');
+  console.log('Fetching scheduled tasks');
   const options = await getFetchOptions('GET');
   const response = await fetch(`${API_BASE_URL}/api/ais/scheduled-tasks`, options);
   
   if (!response.ok) {
-    throw new Error('Failed to fetch scheduled tasks');
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch scheduled tasks');
   }
   
-  const tasks = await response.json();
-  console.log('[API] Received scheduled tasks:', tasks.length);
-  return tasks;
+  return response.json();
 }
 
+// Toggle scheduled task
 export async function toggleScheduledTask(taskId: string, isActive: boolean) {
-  checkBackendConfigured();
-  console.log('[API] Toggling scheduled task:', taskId, 'active:', isActive);
+  console.log('Toggling scheduled task:', { taskId, isActive });
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/ais/scheduled-tasks/${taskId}`, {
     method: 'PUT',
@@ -426,63 +344,57 @@ export async function toggleScheduledTask(taskId: string, isActive: boolean) {
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error || 'Failed to toggle scheduled task');
+    throw new Error(error.error || 'Failed to toggle task');
   }
   
-  const task = await response.json();
-  console.log('[API] Scheduled task toggled');
-  return task;
+  return response.json();
 }
 
+// Get AIS debug logs
 export async function getAISDebugLogs(vesselId: string) {
-  checkBackendConfigured();
-  console.log('[API] Fetching AIS debug logs for vessel:', vesselId);
+  console.log('Fetching AIS debug logs for vessel:', vesselId);
   const options = await getFetchOptions('GET');
   const response = await fetch(`${API_BASE_URL}/api/ais/debug/${vesselId}`, options);
   
   if (!response.ok) {
-    throw new Error('Failed to fetch AIS debug logs');
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch debug logs');
   }
   
-  const logs = await response.json();
-  console.log('[API] Received AIS debug logs:', logs.length);
-  return logs;
+  return response.json();
 }
 
-// Sea Time Entry APIs
+// Get all sea time entries
 export async function getSeaTimeEntries() {
-  checkBackendConfigured();
-  console.log('[API] Fetching all sea time entries');
+  console.log('Fetching all sea time entries');
   const options = await getFetchOptions('GET');
   const response = await fetch(`${API_BASE_URL}/api/sea-time`, options);
   
   if (!response.ok) {
-    throw new Error('Failed to fetch sea time entries');
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch sea time entries');
   }
   
-  const entries = await response.json();
-  console.log('[API] Received sea time entries:', entries.length);
-  return entries;
+  return response.json();
 }
 
+// Get pending sea time entries
 export async function getPendingEntries() {
-  checkBackendConfigured();
-  console.log('[API] Fetching pending sea time entries');
+  console.log('Fetching pending sea time entries');
   const options = await getFetchOptions('GET');
   const response = await fetch(`${API_BASE_URL}/api/sea-time/pending`, options);
   
   if (!response.ok) {
-    throw new Error('Failed to fetch pending entries');
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch pending entries');
   }
   
-  const entries = await response.json();
-  console.log('[API] Received pending entries:', entries.length);
-  return entries;
+  return response.json();
 }
 
+// Confirm sea time entry
 export async function confirmSeaTimeEntry(entryId: string) {
-  checkBackendConfigured();
-  console.log('[API] Confirming sea time entry:', entryId);
+  console.log('Confirming sea time entry:', entryId);
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}/confirm`, {
     method: 'PUT',
@@ -495,13 +407,12 @@ export async function confirmSeaTimeEntry(entryId: string) {
     throw new Error(error.error || 'Failed to confirm entry');
   }
   
-  console.log('[API] Entry confirmed');
   return response.json();
 }
 
+// Reject sea time entry
 export async function rejectSeaTimeEntry(entryId: string) {
-  checkBackendConfigured();
-  console.log('[API] Rejecting sea time entry:', entryId);
+  console.log('Rejecting sea time entry:', entryId);
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}/reject`, {
     method: 'PUT',
@@ -514,13 +425,11 @@ export async function rejectSeaTimeEntry(entryId: string) {
     throw new Error(error.error || 'Failed to reject entry');
   }
   
-  console.log('[API] Entry rejected');
   return response.json();
 }
 
-export async function updateSeaTimeEntry(
-  entryId: string,
-  updates: {
+// Update sea time entry
+export async function updateSeaTimeEntry(entryId: string, updates: {
     service_capacity?: string | null;
     vessel_category?: string | null;
     actual_days_at_sea?: number | null;
@@ -532,10 +441,8 @@ export async function updateSeaTimeEntry(
     area_cruised?: string | null;
     notes?: string | null;
     status?: string;
-  }
-) {
-  checkBackendConfigured();
-  console.log('[API] Updating sea time entry:', entryId, updates);
+  }) {
+  console.log('Updating sea time entry:', entryId, updates);
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}`, {
     method: 'PUT',
@@ -548,26 +455,17 @@ export async function updateSeaTimeEntry(
     throw new Error(error.error || 'Failed to update entry');
   }
   
-  console.log('[API] Entry updated');
   return response.json();
 }
 
+// Delete sea time entry
 export async function deleteSeaTimeEntry(entryId: string) {
-  checkBackendConfigured();
-  console.log('[API] Deleting sea time entry:', entryId);
-  const token = await getAuthToken();
-  
-  // For DELETE requests, we need to send the request without Content-Type: application/json
-  // to avoid Fastify's FST_ERR_CTP_EMPTY_JSON_BODY error
-  const headers: HeadersInit = {};
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  
+  console.log('Deleting sea time entry:', entryId);
+  const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}`, {
     method: 'DELETE',
     headers,
+    body: JSON.stringify({}),
   });
   
   if (!response.ok) {
@@ -575,108 +473,54 @@ export async function deleteSeaTimeEntry(entryId: string) {
     throw new Error(error.error || 'Failed to delete entry');
   }
   
-  console.log('[API] Entry deleted');
   return response.json();
 }
 
-// Reports APIs
+// Get report summary
 export async function getReportSummary() {
-  checkBackendConfigured();
-  console.log('[API] Fetching report summary from:', `${API_BASE_URL}/api/reports/summary`);
+  console.log('Fetching report summary');
   const options = await getFetchOptions('GET');
+  const response = await fetch(`${API_BASE_URL}/api/reports/summary`, options);
   
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/reports/summary`, options);
-    
-    console.log('[API] Report summary response status:', response.status);
-    
-    if (!response.ok) {
-      let errorMessage = 'Failed to fetch report summary';
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.error || errorMessage;
-      } catch (e) {
-        console.error('[API] Failed to parse error response:', e);
-      }
-      console.error('[API] Report summary error:', errorMessage);
-      throw new Error(errorMessage);
-    }
-    
-    const summary = await response.json();
-    console.log('[API] Received report summary:', summary);
-    return summary;
-  } catch (error) {
-    console.error('[API] Exception fetching report summary:', error);
-    throw error;
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch summary');
   }
+  
+  return response.json();
 }
 
+// Download CSV report
 export async function downloadCSVReport() {
-  checkBackendConfigured();
-  console.log('[API] Downloading CSV report from:', `${API_BASE_URL}/api/reports/csv`);
+  console.log('Downloading CSV report');
   const options = await getFetchOptions('GET');
+  const response = await fetch(`${API_BASE_URL}/api/reports/csv`, options);
   
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/reports/csv`, options);
-    
-    console.log('[API] CSV report response status:', response.status);
-    
-    if (!response.ok) {
-      let errorMessage = 'Failed to download CSV report';
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.error || errorMessage;
-      } catch (e) {
-        console.error('[API] Failed to parse error response:', e);
-      }
-      console.error('[API] CSV report error:', errorMessage);
-      throw new Error(errorMessage);
-    }
-    
-    const csvData = await response.text();
-    console.log('[API] CSV report downloaded, size:', csvData.length);
-    return csvData;
-  } catch (error) {
-    console.error('[API] Exception downloading CSV report:', error);
-    throw error;
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to download CSV');
   }
+  
+  return response.text();
 }
 
+// Download PDF report
 export async function downloadPDFReport() {
-  checkBackendConfigured();
-  console.log('[API] Downloading PDF report from:', `${API_BASE_URL}/api/reports/pdf`);
+  console.log('Downloading PDF report');
   const options = await getFetchOptions('GET');
+  const response = await fetch(`${API_BASE_URL}/api/reports/pdf`, options);
   
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/reports/pdf`, options);
-    
-    console.log('[API] PDF report response status:', response.status);
-    
-    if (!response.ok) {
-      let errorMessage = 'Failed to download PDF report';
-      try {
-        const errorData = await response.json();
-        errorMessage = errorData.error || errorMessage;
-      } catch (e) {
-        console.error('[API] Failed to parse error response:', e);
-      }
-      console.error('[API] PDF report error:', errorMessage);
-      throw new Error(errorMessage);
-    }
-    
-    const pdfBlob = await response.blob();
-    console.log('[API] PDF report downloaded, size:', pdfBlob.size);
-    return pdfBlob;
-  } catch (error) {
-    console.error('[API] Exception downloading PDF report:', error);
-    throw error;
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to download PDF');
   }
+  
+  return response.blob();
 }
 
-// Test APIs
+// Create test sea day entry
 export async function createTestSeaDayEntry() {
-  checkBackendConfigured();
-  console.log('[API] Creating test sea day entry');
+  console.log('Creating test sea day entry');
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/sea-time/test-entry`, {
     method: 'POST',
@@ -689,15 +533,12 @@ export async function createTestSeaDayEntry() {
     throw new Error(error.error || 'Failed to create test entry');
   }
   
-  const entry = await response.json();
-  console.log('[API] Test entry created:', entry.id);
-  return entry;
+  return response.json();
 }
 
-// Generate Sample Sea Time Entries
+// Generate sample sea time entries
 export async function generateSampleSeaTimeEntries() {
-  checkBackendConfigured();
-  console.log('[API] Generating sample sea time entries');
+  console.log('Generating sample sea time entries');
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/sea-time/generate-samples`, {
     method: 'POST',
@@ -707,15 +548,13 @@ export async function generateSampleSeaTimeEntries() {
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error || 'Failed to generate sample entries');
+    throw new Error(error.error || 'Failed to generate samples');
   }
   
-  const result = await response.json();
-  console.log('[API] Sample entries generated:', result.entries?.length || 0);
-  return result;
+  return response.json();
 }
 
-// Manual Sea Time Entry API
+// Create manual sea time entry
 export async function createManualSeaTimeEntry(entry: {
   vessel_id: string;
   start_time: string;
@@ -726,8 +565,7 @@ export async function createManualSeaTimeEntry(entry: {
   end_latitude?: number | null;
   end_longitude?: number | null;
 }) {
-  checkBackendConfigured();
-  console.log('[API] Creating manual sea time entry:', entry);
+  console.log('Creating manual sea time entry:', entry);
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/logbook/manual-entry`, {
     method: 'POST',
@@ -737,36 +575,22 @@ export async function createManualSeaTimeEntry(entry: {
   
   if (!response.ok) {
     const error = await response.json();
-    throw new Error(error.error || 'Failed to create manual entry');
+    throw new Error(error.error || 'Failed to create entry');
   }
   
-  const createdEntry = await response.json();
-  console.log('[API] Manual entry created:', createdEntry.id);
-  return createdEntry;
+  return response.json();
 }
 
-// Get new sea time entries that haven't been notified yet
+// Get new sea time entries
 export async function getNewSeaTimeEntries() {
-  checkBackendConfigured();
-  console.log('[API] Fetching new sea time entries for notifications');
+  console.log('Fetching new sea time entries');
   const options = await getFetchOptions('GET');
+  const response = await fetch(`${API_BASE_URL}/api/sea-time/new-entries`, options);
   
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/sea-time/new-entries`, options);
-    
-    if (!response.ok) {
-      if (response.status === 404) {
-        console.log('[API] New entries endpoint not yet available');
-        return { newEntries: [] };
-      }
-      throw new Error('Failed to fetch new entries');
-    }
-    
-    const result = await response.json();
-    console.log('[API] Received new entries:', result.newEntries?.length || 0);
-    return result;
-  } catch (error) {
-    console.error('[API] Error fetching new entries:', error);
-    return { newEntries: [] };
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to fetch new entries');
   }
+  
+  return response.json();
 }
