@@ -1,6 +1,8 @@
 import React from "react";
-import * as Haptics from "expo-haptics";
-import { Pressable, StyleSheet, useColorScheme, View, Text } from "react-native";
+import { Pressable, StyleSheet, useColorScheme, View, Text, Platform } from "react-native";
+
+// Platform-specific import - only load on native platforms
+const Haptics = Platform.OS !== 'web' ? require("expo-haptics") : null;
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, {
   configureReanimatedLogger,
@@ -30,7 +32,7 @@ export default function ListItem({ listId }: { listId: string }) {
     return (
       <Pressable
         onPress={() => {
-          if (process.env.EXPO_OS === "ios") {
+          if (Platform.OS === "ios" && Haptics) {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           }
           console.log("delete");

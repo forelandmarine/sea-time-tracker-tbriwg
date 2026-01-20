@@ -1,13 +1,15 @@
 
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import * as Device from 'expo-device';
+
+// Platform-specific imports - only load on native platforms
+const Notifications = Platform.OS !== 'web' ? require('expo-notifications') : null;
+const Device = Platform.OS !== 'web' ? require('expo-device') : null;
 
 console.log('[Notifications] Notification utility initialized');
 
 // Set the notification handler to show notifications when app is in foreground
 // Only on native platforms
-if (Platform.OS !== 'web') {
+if (Platform.OS !== 'web' && Notifications) {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowAlert: true,

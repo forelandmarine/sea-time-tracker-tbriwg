@@ -34,3 +34,15 @@ For detailed documentation on recent fixes, see:
 ## Additional Notes
 
 This application provides a comprehensive solution for maritime professionals to track and document their sea service time efficiently. The automated AIS tracking reduces manual entry while maintaining accuracy for official documentation.
+
+---
+
+## Technical Architecture
+
+The app is built with React Native and Expo 54, featuring:
+- Cross-platform support (iOS, Android, Web)
+- Real-time AIS data integration via MyShipTracking API
+- Secure authentication with Better Auth
+- Automated background tracking and notifications
+- Offline-first data persistence
+- Professional report generation capabilities

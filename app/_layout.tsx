@@ -4,11 +4,13 @@ import React, { useEffect, useState } from "react";
 import { useFonts } from "expo-font";
 import { Stack, useRouter, useSegments, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import { SystemBars } from "react-native-edge-to-edge";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useColorScheme, Alert, Platform, View, Text } from "react-native";
-import { useNetworkState } from "expo-network";
-import * as Notifications from 'expo-notifications';
+
+// Platform-specific imports for native-only modules
+const SystemBars = Platform.OS !== 'web' ? require("react-native-edge-to-edge").SystemBars : null;
+const useNetworkState = Platform.OS !== 'web' ? require("expo-network").useNetworkState : () => ({ isConnected: true, isInternetReachable: true });
+const Notifications = Platform.OS !== 'web' ? require('expo-notifications') : null;
 import {
   DarkTheme,
   DefaultTheme,
@@ -368,7 +370,7 @@ function RootLayoutNav() {
               }}
             />
           </Stack>
-          <SystemBars style={"auto"} />
+          {Platform.OS !== 'web' && SystemBars && <SystemBars style={"auto"} />}
         </GestureHandlerRootView>
       </ThemeProvider>
     </>
