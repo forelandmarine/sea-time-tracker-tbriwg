@@ -55,13 +55,46 @@ const createStyles = (isDark: boolean, topInset: number) =>
   StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? colors.background : '#f5f5f5',
-      paddingTop: topInset,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+    },
+    scrollView: {
+      flex: 1,
+    },
+    pageHeader: {
+      padding: 20,
+      paddingTop: topInset + 12,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
+    },
+    headerTitleContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    appIcon: {
+      width: 53,
+      height: 53,
+      borderRadius: 12,
+    },
+    headerTextContainer: {
+      flex: 1,
+      minWidth: 0,
+    },
+    headerTitle: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    headerSubtitle: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 4,
     },
     content: {
       padding: 20,
     },
-    header: {
+    profileSection: {
       alignItems: 'center',
       marginBottom: 30,
       paddingTop: 20,
@@ -410,19 +443,37 @@ export default function ProfileScreen() {
   const initials = getInitials(profile.name);
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <View style={styles.header}>
-          <View style={styles.profileImageContainer}>
-            {imageUrl ? (
-              <Image source={{ uri: imageUrl }} style={styles.profileImage} />
-            ) : (
-              <Text style={styles.profileInitials}>{initials}</Text>
-            )}
+    <View style={styles.container}>
+      {/* Header - matching other pages */}
+      <View style={styles.pageHeader}>
+        <View style={styles.headerTitleContainer}>
+          <Image
+            source={require('@/assets/images/c13cbd51-c2f7-489f-bbbb-6b28094d9b2b.png')}
+            style={styles.appIcon}
+            resizeMode="contain"
+          />
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+              Profile
+            </Text>
+            <Text style={styles.headerSubtitle}>Your Sea Time Profile & Reports</Text>
           </View>
-          <Text style={styles.profileName}>{displayName}</Text>
-          <Text style={styles.profileEmail}>{profile.email}</Text>
         </View>
+      </View>
+
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.content}>
+          <View style={styles.profileSection}>
+            <View style={styles.profileImageContainer}>
+              {imageUrl ? (
+                <Image source={{ uri: imageUrl }} style={styles.profileImage} />
+              ) : (
+                <Text style={styles.profileInitials}>{initials}</Text>
+              )}
+            </View>
+            <Text style={styles.profileName}>{displayName}</Text>
+            <Text style={styles.profileEmail}>{profile.email}</Text>
+          </View>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Sea Time Summary</Text>
@@ -593,10 +644,11 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-          <Text style={styles.signOutButtonText}>Sign Out</Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+            <Text style={styles.signOutButtonText}>Sign Out</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
