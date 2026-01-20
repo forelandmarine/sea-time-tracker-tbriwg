@@ -137,12 +137,12 @@ const createStyles = (isDark: boolean) =>
       marginBottom: 10,
     },
     card: {
-      backgroundColor: isDark ? '#1A3A52' : '#E3F2FD',
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
       padding: 15,
       marginBottom: 10,
       borderWidth: 1,
-      borderColor: isDark ? '#2A5A7A' : '#90CAF9',
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
     },
     summaryRow: {
       flexDirection: 'row',
@@ -150,7 +150,7 @@ const createStyles = (isDark: boolean) =>
       alignItems: 'center',
       paddingVertical: 8,
       borderBottomWidth: 1,
-      borderBottomColor: isDark ? '#2A5A7A' : '#BBDEFB',
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
     },
     summaryRowLast: {
       borderBottomWidth: 0,
@@ -170,7 +170,7 @@ const createStyles = (isDark: boolean) =>
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingVertical: 12,
-      backgroundColor: isDark ? '#0D2A3F' : '#BBDEFB',
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
       borderRadius: 8,
       paddingHorizontal: 12,
       marginTop: 8,
@@ -196,7 +196,7 @@ const createStyles = (isDark: boolean) =>
       alignItems: 'center',
       paddingVertical: 15,
       borderBottomWidth: 1,
-      borderBottomColor: isDark ? '#2A5A7A' : '#BBDEFB',
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
     },
     menuItemLast: {
       borderBottomWidth: 0,
