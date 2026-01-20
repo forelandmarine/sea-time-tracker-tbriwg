@@ -25,8 +25,8 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Check if we're in a browser environment
-const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+// Check if we're in a browser environment (not SSR)
+const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined' && typeof window.navigator !== 'undefined';
 
 // Platform-specific token storage
 const tokenStorage = {
@@ -34,6 +34,7 @@ const tokenStorage = {
     try {
       if (Platform.OS === 'web') {
         if (!isBrowser) {
+          console.log('[Auth] Cannot access localStorage during SSR');
           return null;
         }
         try {
@@ -100,7 +101,6 @@ const tokenStorage = {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [mounted, setMounted] = useState(false);
 
   // Check for existing session on mount
   useEffect(() => {
@@ -111,8 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Mark as mounted
-    setMounted(true);
+    console.log('[Auth] Starting auth check...');
     
     // Small delay to ensure everything is ready
     const initTimer = setTimeout(() => {
@@ -124,17 +123,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Safety timeout - if auth check takes too long, stop loading
   useEffect(() => {
-    if (!mounted) return;
-    
     const timeout = setTimeout(() => {
       if (loading) {
         console.warn('[Auth] Auth check timeout - stopping loading state');
         setLoading(false);
       }
-    }, 3000); // 3 second timeout
+    }, 5000); // 5 second timeout
     
     return () => clearTimeout(timeout);
-  }, [loading, mounted]);
+  }, [loading]);
 
   const checkAuth = async () => {
     try {
@@ -163,7 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Add timeout for fetch request
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
       
       try {
         const response = await fetch(`${API_URL}/api/auth/user`, {

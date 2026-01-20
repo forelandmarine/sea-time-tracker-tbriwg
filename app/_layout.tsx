@@ -22,8 +22,8 @@ import { BACKEND_URL } from "@/utils/api";
 import { registerForPushNotificationsAsync } from "@/utils/notifications";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-// Check if we're in a browser environment
-const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+// Check if we're in a browser environment (not SSR)
+const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined' && typeof window.navigator !== 'undefined';
 
 // Type declaration for window property
 declare global {
@@ -33,22 +33,11 @@ declare global {
 }
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
-SplashScreen.preventAutoHideAsync();
-
-// Global error handler for unhandled errors - Only run on client-side
-if (Platform.OS === 'web' && isBrowser) {
-  // Only set up once
-  if (!window.__EXPO_ERROR_HANDLERS_SETUP__) {
-    window.__EXPO_ERROR_HANDLERS_SETUP__ = true;
-    
-    window.addEventListener('error', (event) => {
-      console.error('[App] Global error caught:', event.error);
-    });
-    
-    window.addEventListener('unhandledrejection', (event) => {
-      console.error('[App] Unhandled promise rejection:', event.reason);
-    });
-  }
+// Only call this on client-side
+if (isBrowser || Platform.OS !== 'web') {
+  SplashScreen.preventAutoHideAsync().catch((err) => {
+    console.warn('[App] Could not prevent splash screen auto-hide:', err);
+  });
 }
 
 export const unstable_settings = {
@@ -72,13 +61,18 @@ function RootLayoutNav() {
     if (error) {
       console.error('[App] ❌ Font loading error:', error);
       // Hide splash screen even if fonts fail to load
-      SplashScreen.hideAsync();
+      if (isBrowser || Platform.OS !== 'web') {
+        SplashScreen.hideAsync().catch(() => {});
+      }
     }
   }, [error]);
 
   useEffect(() => {
     if (loaded) {
-      SplashScreen.hideAsync();
+      if (isBrowser || Platform.OS !== 'web') {
+        SplashScreen.hideAsync().catch(() => {});
+      }
+      
       console.log('[App] ========================================');
       console.log('[App] ✅ App Initialized');
       console.log('[App] Platform:', Platform.OS);
@@ -108,6 +102,37 @@ function RootLayoutNav() {
       }
     }
   }, [loaded]);
+
+  // Set up global error handlers - only on client-side
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !isBrowser) {
+      return;
+    }
+
+    // Only set up once
+    if (window.__EXPO_ERROR_HANDLERS_SETUP__) {
+      return;
+    }
+
+    console.log('[App] Setting up global error handlers');
+    window.__EXPO_ERROR_HANDLERS_SETUP__ = true;
+    
+    const errorHandler = (event: ErrorEvent) => {
+      console.error('[App] Global error caught:', event.error);
+    };
+    
+    const rejectionHandler = (event: PromiseRejectionEvent) => {
+      console.error('[App] Unhandled promise rejection:', event.reason);
+    };
+    
+    window.addEventListener('error', errorHandler);
+    window.addEventListener('unhandledrejection', rejectionHandler);
+
+    return () => {
+      window.removeEventListener('error', errorHandler);
+      window.removeEventListener('unhandledrejection', rejectionHandler);
+    };
+  }, []);
 
   // Simplified authentication routing - Let index.tsx handle redirects
   useEffect(() => {

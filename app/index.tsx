@@ -4,8 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { View, Text, useColorScheme, ActivityIndicator, Platform } from 'react-native';
 import React, { useEffect, useState } from 'react';
 
-// Check if we're in a browser environment
-const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+// Check if we're in a browser environment (not SSR)
+const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined' && typeof window.navigator !== 'undefined';
 
 export default function Index() {
   const { user, loading } = useAuth();
