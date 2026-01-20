@@ -42,6 +42,7 @@ function RootLayoutNav() {
   const { user, loading } = useAuth();
   const [isNavigating, setIsNavigating] = useState(false);
   const [webMounted, setWebMounted] = useState(Platform.OS !== 'web');
+  const [initError, setInitError] = useState<string | null>(null);
 
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
@@ -63,6 +64,7 @@ function RootLayoutNav() {
   useEffect(() => {
     if (error) {
       console.error('[App] ❌ Font loading error:', error);
+      setInitError(`Font loading failed: ${error.message}`);
       // Hide splash screen even if fonts fail to load
       if (Platform.OS !== 'web') {
         SplashScreen.hideAsync().catch(() => {});
@@ -198,6 +200,21 @@ function RootLayoutNav() {
       );
     }
   }, [networkState.isConnected, networkState.isInternetReachable]);
+
+  // Show error screen if initialization failed
+  if (initError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff', padding: 20 }}>
+        <Text style={{ fontSize: 18, color: 'red', marginBottom: 10, textAlign: 'center' }}>Initialization Error</Text>
+        <Text style={{ fontSize: 14, color: colorScheme === 'dark' ? '#999' : '#666', textAlign: 'center' }}>
+          {initError}
+        </Text>
+        <Text style={{ fontSize: 12, color: colorScheme === 'dark' ? '#666' : '#999', marginTop: 20, textAlign: 'center' }}>
+          Please restart the app
+        </Text>
+      </View>
+    );
+  }
 
   // Show loading screen while fonts are loading OR auth is checking OR web is mounting
   if (!loaded || loading || !webMounted) {
@@ -375,6 +392,38 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  const [providerError, setProviderError] = useState<string | null>(null);
+
+  // Catch any errors during provider initialization
+  useEffect(() => {
+    console.log('[App] Root layout mounted');
+    
+    // Set up global error handler
+    const errorHandler = (error: ErrorEvent) => {
+      console.error('[App] Global error caught:', error);
+      setProviderError(error.message);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('error', errorHandler);
+      return () => window.removeEventListener('error', errorHandler);
+    }
+  }, []);
+
+  if (providerError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000', padding: 20 }}>
+        <Text style={{ fontSize: 18, color: 'red', marginBottom: 10, textAlign: 'center' }}>App Error</Text>
+        <Text style={{ fontSize: 14, color: '#999', textAlign: 'center' }}>
+          {providerError}
+        </Text>
+        <Text style={{ fontSize: 12, color: '#666', marginTop: 20, textAlign: 'center' }}>
+          Please restart the app
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <ErrorBoundary>
       <AuthProvider>
