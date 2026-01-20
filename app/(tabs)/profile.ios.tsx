@@ -4,6 +4,8 @@ import React, { useState, useEffect } from 'react';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import {
   View,
   Text,
@@ -14,6 +16,7 @@ import {
   useColorScheme,
   Platform,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
@@ -111,6 +114,21 @@ const createStyles = (isDark: boolean, topInset: number) =>
     menuItemChevron: {
       marginLeft: 10,
     },
+    reportButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      padding: 15,
+      marginBottom: 10,
+    },
+    reportButtonText: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '600',
+      marginLeft: 10,
+    },
     signOutButton: {
       backgroundColor: '#ff4444',
       borderRadius: 12,
@@ -128,6 +146,8 @@ const createStyles = (isDark: boolean, topInset: number) =>
 export default function ProfileScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [downloadingCSV, setDownloadingCSV] = useState(false);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const insets = useSafeAreaInsets();
@@ -168,6 +188,74 @@ export default function ProfileScreen() {
   const handleMCARequirements = () => {
     console.log('User tapped MCA Requirements');
     router.push('/mca-requirements');
+  };
+
+  const handleDownloadPDF = async () => {
+    console.log('User tapped Download PDF Report');
+    setDownloadingPDF(true);
+    try {
+      const pdfBlob = await seaTimeApi.downloadPDFReport();
+      console.log('PDF report downloaded, blob size:', pdfBlob.size);
+
+      // For native, save to file system and share
+      const fileUri = `${FileSystem.documentDirectory}SeaTime_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+      
+      // Convert blob to base64
+      const reader = new FileReader();
+      reader.readAsDataURL(pdfBlob);
+      reader.onloadend = async () => {
+        const base64data = reader.result as string;
+        const base64 = base64data.split(',')[1];
+        
+        await FileSystem.writeAsStringAsync(fileUri, base64, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+        
+        console.log('PDF saved to:', fileUri);
+        
+        // Share the file
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri);
+        } else {
+          Alert.alert('Success', 'PDF report saved to device');
+        }
+      };
+    } catch (error) {
+      console.error('Failed to download PDF report:', error);
+      Alert.alert('Error', 'Failed to download PDF report. Please try again.');
+    } finally {
+      setDownloadingPDF(false);
+    }
+  };
+
+  const handleDownloadCSV = async () => {
+    console.log('User tapped Download CSV Report');
+    setDownloadingCSV(true);
+    try {
+      const csvData = await seaTimeApi.downloadCSVReport();
+      console.log('CSV report downloaded, size:', csvData.length);
+
+      // For native, save to file system and share
+      const fileUri = `${FileSystem.documentDirectory}SeaTime_Report_${new Date().toISOString().split('T')[0]}.csv`;
+      
+      await FileSystem.writeAsStringAsync(fileUri, csvData, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+      
+      console.log('CSV saved to:', fileUri);
+      
+      // Share the file
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(fileUri);
+      } else {
+        Alert.alert('Success', 'CSV report saved to device');
+      }
+    } catch (error) {
+      console.error('Failed to download CSV report:', error);
+      Alert.alert('Error', 'Failed to download CSV report. Please try again.');
+    } finally {
+      setDownloadingCSV(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -238,6 +326,51 @@ export default function ProfileScreen() {
           </View>
           <Text style={styles.profileName}>{profile.name}</Text>
           <Text style={styles.profileEmail}>{profile.email}</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Reports</Text>
+          <View style={styles.card}>
+            <TouchableOpacity 
+              style={styles.reportButton} 
+              onPress={handleDownloadPDF}
+              disabled={downloadingPDF}
+            >
+              {downloadingPDF ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <>
+                  <IconSymbol
+                    ios_icon_name="doc.fill"
+                    android_material_icon_name="description"
+                    size={24}
+                    color="#ffffff"
+                  />
+                  <Text style={styles.reportButtonText}>Download PDF Report</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.reportButton} 
+              onPress={handleDownloadCSV}
+              disabled={downloadingCSV}
+            >
+              {downloadingCSV ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <>
+                  <IconSymbol
+                    ios_icon_name="tablecells"
+                    android_material_icon_name="grid-on"
+                    size={24}
+                    color="#ffffff"
+                  />
+                  <Text style={styles.reportButtonText}>Download CSV Report</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.section}>
