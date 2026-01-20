@@ -641,27 +641,6 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       lineHeight: 20,
     },
-    aisInfoBanner: {
-      flexDirection: 'row',
-      backgroundColor: isDark ? 'rgba(0, 122, 255, 0.15)' : 'rgba(0, 122, 255, 0.1)',
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 20,
-      borderWidth: 1,
-      borderColor: isDark ? 'rgba(0, 122, 255, 0.3)' : 'rgba(0, 122, 255, 0.2)',
-    },
-    aisInfoIcon: {
-      marginRight: 12,
-      marginTop: 2,
-    },
-    aisInfoTextContainer: {
-      flex: 1,
-    },
-    aisInfoText: {
-      fontSize: 14,
-      lineHeight: 20,
-      color: isDark ? colors.text : colors.textLight,
-    },
     aisDataCard: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
@@ -1760,21 +1739,6 @@ export default function VesselDetailScreen() {
                 <Text style={styles.aisModalSubtitle}>
                   Real-time vessel position and navigation information
                 </Text>
-              </View>
-
-              <View style={styles.aisInfoBanner}>
-                <IconSymbol
-                  ios_icon_name="info.circle.fill"
-                  android_material_icon_name="info"
-                  size={24}
-                  color={colors.primary}
-                  style={styles.aisInfoIcon}
-                />
-                <View style={styles.aisInfoTextContainer}>
-                  <Text style={styles.aisInfoText}>
-                    This data is retrieved from the MyShipTracking AIS service and shows the vessel&apos;s current status and location.
-                  </Text>
-                </View>
               </View>
 
               <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={styles.modalScrollContent}>
