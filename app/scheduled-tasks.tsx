@@ -67,9 +67,11 @@ export default function ScheduledTasksScreen() {
     try {
       console.log('Toggling task:', taskId, 'from', currentStatus, 'to', !currentStatus);
       await seaTimeApi.toggleScheduledTask(taskId, !currentStatus);
+      const newStatus = !currentStatus;
+      const statusText = newStatus ? 'activated' : 'paused';
       Alert.alert(
         'Success',
-        `Task ${!currentStatus ? 'activated' : 'paused'} successfully`
+        `Task ${statusText} successfully`
       );
       loadTasks();
     } catch (error: any) {
@@ -99,7 +101,9 @@ export default function ScheduledTasksScreen() {
 
   const formatDateTime = (dateString: string | null) => {
     if (!dateString) return 'Never';
-    return `${formatDate(dateString)} ${formatTime(dateString)}`;
+    const dateText = formatDate(dateString);
+    const timeText = formatTime(dateString);
+    return `${dateText} ${timeText}`;
   };
 
   const getTimeUntilNextRun = (nextRunString: string) => {
@@ -114,13 +118,20 @@ export default function ScheduledTasksScreen() {
     const diffDays = Math.floor(diffHours / 24);
     
     if (diffDays > 0) {
-      return `in ${diffDays}d ${diffHours % 24}h`;
+      const remainingHours = diffHours % 24;
+      return `in ${diffDays}d ${remainingHours}h`;
     } else if (diffHours > 0) {
-      return `in ${diffHours}h ${diffMinutes % 60}m`;
+      const remainingMinutes = diffMinutes % 60;
+      return `in ${diffHours}h ${remainingMinutes}m`;
     } else {
       return `in ${diffMinutes}m`;
     }
   };
+
+  const textColor = isDark ? colors.text : colors.textLight;
+  const secondaryTextColor = isDark ? colors.textSecondary : colors.textSecondaryLight;
+  const backgroundColor = isDark ? colors.background : colors.backgroundLight;
+  const cardColor = isDark ? colors.cardBackground : colors.card;
 
   return (
     <>
@@ -130,9 +141,9 @@ export default function ScheduledTasksScreen() {
           headerShown: true,
           headerBackTitle: 'Back',
           headerStyle: {
-            backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+            backgroundColor: backgroundColor,
           },
-          headerTintColor: isDark ? colors.textDark : colors.textLight,
+          headerTintColor: textColor,
           headerShadowVisible: false,
         }}
       />
@@ -229,7 +240,7 @@ export default function ScheduledTasksScreen() {
                   ios_icon_name="calendar.badge.clock"
                   android_material_icon_name="schedule"
                   size={48}
-                  color={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+                  color={secondaryTextColor}
                 />
                 <Text style={styles.emptyText}>No scheduled tasks</Text>
                 <Text style={styles.emptySubtext}>
@@ -237,77 +248,84 @@ export default function ScheduledTasksScreen() {
                 </Text>
               </View>
             ) : (
-              tasks.map((task, index) => (
-                <View key={task.id} style={styles.taskCard}>
-                  <View style={styles.taskHeader}>
-                    <View style={styles.taskHeaderLeft}>
-                      <Text style={styles.vesselName}>{task.vessel_name}</Text>
-                      <Text style={styles.mmsi}>MMSI: {task.mmsi}</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={[
-                        styles.statusBadge,
-                        task.is_active ? styles.statusActive : styles.statusInactive,
-                      ]}
-                      onPress={() => handleToggleTask(task.id, task.is_active)}
-                    >
-                      <Text
+              tasks.map((task) => {
+                const isActive = task.is_active;
+                const statusBgColor = isActive ? 'rgba(0, 200, 83, 0.2)' : 'rgba(255, 179, 0, 0.2)';
+                const statusTextColor = isActive ? colors.success : colors.warning;
+                const statusText = isActive ? 'Active' : 'Paused';
+
+                return (
+                  <View key={task.id} style={styles.taskCard}>
+                    <View style={styles.taskHeader}>
+                      <View style={styles.taskHeaderLeft}>
+                        <Text style={styles.vesselName}>{task.vessel_name}</Text>
+                        <Text style={styles.mmsi}>MMSI: {task.mmsi}</Text>
+                      </View>
+                      <TouchableOpacity
                         style={[
-                          styles.statusText,
-                          task.is_active ? styles.statusTextActive : styles.statusTextInactive,
+                          styles.statusBadge,
+                          { backgroundColor: statusBgColor },
                         ]}
+                        onPress={() => handleToggleTask(task.id, task.is_active)}
                       >
-                        {task.is_active ? 'Active' : 'Paused'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  <View style={styles.taskDetails}>
-                    <View style={styles.detailRow}>
-                      <IconSymbol
-                        ios_icon_name="clock"
-                        android_material_icon_name="schedule"
-                        size={16}
-                        color={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
-                      />
-                      <Text style={styles.detailLabel}>Interval:</Text>
-                      <Text style={styles.detailValue}>Every {task.interval_hours} hours</Text>
+                        <Text
+                          style={[
+                            styles.statusText,
+                            { color: statusTextColor },
+                          ]}
+                        >
+                          {statusText}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
 
-                    <View style={styles.detailRow}>
-                      <IconSymbol
-                        ios_icon_name="arrow.clockwise"
-                        android_material_icon_name="refresh"
-                        size={16}
-                        color={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
-                      />
-                      <Text style={styles.detailLabel}>Last Run:</Text>
-                      <Text style={styles.detailValue}>{formatDateTime(task.last_run)}</Text>
-                    </View>
+                    <View style={styles.taskDetails}>
+                      <View style={styles.detailRow}>
+                        <IconSymbol
+                          ios_icon_name="clock"
+                          android_material_icon_name="schedule"
+                          size={16}
+                          color={secondaryTextColor}
+                        />
+                        <Text style={styles.detailLabel}>Interval:</Text>
+                        <Text style={styles.detailValue}>Every {task.interval_hours} hours</Text>
+                      </View>
 
-                    <View style={styles.detailRow}>
-                      <IconSymbol
-                        ios_icon_name="calendar"
-                        android_material_icon_name="event"
-                        size={16}
-                        color={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
-                      />
-                      <Text style={styles.detailLabel}>Next Run:</Text>
-                      <Text style={styles.detailValue}>
-                        {formatDateTime(task.next_run)}
-                      </Text>
-                    </View>
+                      <View style={styles.detailRow}>
+                        <IconSymbol
+                          ios_icon_name="arrow.clockwise"
+                          android_material_icon_name="refresh"
+                          size={16}
+                          color={secondaryTextColor}
+                        />
+                        <Text style={styles.detailLabel}>Last Run:</Text>
+                        <Text style={styles.detailValue}>{formatDateTime(task.last_run)}</Text>
+                      </View>
 
-                    {task.is_active && (
-                      <View style={styles.nextRunBanner}>
-                        <Text style={styles.nextRunText}>
-                          Next check {getTimeUntilNextRun(task.next_run)}
+                      <View style={styles.detailRow}>
+                        <IconSymbol
+                          ios_icon_name="calendar"
+                          android_material_icon_name="event"
+                          size={16}
+                          color={secondaryTextColor}
+                        />
+                        <Text style={styles.detailLabel}>Next Run:</Text>
+                        <Text style={styles.detailValue}>
+                          {formatDateTime(task.next_run)}
                         </Text>
                       </View>
-                    )}
+
+                      {task.is_active && (
+                        <View style={styles.nextRunBanner}>
+                          <Text style={styles.nextRunText}>
+                            Next check {getTimeUntilNextRun(task.next_run)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
-                </View>
-              ))
+                );
+              })
             )}
           </View>
 
@@ -372,10 +390,16 @@ export default function ScheduledTasksScreen() {
 }
 
 function createStyles(isDark: boolean) {
+  const textColor = isDark ? colors.text : colors.textLight;
+  const secondaryTextColor = isDark ? colors.textSecondary : colors.textSecondaryLight;
+  const backgroundColor = isDark ? colors.background : colors.backgroundLight;
+  const cardColor = isDark ? colors.cardBackground : colors.card;
+  const borderColor = isDark ? colors.border : colors.borderLight;
+
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+      backgroundColor: backgroundColor,
     },
     scrollView: {
       flex: 1,
@@ -409,7 +433,7 @@ function createStyles(isDark: boolean) {
     infoText: {
       fontSize: 14,
       lineHeight: 20,
-      color: isDark ? colors.textDark : colors.textLight,
+      color: textColor,
     },
     section: {
       marginBottom: 24,
@@ -417,13 +441,15 @@ function createStyles(isDark: boolean) {
     sectionTitle: {
       fontSize: 18,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: textColor,
       marginBottom: 12,
     },
     howItWorksContainer: {
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: cardColor,
       borderRadius: 12,
       padding: 16,
+      borderWidth: 1,
+      borderColor: borderColor,
     },
     stepContainer: {
       flexDirection: 'row',
@@ -451,50 +477,54 @@ function createStyles(isDark: boolean) {
     stepTitle: {
       fontSize: 15,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: textColor,
       marginBottom: 4,
     },
     stepText: {
       fontSize: 13,
       lineHeight: 18,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: secondaryTextColor,
     },
     loadingContainer: {
       padding: 40,
       alignItems: 'center',
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: cardColor,
       borderRadius: 12,
+      borderWidth: 1,
+      borderColor: borderColor,
     },
     loadingText: {
       fontSize: 16,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: secondaryTextColor,
     },
     emptyContainer: {
       padding: 40,
       alignItems: 'center',
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: cardColor,
       borderRadius: 12,
+      borderWidth: 1,
+      borderColor: borderColor,
     },
     emptyText: {
       fontSize: 18,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: textColor,
       marginTop: 16,
       marginBottom: 8,
     },
     emptySubtext: {
       fontSize: 14,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: secondaryTextColor,
       textAlign: 'center',
       paddingHorizontal: 20,
     },
     taskCard: {
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: cardColor,
       borderRadius: 12,
       padding: 16,
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+      borderColor: borderColor,
     },
     taskHeader: {
       flexDirection: 'row',
@@ -503,7 +533,7 @@ function createStyles(isDark: boolean) {
       marginBottom: 12,
       paddingBottom: 12,
       borderBottomWidth: 1,
-      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+      borderBottomColor: borderColor,
     },
     taskHeaderLeft: {
       flex: 1,
@@ -512,12 +542,12 @@ function createStyles(isDark: boolean) {
     vesselName: {
       fontSize: 17,
       fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: textColor,
       marginBottom: 4,
     },
     mmsi: {
       fontSize: 13,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: secondaryTextColor,
     },
     statusBadge: {
       paddingHorizontal: 12,
@@ -525,21 +555,9 @@ function createStyles(isDark: boolean) {
       borderRadius: 12,
       flexShrink: 0,
     },
-    statusActive: {
-      backgroundColor: 'rgba(52, 199, 89, 0.2)',
-    },
-    statusInactive: {
-      backgroundColor: 'rgba(255, 149, 0, 0.2)',
-    },
     statusText: {
       fontSize: 13,
       fontWeight: '600',
-    },
-    statusTextActive: {
-      color: colors.success,
-    },
-    statusTextInactive: {
-      color: colors.warning,
     },
     taskDetails: {
       gap: 10,
@@ -551,13 +569,13 @@ function createStyles(isDark: boolean) {
     },
     detailLabel: {
       fontSize: 14,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: secondaryTextColor,
       minWidth: 75,
     },
     detailValue: {
       fontSize: 14,
       fontWeight: '500',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: textColor,
       flex: 1,
     },
     nextRunBanner: {
@@ -573,9 +591,11 @@ function createStyles(isDark: boolean) {
       color: colors.primary,
     },
     noteContainer: {
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: cardColor,
       borderRadius: 12,
       padding: 16,
+      borderWidth: 1,
+      borderColor: borderColor,
     },
     noteItem: {
       flexDirection: 'row',
@@ -591,7 +611,7 @@ function createStyles(isDark: boolean) {
       flex: 1,
       fontSize: 14,
       lineHeight: 20,
-      color: isDark ? colors.textDark : colors.textLight,
+      color: textColor,
     },
   });
 }
