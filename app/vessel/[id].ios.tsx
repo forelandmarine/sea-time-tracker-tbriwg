@@ -1,4 +1,6 @@
 
+import React, { useState, useEffect, useCallback } from 'react';
+import * as Haptics from 'expo-haptics';
 import {
   View,
   Text,
@@ -14,12 +16,11 @@ import {
   KeyboardAvoidingView,
   ActivityIndicator,
 } from 'react-native';
-import { IconSymbol } from '@/components/IconSymbol';
-import { colors } from '@/styles/commonStyles';
-import * as seaTimeApi from '@/utils/seaTimeApi';
-import * as Haptics from 'expo-haptics';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState, useEffect, useCallback } from 'react';
+import { colors } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
+import * as seaTimeApi from '@/utils/seaTimeApi';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Vessel {
   id: string;
@@ -356,18 +357,17 @@ function createStyles(isDark: boolean) {
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
+      justifyContent: 'flex-end',
     },
     modalContent: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 16,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
       padding: 24,
-      width: '90%',
-      maxWidth: 500,
-      maxHeight: '80%',
+      paddingBottom: 40,
+      maxHeight: '90%',
       shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
+      shadowOffset: { width: 0, height: -4 },
       shadowOpacity: 0.3,
       shadowRadius: 8,
       elevation: 8,
@@ -731,28 +731,29 @@ export default function VesselDetailScreen() {
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const loadData = useCallback(async () => {
-    console.log('[VesselDetailScreen] Loading data for vessel:', id);
+    console.log('[VesselDetailScreen iOS] Loading data for vessel:', id);
     try {
       const vessels = await seaTimeApi.getVessels();
       const currentVessel = vessels.find((v) => v.id === id);
       
       if (!currentVessel) {
-        console.error('[VesselDetailScreen] Vessel not found:', id);
+        console.error('[VesselDetailScreen iOS] Vessel not found:', id);
         Alert.alert('Error', 'Vessel not found');
         router.back();
         return;
       }
 
       setVessel(currentVessel);
-      console.log('[VesselDetailScreen] Vessel loaded:', currentVessel.vessel_name, 'MMSI:', currentVessel.mmsi);
+      console.log('[VesselDetailScreen iOS] Vessel loaded:', currentVessel.vessel_name, 'MMSI:', currentVessel.mmsi);
 
       const seaTimeEntries = await seaTimeApi.getVesselSeaTime(id);
-      console.log('[VesselDetailScreen] Sea time entries loaded:', seaTimeEntries.length);
+      console.log('[VesselDetailScreen iOS] Sea time entries loaded:', seaTimeEntries.length);
       setEntries(seaTimeEntries);
     } catch (error) {
-      console.error('[VesselDetailScreen] Error loading data:', error);
+      console.error('[VesselDetailScreen iOS] Error loading data:', error);
       Alert.alert('Error', 'Failed to load vessel data. Please try again.');
     } finally {
       setLoading(false);
@@ -765,19 +766,18 @@ export default function VesselDetailScreen() {
   }, [loadData]);
 
   const onRefresh = () => {
-    console.log('[VesselDetailScreen] User initiated refresh');
+    console.log('[VesselDetailScreen iOS] User initiated refresh');
     setRefreshing(true);
     loadData();
   };
 
   const handleEditParticulars = () => {
-    console.log('[VesselDetailScreen] User tapped Edit Particulars button');
+    console.log('[VesselDetailScreen iOS] User tapped Edit Particulars button');
     if (!vessel) {
-      console.error('[VesselDetailScreen] No vessel data available');
+      console.error('[VesselDetailScreen iOS] No vessel data available');
       return;
     }
     
-    // Pre-fill the form with current values
     setEditForm({
       vessel_name: vessel.vessel_name || '',
       flag: vessel.flag || '',
@@ -792,14 +792,13 @@ export default function VesselDetailScreen() {
   };
 
   const handleSaveParticulars = async () => {
-    console.log('[VesselDetailScreen] User tapped Save button in edit modal');
+    console.log('[VesselDetailScreen iOS] User tapped Save button in edit modal');
     if (!vessel) {
-      console.error('[VesselDetailScreen] No vessel data available');
+      console.error('[VesselDetailScreen iOS] No vessel data available');
       return;
     }
 
     try {
-      // Prepare the update payload
       const updates: any = {};
       
       if (editForm.vessel_name.trim()) updates.vessel_name = editForm.vessel_name.trim();
@@ -820,7 +819,7 @@ export default function VesselDetailScreen() {
         }
       }
 
-      console.log('[VesselDetailScreen] Updating vessel particulars:', updates);
+      console.log('[VesselDetailScreen iOS] Updating vessel particulars:', updates);
       
       await seaTimeApi.updateVesselParticulars(vessel.id, updates);
       
@@ -828,9 +827,8 @@ export default function VesselDetailScreen() {
       Alert.alert('Success', 'Vessel particulars updated successfully');
       await loadData();
     } catch (error: any) {
-      console.error('[VesselDetailScreen] Failed to update vessel particulars:', error);
+      console.error('[VesselDetailScreen iOS] Failed to update vessel particulars:', error);
       
-      // Check if it's an authentication error
       if (error.message && (error.message.includes('401') || error.message.includes('Unauthorized') || error.message.includes('authentication'))) {
         Alert.alert(
           'Authentication Required',
@@ -853,10 +851,10 @@ export default function VesselDetailScreen() {
   };
 
   const handleActivateVessel = async () => {
-    console.log('[VesselDetailScreen] User tapped Activate Vessel button');
+    console.log('[VesselDetailScreen iOS] User tapped Activate Vessel button');
     
     if (!vessel) {
-      console.error('[VesselDetailScreen] No vessel data available');
+      console.error('[VesselDetailScreen iOS] No vessel data available');
       return;
     }
 
@@ -868,43 +866,43 @@ export default function VesselDetailScreen() {
         ? `Start tracking ${vessel.vessel_name}? This will deactivate ${activeVessel.vessel_name}.`
         : `Start tracking ${vessel.vessel_name}? The app will monitor this vessel's AIS data.`;
 
-      console.log('[VesselDetailScreen] Opening activate confirmation modal');
+      console.log('[VesselDetailScreen iOS] Opening activate confirmation modal');
       setActivateModalMessage(message);
       setActivateModalVisible(true);
     } catch (error: any) {
-      console.error('[VesselDetailScreen] Error checking active vessels:', error);
+      console.error('[VesselDetailScreen iOS] Error checking active vessels:', error);
       Alert.alert('Error', 'Failed to check active vessels: ' + error.message);
     }
   };
 
   const confirmActivateVessel = async () => {
-    console.log('[VesselDetailScreen] User confirmed vessel activation');
+    console.log('[VesselDetailScreen iOS] User confirmed vessel activation');
     
     if (!vessel) {
-      console.error('[VesselDetailScreen] No vessel data available');
+      console.error('[VesselDetailScreen iOS] No vessel data available');
       return;
     }
 
     try {
-      console.log('[VesselDetailScreen] Activating vessel:', vessel.id);
+      console.log('[VesselDetailScreen iOS] Activating vessel:', vessel.id);
       setActivateModalVisible(false);
       await seaTimeApi.activateVessel(vessel.id);
       await loadData();
       Alert.alert('Success', `${vessel.vessel_name} is now being tracked`);
     } catch (error: any) {
-      console.error('[VesselDetailScreen] Failed to activate vessel:', error);
+      console.error('[VesselDetailScreen iOS] Failed to activate vessel:', error);
       Alert.alert('Error', 'Failed to activate vessel: ' + error.message);
     }
   };
 
   const cancelActivateVessel = () => {
-    console.log('[VesselDetailScreen] User cancelled vessel activation');
+    console.log('[VesselDetailScreen iOS] User cancelled vessel activation');
     setActivateModalVisible(false);
   };
 
   const handleCheckAIS = async () => {
     if (!vessel) {
-      console.error('[VesselDetailScreen] No vessel data available');
+      console.error('[VesselDetailScreen iOS] No vessel data available');
       return;
     }
 
@@ -913,45 +911,39 @@ export default function VesselDetailScreen() {
       return;
     }
 
-    // Prevent double-taps
     if (checkingAIS) {
-      console.log('[VesselDetailScreen] AIS check already in progress, ignoring duplicate tap');
+      console.log('[VesselDetailScreen iOS] AIS check already in progress, ignoring duplicate tap');
       return;
     }
 
     try {
-      // Haptic feedback
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      console.log('[VesselDetailScreen] 🔍 CHECK AIS BUTTON CLICKED');
-      console.log('[VesselDetailScreen] Using vessel from particulars:');
-      console.log('[VesselDetailScreen] - Vessel ID:', vessel.id);
-      console.log('[VesselDetailScreen] - Vessel Name:', vessel.vessel_name);
-      console.log('[VesselDetailScreen] - MMSI:', vessel.mmsi);
-      console.log('[VesselDetailScreen] - Call Sign:', vessel.callsign || 'Not set');
-      console.log('[VesselDetailScreen] Calling checkVesselAIS with vessel ID:', vessel.id);
-      console.log('[VesselDetailScreen] Backend will look up MMSI from database for this vessel ID');
+      console.log('[VesselDetailScreen iOS] 🔍 CHECK AIS BUTTON CLICKED');
+      console.log('[VesselDetailScreen iOS] Using vessel from particulars:');
+      console.log('[VesselDetailScreen iOS] - Vessel ID:', vessel.id);
+      console.log('[VesselDetailScreen iOS] - Vessel Name:', vessel.vessel_name);
+      console.log('[VesselDetailScreen iOS] - MMSI:', vessel.mmsi);
+      console.log('[VesselDetailScreen iOS] - Call Sign:', vessel.callsign || 'Not set');
+      console.log('[VesselDetailScreen iOS] Calling checkVesselAIS with vessel ID:', vessel.id);
+      console.log('[VesselDetailScreen iOS] Backend will look up MMSI from database for this vessel ID');
       
       setCheckingAIS(true);
       const result = await seaTimeApi.checkVesselAIS(vessel.id);
       
-      console.log('[VesselDetailScreen] ✅ AIS check completed successfully');
-      console.log('[VesselDetailScreen] Result:', result);
+      console.log('[VesselDetailScreen iOS] ✅ AIS check completed successfully');
+      console.log('[VesselDetailScreen iOS] Result:', result);
       
-      // Success haptic feedback
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      // Store AIS data and show modal
       setAisData(result);
       setAisModalVisible(true);
       
-      // Reload data to get any updated vessel information (like callsign from AIS)
-      console.log('[VesselDetailScreen] Reloading vessel data to get any AIS updates...');
+      console.log('[VesselDetailScreen iOS] Reloading vessel data to get any AIS updates...');
       await loadData();
     } catch (error: any) {
-      console.error('[VesselDetailScreen] ❌ AIS check failed:', error);
+      console.error('[VesselDetailScreen iOS] ❌ AIS check failed:', error);
       
-      // Error haptic feedback
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
       Alert.alert('AIS Check Failed', error.message);
@@ -961,35 +953,31 @@ export default function VesselDetailScreen() {
   };
 
   const handleGenerateSamples = async () => {
-    console.log('[VesselDetailScreen] User tapped Generate Sample Entries button');
+    console.log('[VesselDetailScreen iOS] User tapped Generate Sample Entries button');
     
     if (generatingSamples) {
-      console.log('[VesselDetailScreen] Sample generation already in progress, ignoring duplicate tap');
+      console.log('[VesselDetailScreen iOS] Sample generation already in progress, ignoring duplicate tap');
       return;
     }
 
     try {
-      // Haptic feedback
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      console.log('[VesselDetailScreen] Generating sample sea time entries');
+      console.log('[VesselDetailScreen iOS] Generating sample sea time entries');
       setGeneratingSamples(true);
       
       const result = await seaTimeApi.generateSampleSeaTimeEntries();
       
-      console.log('[VesselDetailScreen] ✅ Sample entries generated successfully:', result);
+      console.log('[VesselDetailScreen iOS] ✅ Sample entries generated successfully:', result);
       
-      // Success haptic feedback
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
       Alert.alert('Success', 'Sample sea time entries have been generated successfully!');
       
-      // Reload data to show the new entries
       await loadData();
     } catch (error: any) {
-      console.error('[VesselDetailScreen] ❌ Failed to generate sample entries:', error);
+      console.error('[VesselDetailScreen iOS] ❌ Failed to generate sample entries:', error);
       
-      // Error haptic feedback
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
       Alert.alert('Error', 'Failed to generate sample entries: ' + error.message);
@@ -999,45 +987,44 @@ export default function VesselDetailScreen() {
   };
 
   const handleDeleteVessel = () => {
-    console.log('[VesselDetailScreen] 🔴 DELETE BUTTON CLICKED - handleDeleteVessel called');
+    console.log('[VesselDetailScreen iOS] 🔴 DELETE BUTTON CLICKED - handleDeleteVessel called');
     
     if (!vessel) {
-      console.error('[VesselDetailScreen] No vessel data available for deletion');
+      console.error('[VesselDetailScreen iOS] No vessel data available for deletion');
       return;
     }
 
-    console.log('[VesselDetailScreen] Vessel to delete:', vessel.id, vessel.vessel_name);
-    console.log('[VesselDetailScreen] Opening delete confirmation modal...');
+    console.log('[VesselDetailScreen iOS] Vessel to delete:', vessel.id, vessel.vessel_name);
+    console.log('[VesselDetailScreen iOS] Opening delete confirmation modal...');
     
-    // Show custom modal instead of Alert.alert (which doesn't work on web)
     setDeleteModalVisible(true);
   };
 
   const confirmDeleteVessel = async () => {
-    console.log('[VesselDetailScreen] 🔴 User confirmed deletion - calling deleteVessel API');
+    console.log('[VesselDetailScreen iOS] 🔴 User confirmed deletion - calling deleteVessel API');
     
     if (!vessel) {
-      console.error('[VesselDetailScreen] No vessel data available for deletion');
+      console.error('[VesselDetailScreen iOS] No vessel data available for deletion');
       return;
     }
 
     try {
-      console.log('[VesselDetailScreen] Calling seaTimeApi.deleteVessel with ID:', vessel.id);
+      console.log('[VesselDetailScreen iOS] Calling seaTimeApi.deleteVessel with ID:', vessel.id);
       setDeleteModalVisible(false);
       await seaTimeApi.deleteVessel(vessel.id);
-      console.log('[VesselDetailScreen] ✅ Delete API call successful');
+      console.log('[VesselDetailScreen iOS] ✅ Delete API call successful');
       Alert.alert('Success', 'Vessel deleted successfully');
       router.back();
     } catch (error: any) {
-      console.error('[VesselDetailScreen] ❌ Failed to delete vessel:', error);
-      console.error('[VesselDetailScreen] Error message:', error.message);
-      console.error('[VesselDetailScreen] Error stack:', error.stack);
+      console.error('[VesselDetailScreen iOS] ❌ Failed to delete vessel:', error);
+      console.error('[VesselDetailScreen iOS] Error message:', error.message);
+      console.error('[VesselDetailScreen iOS] Error stack:', error.stack);
       Alert.alert('Error', 'Failed to delete vessel: ' + error.message);
     }
   };
 
   const cancelDeleteVessel = () => {
-    console.log('[VesselDetailScreen] User cancelled deletion');
+    console.log('[VesselDetailScreen iOS] User cancelled deletion');
     setDeleteModalVisible(false);
   };
 
@@ -1069,7 +1056,7 @@ export default function VesselDetailScreen() {
       .filter((e) => e.status === 'confirmed' && e.duration_hours !== null && e.duration_hours !== undefined)
       .reduce((sum, e) => sum + (Number(e.duration_hours) || 0), 0);
     
-    console.log('[VesselDetailScreen] calculateTotalHours result:', total);
+    console.log('[VesselDetailScreen iOS] calculateTotalHours result:', total);
     return total || 0;
   };
 
@@ -1091,7 +1078,7 @@ export default function VesselDetailScreen() {
   };
 
   const handleViewDebugLogs = () => {
-    console.log('[VesselDetailScreen] User tapped View Debug Logs button');
+    console.log('[VesselDetailScreen iOS] User tapped View Debug Logs button');
     router.push(`/debug/${id}` as any);
   };
 
@@ -1126,7 +1113,6 @@ export default function VesselDetailScreen() {
   const totalHours = calculateTotalHours();
   const totalDays = calculateTotalDays();
 
-  // Pre-calculate values for AIS modal to avoid accessing null properties in JSX
   const aisName = formatAISValue(aisData?.name);
   const aisMMSI = formatAISValue(aisData?.mmsi);
   const aisIMO = formatAISValue(aisData?.imo);
@@ -1165,7 +1151,6 @@ export default function VesselDetailScreen() {
         <Text style={styles.header}>{vessel.vessel_name}</Text>
         <Text style={styles.mmsi}>MMSI: {vessel.mmsi}</Text>
 
-        {/* Vessel Particulars Section */}
         <View style={styles.particularsCard}>
           <View style={styles.particularsHeader}>
             <View style={styles.particularsHeaderLeft}>
@@ -1234,7 +1219,6 @@ export default function VesselDetailScreen() {
           </View>
         </View>
 
-        {/* Activate Button - Only show for inactive vessels */}
         {!vessel.is_active && (
           <TouchableOpacity
             style={styles.activateButton}
@@ -1250,7 +1234,6 @@ export default function VesselDetailScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Check AIS Button */}
         <TouchableOpacity
           style={[
             styles.checkAISButton,
@@ -1279,7 +1262,6 @@ export default function VesselDetailScreen() {
           )}
         </TouchableOpacity>
 
-        {/* Generate Sample Entries Button */}
         <TouchableOpacity
           style={styles.generateSamplesButton}
           onPress={handleGenerateSamples}
@@ -1387,7 +1369,6 @@ export default function VesselDetailScreen() {
             ))
         )}
 
-        {/* Delete Vessel Button - At the bottom like logout button */}
         <TouchableOpacity 
           style={styles.deleteButton} 
           onPress={handleDeleteVessel}
@@ -1396,8 +1377,391 @@ export default function VesselDetailScreen() {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* All modals remain the same as in the base file... */}
-      {/* I'm omitting them here for brevity since they're identical */}
+      {/* Edit Particulars Modal */}
+      <Modal
+        visible={editModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setEditModalVisible(false)}
+        >
+          <KeyboardAvoidingView 
+            behavior="padding"
+            style={{ width: '100%', justifyContent: 'flex-end' }}
+            keyboardVerticalOffset={insets.bottom}
+          >
+            <TouchableOpacity activeOpacity={1}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Edit Vessel Particulars</Text>
+                  <TouchableOpacity 
+                    style={styles.closeButton}
+                    onPress={() => setEditModalVisible(false)}
+                  >
+                    <IconSymbol
+                      ios_icon_name="xmark"
+                      android_material_icon_name="close"
+                      size={24}
+                      color={isDark ? colors.text : colors.textLight}
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView 
+                  style={{ maxHeight: 400 }}
+                  contentContainerStyle={styles.modalScrollContent}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Vessel Name</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.vessel_name}
+                      onChangeText={(text) => setEditForm({ ...editForm, vessel_name: text })}
+                      placeholder="Enter vessel name"
+                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Call Sign</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.callsign}
+                      onChangeText={(text) => setEditForm({ ...editForm, callsign: text })}
+                      placeholder="e.g., GBAA"
+                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Flag</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.flag}
+                      onChangeText={(text) => setEditForm({ ...editForm, flag: text })}
+                      placeholder="e.g., United Kingdom"
+                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Official Number</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.official_number}
+                      onChangeText={(text) => setEditForm({ ...editForm, official_number: text })}
+                      placeholder="e.g., 123456"
+                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Type (Motor/Sail)</Text>
+                    <View style={styles.typeButtonContainer}>
+                      <TouchableOpacity
+                        style={[
+                          styles.typeButton,
+                          editForm.vessel_type === 'Motor' && styles.typeButtonActive,
+                        ]}
+                        onPress={() => setEditForm({ ...editForm, vessel_type: 'Motor' })}
+                      >
+                        <Text
+                          style={[
+                            styles.typeButtonText,
+                            editForm.vessel_type === 'Motor' && styles.typeButtonTextActive,
+                          ]}
+                        >
+                          Motor
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.typeButton,
+                          editForm.vessel_type === 'Sail' && styles.typeButtonActive,
+                        ]}
+                        onPress={() => setEditForm({ ...editForm, vessel_type: 'Sail' })}
+                      >
+                        <Text
+                          style={[
+                            styles.typeButtonText,
+                            editForm.vessel_type === 'Sail' && styles.typeButtonTextActive,
+                          ]}
+                        >
+                          Sail
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Length (metres)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.length_metres}
+                      onChangeText={(text) => setEditForm({ ...editForm, length_metres: text })}
+                      placeholder="e.g., 45.5"
+                      keyboardType="decimal-pad"
+                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Gross Tonnes</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.gross_tonnes}
+                      onChangeText={(text) => setEditForm({ ...editForm, gross_tonnes: text })}
+                      placeholder="e.g., 500"
+                      keyboardType="decimal-pad"
+                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    />
+                  </View>
+                </ScrollView>
+
+                <View style={styles.modalButtons}>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.cancelButton]}
+                    onPress={() => setEditModalVisible(false)}
+                  >
+                    <Text style={[styles.modalButtonText, styles.cancelButtonText]}>
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalButton, styles.saveButton]}
+                    onPress={handleSaveParticulars}
+                  >
+                    <Text style={[styles.modalButtonText, styles.saveButtonText]}>
+                      Save
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelDeleteVessel}
+      >
+        <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
+          <View style={styles.deleteModalContent}>
+            <Text style={styles.deleteModalTitle}>Delete Vessel?</Text>
+            <Text style={styles.deleteModalMessage}>
+              Are you sure you want to delete {vessel?.vessel_name}? This action cannot be undone.
+            </Text>
+            <View style={styles.deleteModalButtons}>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.deleteCancelButton]}
+                onPress={cancelDeleteVessel}
+              >
+                <Text style={[styles.deleteModalButtonText, styles.deleteCancelButtonText]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.deleteModalButton, styles.deleteConfirmButton]}
+                onPress={confirmDeleteVessel}
+              >
+                <Text style={[styles.deleteModalButtonText, styles.deleteConfirmButtonText]}>
+                  Delete
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Activate Confirmation Modal */}
+      <Modal
+        visible={activateModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelActivateVessel}
+      >
+        <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
+          <View style={styles.activateModalContent}>
+            <Text style={styles.activateModalTitle}>Activate Vessel?</Text>
+            <Text style={styles.activateModalMessage}>{activateModalMessage}</Text>
+            <View style={styles.activateModalButtons}>
+              <TouchableOpacity
+                style={[styles.activateModalButton, styles.activateCancelButton]}
+                onPress={cancelActivateVessel}
+              >
+                <Text style={[styles.activateModalButtonText, styles.activateCancelButtonText]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.activateModalButton, styles.activateConfirmButton]}
+                onPress={confirmActivateVessel}
+              >
+                <Text style={[styles.activateModalButtonText, styles.activateConfirmButtonText]}>
+                  Activate
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* AIS Data Modal */}
+      <Modal
+        visible={aisModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAisModalVisible(false)}
+      >
+        <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
+          <View style={styles.aisModalContent}>
+            <View style={styles.aisModalHeader}>
+              <Text style={styles.aisModalTitle}>AIS Data</Text>
+              <Text style={styles.aisModalSubtitle}>
+                Real-time vessel information from AIS tracking
+              </Text>
+            </View>
+
+            <View style={styles.aisInfoBanner}>
+              <IconSymbol
+                ios_icon_name="info.circle.fill"
+                android_material_icon_name="info"
+                size={20}
+                color={colors.primary}
+                style={styles.aisInfoIcon}
+              />
+              <View style={styles.aisInfoTextContainer}>
+                <Text style={styles.aisInfoText}>
+                  This data is fetched from MyShipTracking AIS network and shows the vessel's current status.
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView style={{ maxHeight: 400 }}>
+              <View style={styles.aisDataCard}>
+                <View style={styles.aisCardHeader}>
+                  <Text style={styles.aisCardTitle}>Vessel Information</Text>
+                  <View
+                    style={[
+                      styles.aisStatusBadge,
+                      { backgroundColor: aisIsMoving ? colors.success : colors.warning },
+                    ]}
+                  >
+                    <Text style={styles.aisStatusText}>
+                      {aisIsMoving ? 'MOVING' : 'STATIONARY'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.aisDataRow}>
+                  <Text style={styles.aisDataLabel}>Name:</Text>
+                  <Text style={styles.aisDataValue}>{aisName}</Text>
+                </View>
+
+                <View style={styles.aisDataRow}>
+                  <Text style={styles.aisDataLabel}>MMSI:</Text>
+                  <Text style={styles.aisDataValue}>{aisMMSI}</Text>
+                </View>
+
+                <View style={styles.aisDataRow}>
+                  <Text style={styles.aisDataLabel}>IMO:</Text>
+                  <Text style={styles.aisDataValue}>{aisIMO}</Text>
+                </View>
+
+                <View style={styles.aisDataRow}>
+                  <Text style={styles.aisDataLabel}>Call Sign:</Text>
+                  <Text style={styles.aisDataValue}>{aisCallsign}</Text>
+                </View>
+
+                <View style={styles.aisDataRow}>
+                  <Text style={styles.aisDataLabel}>Flag:</Text>
+                  <Text style={styles.aisDataValue}>{aisFlag}</Text>
+                </View>
+
+                <View style={styles.aisDataRow}>
+                  <Text style={styles.aisDataLabel}>Ship Type:</Text>
+                  <Text style={styles.aisDataValue}>{aisShipType}</Text>
+                </View>
+              </View>
+
+              <View style={styles.aisDataCard}>
+                <View style={styles.aisCardHeader}>
+                  <Text style={styles.aisCardTitle}>Navigation</Text>
+                </View>
+
+                <View style={styles.aisDataRow}>
+                  <Text style={styles.aisDataLabel}>Speed:</Text>
+                  <Text style={styles.aisDataValue}>{aisSpeed}</Text>
+                </View>
+
+                <View style={styles.aisDataRow}>
+                  <Text style={styles.aisDataLabel}>Course:</Text>
+                  <Text style={styles.aisDataValue}>{aisCourse}</Text>
+                </View>
+
+                <View style={styles.aisDataRow}>
+                  <Text style={styles.aisDataLabel}>Heading:</Text>
+                  <Text style={styles.aisDataValue}>{aisHeading}</Text>
+                </View>
+
+                <View style={styles.aisDataRow}>
+                  <Text style={styles.aisDataLabel}>Status:</Text>
+                  <Text style={styles.aisDataValue}>{aisStatus}</Text>
+                </View>
+
+                <View style={styles.aisDataRow}>
+                  <Text style={styles.aisDataLabel}>Destination:</Text>
+                  <Text style={styles.aisDataValue}>{aisDestination}</Text>
+                </View>
+
+                <View style={styles.aisDataRow}>
+                  <Text style={styles.aisDataLabel}>ETA:</Text>
+                  <Text style={styles.aisDataValue}>{aisETA}</Text>
+                </View>
+
+                {aisHasCoordinates && (
+                  <View style={styles.aisCoordinatesContainer}>
+                    <Text style={styles.aisCoordinatesTitle}>Current Position</Text>
+                    <Text style={styles.aisCoordinatesText}>
+                      Latitude: {aisLatitude.toFixed(6)}°
+                    </Text>
+                    <Text style={styles.aisCoordinatesText}>
+                      Longitude: {aisLongitude.toFixed(6)}°
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              {aisTimestamp && (
+                <View style={styles.aisDataCard}>
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>Last Update:</Text>
+                    <Text style={styles.aisDataValue}>
+                      {new Date(aisTimestamp).toLocaleString()}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              style={styles.aisCloseButton}
+              onPress={() => setAisModalVisible(false)}
+            >
+              <Text style={styles.aisCloseButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
