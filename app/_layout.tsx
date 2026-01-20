@@ -41,25 +41,11 @@ function RootLayoutNav() {
   const pathname = usePathname();
   const { user, loading } = useAuth();
   const [isNavigating, setIsNavigating] = useState(false);
-  const [webMounted, setWebMounted] = useState(Platform.OS !== 'web');
   const [initError, setInitError] = useState<string | null>(null);
 
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
-
-  // Wait for web to fully mount before doing anything
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      console.log('[App] Web platform detected, waiting for mount...');
-      // Small delay to ensure we're fully client-side
-      const timer = setTimeout(() => {
-        console.log('[App] Web mounted');
-        setWebMounted(true);
-      }, 100);
-      return () => clearTimeout(timer);
-    }
-  }, []);
 
   useEffect(() => {
     if (error) {
@@ -73,7 +59,7 @@ function RootLayoutNav() {
   }, [error]);
 
   useEffect(() => {
-    if (loaded && webMounted) {
+    if (loaded) {
       if (Platform.OS !== 'web') {
         SplashScreen.hideAsync().catch(() => {});
       }
@@ -83,7 +69,6 @@ function RootLayoutNav() {
       console.log('[App] Platform:', Platform.OS);
       console.log('[App] Backend URL:', BACKEND_URL || 'NOT CONFIGURED');
       console.log('[App] Backend configured:', !!BACKEND_URL);
-      console.log('[App] Web mounted:', webMounted);
       console.log('[App] ========================================');
       
       if (!BACKEND_URL) {
@@ -106,11 +91,11 @@ function RootLayoutNav() {
         console.log('[App] ℹ️ Notifications not supported on web');
       }
     }
-  }, [loaded, webMounted]);
+  }, [loaded]);
 
   // Simplified authentication routing - Let index.tsx handle redirects
   useEffect(() => {
-    if (!loaded || !webMounted || loading || isNavigating) {
+    if (!loaded || loading || isNavigating) {
       return;
     }
 
@@ -124,8 +109,7 @@ function RootLayoutNav() {
       isAuthScreen,
       isIndexRoute,
       pathname,
-      platform: Platform.OS,
-      webMounted
+      platform: Platform.OS
     });
 
     // Let index route handle its own redirect
@@ -143,7 +127,7 @@ function RootLayoutNav() {
         setIsNavigating(false);
       }, 100);
     }
-  }, [user, loading, loaded, webMounted, pathname, segments, isNavigating]);
+  }, [user, loading, loaded, pathname, segments, isNavigating]);
 
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
@@ -216,13 +200,13 @@ function RootLayoutNav() {
     );
   }
 
-  // Show loading screen while fonts are loading OR auth is checking OR web is mounting
-  if (!loaded || loading || !webMounted) {
+  // Show loading screen while fonts are loading OR auth is checking
+  if (!loaded || loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff' }}>
         <Text style={{ fontSize: 18, color: colorScheme === 'dark' ? '#fff' : '#000', marginBottom: 10 }}>SeaTime Tracker</Text>
         <Text style={{ fontSize: 14, color: colorScheme === 'dark' ? '#999' : '#666' }}>
-          {!loaded ? 'Loading fonts...' : !webMounted ? 'Initializing...' : 'Checking authentication...'}
+          {!loaded ? 'Loading fonts...' : 'Checking authentication...'}
         </Text>
       </View>
     );
@@ -398,13 +382,13 @@ export default function RootLayout() {
   useEffect(() => {
     console.log('[App] Root layout mounted');
     
-    // Set up global error handler
-    const errorHandler = (error: ErrorEvent) => {
-      console.error('[App] Global error caught:', error);
-      setProviderError(error.message);
-    };
+    // Set up global error handler (only on web)
+    if (Platform.OS === 'web') {
+      const errorHandler = (error: ErrorEvent) => {
+        console.error('[App] Global error caught:', error);
+        setProviderError(error.message);
+      };
 
-    if (typeof window !== 'undefined') {
       window.addEventListener('error', errorHandler);
       return () => window.removeEventListener('error', errorHandler);
     }
