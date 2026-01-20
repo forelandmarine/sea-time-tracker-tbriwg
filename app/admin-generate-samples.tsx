@@ -184,9 +184,12 @@ export default function AdminGenerateSamplesScreen() {
       }
 
       setResult(data);
+      const entriesCount = data.entries?.length || data.entriesCreated || 0;
+      const totalSeaDays = data.entries?.reduce((sum: number, entry: any) => sum + (entry.sea_days || 0), 0) || 0;
+      
       Alert.alert(
         'Success',
-        `Generated ${data.entries?.length || 0} sample entries for ${data.vessel.vessel_name}`,
+        `Generated ${entriesCount} sample entries for ${data.vessel.vessel_name}\n\nTotal Sea Days: ${totalSeaDays}`,
         [{ text: 'OK' }]
       );
     } catch (error) {
@@ -246,7 +249,7 @@ export default function AdminGenerateSamplesScreen() {
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>Generate Sample Sea Time Entries</Text>
         <Text style={styles.subtitle}>
-          Create 8 sample sea day entries for testing purposes. This will create a vessel if it doesn't exist.
+          Create 4 sample sea day entries for testing purposes. This will create a vessel if it doesn&apos;t exist.
         </Text>
 
         <View style={styles.inputGroup}>
@@ -283,7 +286,7 @@ export default function AdminGenerateSamplesScreen() {
           {loading ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.generateButtonText}>Generate 8 Sample Entries</Text>
+            <Text style={styles.generateButtonText}>Generate 4 Sample Entries</Text>
           )}
         </TouchableOpacity>
 
@@ -297,27 +300,40 @@ export default function AdminGenerateSamplesScreen() {
               <Text style={{ fontWeight: '600' }}>MMSI:</Text> {result.vessel.mmsi}
             </Text>
             <Text style={styles.resultText}>
-              <Text style={{ fontWeight: '600' }}>Entries Created:</Text> {result.entries.length}
+              <Text style={{ fontWeight: '600' }}>Entries Created:</Text> {result.entries?.length || result.entriesCreated || 0}
             </Text>
+            {result.entries && result.entries.length > 0 && (
+              <Text style={styles.resultText}>
+                <Text style={{ fontWeight: '600' }}>Total Sea Days:</Text> {result.entries.reduce((sum: number, entry: any) => sum + (entry.sea_days || 0), 0)}
+              </Text>
+            )}
 
-            {result.entries.map((entry, index) => (
-              <View key={entry.id} style={styles.entryCard}>
-                <Text style={[styles.entryText, { fontWeight: '600' }]}>
-                  Entry {index + 1}
-                </Text>
-                <Text style={styles.entryText}>
-                  {formatDate(entry.start_time)} {formatTime(entry.start_time)}
-                  {entry.end_time && ` → ${formatTime(entry.end_time)}`}
-                </Text>
-                <Text style={styles.entryText}>
-                  Duration: {entry.duration_hours?.toFixed(1) || 'N/A'} hours | Sea Days: {entry.sea_days || 0}
-                </Text>
-                <Text style={styles.entryText}>Notes: {entry.notes}</Text>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(entry.status) }]}>
-                  <Text style={styles.statusText}>{entry.status.toUpperCase()}</Text>
+            {result.entries && result.entries.map((entry, index) => {
+              const durationHours = typeof entry.duration_hours === 'number' 
+                ? entry.duration_hours 
+                : parseFloat(entry.duration_hours || '0');
+              
+              return (
+                <View key={entry.id} style={styles.entryCard}>
+                  <Text style={[styles.entryText, { fontWeight: '600' }]}>
+                    Entry {index + 1}
+                  </Text>
+                  <Text style={styles.entryText}>
+                    {formatDate(entry.start_time)} {formatTime(entry.start_time)}
+                    {entry.end_time && ` → ${formatTime(entry.end_time)}`}
+                  </Text>
+                  <Text style={styles.entryText}>
+                    Duration: {durationHours.toFixed(1)} hours | Sea Days: {entry.sea_days || 0}
+                  </Text>
+                  <Text style={styles.entryText} numberOfLines={2}>
+                    Notes: {entry.notes}
+                  </Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(entry.status) }]}>
+                    <Text style={styles.statusText}>{entry.status.toUpperCase()}</Text>
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
       </ScrollView>
