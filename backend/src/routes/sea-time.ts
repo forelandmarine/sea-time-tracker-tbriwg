@@ -1434,7 +1434,7 @@ export function register(app: App, fastify: FastifyInstance) {
     }
   });
 
-  // POST /api/sea-time/generate-sample-entries - Generate 8 realistic sample sea time entries for testing
+  // POST /api/sea-time/generate-sample-entries - Generate 4 realistic sample sea time entries for testing
   fastify.post<{
     Body: {
       email: string;
@@ -1442,7 +1442,7 @@ export function register(app: App, fastify: FastifyInstance) {
     };
   }>('/api/sea-time/generate-sample-entries', {
     schema: {
-      description: 'Generate 8 realistic sample sea time entries for testing purposes',
+      description: 'Generate 4 realistic sample sea time entries for testing purposes',
       tags: ['sea-time'],
       body: {
         type: 'object',
@@ -1467,6 +1467,27 @@ export function register(app: App, fastify: FastifyInstance) {
                 mmsi: { type: 'string' },
               },
             },
+            entries: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  vessel_id: { type: 'string' },
+                  start_time: { type: 'string' },
+                  end_time: { type: 'string' },
+                  duration_hours: { type: 'number' },
+                  sea_days: { type: 'number' },
+                  status: { type: 'string' },
+                  notes: { type: 'string' },
+                  start_latitude: { type: 'string' },
+                  start_longitude: { type: 'string' },
+                  end_latitude: { type: 'string' },
+                  end_longitude: { type: 'string' },
+                  created_at: { type: 'string' },
+                },
+              },
+            },
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
@@ -1476,7 +1497,7 @@ export function register(app: App, fastify: FastifyInstance) {
   }, async (request, reply) => {
     const { email, vesselName } = request.body;
 
-    app.logger.info({ email, vesselName }, 'Generating 8 sample sea time entries');
+    app.logger.info({ email, vesselName }, 'Generating 4 sample sea time entries');
 
     try {
       // Find user by email
@@ -1528,16 +1549,12 @@ export function register(app: App, fastify: FastifyInstance) {
         app.logger.info({ vesselId: vessel.id, vesselName }, 'Using existing vessel');
       }
 
-      // Generate 8 sample entries with varied data
+      // Generate 4 sample entries with varied data
       const sampleNotes = [
         'Coastal passage from Southampton to Portsmouth. Good weather conditions.',
         'Offshore delivery voyage across the Channel.',
         'Training voyage in the Solent. Practiced navigation and mooring.',
         'Charter cruise to Cherbourg with client onboard.',
-        'Routine maintenance and testing of navigation systems.',
-        'Extended passage to Isle of Wight. Overnight preparation and early departure.',
-        'Delivery of provisions and crew change at sea.',
-        'Multi-day offshore expedition with survey work.',
       ];
 
       // UK waters coordinates for realistic positions
@@ -1546,10 +1563,6 @@ export function register(app: App, fastify: FastifyInstance) {
         { lat: 50.7964, lng: -1.1089 }, // Portsmouth
         { lat: 50.8429, lng: -1.2981 }, // Solent
         { lat: 50.6929, lng: -1.3047 }, // Isle of Wight
-        { lat: 49.6432, lng: -1.6292 }, // Cherbourg
-        { lat: 51.3589, lng: -2.6476 }, // Bristol
-        { lat: 50.5085, lng: 0.0928 },  // Hastings
-        { lat: 51.4769, lng: 1.2867 },  // Dover
       ];
 
       const endCoordinates = [
@@ -1557,16 +1570,12 @@ export function register(app: App, fastify: FastifyInstance) {
         { lat: 50.8429, lng: -1.2981 }, // Solent
         { lat: 50.6929, lng: -1.3047 }, // Isle of Wight
         { lat: 49.6432, lng: -1.6292 }, // Cherbourg
-        { lat: 50.5085, lng: 0.0928 },  // Hastings
-        { lat: 51.4769, lng: 1.2867 },  // Dover
-        { lat: 50.7200, lng: 0.5000 },  // East Coast
-        { lat: 51.3589, lng: -2.6476 }, // Bristol
       ];
 
       const entries = [];
 
       // Generate entries spread across last 60 days
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 4; i++) {
         // Random day in last 60 days
         const daysAgo = Math.floor(Math.random() * 60) + 1;
         const hoursAgo = Math.floor(Math.random() * 24);
@@ -1582,8 +1591,8 @@ export function register(app: App, fastify: FastifyInstance) {
         // Calculate sea_days
         const sea_days = calculateSeaDays(durationHours);
 
-        // Mix of confirmed (6) and pending (2) status
-        const status = i < 6 ? 'confirmed' : 'pending';
+        // Mix of confirmed (3) and pending (1) status
+        const status = i < 3 ? 'confirmed' : 'pending';
 
         // Create entry
         const [entry] = await app.db
@@ -1626,13 +1635,28 @@ export function register(app: App, fastify: FastifyInstance) {
 
       return reply.code(201).send({
         success: true,
-        message: `Generated 8 sample sea time entries for vessel ${vesselName}`,
+        message: `Generated 4 sample sea time entries for vessel ${vesselName}`,
         entriesCreated: entries.length,
         vessel: {
           id: vessel.id,
           vessel_name: vessel.vessel_name,
           mmsi: vessel.mmsi,
         },
+        entries: entries.map((entry) => ({
+          id: entry.id,
+          vessel_id: entry.vessel_id,
+          start_time: entry.start_time.toISOString ? entry.start_time.toISOString() : entry.start_time,
+          end_time: entry.end_time ? (entry.end_time.toISOString ? entry.end_time.toISOString() : entry.end_time) : null,
+          duration_hours: entry.duration_hours ? parseFloat(String(entry.duration_hours)) : null,
+          sea_days: entry.sea_days,
+          status: entry.status,
+          notes: entry.notes,
+          start_latitude: entry.start_latitude,
+          start_longitude: entry.start_longitude,
+          end_latitude: entry.end_latitude,
+          end_longitude: entry.end_longitude,
+          created_at: entry.created_at.toISOString ? entry.created_at.toISOString() : entry.created_at,
+        })),
       });
     } catch (error) {
       app.logger.error({ err: error, email, vesselName }, 'Failed to generate sample sea time entries');
