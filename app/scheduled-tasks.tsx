@@ -128,6 +128,7 @@ export default function ScheduledTasksScreen() {
         options={{
           title: 'Scheduled Tasks',
           headerShown: true,
+          headerBackTitle: 'Back',
           headerStyle: {
             backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
           },
@@ -236,7 +237,7 @@ export default function ScheduledTasksScreen() {
                 </Text>
               </View>
             ) : (
-              tasks.map((task) => (
+              tasks.map((task, index) => (
                 <View key={task.id} style={styles.taskCard}>
                   <View style={styles.taskHeader}>
                     <View style={styles.taskHeaderLeft}>
@@ -381,7 +382,7 @@ function createStyles(isDark: boolean) {
     },
     scrollContent: {
       padding: 16,
-      paddingBottom: 100,
+      paddingBottom: 32,
     },
     infoBanner: {
       flexDirection: 'row',
@@ -436,6 +437,7 @@ function createStyles(isDark: boolean) {
       justifyContent: 'center',
       alignItems: 'center',
       marginRight: 12,
+      flexShrink: 0,
     },
     stepNumberText: {
       fontSize: 16,
@@ -460,6 +462,8 @@ function createStyles(isDark: boolean) {
     loadingContainer: {
       padding: 40,
       alignItems: 'center',
+      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      borderRadius: 12,
     },
     loadingText: {
       fontSize: 16,
@@ -468,6 +472,8 @@ function createStyles(isDark: boolean) {
     emptyContainer: {
       padding: 40,
       alignItems: 'center',
+      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      borderRadius: 12,
     },
     emptyText: {
       fontSize: 18,
@@ -480,6 +486,7 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
       textAlign: 'center',
+      paddingHorizontal: 20,
     },
     taskCard: {
       backgroundColor: isDark ? colors.cardDark : colors.cardLight,
@@ -500,6 +507,7 @@ function createStyles(isDark: boolean) {
     },
     taskHeaderLeft: {
       flex: 1,
+      marginRight: 12,
     },
     vesselName: {
       fontSize: 17,
@@ -515,7 +523,7 @@ function createStyles(isDark: boolean) {
       paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 12,
-      marginLeft: 12,
+      flexShrink: 0,
     },
     statusActive: {
       backgroundColor: 'rgba(52, 199, 89, 0.2)',
@@ -534,7 +542,7 @@ function createStyles(isDark: boolean) {
       color: colors.warning,
     },
     taskDetails: {
-      gap: 8,
+      gap: 10,
     },
     detailRow: {
       flexDirection: 'row',
@@ -544,7 +552,7 @@ function createStyles(isDark: boolean) {
     detailLabel: {
       fontSize: 14,
       color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
-      minWidth: 80,
+      minWidth: 75,
     },
     detailValue: {
       fontSize: 14,
@@ -556,7 +564,7 @@ function createStyles(isDark: boolean) {
       backgroundColor: isDark ? 'rgba(0, 122, 255, 0.15)' : 'rgba(0, 122, 255, 0.1)',
       borderRadius: 8,
       padding: 10,
-      marginTop: 8,
+      marginTop: 4,
       alignItems: 'center',
     },
     nextRunText: {
@@ -577,6 +585,7 @@ function createStyles(isDark: boolean) {
     noteIcon: {
       marginRight: 12,
       marginTop: 2,
+      flexShrink: 0,
     },
     noteText: {
       flex: 1,
