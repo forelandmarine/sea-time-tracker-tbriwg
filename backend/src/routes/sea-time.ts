@@ -15,6 +15,14 @@ function calculateSeaDays(durationHours: number): number {
   return durationHours >= 4 ? 1 : 0;
 }
 
+// Valid service types
+const VALID_SERVICE_TYPES = ['actual_sea_service', 'watchkeeping_service', 'standby_service', 'yard_service', 'service_in_port'];
+
+// Helper function to validate service type
+function isValidServiceType(serviceType: any): boolean {
+  return typeof serviceType === 'string' && VALID_SERVICE_TYPES.includes(serviceType);
+}
+
 // Helper function to transform vessel object for API response
 function transformVesselForResponse(vessel: any) {
   return {
@@ -47,6 +55,7 @@ function transformSeaTimeEntryForResponse(entry: any) {
     duration_hours: duration_hours,
     sea_days: entry.sea_days,
     status: entry.status,
+    service_type: entry.service_type || 'actual_sea_service',
     notes: entry.notes,
     start_latitude: entry.start_latitude,
     start_longitude: entry.start_longitude,
@@ -76,6 +85,7 @@ export function register(app: App, fastify: FastifyInstance) {
               duration_hours: { type: ['number', 'null'] },
               sea_days: { type: ['number', 'null'] },
               status: { type: 'string', enum: ['pending', 'confirmed', 'rejected'] },
+              service_type: { type: 'string', enum: ['actual_sea_service', 'watchkeeping_service', 'standby_service', 'yard_service', 'service_in_port'] },
               notes: { type: ['string', 'null'] },
               start_latitude: { type: ['string', 'null'] },
               start_longitude: { type: ['string', 'null'] },
@@ -145,6 +155,7 @@ export function register(app: App, fastify: FastifyInstance) {
               duration_hours: { type: ['number', 'null'] },
               sea_days: { type: ['number', 'null'] },
               status: { type: 'string' },
+              service_type: { type: 'string' },
               notes: { type: ['string', 'null'] },
               created_at: { type: 'string', format: 'date-time' },
               vessel: {
@@ -225,6 +236,7 @@ export function register(app: App, fastify: FastifyInstance) {
               duration_hours: { type: ['number', 'null'] },
               sea_days: { type: ['number', 'null'] },
               status: { type: 'string' },
+              service_type: { type: 'string' },
               notes: { type: ['string', 'null'] },
               created_at: { type: 'string', format: 'date-time' },
               start_latitude: { type: ['string', 'null'] },
@@ -302,6 +314,7 @@ export function register(app: App, fastify: FastifyInstance) {
                   duration_hours: { type: ['number', 'null'] },
                   sea_days: { type: ['number', 'null'] },
                   status: { type: 'string', enum: ['pending', 'confirmed', 'rejected'] },
+                  service_type: { type: 'string' },
                   notes: { type: ['string', 'null'] },
                   created_at: { type: 'string', format: 'date-time' },
                   start_latitude: { type: ['string', 'null'] },
@@ -381,10 +394,10 @@ export function register(app: App, fastify: FastifyInstance) {
     });
   });
 
-  // PUT /api/sea-time/:id/confirm - Confirm pending entry with optional notes
-  fastify.put<{ Params: { id: string }; Body: { notes?: string } }>('/api/sea-time/:id/confirm', {
+  // PUT /api/sea-time/:id/confirm - Confirm pending entry with optional notes and service_type
+  fastify.put<{ Params: { id: string }; Body: { notes?: string; service_type?: string } }>('/api/sea-time/:id/confirm', {
     schema: {
-      description: 'Confirm a pending sea time entry (requires authentication)',
+      description: 'Confirm a pending sea time entry (requires authentication). Accepts optional notes and service_type.',
       tags: ['sea-time'],
       params: {
         type: 'object',
@@ -393,7 +406,10 @@ export function register(app: App, fastify: FastifyInstance) {
       },
       body: {
         type: 'object',
-        properties: { notes: { type: 'string' } },
+        properties: {
+          notes: { type: 'string', description: 'Optional notes' },
+          service_type: { type: 'string', description: 'Service type (actual_sea_service, watchkeeping_service, standby_service, yard_service, service_in_port)' },
+        },
       },
       response: {
         200: { type: 'object' },
@@ -410,7 +426,13 @@ export function register(app: App, fastify: FastifyInstance) {
     }
 
     const { id } = request.params;
-    const { notes } = request.body;
+    const { notes, service_type } = request.body;
+
+    // Validate service_type if provided
+    if (service_type !== undefined && !isValidServiceType(service_type)) {
+      app.logger.warn({ userId, entryId: id, service_type }, 'Invalid service type provided');
+      return reply.code(400).send({ error: `Invalid service_type. Must be one of: ${VALID_SERVICE_TYPES.join(', ')}` });
+    }
 
     app.logger.info({ userId, entryId: id }, `Confirming sea time entry: ${id}`);
 
@@ -447,6 +469,7 @@ export function register(app: App, fastify: FastifyInstance) {
         duration_hours: String(duration_hours),
         sea_days: calculated_sea_days,
         status: 'confirmed',
+        service_type: service_type || current_entry.service_type || 'actual_sea_service',
         notes: notes || current_entry.notes,
       })
       .where(eq(schema.sea_time_entries.id, id))
@@ -469,10 +492,10 @@ export function register(app: App, fastify: FastifyInstance) {
     return reply.code(200).send(transformSeaTimeEntryForResponse(updated));
   });
 
-  // PUT /api/sea-time/:id - Update sea time entry (allows updating sea_days and other fields)
-  fastify.put<{ Params: { id: string }; Body: { sea_days?: number; notes?: string } }>('/api/sea-time/:id', {
+  // PUT /api/sea-time/:id - Update sea time entry (allows updating sea_days, notes, and service_type)
+  fastify.put<{ Params: { id: string }; Body: { sea_days?: number; notes?: string; service_type?: string } }>('/api/sea-time/:id', {
     schema: {
-      description: 'Update a sea time entry (requires authentication). Allows updating sea_days and notes.',
+      description: 'Update a sea time entry (requires authentication). Allows updating sea_days, notes, and service_type.',
       tags: ['sea-time'],
       params: {
         type: 'object',
@@ -484,6 +507,7 @@ export function register(app: App, fastify: FastifyInstance) {
         properties: {
           sea_days: { type: 'number', description: 'Number of sea days (0 or 1)' },
           notes: { type: 'string', description: 'Optional notes' },
+          service_type: { type: 'string', description: 'Service type (actual_sea_service, watchkeeping_service, standby_service, yard_service, service_in_port)' },
         },
       },
       response: {
@@ -501,9 +525,15 @@ export function register(app: App, fastify: FastifyInstance) {
     }
 
     const { id } = request.params;
-    const { sea_days, notes } = request.body;
+    const { sea_days, notes, service_type } = request.body;
 
-    app.logger.info({ userId, entryId: id, sea_days, notes }, 'Updating sea time entry');
+    // Validate service_type if provided
+    if (service_type !== undefined && !isValidServiceType(service_type)) {
+      app.logger.warn({ userId, entryId: id, service_type }, 'Invalid service type provided');
+      return reply.code(400).send({ error: `Invalid service_type. Must be one of: ${VALID_SERVICE_TYPES.join(', ')}` });
+    }
+
+    app.logger.info({ userId, entryId: id, sea_days, notes, service_type }, 'Updating sea time entry');
 
     // Get the entry
     const entry = await app.db
@@ -531,6 +561,9 @@ export function register(app: App, fastify: FastifyInstance) {
     }
     if (notes !== undefined) {
       updateData.notes = notes;
+    }
+    if (service_type !== undefined) {
+      updateData.service_type = service_type;
     }
 
     // If no fields to update, return the current entry
@@ -857,6 +890,7 @@ export function register(app: App, fastify: FastifyInstance) {
           end_latitude: String(endLat),
           end_longitude: String(endLng),
           status: 'pending',
+          service_type: 'actual_sea_service',
           notes: 'Test entry created from two most recent position records',
         })
         .returning();
@@ -1161,6 +1195,7 @@ export function register(app: App, fastify: FastifyInstance) {
               duration_hours: { type: ['number', 'null'] },
               sea_days: { type: ['number', 'null'] },
               status: { type: 'string' },
+              service_type: { type: 'string' },
               notes: { type: ['string', 'null'] },
               start_latitude: { type: ['string', 'null'] },
               start_longitude: { type: ['string', 'null'] },
@@ -1230,6 +1265,7 @@ export function register(app: App, fastify: FastifyInstance) {
       start_time: string;
       end_time?: string;
       sea_days?: number;
+      service_type?: string;
       notes?: string;
       start_latitude?: number;
       start_longitude?: number;
@@ -1238,7 +1274,7 @@ export function register(app: App, fastify: FastifyInstance) {
     };
   }>('/api/logbook/manual-entry', {
     schema: {
-      description: 'Create a manual sea time entry (requires authentication). Sea days defaults to 1 if not provided.',
+      description: 'Create a manual sea time entry (requires authentication). Sea days defaults to 1 if not provided. Service type defaults to actual_sea_service.',
       tags: ['logbook'],
       body: {
         type: 'object',
@@ -1248,6 +1284,7 @@ export function register(app: App, fastify: FastifyInstance) {
           start_time: { type: 'string', description: 'ISO 8601 start time' },
           end_time: { type: 'string', description: 'ISO 8601 end time (optional)' },
           sea_days: { type: 'number', description: 'Number of sea days (default: 1)' },
+          service_type: { type: 'string', description: 'Service type (default: actual_sea_service)' },
           notes: { type: 'string', description: 'Optional notes' },
           start_latitude: { type: 'number', description: 'Start position latitude' },
           start_longitude: { type: 'number', description: 'Start position longitude' },
@@ -1293,10 +1330,16 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
   }, async (request, reply) => {
-    const { vessel_id, start_time, end_time, sea_days = 1, notes, start_latitude, start_longitude, end_latitude, end_longitude } = request.body;
+    const { vessel_id, start_time, end_time, sea_days = 1, service_type, notes, start_latitude, start_longitude, end_latitude, end_longitude } = request.body;
+
+    // Validate service_type if provided
+    if (service_type !== undefined && !isValidServiceType(service_type)) {
+      app.logger.warn({ vessel_id, service_type }, 'Invalid service type provided for manual entry');
+      return reply.code(400).send({ error: `Invalid service_type. Must be one of: ${VALID_SERVICE_TYPES.join(', ')}` });
+    }
 
     app.logger.info(
-      { vessel_id, start_time, end_time },
+      { vessel_id, start_time, end_time, service_type },
       'Manual sea time entry creation request'
     );
 
@@ -1399,6 +1442,7 @@ export function register(app: App, fastify: FastifyInstance) {
           duration_hours: calculated_duration_hours,
           sea_days: calculated_sea_days,
           status: 'confirmed', // Manually created entries are confirmed
+          service_type: service_type || 'actual_sea_service',
           notes,
           start_latitude: start_latitude ? String(start_latitude) : null,
           start_longitude: start_longitude ? String(start_longitude) : null,
@@ -1416,6 +1460,7 @@ export function register(app: App, fastify: FastifyInstance) {
           end_time: endDate?.toISOString(),
           durationHours: calculated_duration_hours,
           seaDays: calculated_sea_days,
+          serviceType: service_type || 'actual_sea_service',
           status: 'confirmed',
         },
         'Manual sea time entry created successfully'
@@ -1605,6 +1650,7 @@ export function register(app: App, fastify: FastifyInstance) {
             duration_hours: String(durationHours),
             sea_days: sea_days,
             status: status,
+            service_type: 'actual_sea_service',
             notes: sampleNotes[i],
             start_latitude: String(startCoordinates[i].lat),
             start_longitude: String(startCoordinates[i].lng),
@@ -1650,6 +1696,7 @@ export function register(app: App, fastify: FastifyInstance) {
           duration_hours: entry.duration_hours ? parseFloat(String(entry.duration_hours)) : null,
           sea_days: entry.sea_days,
           status: entry.status,
+          service_type: entry.service_type || 'actual_sea_service',
           notes: entry.notes,
           start_latitude: entry.start_latitude,
           start_longitude: entry.start_longitude,

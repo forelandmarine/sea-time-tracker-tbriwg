@@ -321,6 +321,7 @@ async function handleSeaTimeEntries(
           end_latitude: String(currentLat),
           end_longitude: String(currentLng),
           status: 'pending',
+          service_type: 'actual_sea_service',
         })
         .returning();
 

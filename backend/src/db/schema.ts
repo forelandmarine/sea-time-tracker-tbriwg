@@ -30,6 +30,7 @@ export const sea_time_entries = pgTable('sea_time_entries', {
   duration_hours: decimal('duration_hours', { precision: 10, scale: 2 }), // Deprecated - kept for backward compatibility
   sea_days: integer('sea_days'), // Sea days count (1 for confirmed entries, null for pending/rejected)
   status: text('status').notNull().default('pending'),
+  service_type: text('service_type').default('actual_sea_service'), // Service type: actual_sea_service, watchkeeping_service, standby_service, yard_service, service_in_port
   notes: text('notes'),
   start_latitude: decimal('start_latitude', { precision: 9, scale: 6 }),
   start_longitude: decimal('start_longitude', { precision: 10, scale: 6 }),
@@ -40,6 +41,7 @@ export const sea_time_entries = pgTable('sea_time_entries', {
   index('sea_time_entries_user_id_idx').on(table.user_id),
   index('sea_time_entries_vessel_id_idx').on(table.vessel_id),
   index('sea_time_entries_status_idx').on(table.status),
+  index('sea_time_entries_service_type_idx').on(table.service_type),
 ]);
 
 export const ais_checks = pgTable('ais_checks', {

@@ -74,6 +74,7 @@ export function register(app: App, fastify: FastifyInstance) {
       'Start Time',
       'End Time',
       'Duration Hours',
+      'Service Type',
       'Status',
       'Notes',
     ];
@@ -89,6 +90,7 @@ export function register(app: App, fastify: FastifyInstance) {
       new Date(entry.start_time).toISOString(),
       entry.end_time ? new Date(entry.end_time).toISOString() : '',
       entry.duration_hours || '',
+      entry.service_type || 'actual_sea_service',
       entry.status,
       entry.notes || '',
     ]);
@@ -141,6 +143,16 @@ export function register(app: App, fastify: FastifyInstance) {
                 type: 'object',
                 properties: {
                   month: { type: 'string' },
+                  total_hours: { type: 'number' },
+                },
+              },
+            },
+            entries_by_service_type: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  service_type: { type: 'string' },
                   total_hours: { type: 'number' },
                 },
               },
@@ -235,12 +247,32 @@ export function register(app: App, fastify: FastifyInstance) {
       }))
       .sort((a, b) => a.month.localeCompare(b.month)); // Sort by month ascending
 
+    // Group by service type
+    const serviceTypeMap: { [key: string]: number } = {};
+    entries.forEach((entry) => {
+      const service_type = entry.service_type || 'actual_sea_service';
+      if (!serviceTypeMap[service_type]) {
+        serviceTypeMap[service_type] = 0;
+      }
+      if (entry.duration_hours) {
+        serviceTypeMap[service_type] += parseFloat(String(entry.duration_hours));
+      }
+    });
+
+    const entries_by_service_type = Object.entries(serviceTypeMap)
+      .map(([service_type, total_hours]) => ({
+        service_type,
+        total_hours: Math.round(total_hours * 100) / 100,
+      }))
+      .sort((a, b) => b.total_hours - a.total_hours); // Sort by hours descending
+
     app.logger.info(
       {
         total_hours: Math.round(total_hours * 100) / 100,
         total_days,
         vesselCount: entries_by_vessel.length,
-        monthCount: entries_by_month.length
+        monthCount: entries_by_month.length,
+        serviceTypeCount: entries_by_service_type.length
       },
       'Summary report generated'
     );
@@ -250,6 +282,7 @@ export function register(app: App, fastify: FastifyInstance) {
       total_days,
       entries_by_vessel,
       entries_by_month,
+      entries_by_service_type,
     });
   });
 
@@ -436,29 +469,29 @@ export function register(app: App, fastify: FastifyInstance) {
 
       // Table headers
       const columns = {
-        date: { x: 50, width: 70 },
-        vessel: { x: 120, width: 80 },
-        startTime: { x: 200, width: 60 },
-        endTime: { x: 260, width: 60 },
-        duration: { x: 320, width: 50 },
-        status: { x: 370, width: 50 },
-        startPos: { x: 420, width: 70 },
-        endPos: { x: 490, width: 70 },
+        date: { x: 50, width: 60 },
+        vessel: { x: 110, width: 70 },
+        startTime: { x: 180, width: 50 },
+        endTime: { x: 230, width: 50 },
+        duration: { x: 280, width: 45 },
+        serviceType: { x: 325, width: 70 },
+        status: { x: 395, width: 45 },
+        startPos: { x: 440, width: 60 },
       };
 
       const tableTop = doc.y;
       doc.fillColor('#CCCCCC');
       doc.rect(50, tableTop, 500, 20).fill();
 
-      doc.fillColor('#000000').fontSize(8).font('Helvetica-Bold');
+      doc.fillColor('#000000').fontSize(7).font('Helvetica-Bold');
       doc.text('Date', columns.date.x, tableTop + 4);
       doc.text('Vessel', columns.vessel.x, tableTop + 4);
       doc.text('Start', columns.startTime.x, tableTop + 4);
       doc.text('End', columns.endTime.x, tableTop + 4);
       doc.text('Dur(h)', columns.duration.x, tableTop + 4);
+      doc.text('Service', columns.serviceType.x, tableTop + 4);
       doc.text('Status', columns.status.x, tableTop + 4);
       doc.text('Start Pos', columns.startPos.x, tableTop + 4);
-      doc.text('End Pos', columns.endPos.x, tableTop + 4);
 
       doc.fontSize(7).font('Helvetica');
       let currentY = tableTop + 20;
@@ -489,19 +522,18 @@ export function register(app: App, fastify: FastifyInstance) {
         const endTime = entry.end_time ? formatTime(entry.end_time) : '';
         const duration = entry.duration_hours ? String(Math.round(parseFloat(String(entry.duration_hours)) * 100) / 100) : '';
         const vesselName = entry.vessel?.vessel_name || '';
+        const serviceType = entry.service_type ? entry.service_type.substring(0, 10) : 'actual';
         const startLat = formatCoordinate(entry.start_latitude);
         const startLon = formatCoordinate(entry.start_longitude);
-        const endLat = formatCoordinate(entry.end_latitude);
-        const endLon = formatCoordinate(entry.end_longitude);
 
         doc.text(date, columns.date.x, currentY + 4);
         doc.text(vesselName.substring(0, 10), columns.vessel.x, currentY + 4);
         doc.text(startTime, columns.startTime.x, currentY + 4);
         doc.text(endTime, columns.endTime.x, currentY + 4);
         doc.text(duration, columns.duration.x, currentY + 4);
+        doc.text(serviceType, columns.serviceType.x, currentY + 4);
         doc.text(entry.status, columns.status.x, currentY + 4);
-        doc.text(`${startLat},${startLon}`, columns.startPos.x, currentY + 4, { width: 60 });
-        doc.text(`${endLat},${endLon}`, columns.endPos.x, currentY + 4, { width: 60 });
+        doc.text(`${startLat},${startLon}`, columns.startPos.x, currentY + 4, { width: 55 });
 
         currentY += 18;
       });
