@@ -401,7 +401,10 @@ export default function ProfileScreen() {
     );
   };
 
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | null | undefined) => {
+    if (!name || typeof name !== 'string') {
+      return '?';
+    }
     return name
       .split(' ')
       .map((n) => n[0])
@@ -427,6 +430,8 @@ export default function ProfileScreen() {
   }
 
   const imageUrl = profile.imageUrl || profile.image;
+  const displayName = profile.name || 'User';
+  const initials = getInitials(profile.name);
 
   return (
     <ScrollView style={styles.container}>
@@ -436,10 +441,10 @@ export default function ProfileScreen() {
             {imageUrl ? (
               <Image source={{ uri: imageUrl }} style={styles.profileImage} />
             ) : (
-              <Text style={styles.profileInitials}>{getInitials(profile.name)}</Text>
+              <Text style={styles.profileInitials}>{initials}</Text>
             )}
           </View>
-          <Text style={styles.profileName}>{profile.name}</Text>
+          <Text style={styles.profileName}>{displayName}</Text>
           <Text style={styles.profileEmail}>{profile.email}</Text>
         </View>
 
