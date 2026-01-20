@@ -44,6 +44,10 @@ interface SeaTimeSummary {
     month: string;
     total_hours: number;
   }>;
+  entries_by_service_type?: Array<{
+    service_type: string;
+    total_hours: number;
+  }>;
 }
 
 const createStyles = (isDark: boolean) =>
@@ -263,6 +267,17 @@ export default function ProfileScreen() {
     router.push('/mca-requirements');
   };
 
+  const formatServiceType = (serviceType: string): string => {
+    const typeMap: { [key: string]: string } = {
+      'actual_sea_service': 'Actual Sea Service',
+      'watchkeeping_service': 'Watchkeeping Service',
+      'standby_service': 'Stand-by Service',
+      'yard_service': 'Yard Service',
+      'service_in_port': 'Service in Port',
+    };
+    return typeMap[serviceType] || serviceType;
+  };
+
   const handleDownloadPDF = async () => {
     console.log('User tapped Download PDF Report');
     setDownloadingPDF(true);
@@ -466,6 +481,29 @@ export default function ProfileScreen() {
             )}
           </View>
         </View>
+
+        {/* Service Type Breakdown */}
+        {!loadingSummary && summary && summary.entries_by_service_type && summary.entries_by_service_type.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sea Time by Service Type</Text>
+            <View style={styles.card}>
+              {summary.entries_by_service_type.map((serviceEntry, index) => (
+                <View 
+                  key={index} 
+                  style={[
+                    styles.summaryRow,
+                    index === summary.entries_by_service_type!.length - 1 && styles.summaryRowLast
+                  ]}
+                >
+                  <Text style={styles.summaryLabel}>{formatServiceType(serviceEntry.service_type)}</Text>
+                  <Text style={styles.summaryValue}>
+                    {(serviceEntry.total_hours / 24).toFixed(2)} days
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Reports</Text>

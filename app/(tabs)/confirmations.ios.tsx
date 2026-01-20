@@ -1,10 +1,4 @@
 
-import { colors } from '@/styles/commonStyles';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import * as seaTimeApi from '@/utils/seaTimeApi';
-import { IconSymbol } from '@/components/IconSymbol';
-import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,8 +11,15 @@ import {
   Platform,
   Image,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { scheduleSeaTimeNotification } from '@/utils/notifications';
+import { colors } from '@/styles/commonStyles';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'expo-router';
+import { IconSymbol } from '@/components/IconSymbol';
+import * as seaTimeApi from '@/utils/seaTimeApi';
 
 interface Vessel {
   id: string;
@@ -41,17 +42,23 @@ interface SeaTimeEntry {
   start_longitude?: number | string | null;
   end_latitude?: number | string | null;
   end_longitude?: number | string | null;
+  service_type?: string | null;
 }
+
+type ServiceType = 'actual_sea_service' | 'watchkeeping_service';
 
 export default function ConfirmationsScreen() {
   const [entries, setEntries] = useState<SeaTimeEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
+  const [showServiceTypeModal, setShowServiceTypeModal] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<SeaTimeEntry | null>(null);
+  const [selectedServiceType, setSelectedServiceType] = useState<ServiceType>('actual_sea_service');
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const insets = useSafeAreaInsets();
   const styles = createStyles(isDark, insets.top);
   const notifiedEntriesRef = useRef<Set<string>>(new Set());
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -71,12 +78,6 @@ export default function ConfirmationsScreen() {
   }, []);
 
   const checkForNewEntries = useCallback(async () => {
-    // Skip on web - notifications not supported
-    if (Platform.OS === 'web') {
-      console.log('[Confirmations] Skipping notification check on web');
-      return;
-    }
-
     try {
       console.log('[Confirmations] Checking for new entries to notify');
       const result = await seaTimeApi.getNewSeaTimeEntries();
@@ -85,7 +86,6 @@ export default function ConfirmationsScreen() {
         console.log('[Confirmations] Found', result.newEntries.length, 'new entries to notify');
         
         for (const entry of result.newEntries) {
-          // Skip if we've already notified about this entry in this session
           if (notifiedEntriesRef.current.has(entry.id)) {
             console.log('[Confirmations] Skipping already notified entry:', entry.id);
             continue;
@@ -106,7 +106,6 @@ export default function ConfirmationsScreen() {
           notifiedEntriesRef.current.add(entry.id);
         }
 
-        // Reload data to show the new entries
         await loadData();
       } else {
         console.log('[Confirmations] No new entries to notify');
@@ -120,13 +119,8 @@ export default function ConfirmationsScreen() {
     console.log('[Confirmations] Component mounted, loading data');
     loadData();
 
-    // Set up polling for new entries every 30 seconds (only on native platforms)
-    if (Platform.OS !== 'web') {
-      console.log('[Confirmations] Setting up notification polling');
-      pollIntervalRef.current = setInterval(checkForNewEntries, 30000);
-    } else {
-      console.log('[Confirmations] Skipping notification polling on web');
-    }
+    console.log('[Confirmations] Setting up notification polling');
+    pollIntervalRef.current = setInterval(checkForNewEntries, 30000);
 
     return () => {
       console.log('[Confirmations] Component unmounting, cleaning up polling');
@@ -142,10 +136,21 @@ export default function ConfirmationsScreen() {
     setRefreshing(false);
   };
 
-  const handleConfirmEntry = async (entryId: string) => {
+  const handleConfirmEntry = (entry: SeaTimeEntry) => {
+    console.log('[Confirmations] User confirming entry:', entry.id);
+    setSelectedEntry(entry);
+    setSelectedServiceType('actual_sea_service');
+    setShowServiceTypeModal(true);
+  };
+
+  const confirmWithServiceType = async () => {
+    if (!selectedEntry) return;
+
     try {
-      console.log('[Confirmations] User confirming entry:', entryId);
-      await seaTimeApi.confirmSeaTimeEntry(entryId);
+      console.log('[Confirmations] Confirming entry with service type:', selectedServiceType);
+      await seaTimeApi.confirmSeaTimeEntry(selectedEntry.id, selectedServiceType);
+      setShowServiceTypeModal(false);
+      setSelectedEntry(null);
       await loadData();
       Alert.alert('Success', 'Sea time entry confirmed');
     } catch (error: any) {
@@ -411,7 +416,7 @@ export default function ConfirmationsScreen() {
                   <View style={styles.entryActions}>
                     <TouchableOpacity
                       style={[styles.actionButton, styles.confirmButton]}
-                      onPress={() => handleConfirmEntry(entry.id)}
+                      onPress={() => handleConfirmEntry(entry)}
                     >
                       <IconSymbol
                         ios_icon_name="checkmark"
@@ -440,6 +445,77 @@ export default function ConfirmationsScreen() {
           )}
         </View>
       </ScrollView>
+
+      {/* Service Type Selection Modal */}
+      <Modal
+        visible={showServiceTypeModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowServiceTypeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirm Service Type</Text>
+            <Text style={styles.modalSubtitle}>
+              Please specify the type of sea service for this entry
+            </Text>
+
+            <View style={styles.serviceTypeContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.serviceTypeButton,
+                  selectedServiceType === 'actual_sea_service' && styles.serviceTypeButtonActive,
+                ]}
+                onPress={() => setSelectedServiceType('actual_sea_service')}
+              >
+                <Text
+                  style={[
+                    styles.serviceTypeText,
+                    selectedServiceType === 'actual_sea_service' && styles.serviceTypeTextActive,
+                  ]}
+                >
+                  Actual Sea Service
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.serviceTypeButton,
+                  selectedServiceType === 'watchkeeping_service' && styles.serviceTypeButtonActive,
+                ]}
+                onPress={() => setSelectedServiceType('watchkeeping_service')}
+              >
+                <Text
+                  style={[
+                    styles.serviceTypeText,
+                    selectedServiceType === 'watchkeeping_service' && styles.serviceTypeTextActive,
+                  ]}
+                >
+                  Watchkeeping Service
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowServiceTypeModal(false);
+                  setSelectedEntry(null);
+                }}
+              >
+                <Text style={[styles.modalButtonText, styles.cancelButtonText]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={confirmWithServiceType}
+              >
+                <Text style={[styles.modalButtonText, styles.saveButtonText]}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -601,6 +677,82 @@ function createStyles(isDark: boolean, topInset: number) {
       color: '#fff',
       fontSize: 16,
       fontWeight: '600',
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    modalContent: {
+      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
+      borderRadius: 20,
+      padding: 24,
+      width: '90%',
+      maxWidth: 400,
+    },
+    modalTitle: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 8,
+    },
+    modalSubtitle: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 20,
+    },
+    serviceTypeContainer: {
+      gap: 12,
+      marginBottom: 24,
+    },
+    serviceTypeButton: {
+      paddingVertical: 16,
+      paddingHorizontal: 16,
+      borderRadius: 12,
+      borderWidth: 2,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+      alignItems: 'center',
+    },
+    serviceTypeButtonActive: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    serviceTypeText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    },
+    serviceTypeTextActive: {
+      color: '#FFFFFF',
+    },
+    modalButtons: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    modalButton: {
+      flex: 1,
+      padding: 16,
+      borderRadius: 12,
+      alignItems: 'center',
+    },
+    cancelButton: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
+    },
+    saveButton: {
+      backgroundColor: colors.primary,
+    },
+    modalButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    cancelButtonText: {
+      color: isDark ? colors.text : colors.textLight,
+    },
+    saveButtonText: {
+      color: '#FFFFFF',
     },
   });
 }

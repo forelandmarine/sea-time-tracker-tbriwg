@@ -52,6 +52,7 @@ interface SeaTimeEntry {
   start_longitude?: number | string | null;
   end_latitude?: number | string | null;
   end_longitude?: number | string | null;
+  service_type?: string | null;
 }
 
 type ViewMode = 'list' | 'calendar';
@@ -662,22 +663,29 @@ export default function LogbookScreen() {
     setStartDate(new Date(entry.start_time));
     setEndDate(entry.end_time ? new Date(entry.end_time) : null);
     
-    // Parse notes to extract service type and voyage locations
+    // Map backend service_type to UI service type
+    const backendToUIServiceType: { [key: string]: ServiceType } = {
+      'actual_sea_service': 'seagoing',
+      'watchkeeping_service': 'seagoing',
+      'standby_service': 'standby',
+      'yard_service': 'yard',
+      'service_in_port': 'seagoing',
+    };
+    const uiServiceType = entry.service_type 
+      ? (backendToUIServiceType[entry.service_type] || 'seagoing')
+      : 'seagoing';
+    setServiceType(uiServiceType);
+    
+    // Parse notes to extract voyage locations
     const notesText = entry.notes || '';
     const lines = notesText.split('\n');
     
-    let extractedServiceType: ServiceType = 'seagoing';
     let extractedFrom = '';
     let extractedTo = '';
     let remainingNotes: string[] = [];
     
     lines.forEach(line => {
-      if (line.startsWith('Service Type:')) {
-        const type = line.replace('Service Type:', '').trim().toLowerCase();
-        if (type === 'seagoing' || type === 'standby' || type === 'yard') {
-          extractedServiceType = type as ServiceType;
-        }
-      } else if (line.startsWith('From:')) {
+      if (line.startsWith('From:')) {
         extractedFrom = line.replace('From:', '').trim();
       } else if (line.startsWith('To:')) {
         extractedTo = line.replace('To:', '').trim();
@@ -686,7 +694,6 @@ export default function LogbookScreen() {
       }
     });
     
-    setServiceType(extractedServiceType);
     setVoyageFrom(extractedFrom);
     setVoyageTo(extractedTo);
     setNotes(remainingNotes.join('\n'));
@@ -740,32 +747,42 @@ export default function LogbookScreen() {
       const fromCoords = parseLatLong(voyageFrom);
       const toCoords = parseLatLong(voyageTo);
 
-      const serviceTypeNote = `Service Type: ${serviceType.charAt(0).toUpperCase() + serviceType.slice(1)}`;
+      // Map UI service type to backend service_type values
+      const serviceTypeMap: { [key: string]: string } = {
+        'seagoing': 'actual_sea_service',
+        'standby': 'standby_service',
+        'yard': 'yard_service',
+      };
+      const backendServiceType = serviceTypeMap[serviceType] || 'actual_sea_service';
+
+      // Build notes with voyage information
       const voyageFromNote = voyageFrom ? `From: ${voyageFrom}` : '';
       const voyageToNote = voyageTo ? `To: ${voyageTo}` : '';
       
-      const noteParts = [serviceTypeNote, voyageFromNote, voyageToNote, notes].filter(Boolean);
+      const noteParts = [voyageFromNote, voyageToNote, notes].filter(Boolean);
       const fullNotes = noteParts.join('\n');
 
       if (editingEntry) {
         // Update existing entry
         console.log('[LogbookScreen] Updating sea time entry:', editingEntry.id);
         await seaTimeApi.updateSeaTimeEntry(editingEntry.id, {
-          notes: fullNotes,
+          notes: fullNotes || null,
+          service_type: backendServiceType,
         });
         Alert.alert('Success', 'Sea time entry updated successfully');
       } else {
         // Create new entry
-        console.log('[LogbookScreen] Creating manual sea time entry');
+        console.log('[LogbookScreen] Creating manual sea time entry with service_type:', backendServiceType);
         await seaTimeApi.createManualSeaTimeEntry({
           vessel_id: selectedVessel.id,
           start_time: startDate.toISOString(),
           end_time: endDate?.toISOString() || null,
-          notes: fullNotes,
+          notes: fullNotes || null,
           start_latitude: fromCoords.lat,
           start_longitude: fromCoords.lon,
           end_latitude: toCoords.lat,
           end_longitude: toCoords.lon,
+          service_type: backendServiceType,
         });
         Alert.alert('Success', 'Sea time entry added successfully');
       }
@@ -860,6 +877,20 @@ export default function LogbookScreen() {
       return 'In progress';
     }
     return 'No sea day';
+  };
+
+  const formatServiceTypeDisplay = (serviceType: string | null | undefined): string => {
+    if (!serviceType) return '';
+    
+    const typeMap: { [key: string]: string } = {
+      'actual_sea_service': 'Actual Sea Service',
+      'watchkeeping_service': 'Watchkeeping Service',
+      'standby_service': 'Stand-by Service',
+      'yard_service': 'Yard Service',
+      'service_in_port': 'Service in Port',
+    };
+    
+    return typeMap[serviceType] || serviceType;
   };
 
   const calculateTotalSeaDays = () => {
@@ -1130,6 +1161,21 @@ export default function LogbookScreen() {
                         </Text>
                       </View>
 
+                      {entry.service_type && (
+                        <View style={styles.entryRow}>
+                          <IconSymbol
+                            ios_icon_name="tag.fill"
+                            android_material_icon_name="label"
+                            size={16}
+                            color={colors.primary}
+                            style={styles.entryIcon}
+                          />
+                          <Text style={[styles.entryText, { color: colors.primary, fontWeight: '600' }]}>
+                            {formatServiceTypeDisplay(entry.service_type)}
+                          </Text>
+                        </View>
+                      )}
+
                       {entry.notes && (
                         <View style={styles.entryRow}>
                           <IconSymbol
@@ -1277,6 +1323,21 @@ export default function LogbookScreen() {
                                 {formatSeaDay(entry.sea_days, entry.duration_hours)}
                               </Text>
                             </View>
+
+                            {entry.service_type && (
+                              <View style={styles.entryRow}>
+                                <IconSymbol
+                                  ios_icon_name="tag.fill"
+                                  android_material_icon_name="label"
+                                  size={16}
+                                  color={colors.primary}
+                                  style={styles.entryIcon}
+                                />
+                                <Text style={[styles.entryText, { color: colors.primary, fontWeight: '600' }]}>
+                                  {formatServiceTypeDisplay(entry.service_type)}
+                                </Text>
+                              </View>
+                            )}
 
                             {entry.notes && (
                               <View style={styles.entryRow}>
