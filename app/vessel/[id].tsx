@@ -203,28 +203,6 @@ function createStyles(isDark: boolean) {
       fontSize: 16,
       fontWeight: '600',
     },
-    generateSamplesButton: {
-      backgroundColor: isDark ? colors.secondary : colors.accent,
-      borderRadius: 12,
-      padding: 16,
-      alignItems: 'center',
-      marginBottom: 24,
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: 8,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-      borderWidth: 1,
-      borderColor: colors.primary,
-    },
-    generateSamplesButtonText: {
-      color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '600',
-    },
     statsContainer: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -732,7 +710,6 @@ export default function VesselDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [checkingAIS, setCheckingAIS] = useState(false);
-  const [generatingSamples, setGeneratingSamples] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [activateModalVisible, setActivateModalVisible] = useState(false);
@@ -984,50 +961,6 @@ export default function VesselDetailScreen() {
       Alert.alert('AIS Check Failed', error.message);
     } finally {
       setCheckingAIS(false);
-    }
-  };
-
-  const handleGenerateSamples = async () => {
-    console.log('[VesselDetailScreen] User tapped Generate Sample Entries button');
-    
-    if (generatingSamples) {
-      console.log('[VesselDetailScreen] Sample generation already in progress, ignoring duplicate tap');
-      return;
-    }
-
-    try {
-      // Haptic feedback
-      if (Platform.OS !== 'web') {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-
-      console.log('[VesselDetailScreen] Generating sample sea time entries');
-      setGeneratingSamples(true);
-      
-      const result = await seaTimeApi.generateSampleSeaTimeEntries();
-      
-      console.log('[VesselDetailScreen] ✅ Sample entries generated successfully:', result);
-      
-      // Success haptic feedback
-      if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      }
-
-      Alert.alert('Success', 'Sample sea time entries have been generated successfully!');
-      
-      // Reload data to show the new entries
-      await loadData();
-    } catch (error: any) {
-      console.error('[VesselDetailScreen] ❌ Failed to generate sample entries:', error);
-      
-      // Error haptic feedback
-      if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      }
-
-      Alert.alert('Error', 'Failed to generate sample entries: ' + error.message);
-    } finally {
-      setGeneratingSamples(false);
     }
   };
 
@@ -1308,30 +1241,6 @@ export default function VesselDetailScreen() {
               <Text style={styles.checkAISButtonText}>
                 {vessel.is_active ? 'Check AIS' : 'Activate Vessel to Check AIS'}
               </Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        {/* Generate Sample Entries Button */}
-        <TouchableOpacity
-          style={styles.generateSamplesButton}
-          onPress={handleGenerateSamples}
-          disabled={generatingSamples}
-        >
-          {generatingSamples ? (
-            <>
-              <ActivityIndicator size="small" color="#fff" />
-              <Text style={styles.generateSamplesButtonText}>Generating...</Text>
-            </>
-          ) : (
-            <>
-              <IconSymbol
-                ios_icon_name="doc.badge.plus"
-                android_material_icon_name="add-circle"
-                size={20}
-                color="#fff"
-              />
-              <Text style={styles.generateSamplesButtonText}>Generate Sample Entries</Text>
             </>
           )}
         </TouchableOpacity>
