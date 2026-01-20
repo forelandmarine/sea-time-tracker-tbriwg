@@ -28,49 +28,62 @@ interface AISDebugLog {
 }
 
 function createStyles(isDark: boolean) {
+  const textColor = isDark ? colors.text : colors.textLight;
+  const secondaryTextColor = isDark ? colors.textSecondary : colors.textSecondaryLight;
+  const backgroundColor = isDark ? colors.background : colors.backgroundLight;
+  const cardColor = isDark ? colors.cardBackground : colors.card;
+  const borderColor = isDark ? colors.border : colors.borderLight;
+
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      backgroundColor: backgroundColor,
     },
     scrollContent: {
       padding: 16,
+      paddingTop: Platform.OS === 'android' ? 48 : 16,
+      paddingBottom: 32,
     },
     header: {
-      marginBottom: 16,
+      marginBottom: 20,
     },
     title: {
       fontSize: 24,
       fontWeight: 'bold',
-      color: isDark ? colors.text : colors.textLight,
+      color: textColor,
       marginBottom: 8,
     },
     subtitle: {
       fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      color: secondaryTextColor,
+      lineHeight: 20,
     },
     logCard: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      backgroundColor: cardColor,
       borderRadius: 12,
       padding: 16,
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: isDark ? colors.border : colors.borderLight,
+      borderColor: borderColor,
     },
     logHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
       marginBottom: 12,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: borderColor,
     },
     logTime: {
-      fontSize: 12,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      fontSize: 13,
+      color: secondaryTextColor,
+      fontWeight: '500',
     },
     statusBadge: {
-      paddingHorizontal: 8,
-      paddingVertical: 4,
-      borderRadius: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 6,
     },
     statusText: {
       fontSize: 12,
@@ -79,23 +92,27 @@ function createStyles(isDark: boolean) {
     },
     logRow: {
       flexDirection: 'row',
-      marginBottom: 8,
+      marginBottom: 10,
+      alignItems: 'flex-start',
     },
     logLabel: {
       fontSize: 13,
       fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      width: 100,
+      color: textColor,
+      width: 110,
+      flexShrink: 0,
     },
     logValue: {
       fontSize: 13,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      color: secondaryTextColor,
       flex: 1,
     },
     expandButton: {
-      marginTop: 8,
-      paddingVertical: 8,
+      marginTop: 12,
+      paddingVertical: 10,
       alignItems: 'center',
+      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.03)',
+      borderRadius: 8,
     },
     expandButtonText: {
       fontSize: 13,
@@ -107,30 +124,35 @@ function createStyles(isDark: boolean) {
       padding: 12,
       backgroundColor: isDark ? '#1a1a1a' : '#f5f5f5',
       borderRadius: 8,
+      borderWidth: 1,
+      borderColor: borderColor,
     },
     responseBodyText: {
-      fontSize: 12,
+      fontSize: 11,
       fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-      color: isDark ? colors.text : colors.textLight,
+      color: textColor,
+      lineHeight: 16,
     },
     emptyState: {
       alignItems: 'center',
       justifyContent: 'center',
-      paddingVertical: 48,
+      paddingVertical: 60,
+      paddingHorizontal: 20,
     },
     emptyStateText: {
       fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      color: secondaryTextColor,
       textAlign: 'center',
       marginTop: 16,
+      lineHeight: 22,
     },
     coordinatesContainer: {
-      marginTop: 8,
+      marginTop: 12,
       padding: 12,
-      backgroundColor: isDark ? '#1a3a1a' : '#e8f5e9',
+      backgroundColor: isDark ? 'rgba(76, 175, 80, 0.15)' : 'rgba(76, 175, 80, 0.1)',
       borderRadius: 8,
       borderWidth: 1,
-      borderColor: isDark ? '#2e7d32' : '#4caf50',
+      borderColor: isDark ? 'rgba(76, 175, 80, 0.3)' : 'rgba(76, 175, 80, 0.2)',
     },
     coordinatesTitle: {
       fontSize: 13,
@@ -142,6 +164,28 @@ function createStyles(isDark: boolean) {
       fontSize: 12,
       color: isDark ? '#a5d6a7' : '#388e3c',
       marginBottom: 4,
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    },
+    infoBanner: {
+      flexDirection: 'row',
+      backgroundColor: isDark ? 'rgba(0, 122, 255, 0.15)' : 'rgba(0, 122, 255, 0.1)',
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(0, 122, 255, 0.3)' : 'rgba(0, 122, 255, 0.2)',
+    },
+    infoIcon: {
+      marginRight: 12,
+      marginTop: 2,
+    },
+    infoTextContainer: {
+      flex: 1,
+    },
+    infoText: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: textColor,
     },
   });
 }
@@ -155,6 +199,7 @@ export default function DebugScreen() {
 
   const [logs, setLogs] = useState<AISDebugLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
 
   const loadLogs = useCallback(async () => {
@@ -168,6 +213,7 @@ export default function DebugScreen() {
       console.error('Failed to load debug logs:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, [vesselId]);
 
@@ -177,6 +223,7 @@ export default function DebugScreen() {
 
   const onRefresh = () => {
     console.log('User pulled to refresh debug logs');
+    setRefreshing(true);
     loadLogs();
   };
 
@@ -203,7 +250,26 @@ export default function DebugScreen() {
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
-    return date.toLocaleString();
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const formatTime = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  };
+
+  const formatDateTime = (dateString: string): string => {
+    const dateText = formatDate(dateString);
+    const timeText = formatTime(dateString);
+    return `${dateText} ${timeText}`;
   };
 
   const formatAuthStatus = (status: string): string => {
@@ -237,141 +303,148 @@ export default function DebugScreen() {
     return null;
   };
 
+  const textColor = isDark ? colors.text : colors.textLight;
+  const backgroundColor = isDark ? colors.background : colors.backgroundLight;
+
   return (
-    <View style={styles.container}>
+    <>
       <Stack.Screen
         options={{
           title: 'AIS Debug Logs',
+          headerShown: true,
+          headerBackTitle: 'Back',
           headerStyle: {
-            backgroundColor: isDark ? colors.background : colors.backgroundLight,
+            backgroundColor: backgroundColor,
           },
-          headerTintColor: isDark ? colors.text : colors.textLight,
-          headerLeft: () => (
-            <TouchableOpacity
-              onPress={() => {
-                console.log('User tapped back button');
-                router.back();
-              }}
-              style={{ marginLeft: 8 }}
-            >
-              <IconSymbol
-                ios_icon_name="chevron.left"
-                android_material_icon_name="arrow-back"
-                size={24}
-                color={isDark ? colors.text : colors.textLight}
-              />
-            </TouchableOpacity>
-          ),
+          headerTintColor: textColor,
+          headerShadowVisible: false,
         }}
       />
-
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={loading} onRefresh={onRefresh} />
-        }
-      >
-        <View style={styles.header}>
-          <Text style={styles.title}>AIS API Debug Logs</Text>
-          <Text style={styles.subtitle}>
-            Showing API calls and responses for vessel {vesselId}
-          </Text>
-        </View>
-
-        {logs.length === 0 && !loading ? (
-          <View style={styles.emptyState}>
-            <IconSymbol
-              ios_icon_name="doc.text.magnifyingglass"
-              android_material_icon_name="search"
-              size={64}
-              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-            />
-            <Text style={styles.emptyStateText}>
-              No debug logs found for this vessel.{'\n'}
-              Try checking the vessel's AIS data to generate logs.
+      <View style={styles.container}>
+        <ScrollView
+          style={styles.container}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          }
+        >
+          <View style={styles.header}>
+            <Text style={styles.title}>AIS API Debug Logs</Text>
+            <Text style={styles.subtitle}>
+              Detailed API call history and responses for vessel monitoring
             </Text>
           </View>
-        ) : (
-          logs.map((log) => {
-            const isExpanded = expandedLogs.has(log.id);
-            const coordinates = extractCoordinates(log.response_body);
 
-            return (
-              <View key={log.id} style={styles.logCard}>
-                <View style={styles.logHeader}>
-                  <Text style={styles.logTime}>{formatDate(log.request_time)}</Text>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      { backgroundColor: getStatusColor(log.response_status) },
-                    ]}
-                  >
-                    <Text style={styles.statusText}>{log.response_status}</Text>
-                  </View>
-                </View>
+          <View style={styles.infoBanner}>
+            <IconSymbol
+              ios_icon_name="info.circle.fill"
+              android_material_icon_name="info"
+              size={24}
+              color={colors.primary}
+              style={styles.infoIcon}
+            />
+            <View style={styles.infoTextContainer}>
+              <Text style={styles.infoText}>
+                These logs show all API calls made to the MyShipTracking AIS service for this vessel. 
+                Use this information to troubleshoot tracking issues and verify data accuracy.
+              </Text>
+            </View>
+          </View>
 
-                <View style={styles.logRow}>
-                  <Text style={styles.logLabel}>MMSI:</Text>
-                  <Text style={styles.logValue}>{log.mmsi}</Text>
-                </View>
+          {logs.length === 0 && !loading ? (
+            <View style={styles.emptyState}>
+              <IconSymbol
+                ios_icon_name="doc.text.magnifyingglass"
+                android_material_icon_name="search"
+                size={64}
+                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+              />
+              <Text style={styles.emptyStateText}>
+                No debug logs found for this vessel.{'\n\n'}
+                Try checking the vessel&apos;s AIS data to generate logs.
+              </Text>
+            </View>
+          ) : (
+            logs.map((log) => {
+              const isExpanded = expandedLogs.has(log.id);
+              const coordinates = extractCoordinates(log.response_body);
 
-                <View style={styles.logRow}>
-                  <Text style={styles.logLabel}>Auth Status:</Text>
-                  <Text style={styles.logValue}>{formatAuthStatus(log.authentication_status)}</Text>
-                </View>
-
-                {log.error_message && (
-                  <View style={styles.logRow}>
-                    <Text style={styles.logLabel}>Error:</Text>
-                    <Text style={[styles.logValue, { color: colors.error }]}>
-                      {log.error_message}
-                    </Text>
-                  </View>
-                )}
-
-                {coordinates && (
-                  <View style={styles.coordinatesContainer}>
-                    <Text style={styles.coordinatesTitle}>📍 Vessel Position</Text>
-                    <Text style={styles.coordinatesText}>
-                      Latitude: {coordinates.lat.toFixed(6)}°
-                    </Text>
-                    <Text style={styles.coordinatesText}>
-                      Longitude: {coordinates.lon.toFixed(6)}°
-                    </Text>
-                  </View>
-                )}
-
-                <TouchableOpacity
-                  style={styles.expandButton}
-                  onPress={() => toggleExpanded(log.id)}
-                >
-                  <Text style={styles.expandButtonText}>
-                    {isExpanded ? '▼ Hide Details' : '▶ Show Details'}
-                  </Text>
-                </TouchableOpacity>
-
-                {isExpanded && (
-                  <>
-                    <View style={styles.logRow}>
-                      <Text style={styles.logLabel}>API URL:</Text>
-                      <Text style={[styles.logValue, { fontSize: 11 }]}>{log.api_url}</Text>
+              return (
+                <View key={log.id} style={styles.logCard}>
+                  <View style={styles.logHeader}>
+                    <Text style={styles.logTime}>{formatDateTime(log.request_time)}</Text>
+                    <View
+                      style={[
+                        styles.statusBadge,
+                        { backgroundColor: getStatusColor(log.response_status) },
+                      ]}
+                    >
+                      <Text style={styles.statusText}>{log.response_status}</Text>
                     </View>
+                  </View>
 
-                    {log.response_body && (
-                      <View style={styles.responseBody}>
-                        <Text style={styles.responseBodyText}>
-                          {JSON.stringify(parseResponseBody(log.response_body), null, 2)}
-                        </Text>
+                  <View style={styles.logRow}>
+                    <Text style={styles.logLabel}>MMSI:</Text>
+                    <Text style={styles.logValue}>{log.mmsi}</Text>
+                  </View>
+
+                  <View style={styles.logRow}>
+                    <Text style={styles.logLabel}>Auth Status:</Text>
+                    <Text style={styles.logValue}>{formatAuthStatus(log.authentication_status)}</Text>
+                  </View>
+
+                  {log.error_message && (
+                    <View style={styles.logRow}>
+                      <Text style={styles.logLabel}>Error:</Text>
+                      <Text style={[styles.logValue, { color: colors.error }]}>
+                        {log.error_message}
+                      </Text>
+                    </View>
+                  )}
+
+                  {coordinates && (
+                    <View style={styles.coordinatesContainer}>
+                      <Text style={styles.coordinatesTitle}>📍 Vessel Position</Text>
+                      <Text style={styles.coordinatesText}>
+                        Latitude: {coordinates.lat.toFixed(6)}°
+                      </Text>
+                      <Text style={styles.coordinatesText}>
+                        Longitude: {coordinates.lon.toFixed(6)}°
+                      </Text>
+                    </View>
+                  )}
+
+                  <TouchableOpacity
+                    style={styles.expandButton}
+                    onPress={() => toggleExpanded(log.id)}
+                  >
+                    <Text style={styles.expandButtonText}>
+                      {isExpanded ? '▼ Hide Details' : '▶ Show Details'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {isExpanded && (
+                    <>
+                      <View style={styles.logRow}>
+                        <Text style={styles.logLabel}>API URL:</Text>
+                        <Text style={[styles.logValue, { fontSize: 11 }]}>{log.api_url}</Text>
                       </View>
-                    )}
-                  </>
-                )}
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
-    </View>
+
+                      {log.response_body && (
+                        <View style={styles.responseBody}>
+                          <Text style={styles.responseBodyText}>
+                            {JSON.stringify(parseResponseBody(log.response_body), null, 2)}
+                          </Text>
+                        </View>
+                      )}
+                    </>
+                  )}
+                </View>
+              );
+            })
+          )}
+        </ScrollView>
+      </View>
+    </>
   );
 }
