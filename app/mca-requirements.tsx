@@ -7,6 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
   useColorScheme,
+  Platform,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
@@ -21,6 +22,7 @@ const createStyles = (isDark: boolean) =>
     },
     scrollContent: {
       padding: 20,
+      paddingTop: Platform.OS === 'android' ? 48 : 20,
       paddingBottom: 40,
     },
     header: {
@@ -150,74 +152,81 @@ export default function MCARequirementsScreen() {
 
   console.log('[MCARequirementsScreen] User viewing MCA requirements reference');
 
+  const textColor = isDark ? colors.text : colors.textLight;
+  const backgroundColor = isDark ? colors.background : colors.backgroundLight;
+
   return (
-    <View style={styles.container}>
+    <>
       <Stack.Screen
         options={{
           title: 'MCA Requirements',
+          headerShown: true,
+          headerBackTitle: 'Back',
           headerStyle: {
-            backgroundColor: isDark ? colors.background : colors.backgroundLight,
+            backgroundColor: backgroundColor,
           },
-          headerTintColor: isDark ? colors.text : colors.textLight,
+          headerTintColor: textColor,
           headerShadowVisible: false,
         }}
       />
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Text style={styles.title}>MCA Large Yacht Pathway</Text>
-          <Text style={styles.subtitle}>
-            Deck Officers sea service requirements for MCA certification
-          </Text>
-        </View>
+      <View style={styles.container}>
+        <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+          <View style={styles.header}>
+            <Text style={styles.title}>MCA Large Yacht Pathway</Text>
+            <Text style={styles.subtitle}>
+              Deck Officers sea service requirements for MCA certification
+            </Text>
+          </View>
 
-        {MCA_REQUIREMENTS.map((requirement, index) => (
-          <React.Fragment key={requirement.id}>
-            <View style={styles.requirementCard}>
-              <View style={styles.requirementHeader}>
-                <View style={styles.requirementTitleContainer}>
-                  <Text style={styles.requirementTitle}>{requirement.title}</Text>
+          {MCA_REQUIREMENTS.map((requirement, index) => (
+            <React.Fragment key={requirement.id}>
+              <View style={styles.requirementCard}>
+                <View style={styles.requirementHeader}>
+                  <View style={styles.requirementTitleContainer}>
+                    <Text style={styles.requirementTitle}>{requirement.title}</Text>
+                  </View>
+                  <View style={styles.regulationBadge}>
+                    <Text style={styles.regulationText}>{requirement.regulation}</Text>
+                  </View>
                 </View>
-                <View style={styles.regulationBadge}>
-                  <Text style={styles.regulationText}>{requirement.regulation}</Text>
-                </View>
+
+                <Text style={styles.requirementDescription}>{requirement.description}</Text>
+
+                {requirement.requirements.map((req, reqIndex) => (
+                  <View key={reqIndex} style={styles.requirementSection}>
+                    <Text style={styles.requirementLabel}>{req.label}</Text>
+                    <Text style={styles.requirementValue}>{req.value}</Text>
+                    {req.details && req.details.length > 0 && (
+                      <View>
+                        {req.details.map((detail, detailIndex) => (
+                          <View key={detailIndex} style={styles.detailItem}>
+                            <Text style={styles.bullet}>•</Text>
+                            <Text style={styles.detailText}>{detail}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                ))}
+
+                {requirement.notes && requirement.notes.length > 0 && (
+                  <View style={styles.notesSection}>
+                    <Text style={styles.notesTitle}>Additional Notes:</Text>
+                    {requirement.notes.map((note, noteIndex) => (
+                      <View key={noteIndex} style={styles.noteItem}>
+                        <Text style={styles.bullet}>ℹ️</Text>
+                        <Text style={styles.noteText}>{note}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
               </View>
 
-              <Text style={styles.requirementDescription}>{requirement.description}</Text>
-
-              {requirement.requirements.map((req, reqIndex) => (
-                <View key={reqIndex} style={styles.requirementSection}>
-                  <Text style={styles.requirementLabel}>{req.label}</Text>
-                  <Text style={styles.requirementValue}>{req.value}</Text>
-                  {req.details && req.details.length > 0 && (
-                    <View>
-                      {req.details.map((detail, detailIndex) => (
-                        <View key={detailIndex} style={styles.detailItem}>
-                          <Text style={styles.bullet}>•</Text>
-                          <Text style={styles.detailText}>{detail}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              ))}
-
-              {requirement.notes && requirement.notes.length > 0 && (
-                <View style={styles.notesSection}>
-                  <Text style={styles.notesTitle}>Additional Notes:</Text>
-                  {requirement.notes.map((note, noteIndex) => (
-                    <View key={noteIndex} style={styles.noteItem}>
-                      <Text style={styles.bullet}>ℹ️</Text>
-                      <Text style={styles.noteText}>{note}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
-
-            {index < MCA_REQUIREMENTS.length - 1 && <View style={styles.divider} />}
-          </React.Fragment>
-        ))}
-      </ScrollView>
-    </View>
+              {index < MCA_REQUIREMENTS.length - 1 && <View style={styles.divider} />}
+            </React.Fragment>
+          ))}
+        </ScrollView>
+      </View>
+    </>
   );
 }
