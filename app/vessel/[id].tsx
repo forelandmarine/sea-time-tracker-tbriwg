@@ -591,7 +591,7 @@ function createStyles(isDark: boolean) {
     activateConfirmButtonText: {
       color: '#FFFFFF',
     },
-    // AIS Data Modal styles
+    // AIS Data Modal styles - Updated to match debug logs formatting
     aisModalContent: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 16,
@@ -606,69 +606,108 @@ function createStyles(isDark: boolean) {
       elevation: 8,
     },
     aisModalHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
       marginBottom: 16,
     },
     aisModalTitle: {
-      fontSize: 20,
-      fontWeight: '600',
+      fontSize: 24,
+      fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
+      marginBottom: 8,
+    },
+    aisModalSubtitle: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      lineHeight: 20,
+    },
+    aisInfoBanner: {
+      flexDirection: 'row',
+      backgroundColor: isDark ? 'rgba(0, 122, 255, 0.15)' : 'rgba(0, 122, 255, 0.1)',
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(0, 122, 255, 0.3)' : 'rgba(0, 122, 255, 0.2)',
+    },
+    aisInfoIcon: {
+      marginRight: 12,
+      marginTop: 2,
+    },
+    aisInfoTextContainer: {
       flex: 1,
     },
-    aisStatusBadge: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
+    aisInfoText: {
+      fontSize: 14,
+      lineHeight: 20,
+      color: isDark ? colors.text : colors.textLight,
+    },
+    aisDataCard: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
-      marginLeft: 8,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    aisCardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
+    },
+    aisCardTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    aisStatusBadge: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 6,
     },
     aisStatusText: {
       fontSize: 12,
       fontWeight: '600',
       color: '#FFFFFF',
     },
-    aisSection: {
-      marginBottom: 16,
-    },
-    aisSectionTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 8,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-    },
     aisDataRow: {
       flexDirection: 'row',
-      justifyContent: 'space-between',
-      paddingVertical: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
-    },
-    aisDataRowLast: {
-      borderBottomWidth: 0,
+      marginBottom: 10,
+      alignItems: 'flex-start',
     },
     aisDataLabel: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      fontWeight: '500',
-      flex: 1,
+      fontSize: 13,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      width: 110,
+      flexShrink: 0,
     },
     aisDataValue: {
-      fontSize: 14,
-      color: isDark ? colors.text : colors.textLight,
-      fontWeight: '600',
-      flex: 1,
-      textAlign: 'right',
-    },
-    aisDataValueEmpty: {
-      fontSize: 14,
+      fontSize: 13,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      fontStyle: 'italic',
       flex: 1,
-      textAlign: 'right',
+    },
+    aisCoordinatesContainer: {
+      marginTop: 12,
+      padding: 12,
+      backgroundColor: isDark ? 'rgba(76, 175, 80, 0.15)' : 'rgba(76, 175, 80, 0.1)',
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(76, 175, 80, 0.3)' : 'rgba(76, 175, 80, 0.2)',
+    },
+    aisCoordinatesTitle: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: isDark ? '#81c784' : '#2e7d32',
+      marginBottom: 8,
+    },
+    aisCoordinatesText: {
+      fontSize: 12,
+      color: isDark ? '#a5d6a7' : '#388e3c',
+      marginBottom: 4,
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
     aisCloseButton: {
       backgroundColor: colors.primary,
@@ -1588,7 +1627,7 @@ export default function VesselDetailScreen() {
         </View>
       </Modal>
 
-      {/* AIS Data Modal */}
+      {/* AIS Data Modal - Updated to match debug logs formatting */}
       <Modal
         visible={aisModalVisible}
         transparent
@@ -1607,157 +1646,139 @@ export default function VesselDetailScreen() {
               style={styles.aisModalContent}
             >
               <View style={styles.aisModalHeader}>
-                <Text style={styles.aisModalTitle}>AIS Data - {vessel?.vessel_name}</Text>
-                <View style={[
-                  styles.aisStatusBadge,
-                  { backgroundColor: aisData?.is_moving ? colors.success : colors.warning }
-                ]}>
-                  <Text style={styles.aisStatusText}>
-                    {aisData?.is_moving ? 'MOVING' : 'STATIONARY'}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={() => setAisModalVisible(false)}
-                >
-                  <IconSymbol
-                    ios_icon_name="xmark.circle.fill"
-                    android_material_icon_name="cancel"
-                    size={28}
-                    color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                  />
-                </TouchableOpacity>
+                <Text style={styles.aisModalTitle}>Current AIS Data</Text>
+                <Text style={styles.aisModalSubtitle}>
+                  Real-time vessel position and navigation information
+                </Text>
               </View>
 
-              <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={styles.modalScrollContent}>
-                {/* Vessel Information */}
-                <View style={styles.aisSection}>
-                  <View style={styles.aisSectionTitle}>
-                    <IconSymbol
-                      ios_icon_name="info.circle"
-                      android_material_icon_name="info"
-                      size={18}
-                      color={colors.primary}
-                    />
-                    <Text style={styles.aisSectionTitle}>Vessel Information</Text>
+              <View style={styles.aisInfoBanner}>
+                <IconSymbol
+                  ios_icon_name="info.circle.fill"
+                  android_material_icon_name="info"
+                  size={24}
+                  color={colors.primary}
+                  style={styles.aisInfoIcon}
+                />
+                <View style={styles.aisInfoTextContainer}>
+                  <Text style={styles.aisInfoText}>
+                    This data is retrieved from the MyShipTracking AIS service and shows the vessel&apos;s current status and location.
+                  </Text>
+                </View>
+              </View>
+
+              <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={styles.modalScrollContent}>
+                {/* Vessel Information Card */}
+                <View style={styles.aisDataCard}>
+                  <View style={styles.aisCardHeader}>
+                    <Text style={styles.aisCardTitle}>Vessel Information</Text>
+                    <View
+                      style={[
+                        styles.aisStatusBadge,
+                        { backgroundColor: aisData?.is_moving ? colors.success : colors.warning },
+                      ]}
+                    >
+                      <Text style={styles.aisStatusText}>
+                        {aisData?.is_moving ? 'MOVING' : 'STATIONARY'}
+                      </Text>
+                    </View>
                   </View>
+
                   <View style={styles.aisDataRow}>
-                    <Text style={styles.aisDataLabel}>Name</Text>
-                    <Text style={aisData?.name ? styles.aisDataValue : styles.aisDataValueEmpty}>
-                      {formatAISValue(aisData?.name)}
-                    </Text>
+                    <Text style={styles.aisDataLabel}>Name:</Text>
+                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.name)}</Text>
                   </View>
+
                   <View style={styles.aisDataRow}>
-                    <Text style={styles.aisDataLabel}>MMSI</Text>
-                    <Text style={aisData?.mmsi ? styles.aisDataValue : styles.aisDataValueEmpty}>
-                      {formatAISValue(aisData?.mmsi)}
-                    </Text>
+                    <Text style={styles.aisDataLabel}>MMSI:</Text>
+                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.mmsi)}</Text>
                   </View>
+
                   <View style={styles.aisDataRow}>
-                    <Text style={styles.aisDataLabel}>IMO</Text>
-                    <Text style={aisData?.imo ? styles.aisDataValue : styles.aisDataValueEmpty}>
-                      {formatAISValue(aisData?.imo)}
-                    </Text>
+                    <Text style={styles.aisDataLabel}>IMO:</Text>
+                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.imo)}</Text>
                   </View>
+
                   <View style={styles.aisDataRow}>
-                    <Text style={styles.aisDataLabel}>Call Sign</Text>
-                    <Text style={aisData?.callsign ? styles.aisDataValue : styles.aisDataValueEmpty}>
-                      {formatAISValue(aisData?.callsign)}
-                    </Text>
+                    <Text style={styles.aisDataLabel}>Call Sign:</Text>
+                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.callsign)}</Text>
                   </View>
+
                   <View style={styles.aisDataRow}>
-                    <Text style={styles.aisDataLabel}>Flag</Text>
-                    <Text style={aisData?.flag ? styles.aisDataValue : styles.aisDataValueEmpty}>
-                      {formatAISValue(aisData?.flag)}
-                    </Text>
+                    <Text style={styles.aisDataLabel}>Flag:</Text>
+                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.flag)}</Text>
                   </View>
-                  <View style={[styles.aisDataRow, styles.aisDataRowLast]}>
-                    <Text style={styles.aisDataLabel}>Ship Type</Text>
-                    <Text style={aisData?.ship_type ? styles.aisDataValue : styles.aisDataValueEmpty}>
-                      {formatAISValue(aisData?.ship_type)}
-                    </Text>
+
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>Ship Type:</Text>
+                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.ship_type)}</Text>
                   </View>
                 </View>
 
-                {/* Position & Navigation */}
-                <View style={styles.aisSection}>
-                  <View style={styles.aisSectionTitle}>
-                    <IconSymbol
-                      ios_icon_name="location.fill"
-                      android_material_icon_name="location-on"
-                      size={18}
-                      color={colors.primary}
-                    />
-                    <Text style={styles.aisSectionTitle}>Position & Navigation</Text>
+                {/* Position & Navigation Card */}
+                <View style={styles.aisDataCard}>
+                  <View style={styles.aisCardHeader}>
+                    <Text style={styles.aisCardTitle}>Position & Navigation</Text>
                   </View>
+
                   <View style={styles.aisDataRow}>
-                    <Text style={styles.aisDataLabel}>Position</Text>
-                    <Text style={aisData?.latitude && aisData?.longitude ? styles.aisDataValue : styles.aisDataValueEmpty}>
-                      {formatCoordinates(aisData?.latitude || null, aisData?.longitude || null)}
-                    </Text>
+                    <Text style={styles.aisDataLabel}>Speed:</Text>
+                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.speed_knots, ' knots')}</Text>
                   </View>
+
                   <View style={styles.aisDataRow}>
-                    <Text style={styles.aisDataLabel}>Speed</Text>
-                    <Text style={aisData?.speed_knots !== null ? styles.aisDataValue : styles.aisDataValueEmpty}>
-                      {formatAISValue(aisData?.speed_knots, ' knots')}
-                    </Text>
+                    <Text style={styles.aisDataLabel}>Course:</Text>
+                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.course, '°')}</Text>
                   </View>
+
                   <View style={styles.aisDataRow}>
-                    <Text style={styles.aisDataLabel}>Course</Text>
-                    <Text style={aisData?.course !== null ? styles.aisDataValue : styles.aisDataValueEmpty}>
-                      {formatAISValue(aisData?.course, '°')}
-                    </Text>
+                    <Text style={styles.aisDataLabel}>Heading:</Text>
+                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.heading, '°')}</Text>
                   </View>
-                  <View style={[styles.aisDataRow, styles.aisDataRowLast]}>
-                    <Text style={styles.aisDataLabel}>Heading</Text>
-                    <Text style={aisData?.heading !== null ? styles.aisDataValue : styles.aisDataValueEmpty}>
-                      {formatAISValue(aisData?.heading, '°')}
-                    </Text>
-                  </View>
+
+                  {aisData?.latitude !== null && aisData?.longitude !== null && (
+                    <View style={styles.aisCoordinatesContainer}>
+                      <Text style={styles.aisCoordinatesTitle}>📍 Vessel Position</Text>
+                      <Text style={styles.aisCoordinatesText}>
+                        Latitude: {aisData.latitude.toFixed(6)}°
+                      </Text>
+                      <Text style={styles.aisCoordinatesText}>
+                        Longitude: {aisData.longitude.toFixed(6)}°
+                      </Text>
+                    </View>
+                  )}
                 </View>
 
-                {/* Voyage Information */}
-                <View style={styles.aisSection}>
-                  <View style={styles.aisSectionTitle}>
-                    <IconSymbol
-                      ios_icon_name="map"
-                      android_material_icon_name="map"
-                      size={18}
-                      color={colors.primary}
-                    />
-                    <Text style={styles.aisSectionTitle}>Voyage Information</Text>
+                {/* Voyage Information Card */}
+                <View style={styles.aisDataCard}>
+                  <View style={styles.aisCardHeader}>
+                    <Text style={styles.aisCardTitle}>Voyage Information</Text>
                   </View>
-                  <View style={styles.aisDataRow}>
-                    <Text style={styles.aisDataLabel}>Status</Text>
-                    <Text style={aisData?.status ? styles.aisDataValue : styles.aisDataValueEmpty}>
-                      {formatAISValue(aisData?.status)}
-                    </Text>
-                  </View>
-                  <View style={styles.aisDataRow}>
-                    <Text style={styles.aisDataLabel}>Destination</Text>
-                    <Text style={aisData?.destination ? styles.aisDataValue : styles.aisDataValueEmpty}>
-                      {formatAISValue(aisData?.destination)}
-                    </Text>
-                  </View>
-                  <View style={[styles.aisDataRow, styles.aisDataRowLast]}>
-                    <Text style={styles.aisDataLabel}>ETA</Text>
-                    <Text style={aisData?.eta ? styles.aisDataValue : styles.aisDataValueEmpty}>
-                      {formatAISValue(aisData?.eta)}
-                    </Text>
-                  </View>
-                </View>
 
-                {/* Timestamp */}
-                {aisData?.timestamp && (
-                  <View style={styles.aisSection}>
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>Status:</Text>
+                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.status)}</Text>
+                  </View>
+
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>Destination:</Text>
+                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.destination)}</Text>
+                  </View>
+
+                  <View style={styles.aisDataRow}>
+                    <Text style={styles.aisDataLabel}>ETA:</Text>
+                    <Text style={styles.aisDataValue}>{formatAISValue(aisData?.eta)}</Text>
+                  </View>
+
+                  {aisData?.timestamp && (
                     <View style={styles.aisDataRow}>
-                      <Text style={styles.aisDataLabel}>Last Updated</Text>
+                      <Text style={styles.aisDataLabel}>Last Updated:</Text>
                       <Text style={styles.aisDataValue}>
                         {new Date(aisData.timestamp).toLocaleString()}
                       </Text>
                     </View>
-                  </View>
-                )}
+                  )}
+                </View>
               </ScrollView>
 
               <TouchableOpacity
