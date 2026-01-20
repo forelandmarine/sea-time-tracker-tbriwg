@@ -7,6 +7,7 @@ import { Platform } from "react-native";
 let ExtensionStorage: any = null;
 let storage: any = null;
 
+// Only initialize on iOS native platform
 if (Platform.OS === 'ios') {
   try {
     const appleTargets = require("@bacons/apple-targets");

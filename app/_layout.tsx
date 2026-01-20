@@ -22,9 +22,6 @@ import { BACKEND_URL } from "@/utils/api";
 import { registerForPushNotificationsAsync } from "@/utils/notifications";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-// Check if we're in a browser environment
-const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
-
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 if (Platform.OS !== 'web') {
   SplashScreen.preventAutoHideAsync().catch((err) => {
@@ -44,22 +41,10 @@ function RootLayoutNav() {
   const pathname = usePathname();
   const { user, loading } = useAuth();
   const [isNavigating, setIsNavigating] = useState(false);
-  const [clientMounted, setClientMounted] = useState(false);
 
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
-
-  // Wait for client-side mount on web
-  useEffect(() => {
-    if (Platform.OS === 'web') {
-      if (isBrowser) {
-        setClientMounted(true);
-      }
-    } else {
-      setClientMounted(true);
-    }
-  }, []);
 
   useEffect(() => {
     if (error) {
@@ -72,7 +57,7 @@ function RootLayoutNav() {
   }, [error]);
 
   useEffect(() => {
-    if (loaded && clientMounted) {
+    if (loaded) {
       if (Platform.OS !== 'web') {
         SplashScreen.hideAsync().catch(() => {});
       }
@@ -80,7 +65,6 @@ function RootLayoutNav() {
       console.log('[App] ========================================');
       console.log('[App] ✅ App Initialized');
       console.log('[App] Platform:', Platform.OS);
-      console.log('[App] Is Browser:', isBrowser);
       console.log('[App] Backend URL:', BACKEND_URL || 'NOT CONFIGURED');
       console.log('[App] Backend configured:', !!BACKEND_URL);
       console.log('[App] ========================================');
@@ -105,11 +89,11 @@ function RootLayoutNav() {
         console.log('[App] ℹ️ Notifications not supported on web');
       }
     }
-  }, [loaded, clientMounted]);
+  }, [loaded]);
 
   // Simplified authentication routing - Let index.tsx handle redirects
   useEffect(() => {
-    if (!loaded || !clientMounted || loading || isNavigating) {
+    if (!loaded || loading || isNavigating) {
       return;
     }
 
@@ -141,12 +125,12 @@ function RootLayoutNav() {
         setIsNavigating(false);
       }, 100);
     }
-  }, [user, loading, loaded, clientMounted, pathname, segments, isNavigating]);
+  }, [user, loading, loaded, pathname, segments, isNavigating]);
 
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
   useEffect(() => {
-    if (Platform.OS === 'web' || !clientMounted) {
+    if (Platform.OS === 'web') {
       return;
     }
 
@@ -185,7 +169,7 @@ function RootLayoutNav() {
     return () => {
       subscription.remove();
     };
-  }, [router, clientMounted]);
+  }, [router]);
 
   React.useEffect(() => {
     if (Platform.OS !== 'web' && 
@@ -199,13 +183,13 @@ function RootLayoutNav() {
     }
   }, [networkState.isConnected, networkState.isInternetReachable]);
 
-  // Show loading screen while fonts are loading OR auth is checking OR waiting for client mount
-  if (!loaded || loading || !clientMounted) {
+  // Show loading screen while fonts are loading OR auth is checking
+  if (!loaded || loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff' }}>
         <Text style={{ fontSize: 18, color: colorScheme === 'dark' ? '#fff' : '#000', marginBottom: 10 }}>SeaTime Tracker</Text>
         <Text style={{ fontSize: 14, color: colorScheme === 'dark' ? '#999' : '#666' }}>
-          {!loaded ? 'Loading fonts...' : !clientMounted ? 'Initializing...' : 'Checking authentication...'}
+          {!loaded ? 'Loading fonts...' : 'Checking authentication...'}
         </Text>
       </View>
     );
