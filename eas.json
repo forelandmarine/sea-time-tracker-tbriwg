@@ -1,3 +1,4 @@
+
 {
   "cli": {
     "version": ">= 5.0.0",
@@ -42,6 +43,10 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleTeamId": "YOUR_CORRECT_TEAM_ID_HERE"
+      }
+    }
   }
 }
