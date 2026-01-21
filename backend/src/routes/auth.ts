@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
 import crypto from "crypto";
+import { ensureUserNotificationSchedule } from "./notifications.js";
 
 /**
  * Hash password using PBKDF2 with SHA-256
@@ -110,6 +111,9 @@ export function register(app: App, fastify: FastifyInstance) {
           .returning();
 
         app.logger.info({ userId, email }, 'User created');
+
+        // Create default notification schedule for the user
+        await ensureUserNotificationSchedule(app, userId);
 
         // Create account with password
         const accountId = crypto.randomUUID();
@@ -258,6 +262,9 @@ export function register(app: App, fastify: FastifyInstance) {
         }
 
         app.logger.info({ email, userId: user.id }, 'Password verified');
+
+        // Ensure user has notification schedule
+        await ensureUserNotificationSchedule(app, user.id);
 
         // Create session
         const sessionId = crypto.randomUUID();
@@ -566,7 +573,11 @@ export function register(app: App, fastify: FastifyInstance) {
           }
         }
 
-        // Step 4: Create session
+        // Step 4: Ensure user has notification schedule
+        app.logger.debug({ userId: user.id }, 'Ensuring notification schedule exists');
+        await ensureUserNotificationSchedule(app, user.id);
+
+        // Step 5: Create session
         app.logger.debug({ userId: user.id }, 'Creating session');
         const sessionId = crypto.randomUUID();
         const token = crypto.randomBytes(32).toString('hex');

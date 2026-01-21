@@ -116,6 +116,22 @@ export const scheduled_tasks = pgTable('scheduled_tasks', {
   index('scheduled_tasks_active_idx').on(table.is_active),
 ]);
 
+export const notification_schedules = pgTable('notification_schedules', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  user_id: text('user_id').notNull(), // User ownership - required for data sandboxing
+  notification_type: text('notification_type').notNull(), // e.g., 'daily_sea_time_review'
+  scheduled_time: text('scheduled_time').notNull(), // Time in HH:MM format (e.g., '18:00')
+  timezone: text('timezone').notNull(), // User's timezone (e.g., 'Europe/London', 'America/New_York')
+  is_active: boolean('is_active').notNull().default(true),
+  last_sent: timestamp('last_sent'), // Last time notification was sent
+  created_at: timestamp('created_at').defaultNow().notNull(),
+  updated_at: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('notification_schedules_user_id_idx').on(table.user_id),
+  index('notification_schedules_active_idx').on(table.is_active),
+  index('notification_schedules_user_active_idx').on(table.user_id, table.is_active),
+]);
+
 export const ais_debug_logsRelations = relations(ais_debug_logs, ({ one }) => ({
   vessel: one(vessels, {
     fields: [ais_debug_logs.vessel_id],

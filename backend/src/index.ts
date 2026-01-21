@@ -21,6 +21,7 @@
  * - Tracking: GET /api/tracking/vessel/:vesselId
  * - Authentication: POST /api/auth/sign-up/email, POST /api/auth/sign-in/email, POST /api/auth/sign-in/apple, GET /api/auth/user, POST /api/auth/sign-out
  * - User Profile: GET /api/profile, PUT /api/profile, POST /api/profile/upload-image
+ * - Notifications: GET /api/notifications/schedule, PUT /api/notifications/schedule, GET /api/notifications/check-due
  */
 
 import { createApplication } from "@specific-dev/framework";
@@ -36,6 +37,7 @@ import * as trackingRoutes from './routes/tracking.js';
 import * as authRoutes from './routes/auth.js';
 import * as profileRoutes from './routes/profile.js';
 import * as adminRoutes from './routes/admin.js';
+import * as notificationsRoutes from './routes/notifications.js';
 
 // Import scheduler service
 import { startScheduler } from './services/scheduler.js';
@@ -105,6 +107,7 @@ trackingRoutes.register(app, app.fastify);
 authRoutes.register(app, app.fastify);
 profileRoutes.register(app, app.fastify);
 adminRoutes.register(app, app.fastify);
+notificationsRoutes.register(app, app.fastify);
 
 // Log API configuration status
 const aisApiKey = process.env.MYSHIPTRACKING_API_KEY;

@@ -2,6 +2,7 @@ import { eq, and, desc, isNotNull, lte } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { App } from '../index.js';
 import { fetchVesselAISData } from '../routes/ais.js';
+import { processNotificationSchedules } from '../routes/notifications.js';
 
 const SCHEDULER_CHECK_INTERVAL_MS = 60 * 1000; // Check every minute
 const LOCATION_CHANGE_THRESHOLD = 0.1; // degrees (latitude/longitude)
@@ -56,6 +57,13 @@ async function runSchedulerIteration(app: App): Promise<void> {
   try {
     const now = new Date();
     app.logger.debug(`Scheduler check at ${now.toISOString()}`);
+
+    // Process notification schedules
+    try {
+      await processNotificationSchedules(app);
+    } catch (error) {
+      app.logger.error({ err: error }, 'Error processing notification schedules');
+    }
 
     // Find all due scheduled tasks that are active
     const dueTasks = await app.db
