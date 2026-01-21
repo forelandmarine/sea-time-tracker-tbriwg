@@ -46,10 +46,11 @@ interface SeaTimeEntry {
   start_longitude?: number | string | null;
   end_latitude?: number | string | null;
   end_longitude?: number | string | null;
+  service_type?: string | null;
 }
 
 type ViewMode = 'list' | 'calendar';
-type ServiceType = 'seagoing' | 'standby' | 'yard';
+type ServiceType = 'seagoing' | 'watchkeeping' | 'standby' | 'yard';
 
 const createStyles = (isDark: boolean, topInset: number) =>
   StyleSheet.create({
@@ -517,12 +518,14 @@ const createStyles = (isDark: boolean, topInset: number) =>
     },
     serviceTypeContainer: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       gap: 8,
     },
     serviceTypeButton: {
       flex: 1,
+      minWidth: '45%',
       paddingVertical: 12,
-      paddingHorizontal: 12,
+      paddingHorizontal: 8,
       borderRadius: 10,
       borderWidth: 1,
       borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
@@ -533,7 +536,7 @@ const createStyles = (isDark: boolean, topInset: number) =>
       borderColor: colors.primary,
     },
     serviceTypeText: {
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: '600',
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
@@ -648,21 +651,28 @@ export default function LogbookScreen() {
     setStartDate(new Date(entry.start_time));
     setEndDate(entry.end_time ? new Date(entry.end_time) : null);
     
+    // Map backend service_type to UI service type
+    const backendToUIServiceType: { [key: string]: ServiceType } = {
+      'actual_sea_service': 'seagoing',
+      'watchkeeping_service': 'watchkeeping',
+      'standby_service': 'standby',
+      'yard_service': 'yard',
+      'service_in_port': 'seagoing',
+    };
+    const uiServiceType = entry.service_type 
+      ? (backendToUIServiceType[entry.service_type] || 'seagoing')
+      : 'seagoing';
+    setServiceType(uiServiceType);
+    
     const notesText = entry.notes || '';
     const lines = notesText.split('\n');
     
-    let extractedServiceType: ServiceType = 'seagoing';
     let extractedFrom = '';
     let extractedTo = '';
     let remainingNotes: string[] = [];
     
     lines.forEach(line => {
-      if (line.startsWith('Service Type:')) {
-        const type = line.replace('Service Type:', '').trim().toLowerCase();
-        if (type === 'seagoing' || type === 'standby' || type === 'yard') {
-          extractedServiceType = type as ServiceType;
-        }
-      } else if (line.startsWith('From:')) {
+      if (line.startsWith('From:')) {
         extractedFrom = line.replace('From:', '').trim();
       } else if (line.startsWith('To:')) {
         extractedTo = line.replace('To:', '').trim();
@@ -671,7 +681,6 @@ export default function LogbookScreen() {
       }
     });
     
-    setServiceType(extractedServiceType);
     setVoyageFrom(extractedFrom);
     setVoyageTo(extractedTo);
     setNotes(remainingNotes.join('\n'));
@@ -760,30 +769,40 @@ export default function LogbookScreen() {
       const fromCoords = parseLatLong(voyageFrom);
       const toCoords = parseLatLong(voyageTo);
 
-      const serviceTypeNote = `Service Type: ${serviceType.charAt(0).toUpperCase() + serviceType.slice(1)}`;
+      // Map UI service type to backend service_type values
+      const serviceTypeMap: { [key: string]: string } = {
+        'seagoing': 'actual_sea_service',
+        'watchkeeping': 'watchkeeping_service',
+        'standby': 'standby_service',
+        'yard': 'yard_service',
+      };
+      const backendServiceType = serviceTypeMap[serviceType] || 'actual_sea_service';
+
       const voyageFromNote = voyageFrom ? `From: ${voyageFrom}` : '';
       const voyageToNote = voyageTo ? `To: ${voyageTo}` : '';
       
-      const noteParts = [serviceTypeNote, voyageFromNote, voyageToNote, notes].filter(Boolean);
+      const noteParts = [voyageFromNote, voyageToNote, notes].filter(Boolean);
       const fullNotes = noteParts.join('\n');
 
       if (editingEntry) {
         console.log('[LogbookScreen iOS] Updating sea time entry:', editingEntry.id);
         await seaTimeApi.updateSeaTimeEntry(editingEntry.id, {
-          notes: fullNotes,
+          notes: fullNotes || null,
+          service_type: backendServiceType,
         });
         Alert.alert('Success', 'Sea time entry updated successfully');
       } else {
-        console.log('[LogbookScreen iOS] Creating manual sea time entry');
+        console.log('[LogbookScreen iOS] Creating manual sea time entry with service_type:', backendServiceType);
         await seaTimeApi.createManualSeaTimeEntry({
           vessel_id: selectedVessel.id,
           start_time: startDate.toISOString(),
           end_time: endDate?.toISOString() || null,
-          notes: fullNotes,
+          notes: fullNotes || null,
           start_latitude: fromCoords.lat,
           start_longitude: fromCoords.lon,
           end_latitude: toCoords.lat,
           end_longitude: toCoords.lon,
+          service_type: backendServiceType,
         });
         Alert.alert('Success', 'Sea time entry added successfully');
       }
@@ -1390,7 +1409,7 @@ export default function LogbookScreen() {
             style={{ width: '100%', justifyContent: 'flex-end' }}
             keyboardVerticalOffset={insets.bottom}
           >
-            <TouchableOpacity activeOpacity={1}>
+            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
               <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
                   <View style={styles.modalTitleContainer}>
@@ -1420,6 +1439,9 @@ export default function LogbookScreen() {
                   style={{ maxHeight: 400 }} 
                   contentContainerStyle={styles.modalScrollContent}
                   keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator={true}
+                  bounces={true}
+                  scrollEnabled={true}
                 >
                   {!editingEntry && (
                     <TouchableOpacity style={styles.mcaButton} onPress={handleViewMCARequirements}>
@@ -1441,7 +1463,10 @@ export default function LogbookScreen() {
                           styles.serviceTypeButton,
                           serviceType === 'seagoing' && styles.serviceTypeButtonActive,
                         ]}
-                        onPress={() => setServiceType('seagoing')}
+                        onPress={() => {
+                          console.log('[LogbookScreen iOS] User selected service type: seagoing');
+                          setServiceType('seagoing');
+                        }}
                       >
                         <Text
                           style={[
@@ -1455,16 +1480,38 @@ export default function LogbookScreen() {
                       <TouchableOpacity
                         style={[
                           styles.serviceTypeButton,
+                          serviceType === 'watchkeeping' && styles.serviceTypeButtonActive,
+                        ]}
+                        onPress={() => {
+                          console.log('[LogbookScreen iOS] User selected service type: watchkeeping');
+                          setServiceType('watchkeeping');
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.serviceTypeText,
+                            serviceType === 'watchkeeping' && styles.serviceTypeTextActive,
+                          ]}
+                        >
+                          Watchkeeping
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.serviceTypeButton,
                           serviceType === 'standby' && styles.serviceTypeButtonActive,
                         ]}
-                        onPress={() => setServiceType('standby')}
+                        onPress={() => {
+                          console.log('[LogbookScreen iOS] User selected service type: standby');
+                          setServiceType('standby');
+                        }}
                       >
                         <Text
                           style={[
                             styles.serviceTypeText,
                             serviceType === 'standby' && styles.serviceTypeTextActive,
                           ]}
-                          >
+                        >
                           Standby
                         </Text>
                       </TouchableOpacity>
@@ -1473,7 +1520,10 @@ export default function LogbookScreen() {
                           styles.serviceTypeButton,
                           serviceType === 'yard' && styles.serviceTypeButtonActive,
                         ]}
-                        onPress={() => setServiceType('yard')}
+                        onPress={() => {
+                          console.log('[LogbookScreen iOS] User selected service type: yard');
+                          setServiceType('yard');
+                        }}
                       >
                         <Text
                           style={[
@@ -1580,7 +1630,16 @@ export default function LogbookScreen() {
 
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Start Date & Time</Text>
-                    <View style={styles.dateTimeButton}>
+                    <TouchableOpacity
+                      style={styles.dateTimeButton}
+                      onPress={() => {
+                        if (!editingEntry) {
+                          console.log('[LogbookScreen iOS] User tapped start date/time button');
+                          setShowStartDatePicker(true);
+                        }
+                      }}
+                      disabled={!!editingEntry}
+                    >
                       <Text style={startDate ? styles.dateTimeText : styles.dateTimePlaceholder}>
                         {startDate ? formatDateTime(startDate) : 'Select start date & time'}
                       </Text>
@@ -1590,7 +1649,7 @@ export default function LogbookScreen() {
                         size={20}
                         color={isDark ? colors.textSecondary : colors.textSecondaryLight}
                       />
-                    </View>
+                    </TouchableOpacity>
                     {editingEntry && (
                       <Text style={styles.helperText}>
                         Start date cannot be changed when editing
@@ -1603,7 +1662,16 @@ export default function LogbookScreen() {
                       End Date & Time{' '}
                       <Text style={styles.inputLabelOptional}>(Optional)</Text>
                     </Text>
-                    <View style={styles.dateTimeButton}>
+                    <TouchableOpacity
+                      style={styles.dateTimeButton}
+                      onPress={() => {
+                        if (!editingEntry) {
+                          console.log('[LogbookScreen iOS] User tapped end date/time button');
+                          setShowEndDatePicker(true);
+                        }
+                      }}
+                      disabled={!!editingEntry}
+                    >
                       <Text style={endDate ? styles.dateTimeText : styles.dateTimePlaceholder}>
                         {endDate ? formatDateTime(endDate) : 'Select end date & time'}
                       </Text>
@@ -1613,7 +1681,7 @@ export default function LogbookScreen() {
                         size={20}
                         color={isDark ? colors.textSecondary : colors.textSecondaryLight}
                       />
-                    </View>
+                    </TouchableOpacity>
                     {editingEntry && (
                       <Text style={styles.helperText}>
                         End date cannot be changed when editing
@@ -1706,6 +1774,92 @@ export default function LogbookScreen() {
           </KeyboardAvoidingView>
         </TouchableOpacity>
       </Modal>
+
+      {showStartDatePicker && !editingEntry && (
+        <Modal
+          visible={showStartDatePicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowStartDatePicker(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              activeOpacity={1}
+              onPress={() => setShowStartDatePicker(false)}
+            />
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select Start Date & Time</Text>
+              <DateTimePicker
+                value={startDate || new Date()}
+                mode="datetime"
+                display="spinner"
+                onChange={(event, selectedDate) => {
+                  if (selectedDate) {
+                    console.log('[LogbookScreen iOS] Start date/time selected:', selectedDate.toISOString());
+                    setStartDate(selectedDate);
+                  }
+                }}
+                textColor={isDark ? colors.text : colors.textLight}
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton]}
+                  onPress={() => {
+                    console.log('[LogbookScreen iOS] Start date/time picker closed');
+                    setShowStartDatePicker(false);
+                  }}
+                >
+                  <Text style={[styles.modalButtonText, styles.saveButtonText]}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
+
+      {showEndDatePicker && !editingEntry && (
+        <Modal
+          visible={showEndDatePicker}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowEndDatePicker(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={{ flex: 1 }}
+              activeOpacity={1}
+              onPress={() => setShowEndDatePicker(false)}
+            />
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Select End Date & Time</Text>
+              <DateTimePicker
+                value={endDate || new Date()}
+                mode="datetime"
+                display="spinner"
+                onChange={(event, selectedDate) => {
+                  if (selectedDate) {
+                    console.log('[LogbookScreen iOS] End date/time selected:', selectedDate.toISOString());
+                    setEndDate(selectedDate);
+                  }
+                }}
+                textColor={isDark ? colors.text : colors.textLight}
+              />
+              <View style={styles.modalButtons}>
+                <TouchableOpacity
+                  style={[styles.modalButton, styles.saveButton]}
+                  onPress={() => {
+                    console.log('[LogbookScreen iOS] End date/time picker closed');
+                    setShowEndDatePicker(false);
+                  }}
+                >
+                  <Text style={[styles.modalButtonText, styles.saveButtonText]}>Done</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
