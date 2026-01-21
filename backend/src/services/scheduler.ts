@@ -188,9 +188,16 @@ async function processScheduledTask(
 }
 
 /**
- * Handle sea time entry creation based on location changes
- * First AIS location: log it, don't create entry
- * Second location with >0.1 degree change: create pending sea day entry
+ * Handle sea time entry creation based on 2-hour movement windows
+ *
+ * Algorithm:
+ * 1. Analyze all AIS checks in the last 24 hours
+ * 2. For each 2-hour window, check if position changed >0.1 degrees
+ * 3. Calculate total underway hours (sum of 2-hour windows with movement)
+ * 4. Create pending entry only if:
+ *    - Total underway time >= 4 hours
+ *    - No entry already exists for this calendar day
+ *    - Start and end coordinates are actually different
  */
 async function handleSeaTimeEntries(
   app: App,
@@ -202,196 +209,240 @@ async function handleSeaTimeEntries(
   check_time: Date,
   taskId: string
 ): Promise<void> {
-  // Get the two most recent AIS checks for this vessel
-  const recentChecks = await app.db
+  // Get all AIS checks for this vessel in the last 24 hours
+  const twentyFourHoursAgo = new Date(check_time.getTime() - 24 * 60 * 60 * 1000);
+  const allChecks = await app.db
     .select()
     .from(schema.ais_checks)
-    .where(eq(schema.ais_checks.vessel_id, vesselId))
-    .orderBy(desc(schema.ais_checks.check_time))
-    .limit(2);
+    .where(and(
+      eq(schema.ais_checks.vessel_id, vesselId),
+    ))
+    .orderBy(schema.ais_checks.check_time);
 
-  app.logger.debug(
-    { vesselId, mmsi, recentChecksCount: recentChecks.length },
-    `Found ${recentChecks.length} recent AIS check(s) for vessel ${vessel_name}`
-  );
+  // Filter to only checks in the last 24 hours
+  const recentChecks = allChecks.filter(check => check.check_time >= twentyFourHoursAgo);
 
-  // Need at least 2 checks to determine movement
-  if (recentChecks.length < 2) {
-    app.logger.debug(
-      { vesselId, mmsi },
-      `Vessel ${vessel_name} has fewer than 2 AIS checks, logging current position only`
-    );
-    return;
-  }
-
-  // Checks are ordered newest first, so [0] is current, [1] is previous
-  const currentCheck = recentChecks[0];
-  const previousCheck = recentChecks[1];
-
-  // Both checks need valid position data
-  if (!currentCheck.latitude || !currentCheck.longitude || !previousCheck.latitude || !previousCheck.longitude) {
-    app.logger.debug(
-      { vesselId, mmsi },
-      `Vessel ${vessel_name} missing position data in recent checks`
-    );
-    return;
-  }
-
-  const currentLat = parseFloat(String(currentCheck.latitude));
-  const currentLng = parseFloat(String(currentCheck.longitude));
-  const previousLat = parseFloat(String(previousCheck.latitude));
-  const previousLng = parseFloat(String(previousCheck.longitude));
-
-  // Calculate coordinate difference
-  const latDiff = Math.abs(currentLat - previousLat);
-  const lngDiff = Math.abs(currentLng - previousLng);
-  const maxDiff = Math.max(latDiff, lngDiff);
-
-  app.logger.debug(
+  app.logger.info(
     {
       vesselId,
       mmsi,
-      previousLat,
-      previousLng,
-      currentLat,
-      currentLng,
-      latDiff: Math.round(latDiff * 10000) / 10000,
-      lngDiff: Math.round(lngDiff * 10000) / 10000,
-      maxDiff: Math.round(maxDiff * 10000) / 10000,
+      totalChecks: allChecks.length,
+      checksInLast24h: recentChecks.length,
+      analysisWindow: `${twentyFourHoursAgo.toISOString()} to ${check_time.toISOString()}`,
     },
-    `Vessel ${vessel_name} location change: lat Δ=${Math.round(latDiff * 10000) / 10000}°, lng Δ=${Math.round(lngDiff * 10000) / 10000}°`
+    `Analyzing 24-hour movement window for vessel ${vessel_name}`
   );
 
-  // Check if location has changed significantly (more than threshold)
-  if (maxDiff > LOCATION_CHANGE_THRESHOLD) {
-    // Validate that start and end coordinates are different
-    // Prevent creating entries when coordinates are identical despite different timestamps
-    const coordinatesAreIdentical = previousLat === currentLat && previousLng === currentLng;
+  // Need at least 2 checks to detect movement
+  if (recentChecks.length < 2) {
+    app.logger.debug(
+      { vesselId, mmsi, checksCount: recentChecks.length },
+      `Vessel ${vessel_name} has fewer than 2 AIS checks in last 24 hours, skipping analysis`
+    );
+    return;
+  }
 
-    if (coordinatesAreIdentical) {
-      app.logger.warn(
+  // Analyze 2-hour sliding windows to detect movement periods
+  const underwayPeriods: Array<{ startIdx: number; endIdx: number; duration_hours: number }> = [];
+  const TWO_HOUR_MS = 2 * 60 * 60 * 1000;
+
+  app.logger.debug(
+    { vesselId, mmsi },
+    `Analyzing ${recentChecks.length} AIS checks for 2-hour movement windows`
+  );
+
+  // For each pair of checks that span ~2 hours, check for movement
+  for (let i = 0; i < recentChecks.length - 1; i++) {
+    const startCheck = recentChecks[i];
+    const endCheck = recentChecks[i + 1];
+
+    // Skip if missing position data
+    if (!startCheck.latitude || !startCheck.longitude || !endCheck.latitude || !endCheck.longitude) {
+      continue;
+    }
+
+    const startLat = parseFloat(String(startCheck.latitude));
+    const startLng = parseFloat(String(startCheck.longitude));
+    const endLat = parseFloat(String(endCheck.latitude));
+    const endLng = parseFloat(String(endCheck.longitude));
+
+    const timeDiffMs = endCheck.check_time.getTime() - startCheck.check_time.getTime();
+    const timeDiffHours = timeDiffMs / (1000 * 60 * 60);
+
+    // Check if this window is approximately 2 hours (accept 1-3 hour windows)
+    if (timeDiffHours >= 1 && timeDiffHours <= 3) {
+      const latDiff = Math.abs(endLat - startLat);
+      const lngDiff = Math.abs(endLng - startLng);
+      const maxDiff = Math.max(latDiff, lngDiff);
+
+      app.logger.debug(
         {
           vesselId,
           mmsi,
-          startLat: previousLat,
-          startLng: previousLng,
-          endLat: currentLat,
-          endLng: currentLng,
-          startTime: previousCheck.check_time.toISOString(),
-          endTime: currentCheck.check_time.toISOString(),
+          windowIndex: `${i}-${i + 1}`,
+          startTime: startCheck.check_time.toISOString(),
+          endTime: endCheck.check_time.toISOString(),
+          timeDiffHours: Math.round(timeDiffHours * 100) / 100,
+          startLat,
+          startLng,
+          endLat,
+          endLng,
+          latDiff: Math.round(latDiff * 10000) / 10000,
+          lngDiff: Math.round(lngDiff * 10000) / 10000,
           maxDiff: Math.round(maxDiff * 10000) / 10000,
+          movementDetected: maxDiff > LOCATION_CHANGE_THRESHOLD,
         },
-        `Vessel ${vessel_name} has identical coordinates (${previousLat}, ${previousLng}) despite different timestamps - skipping sea time entry creation`
+        `2-hour window ${i}-${i + 1}: movement=${maxDiff > LOCATION_CHANGE_THRESHOLD ? 'YES' : 'NO'}, Δ=${Math.round(maxDiff * 10000) / 10000}°, time=${Math.round(timeDiffHours * 100) / 100}h`
       );
-      return;
-    }
 
-    // Check if there's already an open pending sea time entry
-    const openEntry = await app.db
-      .select()
-      .from(schema.sea_time_entries)
-      .where(
-        and(
-          eq(schema.sea_time_entries.vessel_id, vesselId),
-          isNotNull(schema.sea_time_entries.start_time),
-          eq(schema.sea_time_entries.status, 'pending')
-        )
-      )
-      .orderBy(desc(schema.sea_time_entries.created_at))
-      .limit(1);
+      // If movement detected in this window, record it
+      if (maxDiff > LOCATION_CHANGE_THRESHOLD) {
+        underwayPeriods.push({
+          startIdx: i,
+          endIdx: i + 1,
+          duration_hours: timeDiffHours,
+        });
 
-    if (openEntry.length === 0) {
-      // Calculate duration and sea_days
-      const duration_ms = currentCheck.check_time.getTime() - previousCheck.check_time.getTime();
-      const duration_hours = Math.round((duration_ms / (1000 * 60 * 60)) * 100) / 100;
-      const sea_days = duration_hours >= 4 ? 1 : 0; // Calculate sea_days: 1 if >= 4 hours, else 0
-
-      // Check if another entry already exists for this calendar day
-      const prevCheckDate = previousCheck.check_time;
-      const year = prevCheckDate.getFullYear();
-      const month = String(prevCheckDate.getMonth() + 1).padStart(2, '0');
-      const day = String(prevCheckDate.getDate()).padStart(2, '0');
-      const calendarDay = `${year}-${month}-${day}`;
-
-      // Get all entries for this user for this calendar day
-      const existingEntries = await app.db.query.sea_time_entries.findMany({
-        where: eq(schema.sea_time_entries.user_id, vessel.user_id),
-      });
-
-      let dayExists = false;
-      for (const entry of existingEntries) {
-        const entryDate = new Date(entry.start_time);
-        const entryYear = entryDate.getFullYear();
-        const entryMonth = String(entryDate.getMonth() + 1).padStart(2, '0');
-        const entryDay = String(entryDate.getDate()).padStart(2, '0');
-        const entryCalendarDay = `${entryYear}-${entryMonth}-${entryDay}`;
-
-        if (entryCalendarDay === calendarDay) {
-          dayExists = true;
-          break;
-        }
-      }
-
-      if (dayExists) {
         app.logger.info(
           {
-            taskId,
             vesselId,
             mmsi,
-            calendarDay,
+            windowIndex: `${i}-${i + 1}`,
+            duration_hours: Math.round(timeDiffHours * 100) / 100,
+            movementDelta: Math.round(maxDiff * 10000) / 10000,
           },
-          `AIS entry skipped: entry already exists for calendar day ${calendarDay}`
+          `Movement detected in 2-hour window: ${Math.round(timeDiffHours * 100) / 100} hours, position change ${Math.round(maxDiff * 10000) / 10000}°`
         );
-        return;
       }
-
-      // Create new sea time entry with coordinates from both checks
-      const [new_entry] = await app.db
-        .insert(schema.sea_time_entries)
-        .values({
-          user_id: vessel.user_id,
-          vessel_id: vesselId,
-          start_time: previousCheck.check_time,
-          end_time: currentCheck.check_time,
-          duration_hours: String(duration_hours),
-          sea_days: sea_days,
-          start_latitude: String(previousLat),
-          start_longitude: String(previousLng),
-          end_latitude: String(currentLat),
-          end_longitude: String(currentLng),
-          status: 'pending',
-          service_type: 'actual_sea_service',
-        })
-        .returning();
-
-      app.logger.info(
-        {
-          taskId,
-          vesselId,
-          mmsi,
-          entryId: new_entry.id,
-          startTime: previousCheck.check_time.toISOString(),
-          startLat: previousLat,
-          startLng: previousLng,
-          endTime: currentCheck.check_time.toISOString(),
-          endLat: currentLat,
-          endLng: currentLng,
-          locationDelta: Math.round(maxDiff * 10000) / 10000,
-          durationHours: duration_hours,
-          seaDays: sea_days,
-        },
-        `Created sea day entry for vessel ${vessel_name}: location changed ${Math.round(maxDiff * 10000) / 10000}° (threshold: ${LOCATION_CHANGE_THRESHOLD}°), duration: ${duration_hours} hours, sea days: ${sea_days}`
-      );
-    } else {
-      app.logger.debug(
-        { vesselId, mmsi, entryId: openEntry[0].id },
-        `Vessel ${vessel_name} location has changed but pending entry already exists, skipping creation`
-      );
     }
-  } else {
-    app.logger.debug(
-      { vesselId, mmsi, maxDiff: Math.round(maxDiff * 10000) / 10000, threshold: LOCATION_CHANGE_THRESHOLD },
-      `Vessel ${vessel_name} location change of ${Math.round(maxDiff * 10000) / 10000}° is below threshold of ${LOCATION_CHANGE_THRESHOLD}°`
-    );
   }
+
+  // Calculate total underway hours from all detected movement periods
+  const totalUnderwayHours = underwayPeriods.reduce((sum, period) => sum + period.duration_hours, 0);
+  const totalUnderwayHoursRounded = Math.round(totalUnderwayHours * 100) / 100;
+
+  app.logger.info(
+    {
+      vesselId,
+      mmsi,
+      underwayPeriodsCount: underwayPeriods.length,
+      totalUnderwayHours: totalUnderwayHoursRounded,
+      meetsThreshold: totalUnderwayHours >= 4,
+    },
+    `24-hour analysis complete for vessel ${vessel_name}: ${underwayPeriods.length} movement periods detected, ${totalUnderwayHoursRounded} total underway hours`
+  );
+
+  // Only proceed if we have meaningful sea time (4+ hours)
+  if (totalUnderwayHours < 4) {
+    app.logger.info(
+      { vesselId, mmsi, totalHours: totalUnderwayHoursRounded },
+      `Vessel ${vessel_name} has only ${totalUnderwayHoursRounded} underway hours (need 4+), skipping entry creation`
+    );
+    return;
+  }
+
+  // Get the earliest start position and latest end position
+  const firstMovementPeriod = underwayPeriods[0];
+  const lastMovementPeriod = underwayPeriods[underwayPeriods.length - 1];
+
+  const firstStartCheck = recentChecks[firstMovementPeriod.startIdx];
+  const lastEndCheck = recentChecks[lastMovementPeriod.endIdx];
+
+  const startLat = parseFloat(String(firstStartCheck.latitude!));
+  const startLng = parseFloat(String(firstStartCheck.longitude!));
+  const endLat = parseFloat(String(lastEndCheck.latitude!));
+  const endLng = parseFloat(String(lastEndCheck.longitude!));
+
+  // Validate that start and end coordinates are actually different
+  if (startLat === endLat && startLng === endLng) {
+    app.logger.warn(
+      {
+        vesselId,
+        mmsi,
+        startLat,
+        startLng,
+        endLat,
+        endLng,
+        startTime: firstStartCheck.check_time.toISOString(),
+        endTime: lastEndCheck.check_time.toISOString(),
+        totalUnderwayHours: totalUnderwayHoursRounded,
+      },
+      `Vessel ${vessel_name} GPS drift detected: identical coordinates (${startLat}, ${startLng}) despite ${totalUnderwayHoursRounded} hours of detected movement - skipping entry creation`
+    );
+    return;
+  }
+
+  // Check if another entry already exists for this calendar day
+  const startDate = firstStartCheck.check_time;
+  const year = startDate.getFullYear();
+  const month = String(startDate.getMonth() + 1).padStart(2, '0');
+  const day = String(startDate.getDate()).padStart(2, '0');
+  const calendarDay = `${year}-${month}-${day}`;
+
+  const existingEntries = await app.db.query.sea_time_entries.findMany({
+    where: eq(schema.sea_time_entries.user_id, vessel.user_id),
+  });
+
+  const dayHasEntry = existingEntries.some((entry) => {
+    if (!entry.start_time) return false;
+    const entryDate = new Date(entry.start_time);
+    const entryYear = entryDate.getFullYear();
+    const entryMonth = String(entryDate.getMonth() + 1).padStart(2, '0');
+    const entryDay = String(entryDate.getDate()).padStart(2, '0');
+    const entryCalendarDay = `${entryYear}-${entryMonth}-${entryDay}`;
+    return entryCalendarDay === calendarDay;
+  });
+
+  if (dayHasEntry) {
+    app.logger.info(
+      {
+        taskId,
+        vesselId,
+        mmsi,
+        calendarDay,
+      },
+      `AIS entry skipped: entry already exists for calendar day ${calendarDay}`
+    );
+    return;
+  }
+
+  // Create new sea time entry
+  const sea_days = totalUnderwayHours >= 4 ? 1 : 0;
+
+  const [new_entry] = await app.db
+    .insert(schema.sea_time_entries)
+    .values({
+      user_id: vessel.user_id,
+      vessel_id: vesselId,
+      start_time: firstStartCheck.check_time,
+      end_time: lastEndCheck.check_time,
+      duration_hours: String(totalUnderwayHoursRounded),
+      sea_days: sea_days,
+      start_latitude: String(startLat),
+      start_longitude: String(startLng),
+      end_latitude: String(endLat),
+      end_longitude: String(endLng),
+      status: 'pending',
+      service_type: 'actual_sea_service',
+    })
+    .returning();
+
+  app.logger.info(
+    {
+      taskId,
+      vesselId,
+      mmsi,
+      entryId: new_entry.id,
+      startTime: firstStartCheck.check_time.toISOString(),
+      startLat,
+      startLng,
+      endTime: lastEndCheck.check_time.toISOString(),
+      endLat,
+      endLng,
+      movementPeriods: underwayPeriods.length,
+      totalUnderwayHours: totalUnderwayHoursRounded,
+      seaDays: sea_days,
+    },
+    `Created sea day entry for vessel ${vessel_name}: ${underwayPeriods.length} movement periods in 24h window, ${totalUnderwayHoursRounded} total underway hours, position change (${startLat}, ${startLng}) → (${endLat}, ${endLng})`
+  );
 }
