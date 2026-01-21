@@ -699,3 +699,62 @@ export const getNewSeaTimeEntries = async () => {
     count: data.count || 0,
   };
 };
+
+// Get notification schedule
+export const getNotificationSchedule = async () => {
+  console.log('[seaTimeApi] Fetching notification schedule');
+  const options = await getFetchOptions('GET');
+  const response = await fetch(`${API_BASE_URL}/api/notifications/schedule`, options);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[seaTimeApi] Failed to fetch notification schedule:', response.status, errorText);
+    throw new Error(`Failed to fetch notification schedule: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log('[seaTimeApi] Notification schedule fetched successfully:', data);
+  return data;
+};
+
+// Update notification schedule
+export const updateNotificationSchedule = async (updates: {
+  scheduled_time?: string;
+  timezone?: string;
+  is_active?: boolean;
+}) => {
+  console.log('[seaTimeApi] Updating notification schedule:', updates);
+  const headers = await getApiHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/notifications/schedule`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(updates),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[seaTimeApi] Failed to update notification schedule:', response.status, errorText);
+    throw new Error(`Failed to update notification schedule: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log('[seaTimeApi] Notification schedule updated successfully:', data);
+  return data;
+};
+
+// Check if notification is due
+export const checkNotificationDue = async () => {
+  console.log('[seaTimeApi] Checking if notification is due');
+  const options = await getFetchOptions('GET');
+  const response = await fetch(`${API_BASE_URL}/api/notifications/check-due`, options);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[seaTimeApi] Failed to check notification due:', response.status, errorText);
+    throw new Error(`Failed to check notification due: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log('[seaTimeApi] Notification due check completed:', data);
+  return data;
+};

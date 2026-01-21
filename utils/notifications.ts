@@ -78,12 +78,14 @@ export async function registerForPushNotificationsAsync(): Promise<boolean> {
  * @param vesselName - Name of the vessel
  * @param entryId - ID of the sea time entry
  * @param durationHours - Duration of the sea time in hours
+ * @param mcaCompliant - Whether the entry meets MCA 4-hour requirement
  * @returns notification ID or null if not supported/failed
  */
 export async function scheduleSeaTimeNotification(
   vesselName: string,
   entryId: string,
-  durationHours: number
+  durationHours: number,
+  mcaCompliant: boolean = true
 ): Promise<string | null> {
   // Notifications are not supported on web
   if (Platform.OS === 'web') {
@@ -96,18 +98,32 @@ export async function scheduleSeaTimeNotification(
       vesselName,
       entryId,
       durationHours,
+      mcaCompliant,
     });
 
-    const durationDays = (durationHours / 24).toFixed(2);
+    // Add 2hr30min buffer to duration for display (150 minutes = 2.5 hours)
+    const bufferHours = 2.5;
+    const displayDuration = durationHours + bufferHours;
+    const durationDays = (displayDuration / 24).toFixed(2);
+    
+    // Customize message based on MCA compliance
+    let body = '';
+    if (mcaCompliant) {
+      body = `${vesselName} - ${displayDuration.toFixed(1)} hours (${durationDays} days) at sea. Tap to review and confirm.`;
+    } else {
+      body = `${vesselName} - Movement detected (${durationHours.toFixed(1)}h + 2.5h buffer = ${displayDuration.toFixed(1)}h). Review to confirm if this becomes a valid sea day.`;
+    }
     
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: '⚓️ New Sea Time Entry',
-        body: `${vesselName} - ${durationHours.toFixed(1)} hours (${durationDays} days) at sea. Tap to review.`,
+        title: mcaCompliant ? '⚓️ New Sea Day Ready' : '⚠️ Movement Detected',
+        body: body,
         data: {
           entryId,
           vesselName,
           durationHours,
+          displayDuration,
+          mcaCompliant,
           screen: 'confirmations',
           url: '/(tabs)/confirmations',
         },
@@ -125,6 +141,72 @@ export async function scheduleSeaTimeNotification(
     return notificationId;
   } catch (error) {
     console.error('[Notifications] Failed to schedule notification:', error);
+    return null;
+  }
+}
+
+/**
+ * Schedule a daily notification at a specific time (default 18:00 / 6 PM) local time
+ * @param scheduledTime - Time in HH:MM format (e.g., "18:00")
+ * @returns notification ID or null if not supported/failed
+ */
+export async function scheduleDailySeaTimeReviewNotification(scheduledTime: string = '18:00'): Promise<string | null> {
+  // Notifications are not supported on web
+  if (Platform.OS === 'web') {
+    console.log('[Notifications] Skipping daily notification setup on web');
+    return null;
+  }
+
+  try {
+    console.log('[Notifications] Setting up daily sea time review notification at', scheduledTime);
+
+    // Parse the scheduled time
+    const [hourStr, minuteStr] = scheduledTime.split(':');
+    const hour = parseInt(hourStr, 10);
+    const minute = parseInt(minuteStr, 10);
+
+    if (isNaN(hour) || isNaN(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+      console.error('[Notifications] Invalid time format:', scheduledTime);
+      return null;
+    }
+
+    // Cancel any existing daily notifications first
+    const existingNotifications = await Notifications.getAllScheduledNotificationsAsync();
+    for (const notification of existingNotifications) {
+      if (notification.content.data?.type === 'daily_sea_time_review') {
+        await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+        console.log('[Notifications] Cancelled existing daily notification:', notification.identifier);
+      }
+    }
+
+    // Schedule daily notification at the specified time
+    const notificationId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '⚓️ Sea Time Review',
+        body: 'Time to review your sea time entries for today. Tap to check for pending confirmations.',
+        data: {
+          type: 'daily_sea_time_review',
+          screen: 'confirmations',
+          url: '/(tabs)/confirmations',
+        },
+        sound: 'default',
+        badge: 1,
+        ...(Platform.OS === 'android' && {
+          channelId: 'sea-time-entries',
+          priority: Notifications.AndroidNotificationPriority.DEFAULT,
+        }),
+      },
+      trigger: {
+        hour,
+        minute,
+        repeats: true,
+      },
+    });
+
+    console.log('[Notifications] Daily notification scheduled successfully at', scheduledTime, ':', notificationId);
+    return notificationId;
+  } catch (error) {
+    console.error('[Notifications] Failed to schedule daily notification:', error);
     return null;
   }
 }

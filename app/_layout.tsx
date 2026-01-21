@@ -23,6 +23,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { BACKEND_URL } from "@/utils/api";
 import { registerForPushNotificationsAsync } from "@/utils/notifications";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { useNotifications } from "@/hooks/useNotifications";
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 if (Platform.OS !== 'web') {
@@ -44,6 +45,9 @@ function RootLayoutNav() {
   const { user, loading } = useAuth();
   const [isNavigating, setIsNavigating] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
+  
+  // Set up notification polling and daily 18:00 notification
+  useNotifications();
 
   const [loaded, error] = useFonts({
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),

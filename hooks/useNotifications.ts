@@ -2,7 +2,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { Platform } from 'react-native';
 import * as seaTimeApi from '@/utils/seaTimeApi';
-import { scheduleSeaTimeNotification } from '@/utils/notifications';
+import { scheduleSeaTimeNotification, scheduleDailySeaTimeReviewNotification, registerForPushNotificationsAsync } from '@/utils/notifications';
 
 /**
  * Hook to poll for new notifications and trigger local notifications
@@ -43,14 +43,18 @@ export function useNotifications() {
         const durationHours = typeof entry.duration_hours === 'string' 
           ? parseFloat(entry.duration_hours) 
           : entry.duration_hours || 0;
+        const mcaCompliant = entry.mca_compliant !== null && entry.mca_compliant !== undefined 
+          ? entry.mca_compliant 
+          : durationHours >= 4.0;
 
         console.log('[useNotifications] Scheduling local notification for:', {
           vesselName,
           durationHours,
+          mcaCompliant,
           entryId: entry.id,
         });
 
-        await scheduleSeaTimeNotification(vesselName, entry.id, durationHours);
+        await scheduleSeaTimeNotification(vesselName, entry.id, durationHours, mcaCompliant);
 
         // Mark as checked so we don't show it again
         lastCheckedRef.current.add(entry.id);
@@ -68,6 +72,36 @@ export function useNotifications() {
     }
 
     console.log('[useNotifications] Setting up notification polling');
+
+    // Request notification permissions and set up daily notification
+    const setupNotifications = async () => {
+      const hasPermission = await registerForPushNotificationsAsync();
+      if (hasPermission) {
+        console.log('[useNotifications] Syncing notification schedule with backend');
+        try {
+          // Fetch the user's notification schedule from backend
+          const schedule = await seaTimeApi.getNotificationSchedule();
+          console.log('[useNotifications] Backend schedule:', schedule);
+          
+          if (schedule && schedule.is_active) {
+            // Schedule local notification at the user's preferred time
+            const scheduledTime = schedule.scheduled_time || '18:00';
+            console.log('[useNotifications] Setting up daily notification at', scheduledTime);
+            await scheduleDailySeaTimeReviewNotification(scheduledTime);
+          } else {
+            console.log('[useNotifications] Daily notifications are disabled in backend');
+          }
+        } catch (error) {
+          console.error('[useNotifications] Failed to sync with backend schedule, using default:', error);
+          // Fallback to default time if backend sync fails
+          await scheduleDailySeaTimeReviewNotification('18:00');
+        }
+      } else {
+        console.warn('[useNotifications] Notification permissions not granted, skipping daily notification setup');
+      }
+    };
+
+    setupNotifications();
 
     // Check immediately on mount
     checkForNewNotifications();
