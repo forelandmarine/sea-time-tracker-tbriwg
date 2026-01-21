@@ -231,10 +231,12 @@ export const activateVessel = async (vesselId: string) => {
 // Delete a vessel
 export const deleteVessel = async (vesselId: string) => {
   console.log('[seaTimeApi] Deleting vessel:', vesselId);
-  const headers = await getApiHeaders();
+  const token = await getAuthToken();
   const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}`, {
     method: 'DELETE',
-    headers,
+    headers: {
+      'Authorization': token ? `Bearer ${token}` : '',
+    },
   });
 
   if (!response.ok) {
@@ -529,19 +531,24 @@ export const updateSeaTimeEntry = async (
   return data;
 };
 
-// Delete sea time entry
+// Delete sea time entry - FIXED: Don't send Content-Type header for DELETE
 export const deleteSeaTimeEntry = async (entryId: string) => {
   console.log('[seaTimeApi] Deleting sea time entry:', entryId);
-  const headers = await getApiHeaders();
+  const token = await getAuthToken();
+  
+  // For DELETE requests, don't send Content-Type: application/json header
+  // This prevents 400 errors when there's no body
   const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}`, {
     method: 'DELETE',
-    headers,
+    headers: {
+      'Authorization': token ? `Bearer ${token}` : '',
+    },
   });
 
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[seaTimeApi] Failed to delete sea time entry:', response.status, errorText);
-    throw new Error(`Failed to delete sea time entry: ${response.status}`);
+    throw new Error(`Failed to delete sea time entry: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
