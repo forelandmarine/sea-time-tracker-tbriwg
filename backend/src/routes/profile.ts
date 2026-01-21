@@ -21,6 +21,12 @@ export function register(app: App, fastify: FastifyInstance) {
               emailVerified: { type: 'boolean' },
               image: { type: ['string', 'null'] },
               imageUrl: { type: ['string', 'null'] },
+              address: { type: ['string', 'null'] },
+              tel_no: { type: ['string', 'null'] },
+              date_of_birth: { type: ['string', 'null'] },
+              srb_no: { type: ['string', 'null'] },
+              nationality: { type: ['string', 'null'] },
+              pya_membership_no: { type: ['string', 'null'] },
               createdAt: { type: 'string' },
               updatedAt: { type: 'string' },
             },
@@ -94,29 +100,47 @@ export function register(app: App, fastify: FastifyInstance) {
         emailVerified: user.emailVerified,
         image: user.image,
         imageUrl,
+        address: user.address || null,
+        tel_no: user.tel_no || null,
+        date_of_birth: user.date_of_birth || null,
+        srb_no: user.srb_no || null,
+        nationality: user.nationality || null,
+        pya_membership_no: user.pya_membership_no || null,
         createdAt: user.createdAt.toISOString(),
         updatedAt: user.updatedAt.toISOString(),
       });
     }
   );
 
-  // PUT /api/profile - Update user profile (name, email)
+  // PUT /api/profile - Update user profile (name, email, and maritime fields)
   fastify.put<{
     Body: {
       name?: string;
       email?: string;
+      address?: string;
+      tel_no?: string;
+      date_of_birth?: string;
+      srb_no?: string;
+      nationality?: string;
+      pya_membership_no?: string;
     };
   }>(
     '/api/profile',
     {
       schema: {
-        description: 'Update user profile information (name and/or email)',
+        description: 'Update user profile information including maritime details',
         tags: ['profile'],
         body: {
           type: 'object',
           properties: {
             name: { type: 'string', minLength: 1 },
             email: { type: 'string', format: 'email' },
+            address: { type: 'string' },
+            tel_no: { type: 'string' },
+            date_of_birth: { type: 'string', format: 'date', description: 'Date in YYYY-MM-DD format' },
+            srb_no: { type: 'string' },
+            nationality: { type: 'string' },
+            pya_membership_no: { type: 'string' },
           },
         },
         response: {
@@ -129,6 +153,12 @@ export function register(app: App, fastify: FastifyInstance) {
               emailVerified: { type: 'boolean' },
               image: { type: ['string', 'null'] },
               imageUrl: { type: ['string', 'null'] },
+              address: { type: ['string', 'null'] },
+              tel_no: { type: ['string', 'null'] },
+              date_of_birth: { type: ['string', 'null'] },
+              srb_no: { type: ['string', 'null'] },
+              nationality: { type: ['string', 'null'] },
+              pya_membership_no: { type: ['string', 'null'] },
               createdAt: { type: 'string' },
               updatedAt: { type: 'string' },
             },
@@ -140,9 +170,9 @@ export function register(app: App, fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
-      const { name, email } = request.body;
+      const { name, email, address, tel_no, date_of_birth, srb_no, nationality, pya_membership_no } = request.body;
 
-      app.logger.info({ name, email }, 'Profile update request');
+      app.logger.info({ name, email, address, tel_no, date_of_birth, srb_no, nationality, pya_membership_no }, 'Profile update request');
 
       // Get token from Authorization header
       const authHeader = request.headers.authorization;
@@ -185,10 +215,10 @@ export function register(app: App, fastify: FastifyInstance) {
 
       const user = users[0];
 
-      // Validate input
-      if (!name && !email) {
+      // Validate input - at least one field must be provided
+      if (!name && !email && !address && !tel_no && !date_of_birth && !srb_no && !nationality && !pya_membership_no) {
         app.logger.warn({ userId: user.id }, 'Profile update with no changes requested');
-        return reply.code(400).send({ error: 'At least one field (name or email) must be provided' });
+        return reply.code(400).send({ error: 'At least one field must be provided' });
       }
 
       // If email is being changed, check for duplicates
@@ -208,6 +238,12 @@ export function register(app: App, fastify: FastifyInstance) {
       const updateData: Record<string, any> = { updatedAt: new Date() };
       if (name !== undefined) updateData.name = name;
       if (email !== undefined) updateData.email = email;
+      if (address !== undefined) updateData.address = address || null;
+      if (tel_no !== undefined) updateData.tel_no = tel_no || null;
+      if (date_of_birth !== undefined) updateData.date_of_birth = date_of_birth || null;
+      if (srb_no !== undefined) updateData.srb_no = srb_no || null;
+      if (nationality !== undefined) updateData.nationality = nationality || null;
+      if (pya_membership_no !== undefined) updateData.pya_membership_no = pya_membership_no || null;
 
       const [updatedUser] = await app.db
         .update(authSchema.user)
@@ -238,6 +274,12 @@ export function register(app: App, fastify: FastifyInstance) {
         emailVerified: updatedUser.emailVerified,
         image: updatedUser.image,
         imageUrl,
+        address: updatedUser.address || null,
+        tel_no: updatedUser.tel_no || null,
+        date_of_birth: updatedUser.date_of_birth || null,
+        srb_no: updatedUser.srb_no || null,
+        nationality: updatedUser.nationality || null,
+        pya_membership_no: updatedUser.pya_membership_no || null,
         createdAt: updatedUser.createdAt.toISOString(),
         updatedAt: updatedUser.updatedAt.toISOString(),
       });

@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, date } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -6,6 +6,12 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
+  address: text("address"), // User's full address
+  tel_no: text("tel_no"), // Telephone number
+  date_of_birth: date("date_of_birth"), // Date of birth (YYYY-MM-DD format)
+  srb_no: text("srb_no"), // Seafarers Registration Book number
+  nationality: text("nationality"), // User's nationality
+  pya_membership_no: text("pya_membership_no"), // PYA membership number
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
