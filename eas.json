@@ -11,7 +11,8 @@
       "distribution": "internal",
       "ios": {
         "simulator": true,
-        "bundleIdentifier": "com.forelandmarine.seatimetracker.dev"
+        "bundleIdentifier": "com.forelandmarine.seatimetracker.dev",
+        "appleTeamId": "43GZCFFPR9"
       },
       "env": {
         "APP_VARIANT": "development"
@@ -22,7 +23,8 @@
       "ios": {
         "simulator": false,
         "resourceClass": "m-medium",
-        "bundleIdentifier": "com.forelandmarine.seatimetracker.preview"
+        "bundleIdentifier": "com.forelandmarine.seatimetracker.preview",
+        "appleTeamId": "43GZCFFPR9"
       },
       "channel": "preview",
       "env": {
@@ -34,7 +36,8 @@
         "simulator": false,
         "resourceClass": "m-medium",
         "autoIncrement": true,
-        "bundleIdentifier": "com.forelandmarine.seatimetracker"
+        "bundleIdentifier": "com.forelandmarine.seatimetracker",
+        "appleTeamId": "43GZCFFPR9"
       },
       "channel": "production",
       "env": {
@@ -45,7 +48,7 @@
   "submit": {
     "production": {
       "ios": {
-        "appleTeamId": "YOUR_CORRECT_TEAM_ID_HERE"
+        "appleTeamId": "43GZCFFPR9"
       }
     }
   }

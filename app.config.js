@@ -13,6 +13,7 @@ module.exports = ({ config }) => {
         : IS_PREVIEW
         ? 'com.forelandmarine.seatimetracker.preview'
         : 'com.forelandmarine.seatimetracker',
+      appleTeamId: '43GZCFFPR9',
     },
     android: {
       ...config.android,
