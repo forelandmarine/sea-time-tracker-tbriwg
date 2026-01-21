@@ -102,21 +102,52 @@ export default function VesselDetailScreen() {
 
     try {
       console.log('[VesselDetail] Loading data for vessel:', vesselId);
-      const [vesselsData, seaTimeData, aisStatus] = await Promise.all([
+      const [vesselsData, seaTimeData] = await Promise.all([
         seaTimeApi.getVessels(),
         seaTimeApi.getVesselSeaTime(vesselId),
-        seaTimeApi.getVesselAISStatus(vesselId).catch(() => null),
       ]);
 
       const currentVessel = vesselsData.find((v: Vessel) => v.id === vesselId);
       if (currentVessel) {
         setVessel(currentVessel);
+        
+        // Only fetch AIS location if vessel is active
+        if (currentVessel.is_active) {
+          try {
+            console.log('[VesselDetail] Fetching AIS location for active vessel');
+            const aisLocation = await seaTimeApi.getVesselAISLocation(vesselId, true);
+            console.log('[VesselDetail] AIS location data:', aisLocation);
+            
+            // Transform the response to match AISData interface
+            const transformedAisData: AISData = {
+              name: aisLocation.name || null,
+              mmsi: aisLocation.mmsi || null,
+              imo: aisLocation.imo || null,
+              speed_knots: aisLocation.speed !== undefined ? aisLocation.speed : null,
+              latitude: aisLocation.latitude !== undefined ? aisLocation.latitude : null,
+              longitude: aisLocation.longitude !== undefined ? aisLocation.longitude : null,
+              course: aisLocation.course !== undefined ? aisLocation.course : null,
+              heading: aisLocation.heading !== undefined ? aisLocation.heading : null,
+              timestamp: aisLocation.timestamp || null,
+              status: aisLocation.status || null,
+              destination: aisLocation.destination || null,
+              eta: aisLocation.eta || null,
+              callsign: aisLocation.callsign || null,
+              ship_type: aisLocation.vessel_type || null,
+              flag: aisLocation.flag || null,
+              is_moving: (aisLocation.speed !== undefined && aisLocation.speed !== null && aisLocation.speed > 2) || false,
+            };
+            
+            setAisData(transformedAisData);
+            console.log('[VesselDetail] AIS data set successfully');
+          } catch (aisError) {
+            console.error('[VesselDetail] Failed to fetch AIS location:', aisError);
+            // Don't fail the whole load if AIS fetch fails
+          }
+        }
       }
 
       setSeaTimeEntries(seaTimeData);
-      if (aisStatus) {
-        setAisData(aisStatus);
-      }
       console.log('[VesselDetail] Data loaded successfully');
     } catch (error: any) {
       console.error('[VesselDetail] Failed to load data:', error);
@@ -214,8 +245,35 @@ export default function VesselDetailScreen() {
     try {
       setCheckingAIS(true);
       console.log('[VesselDetail] User action: Checking AIS data');
-      const data = await seaTimeApi.checkVesselAIS(vessel.id);
-      setAisData(data);
+      
+      // First trigger the AIS check (POST) which updates the database
+      await seaTimeApi.checkVesselAIS(vessel.id);
+      
+      // Then fetch the detailed AIS location data (GET)
+      const aisLocation = await seaTimeApi.getVesselAISLocation(vessel.id, true);
+      console.log('[VesselDetail] AIS location data:', aisLocation);
+      
+      // Transform the response to match AISData interface
+      const transformedAisData: AISData = {
+        name: aisLocation.name || null,
+        mmsi: aisLocation.mmsi || null,
+        imo: aisLocation.imo || null,
+        speed_knots: aisLocation.speed !== undefined ? aisLocation.speed : null,
+        latitude: aisLocation.latitude !== undefined ? aisLocation.latitude : null,
+        longitude: aisLocation.longitude !== undefined ? aisLocation.longitude : null,
+        course: aisLocation.course !== undefined ? aisLocation.course : null,
+        heading: aisLocation.heading !== undefined ? aisLocation.heading : null,
+        timestamp: aisLocation.timestamp || null,
+        status: aisLocation.status || null,
+        destination: aisLocation.destination || null,
+        eta: aisLocation.eta || null,
+        callsign: aisLocation.callsign || null,
+        ship_type: aisLocation.vessel_type || null,
+        flag: aisLocation.flag || null,
+        is_moving: (aisLocation.speed !== undefined && aisLocation.speed !== null && aisLocation.speed > 2) || false,
+      };
+      
+      setAisData(transformedAisData);
       Alert.alert('Success', 'AIS data updated');
     } catch (error: any) {
       console.error('[VesselDetail] Failed to check AIS:', error);

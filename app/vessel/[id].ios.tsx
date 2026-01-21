@@ -705,6 +705,41 @@ export default function VesselDetailScreen() {
       setVessel(currentVessel);
       console.log('[VesselDetailScreen iOS] Vessel loaded:', currentVessel.vessel_name, 'MMSI:', currentVessel.mmsi);
 
+      // Only fetch AIS location if vessel is active
+      if (currentVessel.is_active) {
+        try {
+          console.log('[VesselDetailScreen iOS] Fetching AIS location for active vessel');
+          const aisLocation = await seaTimeApi.getVesselAISLocation(id, true);
+          console.log('[VesselDetailScreen iOS] AIS location data:', aisLocation);
+          
+          // Transform the response to match AISData interface
+          const transformedAisData: AISData = {
+            name: aisLocation.name || null,
+            mmsi: aisLocation.mmsi || null,
+            imo: aisLocation.imo || null,
+            speed_knots: aisLocation.speed !== undefined ? aisLocation.speed : null,
+            latitude: aisLocation.latitude !== undefined ? aisLocation.latitude : null,
+            longitude: aisLocation.longitude !== undefined ? aisLocation.longitude : null,
+            course: aisLocation.course !== undefined ? aisLocation.course : null,
+            heading: aisLocation.heading !== undefined ? aisLocation.heading : null,
+            timestamp: aisLocation.timestamp || null,
+            status: aisLocation.status || null,
+            destination: aisLocation.destination || null,
+            eta: aisLocation.eta || null,
+            callsign: aisLocation.callsign || null,
+            ship_type: aisLocation.vessel_type || null,
+            flag: aisLocation.flag || null,
+            is_moving: (aisLocation.speed !== undefined && aisLocation.speed !== null && aisLocation.speed > 2) || false,
+          };
+          
+          setAisData(transformedAisData);
+          console.log('[VesselDetailScreen iOS] AIS data set successfully');
+        } catch (aisError) {
+          console.error('[VesselDetailScreen iOS] Failed to fetch AIS location:', aisError);
+          // Don't fail the whole load if AIS fetch fails
+        }
+      }
+
       const seaTimeEntries = await seaTimeApi.getVesselSeaTime(id);
       console.log('[VesselDetailScreen iOS] Sea time entries loaded:', seaTimeEntries.length);
       setEntries(seaTimeEntries);
@@ -885,14 +920,38 @@ export default function VesselDetailScreen() {
       console.log('[VesselDetailScreen iOS] Backend will look up MMSI from database for this vessel ID');
       
       setCheckingAIS(true);
-      const result = await seaTimeApi.checkVesselAIS(vessel.id);
       
+      // First trigger the AIS check (POST) which updates the database
+      await seaTimeApi.checkVesselAIS(vessel.id);
+      
+      // Then fetch the detailed AIS location data (GET)
+      const aisLocation = await seaTimeApi.getVesselAISLocation(vessel.id, true);
       console.log('[VesselDetailScreen iOS] ✅ AIS check completed successfully');
-      console.log('[VesselDetailScreen iOS] Result:', result);
+      console.log('[VesselDetailScreen iOS] AIS location data:', aisLocation);
+      
+      // Transform the response to match AISData interface
+      const transformedAisData: AISData = {
+        name: aisLocation.name || null,
+        mmsi: aisLocation.mmsi || null,
+        imo: aisLocation.imo || null,
+        speed_knots: aisLocation.speed !== undefined ? aisLocation.speed : null,
+        latitude: aisLocation.latitude !== undefined ? aisLocation.latitude : null,
+        longitude: aisLocation.longitude !== undefined ? aisLocation.longitude : null,
+        course: aisLocation.course !== undefined ? aisLocation.course : null,
+        heading: aisLocation.heading !== undefined ? aisLocation.heading : null,
+        timestamp: aisLocation.timestamp || null,
+        status: aisLocation.status || null,
+        destination: aisLocation.destination || null,
+        eta: aisLocation.eta || null,
+        callsign: aisLocation.callsign || null,
+        ship_type: aisLocation.vessel_type || null,
+        flag: aisLocation.flag || null,
+        is_moving: (aisLocation.speed !== undefined && aisLocation.speed !== null && aisLocation.speed > 2) || false,
+      };
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      setAisData(result);
+      setAisData(transformedAisData);
       setAisModalVisible(true);
       
       console.log('[VesselDetailScreen iOS] Reloading vessel data to get any AIS updates...');

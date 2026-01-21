@@ -387,7 +387,7 @@ export const toggleScheduledTask = async (taskId: string, isActive: boolean) => 
 export const getAISDebugLogs = async (vesselId: string) => {
   console.log('[seaTimeApi] Fetching AIS debug logs for vessel:', vesselId);
   const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/ais/debug-logs/${vesselId}`, options);
+  const response = await fetch(`${API_BASE_URL}/api/ais/debug/${vesselId}`, options);
 
   if (!response.ok) {
     const errorText = await response.text();
