@@ -21,6 +21,7 @@ import {
 import { colors } from '@/styles/commonStyles';
 import React, { useState, useEffect, useCallback } from 'react';
 import CartoMap from '@/components/CartoMap';
+import { useAuth } from '@/contexts/AuthContext';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -46,6 +47,7 @@ interface VesselLocation {
 
 export default function SeaTimeScreen() {
   const router = useRouter();
+  const { refreshTrigger } = useAuth();
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -69,8 +71,17 @@ export default function SeaTimeScreen() {
   const historicVessels = vessels.filter(v => !v.is_active);
 
   useEffect(() => {
+    console.log('[Home] Initial data load');
     loadData();
   }, []);
+
+  // Listen for global refresh trigger
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      console.log('[Home] Global refresh triggered, reloading data');
+      loadData();
+    }
+  }, [refreshTrigger]);
 
   const loadActiveVesselLocation = useCallback(async () => {
     if (!activeVessel) {
@@ -135,7 +146,7 @@ export default function SeaTimeScreen() {
     }
 
     try {
-      console.log('Creating new vessel:', { 
+      console.log('[Home] User action: Creating new vessel:', { 
         mmsi: newMMSI, 
         name: newVesselName,
         callsign: newCallSign,
@@ -208,7 +219,7 @@ export default function SeaTimeScreen() {
           text: 'Activate',
           onPress: async () => {
             try {
-              console.log('Activating vessel:', vesselId, '(will deactivate others)');
+              console.log('[Home] User action: Activating vessel:', vesselId, '(will deactivate others)');
               await seaTimeApi.activateVessel(vesselId);
               await loadData();
               Alert.alert('Success', `${vesselName} is now being tracked`);
@@ -233,7 +244,7 @@ export default function SeaTimeScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('Deleting vessel:', vesselId);
+              console.log('[Home] User action: Deleting vessel:', vesselId);
               await seaTimeApi.deleteVessel(vesselId);
               await loadData();
               Alert.alert('Success', 'Vessel deleted');

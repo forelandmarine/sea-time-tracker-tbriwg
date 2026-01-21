@@ -21,6 +21,8 @@ interface AuthContextType {
   signInWithApple: (identityToken: string, appleUser?: any) => Promise<void>;
   signOut: () => Promise<void>;
   isAuthenticated: boolean;
+  refreshTrigger: number;
+  triggerRefresh: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -87,6 +89,13 @@ const tokenStorage = {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Function to trigger app-wide data refresh
+  const triggerRefresh = () => {
+    console.log('[Auth] ========== GLOBAL REFRESH TRIGGERED ==========');
+    setRefreshTrigger(prev => prev + 1);
+  };
 
   // Check for existing session on mount
   useEffect(() => {
@@ -415,6 +424,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signInWithApple,
         signOut,
         isAuthenticated: !!user,
+        refreshTrigger,
+        triggerRefresh,
       }}
     >
       {children}
