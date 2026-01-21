@@ -389,11 +389,23 @@ const createStyles = (isDark: boolean) =>
     modalScrollContent: {
       paddingBottom: 20,
     },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 8,
+    },
+    modalTitleContainer: {
+      flex: 1,
+    },
     modalTitle: {
       fontSize: 24,
       fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
-      marginBottom: 8,
+    },
+    deleteButton: {
+      padding: 8,
+      marginLeft: 12,
     },
     modalSubtitle: {
       fontSize: 14,
@@ -699,6 +711,41 @@ export default function LogbookScreen() {
     setNotes(remainingNotes.join('\n'));
     
     setShowAddModal(true);
+  };
+
+  const handleDeleteEntry = () => {
+    if (!editingEntry) return;
+
+    console.log('[LogbookScreen] User tapped delete button for entry:', editingEntry.id);
+    
+    Alert.alert(
+      'Delete Entry',
+      'Are you sure you want to delete this sea time entry? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => console.log('[LogbookScreen] Delete cancelled'),
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('[LogbookScreen] Deleting sea time entry:', editingEntry.id);
+              await seaTimeApi.deleteSeaTimeEntry(editingEntry.id);
+              Alert.alert('Success', 'Sea time entry deleted successfully');
+              setShowAddModal(false);
+              resetForm();
+              loadData();
+            } catch (error: any) {
+              console.error('[LogbookScreen] Error deleting entry:', error);
+              Alert.alert('Error', error.message || 'Failed to delete sea time entry');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleViewMCARequirements = () => {
@@ -1441,9 +1488,26 @@ export default function LogbookScreen() {
           >
             <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>
-                  {editingEntry ? 'Edit Sea Time Entry' : 'Add Sea Time Entry'}
-                </Text>
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalTitleContainer}>
+                    <Text style={styles.modalTitle}>
+                      {editingEntry ? 'Edit Sea Time Entry' : 'Add Sea Time Entry'}
+                    </Text>
+                  </View>
+                  {editingEntry && (
+                    <TouchableOpacity 
+                      style={styles.deleteButton}
+                      onPress={handleDeleteEntry}
+                    >
+                      <IconSymbol
+                        ios_icon_name="trash"
+                        android_material_icon_name="delete"
+                        size={22}
+                        color="#FF3B30"
+                      />
+                    </TouchableOpacity>
+                  )}
+                </View>
                 <Text style={styles.modalSubtitle}>
                   {editingEntry ? 'Update your sea time record' : 'Manually record your sea time with voyage details. A sea day = 4+ hours underway.'}
                 </Text>
