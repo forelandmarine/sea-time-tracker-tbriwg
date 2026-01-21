@@ -73,6 +73,12 @@ function transformSeaTimeEntryForResponse(entry: any) {
     duration_hours = calculateDurationHours(startTime, endTime);
   }
 
+  // Parse detection_window_hours if present
+  let detection_window_hours = null;
+  if (entry.detection_window_hours) {
+    detection_window_hours = parseFloat(String(entry.detection_window_hours));
+  }
+
   return {
     id: entry.id,
     vessel_id: entry.vessel_id,
@@ -87,6 +93,8 @@ function transformSeaTimeEntryForResponse(entry: any) {
     start_longitude: entry.start_longitude,
     end_latitude: entry.end_latitude,
     end_longitude: entry.end_longitude,
+    mca_compliant: entry.mca_compliant !== null ? entry.mca_compliant : null,
+    detection_window_hours: detection_window_hours,
     created_at: entry.created_at.toISOString ? entry.created_at.toISOString() : entry.created_at,
     vessel: entry.vessel ? transformVesselForResponse(entry.vessel) : null,
   };
@@ -117,6 +125,8 @@ export function register(app: App, fastify: FastifyInstance) {
               start_longitude: { type: ['string', 'null'] },
               end_latitude: { type: ['string', 'null'] },
               end_longitude: { type: ['string', 'null'] },
+              mca_compliant: { type: ['boolean', 'null'] },
+              detection_window_hours: { type: ['number', 'null'] },
               created_at: { type: 'string', format: 'date-time' },
               vessel: {
                 type: ['object', 'null'],
@@ -183,6 +193,8 @@ export function register(app: App, fastify: FastifyInstance) {
               status: { type: 'string' },
               service_type: { type: 'string' },
               notes: { type: ['string', 'null'] },
+              mca_compliant: { type: ['boolean', 'null'] },
+              detection_window_hours: { type: ['number', 'null'] },
               created_at: { type: 'string', format: 'date-time' },
               vessel: {
                 type: 'object',
@@ -269,6 +281,8 @@ export function register(app: App, fastify: FastifyInstance) {
               start_longitude: { type: ['string', 'null'] },
               end_latitude: { type: ['string', 'null'] },
               end_longitude: { type: ['string', 'null'] },
+              mca_compliant: { type: ['boolean', 'null'] },
+              detection_window_hours: { type: ['number', 'null'] },
               vessel: {
                 type: 'object',
                 properties: {
@@ -347,6 +361,8 @@ export function register(app: App, fastify: FastifyInstance) {
                   start_longitude: { type: ['string', 'null'] },
                   end_latitude: { type: ['string', 'null'] },
                   end_longitude: { type: ['string', 'null'] },
+                  mca_compliant: { type: ['boolean', 'null'] },
+                  detection_window_hours: { type: ['number', 'null'] },
                   vessel: {
                     type: 'object',
                     properties: {

@@ -36,12 +36,15 @@ export const sea_time_entries = pgTable('sea_time_entries', {
   start_longitude: decimal('start_longitude', { precision: 10, scale: 6 }),
   end_latitude: decimal('end_latitude', { precision: 9, scale: 6 }),
   end_longitude: decimal('end_longitude', { precision: 10, scale: 6 }),
+  mca_compliant: boolean('mca_compliant'), // true = meets 4hr requirement, false = 2-4hr detection, null = legacy
+  detection_window_hours: decimal('detection_window_hours', { precision: 10, scale: 2 }), // Actual movement detection window duration
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('sea_time_entries_user_id_idx').on(table.user_id),
   index('sea_time_entries_vessel_id_idx').on(table.vessel_id),
   index('sea_time_entries_status_idx').on(table.status),
   index('sea_time_entries_service_type_idx').on(table.service_type),
+  index('sea_time_entries_mca_compliant_idx').on(table.mca_compliant),
 ]);
 
 export const ais_checks = pgTable('ais_checks', {
