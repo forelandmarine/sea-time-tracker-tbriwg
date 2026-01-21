@@ -163,8 +163,15 @@ export default function ConfirmationsScreen() {
     }
   };
 
-  const handleRejectEntry = (entryId: string) => {
+  const handleRejectEntry = async (entryId: string) => {
     console.log('[Confirmations] User tapped Reject button for entry:', entryId);
+    
+    // Set processing state immediately to prevent multiple taps
+    if (processingEntryId) {
+      console.log('[Confirmations] Already processing an entry, ignoring tap');
+      return;
+    }
+
     Alert.alert(
       'Reject Entry',
       'Are you sure you want to reject this sea time entry?',
@@ -172,7 +179,9 @@ export default function ConfirmationsScreen() {
         { 
           text: 'Cancel', 
           style: 'cancel',
-          onPress: () => console.log('[Confirmations] User cancelled rejection')
+          onPress: () => {
+            console.log('[Confirmations] User cancelled rejection');
+          }
         },
         {
           text: 'Reject',
@@ -181,10 +190,14 @@ export default function ConfirmationsScreen() {
             try {
               console.log('[Confirmations] User confirmed rejection, calling API for entry:', entryId);
               setProcessingEntryId(entryId);
+              
               await seaTimeApi.rejectSeaTimeEntry(entryId);
+              
               console.log('[Confirmations] Entry rejected successfully');
               setProcessingEntryId(null);
+              
               await loadData();
+              
               Alert.alert('Success', 'Sea time entry rejected');
             } catch (error: any) {
               console.error('[Confirmations] Failed to reject entry:', error);

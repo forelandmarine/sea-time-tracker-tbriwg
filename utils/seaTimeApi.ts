@@ -469,21 +469,26 @@ export const confirmSeaTimeEntry = async (entryId: string, serviceType?: string)
 // Reject sea time entry
 export const rejectSeaTimeEntry = async (entryId: string) => {
   console.log('[seaTimeApi] Rejecting sea time entry:', entryId);
+  console.log('[seaTimeApi] API URL:', `${API_BASE_URL}/api/sea-time/${entryId}/reject`);
   const headers = await getApiHeaders();
+  console.log('[seaTimeApi] Request headers:', headers);
+  
   const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}/reject`, {
     method: 'PUT',
     headers,
     body: JSON.stringify({}),
   });
 
+  console.log('[seaTimeApi] Response status:', response.status);
+  
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[seaTimeApi] Failed to reject sea time entry:', response.status, errorText);
-    throw new Error(`Failed to reject sea time entry: ${response.status}`);
+    throw new Error(`Failed to reject sea time entry: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
-  console.log('[seaTimeApi] Sea time entry rejected successfully');
+  console.log('[seaTimeApi] Sea time entry rejected successfully:', data);
   return data;
 };
 
