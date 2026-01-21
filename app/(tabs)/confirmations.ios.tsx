@@ -325,21 +325,6 @@ export default function ConfirmationsScreen() {
     return `${days.toFixed(2)} days`;
   };
 
-  const formatDurationWithBuffer = (hours: number | string | null | undefined): string => {
-    const num = toNumber(hours);
-    const bufferHours = 2.5; // 2hr30min buffer
-    const totalHours = num + bufferHours;
-    return `${num.toFixed(1)}h + 2.5h buffer = ${totalHours.toFixed(1)}h`;
-  };
-
-  const formatDaysWithBuffer = (hours: number | string | null | undefined): string => {
-    const num = toNumber(hours);
-    const bufferHours = 2.5;
-    const totalHours = num + bufferHours;
-    const days = totalHours / 24;
-    return `${days.toFixed(2)} days`;
-  };
-
   const isMCACompliant = (entry: SeaTimeEntry): boolean => {
     if (entry.mca_compliant !== null && entry.mca_compliant !== undefined) {
       return entry.mca_compliant;
@@ -386,19 +371,6 @@ export default function ConfirmationsScreen() {
                 {entries.length} {entries.length === 1 ? 'entry' : 'entries'} pending confirmation
               </Text>
             </View>
-          </View>
-          
-          {/* Info banner about buffer */}
-          <View style={styles.infoBanner}>
-            <IconSymbol
-              ios_icon_name="info.circle"
-              android_material_icon_name="info"
-              size={18}
-              color={colors.primary}
-            />
-            <Text style={styles.infoBannerText}>
-              A 2.5-hour buffer is added to entries under 4 hours to account for observation windows that may extend into compliant sea days.
-            </Text>
           </View>
         </View>
 
@@ -453,10 +425,7 @@ export default function ConfirmationsScreen() {
                       </Text>
                       <View style={styles.durationBadge}>
                         <Text style={styles.durationText}>
-                          {mcaCompliant 
-                            ? `${formatDuration(entry.duration_hours)} (${formatDays(entry.duration_hours)})`
-                            : `${formatDurationWithBuffer(entry.duration_hours)} (${formatDaysWithBuffer(entry.duration_hours)})`
-                          }
+                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
                         </Text>
                       </View>
                     </View>
@@ -502,20 +471,9 @@ export default function ConfirmationsScreen() {
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Duration:</Text>
                         <Text style={styles.detailValue}>
-                          {mcaCompliant 
-                            ? `${formatDuration(entry.duration_hours)} (${formatDays(entry.duration_hours)})`
-                            : `${formatDurationWithBuffer(entry.duration_hours)} (${formatDaysWithBuffer(entry.duration_hours)})`
-                          }
+                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
                         </Text>
                       </View>
-                      {!mcaCompliant && (
-                        <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Detected Duration:</Text>
-                          <Text style={styles.detailValue}>
-                            {formatDuration(entry.duration_hours)} (movement window)
-                          </Text>
-                        </View>
-                      )}
                       {entry.detection_window_hours && (
                         <View style={styles.detailRow}>
                           <Text style={styles.detailLabel}>Detection Window:</Text>
@@ -695,21 +653,6 @@ function createStyles(isDark: boolean, topInset: number) {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderBottomWidth: 1,
       borderBottomColor: isDark ? colors.border : colors.borderLight,
-    },
-    infoBanner: {
-      flexDirection: 'row',
-      alignItems: 'flex-start',
-      backgroundColor: colors.primary + '15',
-      padding: 12,
-      borderRadius: 8,
-      marginTop: 12,
-      gap: 8,
-    },
-    infoBannerText: {
-      flex: 1,
-      fontSize: 12,
-      color: isDark ? colors.text : colors.textLight,
-      lineHeight: 16,
     },
     headerContent: {
       flexDirection: 'row',
