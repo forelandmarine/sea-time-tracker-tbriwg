@@ -12,7 +12,7 @@ import {
   Platform,
   ActivityIndicator,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import * as seaTimeApi from '@/utils/seaTimeApi';
@@ -33,24 +33,8 @@ const createStyles = (isDark: boolean) =>
       flex: 1,
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      padding: 20,
-      paddingTop: Platform.OS === 'android' ? 48 : 20,
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.border : colors.borderLight,
-    },
-    backButton: {
-      marginRight: 15,
-    },
-    headerTitle: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: isDark ? colors.text : colors.textLight,
-    },
     content: {
+      flex: 1,
       padding: 20,
     },
     section: {
@@ -258,41 +242,38 @@ export default function NotificationSettingsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <IconSymbol
-              ios_icon_name="chevron.left"
-              android_material_icon_name="arrow-back"
-              size={24}
-              color={colors.primary}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Notification Settings</Text>
+      <>
+        <Stack.Screen
+          options={{
+            title: 'Notification Settings',
+            headerShown: true,
+            headerBackTitle: 'Back',
+            headerBackTitleVisible: true,
+          }}
+        />
+        <View style={styles.container}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading settings...</Text>
+          </View>
         </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading settings...</Text>
-        </View>
-      </View>
+      </>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <IconSymbol
-            ios_icon_name="chevron.left"
-            android_material_icon_name="arrow-back"
-            size={24}
-            color={colors.primary}
-          />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Notification Settings</Text>
-      </View>
+    <>
+      <Stack.Screen
+        options={{
+          title: 'Notification Settings',
+          headerShown: true,
+          headerBackTitle: 'Back',
+          headerBackTitleVisible: true,
+        }}
+      />
+      <View style={styles.container}>
 
-      <ScrollView style={styles.content}>
+        <ScrollView style={styles.content}>
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Daily Sea Time Review</Text>
           <View style={styles.card}>
@@ -354,7 +335,8 @@ export default function NotificationSettingsScreen() {
             </Text>
           </View>
         </View>
-      </ScrollView>
-    </View>
+        </ScrollView>
+      </View>
+    </>
   );
 }

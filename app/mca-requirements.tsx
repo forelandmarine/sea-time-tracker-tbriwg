@@ -162,6 +162,7 @@ export default function MCARequirementsScreen() {
           title: 'MCA Requirements',
           headerShown: true,
           headerBackTitle: 'Back',
+          headerBackTitleVisible: true,
           headerStyle: {
             backgroundColor: backgroundColor,
           },

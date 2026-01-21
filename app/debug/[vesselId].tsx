@@ -292,6 +292,7 @@ export default function DebugScreen() {
           title: 'AIS Debug Logs',
           headerShown: true,
           headerBackTitle: 'Back',
+          headerBackTitleVisible: true,
           headerStyle: {
             backgroundColor: backgroundColor,
           },

@@ -461,6 +461,7 @@ export default function UserProfileScreen() {
           options={{
             title: 'User Profile',
             headerShown: true,
+            headerBackTitle: 'Back',
           }}
         />
         <View style={styles.container}>
@@ -479,6 +480,7 @@ export default function UserProfileScreen() {
         options={{
           title: 'User Profile',
           headerShown: true,
+          headerBackTitle: 'Back',
         }}
       />
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>

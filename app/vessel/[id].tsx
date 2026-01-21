@@ -378,6 +378,7 @@ export default function VesselDetailScreen() {
             backgroundColor: isDark ? colors.cardBackground : colors.card,
           },
           headerTintColor: isDark ? colors.text : colors.textLight,
+          headerBackTitleVisible: true,
         }}
       />
 

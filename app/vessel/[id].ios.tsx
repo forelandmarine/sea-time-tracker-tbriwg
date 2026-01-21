@@ -1022,6 +1022,7 @@ export default function VesselDetailScreen() {
             headerShown: true,
             title: 'Loading...',
             headerBackTitle: 'Back',
+            headerBackTitleVisible: true,
           }}
         />
         <View style={styles.scrollContent}>
@@ -1060,6 +1061,7 @@ export default function VesselDetailScreen() {
           headerShown: true,
           title: vessel.vessel_name,
           headerBackTitle: 'Back',
+          headerBackTitleVisible: true,
         }}
       />
       

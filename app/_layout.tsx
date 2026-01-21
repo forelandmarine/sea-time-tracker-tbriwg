@@ -291,6 +291,7 @@ function RootLayoutNav() {
               options={{ 
                 headerShown: false,
                 presentation: 'card',
+                headerBackTitle: 'Back',
               }} 
             />
 
@@ -300,6 +301,7 @@ function RootLayoutNav() {
               options={{ 
                 headerShown: false,
                 presentation: 'card',
+                headerBackTitle: 'Back',
               }} 
             />
 
@@ -309,6 +311,7 @@ function RootLayoutNav() {
               options={{ 
                 headerShown: false,
                 presentation: 'card',
+                headerBackTitle: 'Back',
               }} 
             />
 
@@ -318,6 +321,17 @@ function RootLayoutNav() {
               options={{ 
                 headerShown: false,
                 presentation: 'card',
+                headerBackTitle: 'Back',
+              }} 
+            />
+
+            {/* Notification settings screen */}
+            <Stack.Screen 
+              name="notification-settings" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                headerBackTitle: 'Back',
               }} 
             />
 
@@ -327,6 +341,7 @@ function RootLayoutNav() {
               options={{ 
                 headerShown: false,
                 presentation: 'card',
+                headerBackTitle: 'Back',
               }} 
             />
 
