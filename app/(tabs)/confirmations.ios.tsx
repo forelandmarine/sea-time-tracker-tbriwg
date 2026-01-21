@@ -43,6 +43,8 @@ interface SeaTimeEntry {
   end_latitude?: number | string | null;
   end_longitude?: number | string | null;
   service_type?: string | null;
+  mca_compliant?: boolean | null;
+  detection_window_hours?: number | string | null;
 }
 
 type ServiceType = 'actual_sea_service' | 'watchkeeping_service';
@@ -166,7 +168,6 @@ export default function ConfirmationsScreen() {
   const handleRejectEntry = async (entryId: string) => {
     console.log('[Confirmations] User tapped Reject button for entry:', entryId);
     
-    // Set processing state immediately to prevent multiple taps
     if (processingEntryId) {
       console.log('[Confirmations] Already processing an entry, ignoring tap');
       return;
@@ -320,6 +321,24 @@ export default function ConfirmationsScreen() {
     return `${days.toFixed(2)} days`;
   };
 
+  const isMCACompliant = (entry: SeaTimeEntry): boolean => {
+    if (entry.mca_compliant !== null && entry.mca_compliant !== undefined) {
+      return entry.mca_compliant;
+    }
+    
+    const hours = toNumber(entry.duration_hours);
+    return hours >= 4.0;
+  };
+
+  const getMCAWarningText = (entry: SeaTimeEntry): string | null => {
+    if (isMCACompliant(entry)) {
+      return null;
+    }
+    
+    const hours = toNumber(entry.detection_window_hours || entry.duration_hours);
+    return `Movement detected over ${hours.toFixed(1)} hours. This does not meet the MCA 4-hour requirement but has been flagged for review to avoid missing potential sea days.`;
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -335,7 +354,6 @@ export default function ConfirmationsScreen() {
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Header with Logo */}
         <View style={styles.header}>
           <View style={styles.headerContent}>
             <Image
@@ -352,7 +370,6 @@ export default function ConfirmationsScreen() {
           </View>
         </View>
 
-        {/* Entries List */}
         <View style={styles.content}>
           {entries.length === 0 ? (
             <View style={styles.emptyState}>
@@ -371,8 +388,25 @@ export default function ConfirmationsScreen() {
             entries.map((entry) => {
               const isExpanded = expandedEntries.has(entry.id);
               const isProcessing = processingEntryId === entry.id;
+              const mcaCompliant = isMCACompliant(entry);
+              const warningText = getMCAWarningText(entry);
+              
               return (
                 <View key={entry.id} style={styles.entryCard}>
+                  {!mcaCompliant && (
+                    <View style={styles.warningBanner}>
+                      <IconSymbol
+                        ios_icon_name="exclamationmark.triangle"
+                        android_material_icon_name="warning"
+                        size={20}
+                        color={colors.warning}
+                      />
+                      <Text style={styles.warningBannerText}>
+                        Does not meet MCA 4-hour requirement
+                      </Text>
+                    </View>
+                  )}
+
                   <TouchableOpacity
                     style={styles.entryHeader}
                     onPress={() => toggleExpanded(entry.id)}
@@ -401,6 +435,21 @@ export default function ConfirmationsScreen() {
 
                   {isExpanded && (
                     <View style={styles.entryDetails}>
+                      {warningText && (
+                        <View style={styles.warningBox}>
+                          <View style={styles.warningBoxHeader}>
+                            <IconSymbol
+                              ios_icon_name="info.circle"
+                              android_material_icon_name="info"
+                              size={20}
+                              color={colors.warning}
+                            />
+                            <Text style={styles.warningBoxTitle}>Movement Detected</Text>
+                          </View>
+                          <Text style={styles.warningBoxText}>{warningText}</Text>
+                        </View>
+                      )}
+
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Start:</Text>
                         <Text style={styles.detailValue}>
@@ -421,6 +470,14 @@ export default function ConfirmationsScreen() {
                           {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
                         </Text>
                       </View>
+                      {entry.detection_window_hours && (
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Detection Window:</Text>
+                          <Text style={styles.detailValue}>
+                            {formatDuration(entry.detection_window_hours)}
+                          </Text>
+                        </View>
+                      )}
                       {(entry.start_latitude || entry.start_longitude) && (
                         <View style={styles.detailRow}>
                           <Text style={styles.detailLabel}>Start Position:</Text>
@@ -493,7 +550,6 @@ export default function ConfirmationsScreen() {
         </View>
       </ScrollView>
 
-      {/* Service Type Selection Modal */}
       <Modal
         visible={showServiceTypeModal}
         transparent
@@ -645,6 +701,20 @@ function createStyles(isDark: boolean, topInset: number) {
       borderColor: isDark ? colors.border : colors.borderLight,
       overflow: 'hidden',
     },
+    warningBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.warning + '20',
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      gap: 8,
+    },
+    warningBannerText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.warning,
+      flex: 1,
+    },
     entryHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
@@ -683,6 +753,31 @@ function createStyles(isDark: boolean, topInset: number) {
       borderTopWidth: 1,
       borderTopColor: isDark ? colors.border : colors.borderLight,
     },
+    warningBox: {
+      backgroundColor: colors.warning + '15',
+      borderLeftWidth: 3,
+      borderLeftColor: colors.warning,
+      padding: 12,
+      borderRadius: 8,
+      marginTop: 12,
+      marginBottom: 12,
+    },
+    warningBoxHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 8,
+    },
+    warningBoxTitle: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.warning,
+    },
+    warningBoxText: {
+      fontSize: 13,
+      color: isDark ? colors.text : colors.textLight,
+      lineHeight: 18,
+    },
     detailRow: {
       flexDirection: 'row',
       marginTop: 12,
@@ -691,7 +786,7 @@ function createStyles(isDark: boolean, topInset: number) {
       fontSize: 14,
       fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
-      width: 120,
+      width: 140,
     },
     detailValue: {
       fontSize: 14,
