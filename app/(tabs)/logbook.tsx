@@ -261,12 +261,6 @@ const createStyles = (isDark: boolean) =>
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       flex: 1,
     },
-    durationText: {
-      fontSize: 15,
-      fontWeight: '600',
-      color: colors.primary,
-      marginTop: 8,
-    },
     seaDayBadge: {
       backgroundColor: colors.primary + '20',
       paddingHorizontal: 12,
@@ -896,34 +890,13 @@ export default function LogbookScreen() {
     }
   };
 
-  const toNumber = (value: number | string | null | undefined): number => {
-    if (value === null || value === undefined) return 0;
-    if (typeof value === 'number') return value;
-    const parsed = parseFloat(value);
-    return isNaN(parsed) ? 0 : parsed;
-  };
-
-  const formatDuration = (hours: number | string | null | undefined): string => {
-    const h = toNumber(hours);
-    if (h === 0) return 'In progress';
-    const wholeHours = Math.floor(h);
-    const minutes = Math.round((h - wholeHours) * 60);
-    if (minutes === 0) return `${wholeHours}h`;
-    return `${wholeHours}h ${minutes}m`;
-  };
-
-  const formatSeaDay = (seaDays: number | null | undefined, durationHours: number | string | null | undefined): string => {
-    const days = seaDays ?? 0;
-    const hours = toNumber(durationHours);
-    
-    if (days === 1) {
+  const formatSeaDay = (seaDays: number | null | undefined): string => {
+    if (seaDays === 1) {
       return '✓ Sea Day Qualified';
-    } else if (hours > 0 && hours < 4) {
-      return `${formatDuration(hours)} (< 4h, no sea day)`;
-    } else if (hours === 0) {
-      return 'In progress';
+    } else if (seaDays === 0) {
+      return '✗ Not Qualified (< 4 hours)';
     }
-    return 'No sea day';
+    return 'Pending Confirmation';
   };
 
   const formatServiceTypeDisplay = (serviceType: string | null | undefined): string => {
@@ -957,16 +930,10 @@ export default function LogbookScreen() {
       // Show confirmed entries on calendar
       if (entry.status !== 'confirmed') return false;
       
-      const entryStartDate = new Date(entry.start_time);
-      const entryEndDate = entry.end_time ? new Date(entry.end_time) : new Date();
+      const entryDate = new Date(entry.start_time);
+      const entryDateString = formatDateToLocalString(entryDate);
       
-      const selectedDateObj = new Date(dateString);
-      selectedDateObj.setHours(0, 0, 0, 0);
-      
-      const nextDay = new Date(selectedDateObj);
-      nextDay.setDate(nextDay.getDate() + 1);
-      
-      return entryStartDate < nextDay && entryEndDate >= selectedDateObj;
+      return entryDateString === dateString;
     });
     
     console.log('[LogbookScreen] Entries for date', dateString, ':', dateEntries.length);
@@ -977,37 +944,22 @@ export default function LogbookScreen() {
     const marked: any = {};
     
     // Filter for confirmed entries only
-    const confirmedEntries = entries.filter((e) => e.status === 'confirmed');
-    console.log('[LogbookScreen] Marking calendar - Total entries:', entries.length, 'Confirmed:', confirmedEntries.length);
+    const confirmedEntries = entries.filter((e) => e.status === 'confirmed' && e.sea_days === 1);
+    console.log('[LogbookScreen] Marking calendar - Total entries:', entries.length, 'Confirmed sea days:', confirmedEntries.length);
     
     confirmedEntries.forEach((entry) => {
-      const startDate = new Date(entry.start_time);
-      const endDate = entry.end_time ? new Date(entry.end_time) : new Date();
+      const entryDate = new Date(entry.start_time);
+      const dateString = formatDateToLocalString(entryDate);
       
-      // Create a new date object for iteration, starting at midnight local time
-      let currentDate = new Date(startDate);
-      currentDate.setHours(0, 0, 0, 0);
+      console.log('[LogbookScreen] Marking date:', dateString, 'for entry:', entry.id);
       
-      // Set end date to end of day local time
-      const endDateNormalized = new Date(endDate);
-      endDateNormalized.setHours(23, 59, 59, 999);
-      
-      console.log('[LogbookScreen] Marking dates for entry:', entry.id, 'Start:', startDate.toISOString(), 'End:', endDate.toISOString());
-      
-      while (currentDate <= endDateNormalized) {
-        // Use local date formatting instead of UTC to avoid timezone shift
-        const dateString = formatDateToLocalString(currentDate);
-        console.log('[LogbookScreen] Marking date:', dateString, 'for entry:', entry.id);
-        
-        marked[dateString] = {
-          marked: true,
-          dotColor: colors.primary,
-          selected: selectedDate === dateString,
-          selectedColor: colors.primary,
-          selectedTextColor: '#FFFFFF',
-        };
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
+      marked[dateString] = {
+        marked: true,
+        dotColor: colors.primary,
+        selected: selectedDate === dateString,
+        selectedColor: colors.primary,
+        selectedTextColor: '#FFFFFF',
+      };
     });
     
     console.log('[LogbookScreen] Marked dates for calendar:', Object.keys(marked).length, 'days', Object.keys(marked));
@@ -1154,7 +1106,7 @@ export default function LogbookScreen() {
             />
             <View style={styles.calendarLegend}>
               <View style={styles.legendDot} />
-              <Text style={styles.legendText}>Sea day recorded - Tap a date to view details</Text>
+              <Text style={styles.legendText}>Sea day recorded (4+ hours) - Tap to view</Text>
             </View>
           </View>
 
@@ -1198,13 +1150,13 @@ export default function LogbookScreen() {
                         <Text style={styles.entryText}>
                           {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
                           {entry.end_time &&
-                            ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
+                            ` - ${formatTime(entry.end_time)}`}
                         </Text>
                       </View>
 
                       <View style={styles.seaDayBadge}>
                         <Text style={styles.seaDayText}>
-                          {formatSeaDay(entry.sea_days, entry.duration_hours)}
+                          {formatSeaDay(entry.sea_days)}
                         </Text>
                       </View>
 
@@ -1239,7 +1191,7 @@ export default function LogbookScreen() {
                   ))}
                 </React.Fragment>
               ) : (
-                <Text style={styles.noEntriesText}>No entries recorded for this date</Text>
+                <Text style={styles.noEntriesText}>No sea days recorded for this date</Text>
               )}
             </View>
           ) : (
@@ -1251,7 +1203,7 @@ export default function LogbookScreen() {
                 color={isDark ? colors.textSecondary : colors.textSecondaryLight}
               />
               <Text style={styles.noDateSelectedText}>
-                Select a date on the calendar to view sea time entries for that day
+                Select a date on the calendar to view sea time entries
               </Text>
             </View>
           )}
@@ -1278,7 +1230,7 @@ export default function LogbookScreen() {
               />
               <Text style={styles.emptyText}>No sea time entries yet</Text>
               <Text style={styles.emptySubtext}>
-                Tap the + button to manually add a sea time entry, or start tracking vessels
+                Tap the + button to add a sea time entry. Remember: 4+ hours underway = 1 sea day
               </Text>
             </View>
           ) : (
@@ -1361,13 +1313,13 @@ export default function LogbookScreen() {
                               <Text style={styles.entryText}>
                                 {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
                                 {entry.end_time &&
-                                  ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
+                                  ` - ${formatTime(entry.end_time)}`}
                               </Text>
                             </View>
 
                             <View style={styles.seaDayBadge}>
                               <Text style={styles.seaDayText}>
-                                {formatSeaDay(entry.sea_days, entry.duration_hours)}
+                                {formatSeaDay(entry.sea_days)}
                               </Text>
                             </View>
 
@@ -1445,13 +1397,13 @@ export default function LogbookScreen() {
                         <Text style={styles.entryText}>
                           {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
                           {entry.end_time &&
-                            ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
+                            ` - ${formatTime(entry.end_time)}`}
                         </Text>
                       </View>
 
                       <View style={styles.seaDayBadge}>
                         <Text style={styles.seaDayText}>
-                          {formatSeaDay(entry.sea_days, entry.duration_hours)}
+                          {formatSeaDay(entry.sea_days)}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -1509,7 +1461,7 @@ export default function LogbookScreen() {
                   )}
                 </View>
                 <Text style={styles.modalSubtitle}>
-                  {editingEntry ? 'Update your sea time record' : 'Manually record your sea time with voyage details. A sea day = 4+ hours underway.'}
+                  {editingEntry ? 'Update your sea time record' : 'Record a sea day: 4+ hours underway in any 24-hour period. Only one entry per day allowed.'}
                 </Text>
 
                 <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={styles.modalScrollContent}>
