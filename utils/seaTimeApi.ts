@@ -59,9 +59,9 @@ const getFetchOptions = async (method: string = 'GET') => {
 
 // Get user profile
 export const getUserProfile = async () => {
-  console.log('[seaTimeApi] Fetching user profile');
+  console.log('[seaTimeApi] Fetching user profile from /api/profile');
   const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/auth/user`, options);
+  const response = await fetch(`${API_BASE_URL}/api/profile`, options);
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -70,10 +70,10 @@ export const getUserProfile = async () => {
   }
 
   const data = await response.json();
-  console.log('[seaTimeApi] User profile fetched successfully');
+  console.log('[seaTimeApi] User profile fetched successfully with all fields');
   
-  // Backend returns { user: {...} }, extract the user object
-  return data.user || data;
+  // Backend returns the profile object directly
+  return data;
 };
 
 // Update user profile
@@ -108,7 +108,7 @@ export const updateUserProfile = async (updates: {
 
 // Upload profile image
 export const uploadProfileImage = async (imageUri: string) => {
-  console.log('[seaTimeApi] Uploading profile image');
+  console.log('[seaTimeApi] Uploading profile image to /api/profile/upload-image');
   const token = await getAuthToken();
   
   const formData = new FormData();
@@ -118,7 +118,7 @@ export const uploadProfileImage = async (imageUri: string) => {
     name: 'profile.jpg',
   } as any);
 
-  const response = await fetch(`${API_BASE_URL}/api/profile/image`, {
+  const response = await fetch(`${API_BASE_URL}/api/profile/upload-image`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
