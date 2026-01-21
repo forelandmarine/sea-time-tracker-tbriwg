@@ -311,6 +311,9 @@ export default function SeaTimeScreen() {
 
   const headerTitleText = 'SeaTime Tracker';
   const headerSubtitleText = 'Your AIS Tracking Companion';
+  const logoSource = isDark 
+    ? require('@/assets/images/c13cbd51-c2f7-489f-bbbb-6b28094d9b2b.png')
+    : require('@/assets/images/c0b805f0-b63d-4d71-8549-490ab57ba961.png');
 
   return (
     <View style={styles.container}>
@@ -322,7 +325,7 @@ export default function SeaTimeScreen() {
         <View style={styles.header}>
           <View style={styles.headerTitleContainer}>
             <Image
-              source={require('@/assets/images/c13cbd51-c2f7-489f-bbbb-6b28094d9b2b.png')}
+              source={logoSource}
               style={styles.appIcon}
               resizeMode="contain"
             />
