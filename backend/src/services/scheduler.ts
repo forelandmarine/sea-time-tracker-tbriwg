@@ -306,6 +306,45 @@ async function handleSeaTimeEntries(
       const duration_hours = Math.round((duration_ms / (1000 * 60 * 60)) * 100) / 100;
       const sea_days = duration_hours >= 4 ? 1 : 0; // Calculate sea_days: 1 if >= 4 hours, else 0
 
+      // Check if another entry already exists for this calendar day
+      const prevCheckDate = previousCheck.check_time;
+      const year = prevCheckDate.getFullYear();
+      const month = String(prevCheckDate.getMonth() + 1).padStart(2, '0');
+      const day = String(prevCheckDate.getDate()).padStart(2, '0');
+      const calendarDay = `${year}-${month}-${day}`;
+
+      // Get all entries for this user for this calendar day
+      const existingEntries = await app.db.query.sea_time_entries.findMany({
+        where: eq(schema.sea_time_entries.user_id, vessel.user_id),
+      });
+
+      let dayExists = false;
+      for (const entry of existingEntries) {
+        const entryDate = new Date(entry.start_time);
+        const entryYear = entryDate.getFullYear();
+        const entryMonth = String(entryDate.getMonth() + 1).padStart(2, '0');
+        const entryDay = String(entryDate.getDate()).padStart(2, '0');
+        const entryCalendarDay = `${entryYear}-${entryMonth}-${entryDay}`;
+
+        if (entryCalendarDay === calendarDay) {
+          dayExists = true;
+          break;
+        }
+      }
+
+      if (dayExists) {
+        app.logger.info(
+          {
+            taskId,
+            vesselId,
+            mmsi,
+            calendarDay,
+          },
+          `AIS entry skipped: entry already exists for calendar day ${calendarDay}`
+        );
+        return;
+      }
+
       // Create new sea time entry with coordinates from both checks
       const [new_entry] = await app.db
         .insert(schema.sea_time_entries)

@@ -23,6 +23,32 @@ function isValidServiceType(serviceType: any): boolean {
   return typeof serviceType === 'string' && VALID_SERVICE_TYPES.includes(serviceType);
 }
 
+// Helper function to get calendar day (YYYY-MM-DD) from a date
+function getCalendarDay(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Helper function to check if another entry exists for the same calendar day
+async function checkEntryExistsForDay(app: App, userId: string, calendarDay: string, excludeEntryId?: string): Promise<boolean> {
+  // Get all entries for the user for this calendar day
+  const entries = await app.db.query.sea_time_entries.findMany({
+    where: eq(schema.sea_time_entries.user_id, userId),
+  });
+
+  // Filter by calendar day
+  for (const entry of entries) {
+    const entryDay = getCalendarDay(new Date(entry.start_time));
+    if (entryDay === calendarDay && (!excludeEntryId || entry.id !== excludeEntryId)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 // Helper function to transform vessel object for API response
 function transformVesselForResponse(vessel: any) {
   return {
@@ -462,6 +488,15 @@ export function register(app: App, fastify: FastifyInstance) {
     const duration_hours = calculateDurationHours(current_entry.start_time, end_time);
     const calculated_sea_days = calculateSeaDays(duration_hours);
 
+    // Check if another entry already exists for this calendar day (excluding this entry)
+    const calendarDay = getCalendarDay(new Date(current_entry.start_time));
+    const anotherEntryExistsForDay = await checkEntryExistsForDay(app, userId, calendarDay, id);
+
+    if (anotherEntryExistsForDay) {
+      app.logger.warn({ userId, entryId: id, calendarDay }, 'Cannot confirm: another entry exists for the same calendar day');
+      return reply.code(400).send({ error: 'You can only have one sea time period per day (00:00-23:59). Another entry exists for this day.' });
+    }
+
     const [updated] = await app.db
       .update(schema.sea_time_entries)
       .set({
@@ -874,6 +909,17 @@ export function register(app: App, fastify: FastifyInstance) {
         },
         `Test endpoint: Creating sea day entry from two most recent positions`
       );
+
+      // Check if another entry exists for this calendar day
+      const testCalendarDay = getCalendarDay(new Date(olderRecord.check_time));
+      const testEntryExists = await checkEntryExistsForDay(app, vessel[0].user_id, testCalendarDay);
+
+      if (testEntryExists) {
+        app.logger.warn({ vesselId: vessel.id, calendarDay: testCalendarDay }, 'Test entry: another entry exists for this calendar day');
+        return reply.code(400).send({
+          error: `Cannot create test entry: You can only register one sea time period per day (00:00-23:59). Another entry exists for ${testCalendarDay}.`,
+        });
+      }
 
       // Create the sea time entry
       const [new_entry] = await app.db
@@ -1430,6 +1476,15 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     }
 
+    // Check if entry already exists for this calendar day
+    const calendarDay = getCalendarDay(startDate);
+    const entryExistsForDay = await checkEntryExistsForDay(app, session.userId, calendarDay);
+
+    if (entryExistsForDay) {
+      app.logger.warn({ userId: session.userId, calendarDay }, 'Duplicate entry attempt for same calendar day');
+      return reply.code(400).send({ error: 'You can only register one sea time period per day (00:00-23:59)' });
+    }
+
     // Create the sea time entry (marked as confirmed for manually created entries)
     try {
       const [entry] = await app.db
@@ -1618,15 +1673,27 @@ export function register(app: App, fastify: FastifyInstance) {
       ];
 
       const entries = [];
+      const usedDays = new Set<string>(); // Track calendar days to ensure no duplicates
 
       // Generate entries spread across last 60 days
       for (let i = 0; i < 4; i++) {
-        // Random day in last 60 days
-        const daysAgo = Math.floor(Math.random() * 60) + 1;
-        const hoursAgo = Math.floor(Math.random() * 24);
-
-        const startTime = new Date();
+        // Random day in last 60 days, ensure no duplicate calendar days
+        let daysAgo = Math.floor(Math.random() * 60) + 1;
+        let startTime = new Date();
         startTime.setDate(startTime.getDate() - daysAgo);
+        let calendarDay = getCalendarDay(startTime);
+
+        // Keep trying until we find a unique calendar day
+        while (usedDays.has(calendarDay)) {
+          daysAgo = Math.floor(Math.random() * 60) + 1;
+          startTime = new Date();
+          startTime.setDate(startTime.getDate() - daysAgo);
+          calendarDay = getCalendarDay(startTime);
+        }
+
+        usedDays.add(calendarDay);
+
+        const hoursAgo = Math.floor(Math.random() * 24);
         startTime.setHours(hoursAgo, Math.floor(Math.random() * 60), 0, 0);
 
         // Duration between 6-14 hours
