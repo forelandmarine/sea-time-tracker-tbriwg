@@ -300,6 +300,9 @@ export default function SeaTimeScreen() {
     );
   }
 
+  const headerTitleText = 'SeaTime Tracker';
+  const headerSubtitleText = 'Your AIS Tracking Companion';
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -316,9 +319,9 @@ export default function SeaTimeScreen() {
             />
             <View style={styles.headerTextContainer}>
               <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
-                Home
+                {headerTitleText}
               </Text>
-              <Text style={styles.headerSubtitle}>Track Your Days at Sea with AIS</Text>
+              <Text style={styles.headerSubtitle}>{headerSubtitleText}</Text>
             </View>
           </View>
         </View>
