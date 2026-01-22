@@ -12,6 +12,7 @@ export const user = pgTable("user", {
   srb_no: text("srb_no"), // Seafarers Registration Book number
   nationality: text("nationality"), // User's nationality
   pya_membership_no: text("pya_membership_no"), // PYA membership number
+  department: text("department"), // Department: 'deck' or 'engineering'
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

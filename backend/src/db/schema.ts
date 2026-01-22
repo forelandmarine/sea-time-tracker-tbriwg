@@ -38,6 +38,9 @@ export const sea_time_entries = pgTable('sea_time_entries', {
   end_longitude: decimal('end_longitude', { precision: 10, scale: 6 }),
   mca_compliant: boolean('mca_compliant'), // true = meets 4hr requirement, false = 2-4hr detection, null = legacy
   detection_window_hours: decimal('detection_window_hours', { precision: 10, scale: 2 }), // Actual movement detection window duration
+  watchkeeping_hours: decimal('watchkeeping_hours', { precision: 10, scale: 2 }), // Watchkeeping hours (accumulated across days, 4hrs = 1 day)
+  additional_watchkeeping_hours: decimal('additional_watchkeeping_hours', { precision: 10, scale: 2 }), // Additional watchkeeping at anchor/mooring (engineering only)
+  is_stationary: boolean('is_stationary'), // Whether vessel is stationary (at anchor or moored) for this entry
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('sea_time_entries_user_id_idx').on(table.user_id),
