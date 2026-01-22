@@ -20,6 +20,12 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
+import { 
+  isBiometricAvailable, 
+  getBiometricCredentials, 
+  clearBiometricCredentials,
+  getBiometricType 
+} from '@/utils/biometricAuth';
 
 interface UserProfile {
   id: string;
@@ -423,6 +429,9 @@ export default function ProfileScreen() {
   const [downloadingCSV, setDownloadingCSV] = useState(false);
   const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
   const [showVesselModal, setShowVesselModal] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
+  const [biometricType, setBiometricType] = useState('Biometric');
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
@@ -435,7 +444,21 @@ export default function ProfileScreen() {
     loadProfile();
     loadSummary();
     loadVessels();
+    checkBiometricStatus();
   }, []);
+
+  const checkBiometricStatus = async () => {
+    const available = await isBiometricAvailable();
+    setBiometricAvailable(available);
+    
+    if (available) {
+      const type = await getBiometricType();
+      setBiometricType(type);
+      
+      const credentials = await getBiometricCredentials();
+      setHasSavedCredentials(!!credentials);
+    }
+  };
 
   const loadProfile = async () => {
     console.log('Loading user profile');
@@ -620,6 +643,46 @@ export default function ProfileScreen() {
       Alert.alert('Error', 'Failed to download CSV report. Please try again.');
     } finally {
       setDownloadingCSV(false);
+    }
+  };
+
+  const handleManageBiometric = async () => {
+    console.log('User tapped Manage Biometric Authentication');
+    
+    if (!biometricAvailable) {
+      Alert.alert(
+        'Not Available',
+        `${biometricType} is not available on this device. Please ensure you have enrolled biometric credentials in your device settings.`
+      );
+      return;
+    }
+
+    if (hasSavedCredentials) {
+      Alert.alert(
+        `Disable ${biometricType}`,
+        `Do you want to disable ${biometricType} sign in? You will need to enter your password next time.`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Disable',
+            style: 'destructive',
+            onPress: async () => {
+              console.log('User confirmed disable biometric');
+              await clearBiometricCredentials();
+              setHasSavedCredentials(false);
+              Alert.alert('Success', `${biometricType} sign in has been disabled`);
+            },
+          },
+        ]
+      );
+    } else {
+      Alert.alert(
+        `Enable ${biometricType}`,
+        `To enable ${biometricType} sign in, please sign out and sign in again with the "Remember me" checkbox enabled.`
+      );
     }
   };
 
@@ -937,6 +1000,28 @@ export default function ProfileScreen() {
                   style={styles.menuItemChevron}
                 />
               </TouchableOpacity>
+
+              {biometricAvailable && (
+                <TouchableOpacity style={styles.menuItem} onPress={handleManageBiometric}>
+                  <IconSymbol
+                    ios_icon_name="faceid"
+                    android_material_icon_name="fingerprint"
+                    size={24}
+                    color={colors.primary}
+                    style={styles.menuItemIcon}
+                  />
+                  <Text style={styles.menuItemText}>
+                    {biometricType} Sign In {hasSavedCredentials ? '(Enabled)' : '(Disabled)'}
+                  </Text>
+                  <IconSymbol
+                    ios_icon_name="chevron.right"
+                    android_material_icon_name="arrow-forward"
+                    size={20}
+                    color={colors.textSecondary}
+                    style={styles.menuItemChevron}
+                  />
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 style={[styles.menuItem, styles.menuItemLast]}

@@ -3,6 +3,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { clearBiometricCredentials } from '@/utils/biometricAuth';
 
 const API_URL = Constants.expoConfig?.extra?.backendUrl || '';
 const TOKEN_KEY = 'seatime_auth_token';
@@ -398,6 +399,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       console.log('[Auth] Clearing local token and user state...');
       await tokenStorage.removeToken();
+      
+      // Clear biometric credentials on sign out
+      console.log('[Auth] Clearing biometric credentials...');
+      await clearBiometricCredentials();
+      
       setUser(null);
       console.log('[Auth] ========== SIGN OUT COMPLETED ==========');
     } catch (error) {
@@ -405,6 +411,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Still clear local state even if there's an error
       try {
         await tokenStorage.removeToken();
+        await clearBiometricCredentials();
         setUser(null);
         console.log('[Auth] Local state cleared despite error');
       } catch (clearError) {

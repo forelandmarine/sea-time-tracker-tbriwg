@@ -17,7 +17,15 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors } from '@/styles/commonStyles';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { BACKEND_URL } from '@/utils/api';
+import { 
+  getBiometricCredentials, 
+  saveBiometricCredentials, 
+  clearBiometricCredentials,
+  isBiometricAvailable,
+  authenticateWithBiometrics 
+} from '@/utils/biometricAuth';
 
 export default function AuthScreen() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -25,6 +33,9 @@ export default function AuthScreen() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
   const { signIn, signUp, signInWithApple } = useAuth();
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -34,7 +45,52 @@ export default function AuthScreen() {
     console.log('[AuthScreen] Mounted');
     console.log('[AuthScreen] Backend URL:', BACKEND_URL || 'NOT CONFIGURED');
     console.log('[AuthScreen] Platform:', Platform.OS);
+    checkBiometricAvailability();
+    checkSavedCredentials();
   }, []);
+
+  const checkBiometricAvailability = async () => {
+    const available = await isBiometricAvailable();
+    setBiometricAvailable(available);
+    console.log('[AuthScreen] Biometric authentication available:', available);
+  };
+
+  const checkSavedCredentials = async () => {
+    const credentials = await getBiometricCredentials();
+    setHasSavedCredentials(!!credentials);
+    if (credentials) {
+      console.log('[AuthScreen] Found saved credentials for:', credentials.email);
+    }
+  };
+
+  const handleBiometricSignIn = async () => {
+    try {
+      console.log('[AuthScreen] User tapped biometric sign in button');
+      setLoading(true);
+
+      const credentials = await getBiometricCredentials();
+      if (!credentials) {
+        Alert.alert('Error', 'No saved credentials found. Please sign in with email and password first.');
+        return;
+      }
+
+      const authenticated = await authenticateWithBiometrics();
+      if (!authenticated) {
+        console.log('[AuthScreen] Biometric authentication cancelled or failed');
+        return;
+      }
+
+      console.log('[AuthScreen] Biometric authentication successful, signing in...');
+      await signIn(credentials.email, credentials.password);
+      console.log('[AuthScreen] Sign in successful, navigating to home');
+      router.replace('/(tabs)');
+    } catch (error: any) {
+      console.error('[AuthScreen] Biometric sign in failed:', error);
+      Alert.alert('Error', error.message || 'Biometric sign in failed');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleEmailAuth = async () => {
     if (!BACKEND_URL) {
@@ -65,6 +121,14 @@ export default function AuthScreen() {
         console.log('[AuthScreen] User tapped Sign In button');
         await signIn(email, password);
       }
+
+      // Save credentials if remember me is checked
+      if (rememberMe && !isSignUp) {
+        console.log('[AuthScreen] Saving credentials for biometric authentication');
+        await saveBiometricCredentials(email, password);
+        setHasSavedCredentials(true);
+      }
+
       console.log('[AuthScreen] Authentication successful, navigating to home');
       router.replace('/(tabs)');
     } catch (error: any) {
@@ -162,6 +226,26 @@ export default function AuthScreen() {
       </View>
 
       <View style={styles.form}>
+        {biometricAvailable && hasSavedCredentials && !isSignUp && (
+          <TouchableOpacity
+            style={[styles.button, styles.biometricButton]}
+            onPress={handleBiometricSignIn}
+            disabled={loading}
+          >
+            <Text style={styles.biometricButtonText}>
+              {Platform.OS === 'ios' ? '🔐 Sign in with Face ID' : '🔐 Sign in with Biometrics'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {biometricAvailable && hasSavedCredentials && !isSignUp && (
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.dividerLine} />
+          </View>
+        )}
+
         {isSignUp && (
           <View style={styles.inputContainer}>
             <Text style={styles.label}>Name (Optional)</Text>
@@ -203,6 +287,20 @@ export default function AuthScreen() {
             autoComplete={isSignUp ? 'password-new' : 'password'}
           />
         </View>
+
+        {!isSignUp && biometricAvailable && (
+          <TouchableOpacity
+            style={styles.checkboxContainer}
+            onPress={() => setRememberMe(!rememberMe)}
+          >
+            <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+              {rememberMe && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+            <Text style={styles.checkboxLabel}>
+              Remember me (enable {Platform.OS === 'ios' ? 'Face ID' : 'biometric'} sign in)
+            </Text>
+          </TouchableOpacity>
+        )}
 
         <TouchableOpacity
           style={[styles.button, styles.primaryButton]}
@@ -359,6 +457,46 @@ function createStyles(isDark: boolean) {
     appleButton: {
       width: '100%',
       height: 50,
+    },
+    biometricButton: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderWidth: 2,
+      borderColor: colors.primary,
+    },
+    biometricButtonText: {
+      color: colors.primary,
+      fontSize: 18,
+      fontWeight: '600',
+    },
+    checkboxContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    checkbox: {
+      width: 24,
+      height: 24,
+      borderWidth: 2,
+      borderColor: isDark ? colors.border : colors.borderLight,
+      borderRadius: 6,
+      marginRight: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+    },
+    checkboxChecked: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primary,
+    },
+    checkmark: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: 'bold',
+    },
+    checkboxLabel: {
+      flex: 1,
+      fontSize: 15,
+      color: isDark ? colors.text : colors.textLight,
     },
     footer: {
       marginTop: 40,

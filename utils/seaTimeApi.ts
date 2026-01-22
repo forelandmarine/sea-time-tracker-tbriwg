@@ -5,7 +5,8 @@ import Constants from 'expo-constants';
 
 export const API_BASE_URL =
   Constants.expoConfig?.extra?.backendUrl || 'http://localhost:3000';
-const TOKEN_KEY = 'seatime_auth_token';
+export const TOKEN_KEY = 'seatime_auth_token';
+export const BIOMETRIC_CREDENTIALS_KEY = 'seatime_biometric_credentials';
 
 // Helper to normalize vessel data from API
 const normalizeVessel = (vessel: any) => {
