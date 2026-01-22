@@ -17,6 +17,7 @@ import {
   Platform,
   Image,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
@@ -51,6 +52,59 @@ interface SeaTimeSummary {
     total_hours: number;
   }[];
 }
+
+interface Vessel {
+  id: string;
+  mmsi: string;
+  vessel_name: string;
+  is_active: boolean;
+  created_at: string;
+  flag?: string;
+  official_number?: string;
+  vessel_type?: string;
+  length_metres?: number;
+  gross_tonnes?: number;
+  callsign?: string;
+}
+
+interface SeaDayDefinition {
+  title: string;
+  description: string;
+  department: 'deck' | 'engineering' | 'both';
+}
+
+const SEA_DAY_DEFINITIONS: SeaDayDefinition[] = [
+  {
+    title: 'Actual Day at Sea',
+    description: 'Main propulsion machinery runs ≥4 hours within the same calendar day, OR vessel is powered by wind (sail yachts only)',
+    department: 'both',
+  },
+  {
+    title: 'Watchkeeping Service (Deck)',
+    description: 'Bridge watch while vessel is underway. Every 4 hours of watchkeeping = 1 watchkeeping day. Requires OOW 3000 Certificate.',
+    department: 'deck',
+  },
+  {
+    title: 'Watchkeeping Service (Engineering)',
+    description: 'Engine room watch while vessel is underway. Every 4 hours = 1 watchkeeping day. Accumulative across multiple days.',
+    department: 'engineering',
+  },
+  {
+    title: 'Additional Watchkeeping (Engineering)',
+    description: 'Engine room watchkeeping while vessel is at anchor or moored. Generators must be running with safe watchkeeping maintained.',
+    department: 'engineering',
+  },
+  {
+    title: 'Yard Service',
+    description: 'Standing by a vessel during build, refit, or serious repair. Maximum 90 days per OOW 3000 application. Routine maintenance does NOT qualify.',
+    department: 'both',
+  },
+  {
+    title: 'Anchor Time',
+    description: 'Generally excluded. Included ONLY if: part of active 24-hour passage, operational necessity (berth wait, canal transit, weather), anchor duration ≤ previous voyage segment, not final end of passage.',
+    department: 'both',
+  },
+];
 
 const createStyles = (isDark: boolean, topInset: number) =>
   StyleSheet.create({
@@ -254,13 +308,114 @@ const createStyles = (isDark: boolean, topInset: number) =>
       fontWeight: '600',
       color: colors.primary,
     },
+    vesselButton: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    vesselButtonLast: {
+      borderBottomWidth: 0,
+    },
+    vesselButtonLeft: {
+      flex: 1,
+    },
+    vesselName: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 2,
+    },
+    vesselHours: {
+      fontSize: 13,
+      color: colors.primary,
+    },
+    definitionCard: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 10,
+      padding: 14,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    definitionTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 6,
+    },
+    definitionDescription: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      lineHeight: 20,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 16,
+      padding: 20,
+      width: '100%',
+      maxWidth: 400,
+      maxHeight: '80%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: isDark ? colors.text : colors.textLight,
+      flex: 1,
+    },
+    closeButton: {
+      padding: 4,
+    },
+    modalScrollView: {
+      maxHeight: 400,
+    },
+    particularRow: {
+      flexDirection: 'row',
+      paddingVertical: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    particularRowLast: {
+      borderBottomWidth: 0,
+    },
+    particularLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      width: 120,
+    },
+    particularValue: {
+      fontSize: 14,
+      color: isDark ? colors.text : colors.textLight,
+      flex: 1,
+    },
   });
 
 export default function ProfileScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [summary, setSummary] = useState<SeaTimeSummary | null>(null);
+  const [vessels, setVessels] = useState<Vessel[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(true);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [downloadingCSV, setDownloadingCSV] = useState(false);
+  const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
+  const [showVesselModal, setShowVesselModal] = useState(false);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const insets = useSafeAreaInsets();
@@ -273,6 +428,7 @@ export default function ProfileScreen() {
   useEffect(() => {
     loadProfile();
     loadSummary();
+    loadVessels();
   }, []);
 
   const loadProfile = async () => {
@@ -302,6 +458,17 @@ export default function ProfileScreen() {
     }
   };
 
+  const loadVessels = async () => {
+    console.log('Loading vessels');
+    try {
+      const data = await seaTimeApi.getVessels();
+      console.log('Vessels loaded:', data);
+      setVessels(data);
+    } catch (error) {
+      console.error('Failed to load vessels:', error);
+    }
+  };
+
   const handleEditProfile = () => {
     console.log('User tapped Edit Profile');
     router.push('/user-profile');
@@ -317,9 +484,118 @@ export default function ProfileScreen() {
     router.push('/mca-requirements');
   };
 
-  const handleViewReports = () => {
-    console.log('User tapped View Detailed Reports');
-    router.push('/reports');
+  const handleVesselPress = (vesselName: string) => {
+    console.log('User tapped vessel:', vesselName);
+    const vessel = vessels.find((v) => v.vessel_name === vesselName);
+    if (vessel) {
+      setSelectedVessel(vessel);
+      setShowVesselModal(true);
+    }
+  };
+
+  const handleCloseModal = () => {
+    console.log('User closed vessel modal');
+    setShowVesselModal(false);
+    setSelectedVessel(null);
+  };
+
+  const formatServiceType = (serviceType: string): string => {
+    const typeMap: { [key: string]: string } = {
+      'actual_sea_service': 'Actual Sea Service',
+      'watchkeeping_service': 'Watchkeeping Service',
+      'standby_service': 'Stand-by Service',
+      'yard_service': 'Yard Service',
+      'service_in_port': 'Service in Port',
+    };
+    return typeMap[serviceType] || serviceType;
+  };
+
+  const handleDownloadPDF = async () => {
+    console.log('User tapped Download PDF Report');
+    setDownloadingPDF(true);
+    try {
+      const pdfBlob = await seaTimeApi.downloadPDFReport();
+      console.log('PDF report downloaded, blob size:', pdfBlob.size);
+
+      if (Platform.OS === 'web') {
+        const url = URL.createObjectURL(pdfBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `SeaTime_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        Alert.alert('Success', 'PDF report downloaded successfully');
+      } else {
+        const fileUri = `${FileSystem.documentDirectory}SeaTime_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+        
+        const reader = new FileReader();
+        reader.readAsDataURL(pdfBlob);
+        reader.onloadend = async () => {
+          const base64data = reader.result as string;
+          const base64 = base64data.split(',')[1];
+          
+          await FileSystem.writeAsStringAsync(fileUri, base64, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          
+          console.log('PDF saved to:', fileUri);
+          
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(fileUri);
+          } else {
+            Alert.alert('Success', 'PDF report saved to device');
+          }
+        };
+      }
+    } catch (error) {
+      console.error('Failed to download PDF report:', error);
+      Alert.alert('Error', 'Failed to download PDF report. Please try again.');
+    } finally {
+      setDownloadingPDF(false);
+    }
+  };
+
+  const handleDownloadCSV = async () => {
+    console.log('User tapped Download CSV Report');
+    setDownloadingCSV(true);
+    try {
+      const csvData = await seaTimeApi.downloadCSVReport();
+      console.log('CSV report downloaded, size:', csvData.length);
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csvData], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `SeaTime_Report_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        Alert.alert('Success', 'CSV report downloaded successfully');
+      } else {
+        const fileUri = `${FileSystem.documentDirectory}SeaTime_Report_${new Date().toISOString().split('T')[0]}.csv`;
+        
+        await FileSystem.writeAsStringAsync(fileUri, csvData, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        
+        console.log('CSV saved to:', fileUri);
+        
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri);
+        } else {
+          Alert.alert('Success', 'CSV report saved to device');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to download CSV report:', error);
+      Alert.alert('Error', 'Failed to download CSV report. Please try again.');
+    } finally {
+      setDownloadingCSV(false);
+    }
   };
 
   const handleSignOut = async () => {
@@ -382,6 +658,12 @@ export default function ProfileScreen() {
   const displayName = profile.name || 'User';
   const initials = getInitials(profile.name);
   const totalDaysDisplay = summary?.total_days.toFixed(2) || '0.00';
+  const totalHoursDisplay = summary?.total_hours.toFixed(2) || '0.00';
+
+  const userDepartment = profile?.department?.toLowerCase();
+  const filteredDefinitions = SEA_DAY_DEFINITIONS.filter(
+    (def) => def.department === 'both' || def.department === userDepartment
+  );
 
   console.log('Profile image URL:', imageUrl);
 
@@ -424,127 +706,325 @@ export default function ProfileScreen() {
             )}
           </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Sea Time Summary</Text>
-          <View style={styles.card}>
-            {loadingSummary ? (
-              <Text style={styles.loadingText}>Loading summary...</Text>
-            ) : summary ? (
-              <>
-                {summary.entries_by_vessel.length === 0 && (
-                  <Text style={styles.loadingText}>No confirmed sea time entries yet</Text>
-                )}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sea Time Summary</Text>
+            <View style={styles.card}>
+              {loadingSummary ? (
+                <Text style={styles.loadingText}>Loading summary...</Text>
+              ) : summary ? (
+                <>
+                  {summary.entries_by_vessel.length === 0 && (
+                    <Text style={styles.loadingText}>No confirmed sea time entries yet</Text>
+                  )}
 
-                {summary.entries_by_vessel.length > 0 && (
-                  <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>Total Sea Time</Text>
-                    <Text style={styles.totalValue}>{totalDaysDisplay} days</Text>
-                  </View>
-                )}
-              </>
-            ) : (
-              <Text style={styles.loadingText}>Unable to load summary</Text>
-            )}
+                  {summary.entries_by_vessel.length > 0 && (
+                    <>
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Total Hours</Text>
+                        <Text style={styles.summaryValue}>{totalHoursDisplay} hrs</Text>
+                      </View>
+                      <View style={[styles.summaryRow, styles.summaryRowLast]}>
+                        <Text style={styles.summaryLabel}>Total Days</Text>
+                        <Text style={styles.summaryValue}>{totalDaysDisplay} days</Text>
+                      </View>
+                    </>
+                  )}
+                </>
+              ) : (
+                <Text style={styles.loadingText}>Unable to load summary</Text>
+              )}
+            </View>
           </View>
-          
-          {summary && summary.entries_by_vessel.length > 0 && (
-            <TouchableOpacity style={styles.reportButton} onPress={handleViewReports}>
-              <IconSymbol
-                ios_icon_name="chart.bar.fill"
-                android_material_icon_name="assessment"
-                size={24}
-                color="#ffffff"
-              />
-              <Text style={styles.reportButtonText}>View Detailed Reports</Text>
-            </TouchableOpacity>
+
+          {!loadingSummary && summary && summary.entries_by_vessel.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Sea Time by Vessel</Text>
+              <View style={styles.card}>
+                {summary.entries_by_vessel.map((vessel, index) => {
+                  const vesselDays = (vessel.total_hours / 24).toFixed(2);
+                  const vesselHours = vessel.total_hours.toFixed(2);
+                  const isLast = index === summary.entries_by_vessel.length - 1;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={[styles.vesselButton, isLast && styles.vesselButtonLast]}
+                      onPress={() => handleVesselPress(vessel.vessel_name)}
+                    >
+                      <View style={styles.vesselButtonLeft}>
+                        <Text style={styles.vesselName}>{vessel.vessel_name}</Text>
+                        <Text style={styles.vesselHours}>
+                          {vesselDays} days ({vesselHours} hrs)
+                        </Text>
+                      </View>
+                      <IconSymbol
+                        ios_icon_name="chevron.right"
+                        android_material_icon_name="arrow-forward"
+                        size={20}
+                        color={colors.textSecondary}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
           )}
-        </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
-          <View style={styles.card}>
-            <TouchableOpacity style={styles.menuItem} onPress={handleEditProfile}>
-              <IconSymbol
-                ios_icon_name="person.circle"
-                android_material_icon_name="person"
-                size={24}
-                color={colors.primary}
-                style={styles.menuItemIcon}
-              />
-              <Text style={styles.menuItemText}>Edit Profile</Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={20}
-                color={colors.textSecondary}
-                style={styles.menuItemChevron}
-              />
-            </TouchableOpacity>
+          {!loadingSummary && summary && summary.entries_by_service_type && summary.entries_by_service_type.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Sea Time by Service Type</Text>
+              <View style={styles.card}>
+                {summary.entries_by_service_type.map((serviceEntry, index) => {
+                  const serviceDays = (serviceEntry.total_hours / 24).toFixed(2);
+                  const isLast = index === summary.entries_by_service_type!.length - 1;
+                  const formattedType = formatServiceType(serviceEntry.service_type);
+                  
+                  return (
+                    <View
+                      key={index}
+                      style={[styles.summaryRow, isLast && styles.summaryRowLast]}
+                    >
+                      <Text style={styles.summaryLabel}>{formattedType}</Text>
+                      <Text style={styles.summaryValue}>
+                        {serviceDays} days
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
 
-            <TouchableOpacity style={styles.menuItem} onPress={handleScheduledTasks}>
-              <IconSymbol
-                ios_icon_name="clock"
-                android_material_icon_name="schedule"
-                size={24}
-                color={colors.primary}
-                style={styles.menuItemIcon}
-              />
-              <Text style={styles.menuItemText}>Scheduled Tasks</Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={20}
-                color={colors.textSecondary}
-                style={styles.menuItemChevron}
-              />
-            </TouchableOpacity>
+          {profile.department && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Sea Day Definitions</Text>
+              {filteredDefinitions.map((definition, index) => (
+                <View key={index} style={styles.definitionCard}>
+                  <Text style={styles.definitionTitle}>{definition.title}</Text>
+                  <Text style={styles.definitionDescription}>{definition.description}</Text>
+                </View>
+              ))}
+            </View>
+          )}
 
-            <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/notification-settings')}>
-              <IconSymbol
-                ios_icon_name="bell"
-                android_material_icon_name="notifications"
-                size={24}
-                color={colors.primary}
-                style={styles.menuItemIcon}
-              />
-              <Text style={styles.menuItemText}>Notification Settings</Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={20}
-                color={colors.textSecondary}
-                style={styles.menuItemChevron}
-              />
-            </TouchableOpacity>
+          {!loadingSummary && summary && summary.entries_by_vessel.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Download Reports</Text>
+              <View style={styles.card}>
+                <TouchableOpacity
+                  style={styles.reportButton}
+                  onPress={handleDownloadPDF}
+                  disabled={downloadingPDF}
+                >
+                  {downloadingPDF ? (
+                    <ActivityIndicator color="#ffffff" />
+                  ) : (
+                    <>
+                      <IconSymbol
+                        ios_icon_name="doc.fill"
+                        android_material_icon_name="description"
+                        size={24}
+                        color="#ffffff"
+                      />
+                      <Text style={styles.reportButtonText}>Download PDF Report</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.menuItem, styles.menuItemLast]}
-              onPress={handleMCARequirements}
-            >
-              <IconSymbol
-                ios_icon_name="doc.text"
-                android_material_icon_name="description"
-                size={24}
-                color={colors.primary}
-                style={styles.menuItemIcon}
-              />
-              <Text style={styles.menuItemText}>MCA Requirements</Text>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={20}
-                color={colors.textSecondary}
-                style={styles.menuItemChevron}
-              />
-            </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.reportButton}
+                  onPress={handleDownloadCSV}
+                  disabled={downloadingCSV}
+                >
+                  {downloadingCSV ? (
+                    <ActivityIndicator color="#ffffff" />
+                  ) : (
+                    <>
+                      <IconSymbol
+                        ios_icon_name="tablecells"
+                        android_material_icon_name="grid-on"
+                        size={24}
+                        color="#ffffff"
+                      />
+                      <Text style={styles.reportButtonText}>Download CSV Report</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Account</Text>
+            <View style={styles.card}>
+              <TouchableOpacity style={styles.menuItem} onPress={handleEditProfile}>
+                <IconSymbol
+                  ios_icon_name="person.circle"
+                  android_material_icon_name="person"
+                  size={24}
+                  color={colors.primary}
+                  style={styles.menuItemIcon}
+                />
+                <Text style={styles.menuItemText}>Edit Profile</Text>
+                <IconSymbol
+                  ios_icon_name="chevron.right"
+                  android_material_icon_name="arrow-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                  style={styles.menuItemChevron}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.menuItem} onPress={handleScheduledTasks}>
+                <IconSymbol
+                  ios_icon_name="clock"
+                  android_material_icon_name="schedule"
+                  size={24}
+                  color={colors.primary}
+                  style={styles.menuItemIcon}
+                />
+                <Text style={styles.menuItemText}>Scheduled Tasks</Text>
+                <IconSymbol
+                  ios_icon_name="chevron.right"
+                  android_material_icon_name="arrow-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                  style={styles.menuItemChevron}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/notification-settings')}>
+                <IconSymbol
+                  ios_icon_name="bell"
+                  android_material_icon_name="notifications"
+                  size={24}
+                  color={colors.primary}
+                  style={styles.menuItemIcon}
+                />
+                <Text style={styles.menuItemText}>Notification Settings</Text>
+                <IconSymbol
+                  ios_icon_name="chevron.right"
+                  android_material_icon_name="arrow-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                  style={styles.menuItemChevron}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.menuItem, styles.menuItemLast]}
+                onPress={handleMCARequirements}
+              >
+                <IconSymbol
+                  ios_icon_name="doc.text"
+                  android_material_icon_name="description"
+                  size={24}
+                  color={colors.primary}
+                  style={styles.menuItemIcon}
+                />
+                <Text style={styles.menuItemText}>MCA Requirements</Text>
+                <IconSymbol
+                  ios_icon_name="chevron.right"
+                  android_material_icon_name="arrow-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                  style={styles.menuItemChevron}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
 
           <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
             <Text style={styles.signOutButtonText}>Sign Out</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showVesselModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleCloseModal}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={handleCloseModal}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Yacht Particulars</Text>
+                <TouchableOpacity onPress={handleCloseModal} style={styles.closeButton}>
+                  <IconSymbol
+                    ios_icon_name="xmark"
+                    android_material_icon_name="close"
+                    size={24}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalScrollView}>
+                {selectedVessel && (
+                  <>
+                    <View style={styles.particularRow}>
+                      <Text style={styles.particularLabel}>Vessel Name</Text>
+                      <Text style={styles.particularValue}>{selectedVessel.vessel_name}</Text>
+                    </View>
+                    <View style={styles.particularRow}>
+                      <Text style={styles.particularLabel}>MMSI</Text>
+                      <Text style={styles.particularValue}>{selectedVessel.mmsi}</Text>
+                    </View>
+                    {selectedVessel.flag && (
+                      <View style={styles.particularRow}>
+                        <Text style={styles.particularLabel}>Flag</Text>
+                        <Text style={styles.particularValue}>{selectedVessel.flag}</Text>
+                      </View>
+                    )}
+                    {selectedVessel.official_number && (
+                      <View style={styles.particularRow}>
+                        <Text style={styles.particularLabel}>Official Number</Text>
+                        <Text style={styles.particularValue}>{selectedVessel.official_number}</Text>
+                      </View>
+                    )}
+                    {selectedVessel.vessel_type && (
+                      <View style={styles.particularRow}>
+                        <Text style={styles.particularLabel}>Vessel Type</Text>
+                        <Text style={styles.particularValue}>{selectedVessel.vessel_type}</Text>
+                      </View>
+                    )}
+                    {selectedVessel.length_metres && (
+                      <View style={styles.particularRow}>
+                        <Text style={styles.particularLabel}>Length</Text>
+                        <Text style={styles.particularValue}>{selectedVessel.length_metres}m</Text>
+                      </View>
+                    )}
+                    {selectedVessel.gross_tonnes && (
+                      <View style={styles.particularRow}>
+                        <Text style={styles.particularLabel}>Gross Tonnes</Text>
+                        <Text style={styles.particularValue}>{selectedVessel.gross_tonnes}</Text>
+                      </View>
+                    )}
+                    {selectedVessel.callsign && (
+                      <View style={styles.particularRow}>
+                        <Text style={styles.particularLabel}>Callsign</Text>
+                        <Text style={styles.particularValue}>{selectedVessel.callsign}</Text>
+                      </View>
+                    )}
+                    <View style={[styles.particularRow, styles.particularRowLast]}>
+                      <Text style={styles.particularLabel}>Status</Text>
+                      <Text style={styles.particularValue}>
+                        {selectedVessel.is_active ? 'Active' : 'Inactive'}
+                      </Text>
+                    </View>
+                  </>
+                )}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
