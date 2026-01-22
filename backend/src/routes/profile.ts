@@ -299,6 +299,144 @@ export function register(app: App, fastify: FastifyInstance) {
     }
   );
 
+  // PUT /api/profile/department - Update user's department/pathway
+  fastify.put<{ Body: { department: string } }>(
+    '/api/profile/department',
+    {
+      schema: {
+        description: 'Update user department/pathway (Deck or Engineering) - required for first-time setup',
+        tags: ['profile'],
+        body: {
+          type: 'object',
+          required: ['department'],
+          properties: {
+            department: { type: 'string', enum: ['deck', 'engineering'], description: 'Department pathway: deck or engineering' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              name: { type: 'string' },
+              email: { type: 'string' },
+              emailVerified: { type: 'boolean' },
+              image: { type: ['string', 'null'] },
+              imageUrl: { type: ['string', 'null'] },
+              address: { type: ['string', 'null'] },
+              tel_no: { type: ['string', 'null'] },
+              date_of_birth: { type: ['string', 'null'] },
+              srb_no: { type: ['string', 'null'] },
+              nationality: { type: ['string', 'null'] },
+              pya_membership_no: { type: ['string', 'null'] },
+              department: { type: ['string', 'null'], enum: ['deck', 'engineering'] },
+              createdAt: { type: 'string' },
+              updatedAt: { type: 'string' },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+          401: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { department } = request.body;
+
+      app.logger.info({ department }, 'Department selection request');
+
+      // Validate department is provided
+      if (!department || !['deck', 'engineering'].includes(department)) {
+        app.logger.warn({ department }, 'Invalid department provided');
+        return reply.code(400).send({ error: 'Invalid department. Must be "deck" or "engineering"' });
+      }
+
+      // Get token from Authorization header
+      const authHeader = request.headers.authorization;
+      const token = authHeader?.replace('Bearer ', '');
+
+      if (!token) {
+        app.logger.warn({}, 'Department update without authentication');
+        return reply.code(401).send({ error: 'Authentication required' });
+      }
+
+      // Find session by token
+      const sessions = await app.db
+        .select()
+        .from(authSchema.session)
+        .where(eq(authSchema.session.token, token));
+
+      if (sessions.length === 0) {
+        app.logger.warn({}, 'Invalid token for department update');
+        return reply.code(401).send({ error: 'Invalid or expired token' });
+      }
+
+      const session = sessions[0];
+
+      // Check if session is expired
+      if (session.expiresAt < new Date()) {
+        app.logger.warn({ sessionId: session.id }, 'Session expired for department update');
+        return reply.code(401).send({ error: 'Session expired' });
+      }
+
+      // Get user
+      const users = await app.db
+        .select()
+        .from(authSchema.user)
+        .where(eq(authSchema.user.id, session.userId));
+
+      if (users.length === 0) {
+        app.logger.warn({ userId: session.userId }, 'User not found for department update');
+        return reply.code(401).send({ error: 'User not found' });
+      }
+
+      const user = users[0];
+
+      // Update user department
+      const [updatedUser] = await app.db
+        .update(authSchema.user)
+        .set({
+          department,
+          updatedAt: new Date(),
+        })
+        .where(eq(authSchema.user.id, user.id))
+        .returning();
+
+      // Generate signed URL for profile image if it exists
+      let imageUrl: string | null = null;
+      if (updatedUser.image) {
+        try {
+          const { url } = await app.storage.getSignedUrl(updatedUser.image);
+          imageUrl = url;
+        } catch (error) {
+          app.logger.warn({ userId: updatedUser.id, imageKey: updatedUser.image, err: error }, 'Failed to generate signed URL for profile image');
+        }
+      }
+
+      app.logger.info(
+        { userId: updatedUser.id, department },
+        `Department updated successfully to: ${department}`
+      );
+
+      return reply.code(200).send({
+        id: updatedUser.id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        emailVerified: updatedUser.emailVerified,
+        image: updatedUser.image,
+        imageUrl,
+        address: updatedUser.address || null,
+        tel_no: updatedUser.tel_no || null,
+        date_of_birth: updatedUser.date_of_birth || null,
+        srb_no: updatedUser.srb_no || null,
+        nationality: updatedUser.nationality || null,
+        pya_membership_no: updatedUser.pya_membership_no || null,
+        department: updatedUser.department || null,
+        createdAt: updatedUser.createdAt.toISOString(),
+        updatedAt: updatedUser.updatedAt.toISOString(),
+      });
+    }
+  );
+
   // POST /api/profile/upload-image - Upload profile picture
   fastify.post(
     '/api/profile/upload-image',

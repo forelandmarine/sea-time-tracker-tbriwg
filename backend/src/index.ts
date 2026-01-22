@@ -20,7 +20,7 @@
  * - Reports: GET /api/reports/csv, GET /api/reports/pdf, GET /api/reports/summary
  * - Tracking: GET /api/tracking/vessel/:vesselId
  * - Authentication: POST /api/auth/sign-up/email, POST /api/auth/sign-in/email, POST /api/auth/sign-in/apple, GET /api/auth/user, POST /api/auth/sign-out
- * - User Profile: GET /api/profile, PUT /api/profile, POST /api/profile/upload-image
+ * - User Profile: GET /api/profile, PUT /api/profile, PUT /api/profile/department, POST /api/profile/upload-image
  * - Notifications: GET /api/notifications/schedule, PUT /api/notifications/schedule, GET /api/notifications/check-due
  */
 
