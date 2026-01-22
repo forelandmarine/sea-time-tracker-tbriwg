@@ -1,16 +1,11 @@
 
 import "react-native-reanimated";
 import React, { useEffect, useState } from "react";
-import { useFonts } from "expo-font";
 import { Stack, useRouter, useSegments, usePathname } from "expo-router";
-import * as SplashScreen from "expo-splash-screen";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { useColorScheme, Alert, Platform, View, Text } from "react-native";
-
-// Platform-specific imports for native-only modules
-const SystemBars = Platform.OS !== 'web' ? require("react-native-edge-to-edge").SystemBars : null;
-const useNetworkState = Platform.OS !== 'web' ? require("expo-network").useNetworkState : () => ({ isConnected: true, isInternetReachable: true });
-const Notifications = Platform.OS !== 'web' ? require('expo-notifications') : null;
+import { useFonts } from "expo-font";
+import * as SplashScreen from "expo-splash-screen";
 import {
   DarkTheme,
   DefaultTheme,
@@ -24,6 +19,11 @@ import { BACKEND_URL } from "@/utils/api";
 import { registerForPushNotificationsAsync } from "@/utils/notifications";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useNotifications } from "@/hooks/useNotifications";
+
+// Platform-specific imports for native-only modules
+const SystemBars = Platform.OS !== 'web' ? require("react-native-edge-to-edge").SystemBars : null;
+const useNetworkState = Platform.OS !== 'web' ? require("expo-network").useNetworkState : () => ({ isConnected: true, isInternetReachable: true });
+const Notifications = Platform.OS !== 'web' ? require('expo-notifications') : null;
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 if (Platform.OS !== 'web') {
@@ -133,7 +133,7 @@ function RootLayoutNav() {
         setIsNavigating(false);
       }, 100);
     }
-  }, [user, loading, loaded, pathname, segments, isNavigating]);
+  }, [user, loading, loaded, pathname, segments, isNavigating, router]);
 
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
@@ -338,6 +338,16 @@ function RootLayoutNav() {
             {/* Debug logs screen */}
             <Stack.Screen 
               name="debug/[vesselId]" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                headerBackTitle: 'Back',
+              }} 
+            />
+
+            {/* Reports screen */}
+            <Stack.Screen 
+              name="reports" 
               options={{ 
                 headerShown: false,
                 presentation: 'card',

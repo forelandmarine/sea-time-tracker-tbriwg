@@ -38,18 +38,18 @@ interface UserProfile {
 interface SeaTimeSummary {
   total_hours: number;
   total_days: number;
-  entries_by_vessel: Array<{
+  entries_by_vessel: {
     vessel_name: string;
     total_hours: number;
-  }>;
-  entries_by_month: Array<{
+  }[];
+  entries_by_month: {
     month: string;
     total_hours: number;
-  }>;
-  entries_by_service_type?: Array<{
+  }[];
+  entries_by_service_type?: {
     service_type: string;
     total_hours: number;
-  }>;
+  }[];
 }
 
 const createStyles = (isDark: boolean, topInset: number) =>
@@ -320,6 +320,17 @@ export default function ProfileScreen() {
   const handleViewReports = () => {
     console.log('User tapped View Detailed Reports');
     router.push('/reports');
+  };
+
+  const formatServiceType = (serviceType: string): string => {
+    const typeMap: { [key: string]: string } = {
+      'actual_sea_service': 'Actual Sea Service',
+      'watchkeeping_service': 'Watchkeeping Service',
+      'standby_service': 'Stand-by Service',
+      'yard_service': 'Yard Service',
+      'service_in_port': 'Service in Port',
+    };
+    return typeMap[serviceType] || serviceType;
   };
 
   const formatServiceType = (serviceType: string): string => {

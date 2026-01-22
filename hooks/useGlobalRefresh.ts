@@ -1,5 +1,5 @@
 
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 
 /**
@@ -22,7 +22,7 @@ export function useGlobalRefresh(onRefresh?: () => void) {
       console.log('[useGlobalRefresh] Refresh triggered, calling onRefresh callback');
       onRefresh();
     }
-  }, [refreshTrigger]);
+  }, [refreshTrigger, onRefresh]);
 
   return { triggerRefresh, refreshTrigger };
 }

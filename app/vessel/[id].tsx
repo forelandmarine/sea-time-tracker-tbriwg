@@ -399,7 +399,7 @@ export default function VesselDetailScreen() {
       console.log('[VesselDetail] Screen unmounting, triggering global refresh');
       triggerRefresh();
     };
-  }, []);
+  }, [triggerRefresh]);
 
   if (loading) {
     return (

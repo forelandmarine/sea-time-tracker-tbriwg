@@ -11,6 +11,7 @@ let storage: any = null;
 if (Platform.OS === 'ios' && typeof window === 'undefined') {
   try {
     console.log('[WidgetContext] Attempting to load @bacons/apple-targets for iOS...');
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const appleTargets = require("@bacons/apple-targets");
     ExtensionStorage = appleTargets.ExtensionStorage;
     // Initialize storage with your group ID

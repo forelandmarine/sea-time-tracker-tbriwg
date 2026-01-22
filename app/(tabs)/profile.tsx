@@ -37,18 +37,18 @@ interface UserProfile {
 interface SeaTimeSummary {
   total_hours: number;
   total_days: number;
-  entries_by_vessel: Array<{
+  entries_by_vessel: {
     vessel_name: string;
     total_hours: number;
-  }>;
-  entries_by_month: Array<{
+  }[];
+  entries_by_month: {
     month: string;
     total_hours: number;
-  }>;
-  entries_by_service_type?: Array<{
+  }[];
+  entries_by_service_type?: {
     service_type: string;
     total_hours: number;
-  }>;
+  }[];
 }
 
 const createStyles = (isDark: boolean) =>

@@ -1,8 +1,6 @@
-import React from "react";
-import { Pressable, StyleSheet, useColorScheme, View, Text, Platform } from "react-native";
 
-// Platform-specific import - only load on native platforms
-const Haptics = Platform.OS !== 'web' ? require("expo-haptics") : null;
+import React from "react";
+import { Platform, Pressable, StyleSheet, useColorScheme, View, Text } from "react-native";
 import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, {
   configureReanimatedLogger,
@@ -14,6 +12,9 @@ import Reanimated from "react-native-reanimated";
 import { appleRed, borderColor } from "@/constants/Colors";
 import { IconCircle } from "./IconCircle";
 import { IconSymbol } from "./IconSymbol";
+
+// Platform-specific import - only load on native platforms
+const Haptics = Platform.OS !== 'web' ? require("expo-haptics") : null;
 
 configureReanimatedLogger({ strict: false });
 

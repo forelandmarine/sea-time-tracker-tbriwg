@@ -2,7 +2,9 @@
 import { Platform } from 'react-native';
 
 // Platform-specific imports - only load on native platforms
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Notifications = Platform.OS !== 'web' ? require('expo-notifications') : null;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Device = Platform.OS !== 'web' ? require('expo-device') : null;
 
 console.log('[Notifications] Notification utility initialized');

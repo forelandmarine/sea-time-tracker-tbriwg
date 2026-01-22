@@ -18,7 +18,7 @@ export default function TabLayout() {
     console.log('[TabLayout] Navigation detected to:', pathname);
     console.log('[TabLayout] Triggering global refresh');
     triggerRefresh();
-  }, [pathname]);
+  }, [pathname, triggerRefresh]);
 
   // Show loading state while checking auth
   if (loading) {
