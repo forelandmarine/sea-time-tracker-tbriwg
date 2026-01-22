@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "SeaTime Tracker",
@@ -57,7 +58,9 @@
         "projectId": "d982d462-52e2-493e-a176-8f75b09d5ef9"
       }
     },
-    "runtimeVersion": "1.0.2",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "updates": {
       "enabled": false,
       "checkAutomatically": "ON_ERROR_RECOVERY",
