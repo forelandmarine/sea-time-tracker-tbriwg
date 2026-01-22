@@ -534,163 +534,166 @@ export default function SeaTimeScreen() {
 
       {/* Add Vessel Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
+        <View style={styles.modalOverlay}>
           <TouchableOpacity 
             style={styles.modalBackdrop} 
             activeOpacity={1} 
             onPress={() => setModalVisible(false)}
           />
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add New Vessel</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <IconSymbol
-                  ios_icon_name="xmark.circle.fill"
-                  android_material_icon_name="cancel"
-                  size={28}
-                  color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={styles.modalScrollView}
-              contentContainerStyle={styles.modalScrollContent}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={true}
-            >
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Vessel Name *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., MV Serenity"
-                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                  value={newVesselName}
-                  onChangeText={setNewVesselName}
-                  returnKeyType="next"
-                />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalContentWrapper}
+          >
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Add New Vessel</Text>
+                <TouchableOpacity onPress={() => setModalVisible(false)}>
+                  <IconSymbol
+                    ios_icon_name="xmark.circle.fill"
+                    android_material_icon_name="cancel"
+                    size={28}
+                    color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  />
+                </TouchableOpacity>
               </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>MMSI Number *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., 235012345"
-                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                  value={newMMSI}
-                  onChangeText={setNewMMSI}
-                  keyboardType="numeric"
-                  returnKeyType="next"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Call Sign</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., GBAA"
-                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                  value={newCallSign}
-                  onChangeText={setNewCallSign}
-                  autoCapitalize="characters"
-                  returnKeyType="next"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Flag</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., United Kingdom"
-                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                  value={newFlag}
-                  onChangeText={setNewFlag}
-                  returnKeyType="next"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Official No.</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., 123456"
-                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                  value={newOfficialNumber}
-                  onChangeText={setNewOfficialNumber}
-                  returnKeyType="next"
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Type (Motor/Sail)</Text>
-                <View style={styles.typeButtonContainer}>
-                  <TouchableOpacity
-                    style={[
-                      styles.typeButton,
-                      newVesselType === 'Motor' && styles.typeButtonActive
-                    ]}
-                    onPress={() => setNewVesselType('Motor')}
-                  >
-                    <Text style={[
-                      styles.typeButtonText,
-                      newVesselType === 'Motor' && styles.typeButtonTextActive
-                    ]}>
-                      Motor
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.typeButton,
-                      newVesselType === 'Sail' && styles.typeButtonActive
-                    ]}
-                    onPress={() => setNewVesselType('Sail')}
-                  >
-                    <Text style={[
-                      styles.typeButtonText,
-                      newVesselType === 'Sail' && styles.typeButtonTextActive
-                    ]}>
-                      Sail
-                    </Text>
-                  </TouchableOpacity>
+              <ScrollView
+                style={styles.modalScrollView}
+                contentContainerStyle={styles.modalScrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={true}
+                bounces={false}
+              >
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Vessel Name *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., MV Serenity"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newVesselName}
+                    onChangeText={setNewVesselName}
+                    returnKeyType="next"
+                  />
                 </View>
-              </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Length (metres)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., 45.5"
-                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                  value={newLengthMetres}
-                  onChangeText={setNewLengthMetres}
-                  keyboardType="decimal-pad"
-                  returnKeyType="next"
-                />
-              </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>MMSI Number *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 235012345"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newMMSI}
+                    onChangeText={setNewMMSI}
+                    keyboardType="numeric"
+                    returnKeyType="next"
+                  />
+                </View>
 
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Gross Tonnes</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., 500"
-                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                  value={newGrossTonnes}
-                  onChangeText={setNewGrossTonnes}
-                  keyboardType="decimal-pad"
-                  returnKeyType="done"
-                  onSubmitEditing={handleAddVessel}
-                />
-              </View>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Call Sign</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., GBAA"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newCallSign}
+                    onChangeText={setNewCallSign}
+                    autoCapitalize="characters"
+                    returnKeyType="next"
+                  />
+                </View>
 
-              <TouchableOpacity style={styles.submitButton} onPress={handleAddVessel}>
-                <Text style={styles.submitButtonText}>Add Vessel</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Flag</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., United Kingdom"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newFlag}
+                    onChangeText={setNewFlag}
+                    returnKeyType="next"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Official No.</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 123456"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newOfficialNumber}
+                    onChangeText={setNewOfficialNumber}
+                    returnKeyType="next"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Type (Motor/Sail)</Text>
+                  <View style={styles.typeButtonContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeButton,
+                        newVesselType === 'Motor' && styles.typeButtonActive
+                      ]}
+                      onPress={() => setNewVesselType('Motor')}
+                    >
+                      <Text style={[
+                        styles.typeButtonText,
+                        newVesselType === 'Motor' && styles.typeButtonTextActive
+                      ]}>
+                        Motor
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.typeButton,
+                        newVesselType === 'Sail' && styles.typeButtonActive
+                      ]}
+                      onPress={() => setNewVesselType('Sail')}
+                    >
+                      <Text style={[
+                        styles.typeButtonText,
+                        newVesselType === 'Sail' && styles.typeButtonTextActive
+                      ]}>
+                        Sail
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Length (metres)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 45.5"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newLengthMetres}
+                    onChangeText={setNewLengthMetres}
+                    keyboardType="decimal-pad"
+                    returnKeyType="next"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Gross Tonnes</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 500"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newGrossTonnes}
+                    onChangeText={setNewGrossTonnes}
+                    keyboardType="decimal-pad"
+                    returnKeyType="done"
+                    onSubmitEditing={handleAddVessel}
+                  />
+                </View>
+
+                <TouchableOpacity style={styles.submitButton} onPress={handleAddVessel}>
+                  <Text style={styles.submitButtonText}>Add Vessel</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
       </Modal>
     </View>
   );
@@ -985,11 +988,14 @@ function createStyles(isDark: boolean, topInset: number) {
       right: 0,
       bottom: 0,
     },
+    modalContentWrapper: {
+      maxHeight: SCREEN_HEIGHT * 0.9,
+    },
     modalContent: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
-      maxHeight: SCREEN_HEIGHT * 0.85,
+      height: '100%',
     },
     modalHeader: {
       flexDirection: 'row',
