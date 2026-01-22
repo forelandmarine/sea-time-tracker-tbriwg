@@ -32,6 +32,7 @@ interface UserProfile {
   created_at: string;
   createdAt: string;
   updatedAt: string;
+  department?: string | null;
 }
 
 interface SeaTimeSummary {
@@ -239,6 +240,19 @@ const createStyles = (isDark: boolean, topInset: number) =>
       color: '#ffffff',
       fontSize: 16,
       fontWeight: '600',
+    },
+    departmentBadge: {
+      backgroundColor: colors.primary + '20',
+      borderRadius: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      marginTop: 8,
+      alignSelf: 'center',
+    },
+    departmentBadgeText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.primary,
     },
   });
 
@@ -478,6 +492,13 @@ export default function ProfileScreen() {
             </View>
             <Text style={styles.profileName}>{displayName}</Text>
             <Text style={styles.profileEmail}>{profile.email}</Text>
+            {profile.department && (
+              <View style={styles.departmentBadge}>
+                <Text style={styles.departmentBadgeText}>
+                  {profile.department === 'Deck' ? '⚓ Deck Department' : '⚙️ Engineering Department'}
+                </Text>
+              </View>
+            )}
           </View>
 
         <View style={styles.section}>

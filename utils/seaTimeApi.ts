@@ -86,6 +86,7 @@ export const updateUserProfile = async (updates: {
   srb_no?: string | null;
   nationality?: string | null;
   pya_membership_no?: string | null;
+  department?: string | null;
 }) => {
   console.log('[seaTimeApi] Updating user profile');
   const headers = await getApiHeaders();

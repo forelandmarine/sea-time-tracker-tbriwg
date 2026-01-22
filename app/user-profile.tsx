@@ -40,6 +40,7 @@ interface UserProfile {
   srb_no?: string | null;
   nationality?: string | null;
   pya_membership_no?: string | null;
+  department?: string | null;
 }
 
 function createStyles(isDark: boolean) {
@@ -280,6 +281,33 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       lineHeight: 20,
     },
+    departmentButton: {
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    departmentButtonSelected: {
+      borderColor: colors.primary,
+      borderWidth: 2,
+      backgroundColor: colors.primary + '10',
+    },
+    departmentButtonText: {
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
+      textAlign: 'center',
+      fontWeight: '500',
+    },
+    departmentButtonsContainer: {
+      flexDirection: 'row',
+      gap: 12,
+      marginBottom: 16,
+    },
+    departmentButtonSmall: {
+      flex: 1,
+    },
   });
 }
 
@@ -301,6 +329,7 @@ export default function UserProfileScreen() {
   const [editSrbNo, setEditSrbNo] = useState('');
   const [editNationality, setEditNationality] = useState('');
   const [editPyaMembershipNo, setEditPyaMembershipNo] = useState('');
+  const [editDepartment, setEditDepartment] = useState<string>('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [uploading, setUploading] = useState(false);
 
@@ -337,6 +366,7 @@ export default function UserProfileScreen() {
       setEditSrbNo(profile.srb_no || '');
       setEditNationality(profile.nationality || '');
       setEditPyaMembershipNo(profile.pya_membership_no || '');
+      setEditDepartment(profile.department || '');
       setEditModalVisible(true);
     }
   };
@@ -356,6 +386,7 @@ export default function UserProfileScreen() {
       if (editSrbNo !== (profile?.srb_no || '')) updates.srb_no = editSrbNo || null;
       if (editNationality !== (profile?.nationality || '')) updates.nationality = editNationality || null;
       if (editPyaMembershipNo !== (profile?.pya_membership_no || '')) updates.pya_membership_no = editPyaMembershipNo || null;
+      if (editDepartment !== (profile?.department || '')) updates.department = editDepartment || null;
       
       if (Object.keys(updates).length === 0) {
         setEditModalVisible(false);
@@ -562,6 +593,16 @@ export default function UserProfileScreen() {
               </View>
             </View>
 
+            <Text style={styles.sectionTitle}>Sea Time Pathway</Text>
+            <View style={styles.profileCard}>
+              <View style={[styles.profileRow, styles.profileRowLast]}>
+                <Text style={styles.profileLabel}>Department</Text>
+                <Text style={profile.department ? styles.profileValue : styles.profileValueEmpty}>
+                  {profile.department || 'Not set'}
+                </Text>
+              </View>
+            </View>
+
             <Text style={styles.sectionTitle}>Maritime Credentials</Text>
             <View style={styles.profileCard}>
               <View style={styles.profileRow}>
@@ -720,6 +761,31 @@ export default function UserProfileScreen() {
                   value={editPyaMembershipNo}
                   onChangeText={setEditPyaMembershipNo}
                 />
+                
+                <Text style={styles.profileLabel}>Sea Time Pathway *</Text>
+                <View style={styles.departmentButtonsContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.departmentButton,
+                      styles.departmentButtonSmall,
+                      editDepartment === 'Deck' && styles.departmentButtonSelected,
+                    ]}
+                    onPress={() => setEditDepartment('Deck')}
+                  >
+                    <Text style={styles.departmentButtonText}>⚓ Deck</Text>
+                  </TouchableOpacity>
+                  
+                  <TouchableOpacity
+                    style={[
+                      styles.departmentButton,
+                      styles.departmentButtonSmall,
+                      editDepartment === 'Engineering' && styles.departmentButtonSelected,
+                    ]}
+                    onPress={() => setEditDepartment('Engineering')}
+                  >
+                    <Text style={styles.departmentButtonText}>⚙️ Engineering</Text>
+                  </TouchableOpacity>
+                </View>
               </ScrollView>
               
               <View style={styles.modalButtons}>
