@@ -105,6 +105,14 @@ const SEA_DAY_DEFINITIONS: SeaDayDefinition[] = [
   },
 ];
 
+const ALL_SERVICE_TYPES = [
+  'actual_sea_service',
+  'watchkeeping_service',
+  'standby_service',
+  'yard_service',
+  'service_in_port',
+];
+
 const createStyles = (isDark: boolean) =>
   StyleSheet.create({
     container: {
@@ -508,6 +516,25 @@ export default function ProfileScreen() {
     return typeMap[serviceType] || serviceType;
   };
 
+  const getAllServiceTypesWithHours = () => {
+    const serviceTypeMap: { [key: string]: number } = {};
+    
+    ALL_SERVICE_TYPES.forEach((type) => {
+      serviceTypeMap[type] = 0;
+    });
+    
+    if (summary?.entries_by_service_type) {
+      summary.entries_by_service_type.forEach((entry) => {
+        serviceTypeMap[entry.service_type] = entry.total_hours;
+      });
+    }
+    
+    return ALL_SERVICE_TYPES.map((type) => ({
+      service_type: type,
+      total_hours: serviceTypeMap[type],
+    }));
+  };
+
   const handleDownloadPDF = async () => {
     console.log('User tapped Download PDF Report');
     setDownloadingPDF(true);
@@ -663,6 +690,8 @@ export default function ProfileScreen() {
     (def) => def.department === 'both' || def.department === userDepartment
   );
 
+  const allServiceTypes = getAllServiceTypesWithHours();
+
   console.log('Profile image URL:', imageUrl);
 
   return (
@@ -768,13 +797,13 @@ export default function ProfileScreen() {
             </View>
           )}
 
-          {!loadingSummary && summary && summary.entries_by_service_type && summary.entries_by_service_type.length > 0 && (
+          {!loadingSummary && summary && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Sea Time by Service Type</Text>
               <View style={styles.card}>
-                {summary.entries_by_service_type.map((serviceEntry, index) => {
+                {allServiceTypes.map((serviceEntry, index) => {
                   const serviceDays = (serviceEntry.total_hours / 24).toFixed(2);
-                  const isLast = index === summary.entries_by_service_type!.length - 1;
+                  const isLast = index === allServiceTypes.length - 1;
                   const formattedType = formatServiceType(serviceEntry.service_type);
                   
                   return (
