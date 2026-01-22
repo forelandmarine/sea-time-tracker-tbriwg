@@ -366,7 +366,9 @@ export default function UserProfileScreen() {
       setEditSrbNo(profile.srb_no || '');
       setEditNationality(profile.nationality || '');
       setEditPyaMembershipNo(profile.pya_membership_no || '');
-      setEditDepartment(profile.department || '');
+      // Capitalize for display in UI
+      const displayDepartment = profile.department ? profile.department.charAt(0).toUpperCase() + profile.department.slice(1) : '';
+      setEditDepartment(displayDepartment);
       setEditModalVisible(true);
     }
   };
@@ -386,7 +388,12 @@ export default function UserProfileScreen() {
       if (editSrbNo !== (profile?.srb_no || '')) updates.srb_no = editSrbNo || null;
       if (editNationality !== (profile?.nationality || '')) updates.nationality = editNationality || null;
       if (editPyaMembershipNo !== (profile?.pya_membership_no || '')) updates.pya_membership_no = editPyaMembershipNo || null;
-      if (editDepartment !== (profile?.department || '')) updates.department = editDepartment || null;
+      
+      // Convert department to lowercase for backend
+      const currentDepartment = profile?.department ? profile.department.charAt(0).toUpperCase() + profile.department.slice(1) : '';
+      if (editDepartment !== currentDepartment) {
+        updates.department = editDepartment ? editDepartment.toLowerCase() : null;
+      }
       
       if (Object.keys(updates).length === 0) {
         setEditModalVisible(false);
@@ -483,6 +490,12 @@ export default function UserProfileScreen() {
       month: 'short',
       year: 'numeric',
     });
+  };
+
+  // Format department for display (capitalize first letter)
+  const formatDepartment = (dept: string | null | undefined) => {
+    if (!dept) return 'Not set';
+    return dept.charAt(0).toUpperCase() + dept.slice(1);
   };
 
   if (loading) {
@@ -598,7 +611,7 @@ export default function UserProfileScreen() {
               <View style={[styles.profileRow, styles.profileRowLast]}>
                 <Text style={styles.profileLabel}>Department</Text>
                 <Text style={profile.department ? styles.profileValue : styles.profileValueEmpty}>
-                  {profile.department || 'Not set'}
+                  {formatDepartment(profile.department)}
                 </Text>
               </View>
             </View>

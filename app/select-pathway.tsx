@@ -189,8 +189,12 @@ export default function SelectPathwayScreen() {
     setSaving(true);
 
     try {
-      await seaTimeApi.updateUserProfile({ department: selectedDepartment });
-      console.log('Department saved successfully:', selectedDepartment);
+      // Convert to lowercase for backend
+      const departmentLowercase = selectedDepartment.toLowerCase();
+      console.log('Sending department to backend:', departmentLowercase);
+      
+      await seaTimeApi.updateUserProfile({ department: departmentLowercase });
+      console.log('Department saved successfully:', departmentLowercase);
       
       Alert.alert(
         'Pathway Selected',
