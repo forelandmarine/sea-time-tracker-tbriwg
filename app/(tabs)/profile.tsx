@@ -260,8 +260,6 @@ export default function ProfileScreen() {
   const [summary, setSummary] = useState<SeaTimeSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(true);
-  const [downloadingPDF, setDownloadingPDF] = useState(false);
-  const [downloadingCSV, setDownloadingCSV] = useState(false);
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
@@ -317,6 +315,11 @@ export default function ProfileScreen() {
     router.push('/mca-requirements');
   };
 
+  const handleViewReports = () => {
+    console.log('User tapped View Detailed Reports');
+    router.push('/reports');
+  };
+
   const formatServiceType = (serviceType: string): string => {
     const typeMap: { [key: string]: string } = {
       'actual_sea_service': 'Actual Sea Service',
@@ -326,101 +329,6 @@ export default function ProfileScreen() {
       'service_in_port': 'Service in Port',
     };
     return typeMap[serviceType] || serviceType;
-  };
-
-  const handleDownloadPDF = async () => {
-    console.log('User tapped Download PDF Report');
-    setDownloadingPDF(true);
-    try {
-      const pdfBlob = await seaTimeApi.downloadPDFReport();
-      console.log('PDF report downloaded, blob size:', pdfBlob.size);
-
-      if (Platform.OS === 'web') {
-        // For web, create a download link
-        const url = URL.createObjectURL(pdfBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `SeaTime_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        Alert.alert('Success', 'PDF report downloaded successfully');
-      } else {
-        // For native, save to file system and share
-        const fileUri = `${FileSystem.documentDirectory}SeaTime_Report_${new Date().toISOString().split('T')[0]}.pdf`;
-        
-        // Convert blob to base64
-        const reader = new FileReader();
-        reader.readAsDataURL(pdfBlob);
-        reader.onloadend = async () => {
-          const base64data = reader.result as string;
-          const base64 = base64data.split(',')[1];
-          
-          await FileSystem.writeAsStringAsync(fileUri, base64, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
-          
-          console.log('PDF saved to:', fileUri);
-          
-          // Share the file
-          if (await Sharing.isAvailableAsync()) {
-            await Sharing.shareAsync(fileUri);
-          } else {
-            Alert.alert('Success', 'PDF report saved to device');
-          }
-        };
-      }
-    } catch (error) {
-      console.error('Failed to download PDF report:', error);
-      Alert.alert('Error', 'Failed to download PDF report. Please try again.');
-    } finally {
-      setDownloadingPDF(false);
-    }
-  };
-
-  const handleDownloadCSV = async () => {
-    console.log('User tapped Download CSV Report');
-    setDownloadingCSV(true);
-    try {
-      const csvData = await seaTimeApi.downloadCSVReport();
-      console.log('CSV report downloaded, size:', csvData.length);
-
-      if (Platform.OS === 'web') {
-        // For web, create a download link
-        const blob = new Blob([csvData], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `SeaTime_Report_${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        Alert.alert('Success', 'CSV report downloaded successfully');
-      } else {
-        // For native, save to file system and share
-        const fileUri = `${FileSystem.documentDirectory}SeaTime_Report_${new Date().toISOString().split('T')[0]}.csv`;
-        
-        await FileSystem.writeAsStringAsync(fileUri, csvData, {
-          encoding: FileSystem.EncodingType.UTF8,
-        });
-        
-        console.log('CSV saved to:', fileUri);
-        
-        // Share the file
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(fileUri);
-        } else {
-          Alert.alert('Success', 'CSV report saved to device');
-        }
-      }
-    } catch (error) {
-      console.error('Failed to download CSV report:', error);
-      Alert.alert('Error', 'Failed to download CSV report. Please try again.');
-    } finally {
-      setDownloadingCSV(false);
-    }
   };
 
   const handleSignOut = async () => {
@@ -479,16 +387,15 @@ export default function ProfileScreen() {
     );
   }
 
-  // Construct full image URL from relative path
   const imageUrl = profile.imageUrl || (profile.image ? `${seaTimeApi.API_BASE_URL}/${profile.image}` : null);
   const displayName = profile.name || 'User';
   const initials = getInitials(profile.name);
+  const totalDaysDisplay = summary?.total_days.toFixed(2) || '0.00';
 
   console.log('Profile image URL:', imageUrl);
 
   return (
     <View style={styles.container}>
-      {/* Header - matching other pages */}
       <View style={styles.pageHeader}>
         <View style={styles.headerTitleContainer}>
           <Image
@@ -533,21 +440,6 @@ export default function ProfileScreen() {
               <Text style={styles.loadingText}>Loading summary...</Text>
             ) : summary ? (
               <>
-                {summary.entries_by_vessel.map((vessel, index) => (
-                  <View 
-                    key={index} 
-                    style={[
-                      styles.summaryRow,
-                      index === summary.entries_by_vessel.length - 1 && styles.summaryRowLast
-                    ]}
-                  >
-                    <Text style={styles.summaryLabel}>{vessel.vessel_name}</Text>
-                    <Text style={styles.summaryValue}>
-                      {(vessel.total_hours / 24).toFixed(2)} days
-                    </Text>
-                  </View>
-                ))}
-                
                 {summary.entries_by_vessel.length === 0 && (
                   <Text style={styles.loadingText}>No confirmed sea time entries yet</Text>
                 )}
@@ -555,7 +447,7 @@ export default function ProfileScreen() {
                 {summary.entries_by_vessel.length > 0 && (
                   <View style={styles.totalRow}>
                     <Text style={styles.totalLabel}>Total Sea Time</Text>
-                    <Text style={styles.totalValue}>{summary.total_days.toFixed(2)} days</Text>
+                    <Text style={styles.totalValue}>{totalDaysDisplay} days</Text>
                   </View>
                 )}
               </>
@@ -563,74 +455,18 @@ export default function ProfileScreen() {
               <Text style={styles.loadingText}>Unable to load summary</Text>
             )}
           </View>
-        </View>
-
-        {/* Service Type Breakdown */}
-        {!loadingSummary && summary && summary.entries_by_service_type && summary.entries_by_service_type.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Sea Time by Service Type</Text>
-            <View style={styles.card}>
-              {summary.entries_by_service_type.map((serviceEntry, index) => (
-                <View 
-                  key={index} 
-                  style={[
-                    styles.summaryRow,
-                    index === summary.entries_by_service_type!.length - 1 && styles.summaryRowLast
-                  ]}
-                >
-                  <Text style={styles.summaryLabel}>{formatServiceType(serviceEntry.service_type)}</Text>
-                  <Text style={styles.summaryValue}>
-                    {(serviceEntry.total_hours / 24).toFixed(2)} days
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Reports</Text>
-          <View style={styles.card}>
-            <TouchableOpacity 
-              style={styles.reportButton} 
-              onPress={handleDownloadPDF}
-              disabled={downloadingPDF}
-            >
-              {downloadingPDF ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <>
-                  <IconSymbol
-                    ios_icon_name="doc.fill"
-                    android_material_icon_name="description"
-                    size={24}
-                    color="#ffffff"
-                  />
-                  <Text style={styles.reportButtonText}>Download PDF Report</Text>
-                </>
-              )}
+          
+          {summary && summary.entries_by_vessel.length > 0 && (
+            <TouchableOpacity style={styles.reportButton} onPress={handleViewReports}>
+              <IconSymbol
+                ios_icon_name="chart.bar.fill"
+                android_material_icon_name="assessment"
+                size={24}
+                color="#ffffff"
+              />
+              <Text style={styles.reportButtonText}>View Detailed Reports</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity 
-              style={styles.reportButton} 
-              onPress={handleDownloadCSV}
-              disabled={downloadingCSV}
-            >
-              {downloadingCSV ? (
-                <ActivityIndicator color="#ffffff" />
-              ) : (
-                <>
-                  <IconSymbol
-                    ios_icon_name="tablecells"
-                    android_material_icon_name="grid-on"
-                    size={24}
-                    color="#ffffff"
-                  />
-                  <Text style={styles.reportButtonText}>Download CSV Report</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
+          )}
         </View>
 
         <View style={styles.section}>
