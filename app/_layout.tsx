@@ -21,8 +21,11 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useNotifications } from "@/hooks/useNotifications";
 
 // Platform-specific imports for native-only modules
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const SystemBars = Platform.OS !== 'web' ? require("react-native-edge-to-edge").SystemBars : null;
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const useNetworkState = Platform.OS !== 'web' ? require("expo-network").useNetworkState : () => ({ isConnected: true, isInternetReachable: true });
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Notifications = Platform.OS !== 'web' ? require('expo-notifications') : null;
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -50,6 +53,7 @@ function RootLayoutNav() {
   useNotifications();
 
   const [loaded, error] = useFonts({
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
 

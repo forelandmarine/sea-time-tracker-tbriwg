@@ -14,6 +14,7 @@ import { IconCircle } from "./IconCircle";
 import { IconSymbol } from "./IconSymbol";
 
 // Platform-specific import - only load on native platforms
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const Haptics = Platform.OS !== 'web' ? require("expo-haptics") : null;
 
 configureReanimatedLogger({ strict: false });

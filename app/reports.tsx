@@ -719,9 +719,6 @@ export default function ReportsScreen() {
     </View>
   );
 }
-</write file>
-
-Now let me update the profile page to add a link to the new reports page:
 
 <write file="app/(tabs)/profile.tsx">
 import { IconSymbol } from '@/components/IconSymbol';
