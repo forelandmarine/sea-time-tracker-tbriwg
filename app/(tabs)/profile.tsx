@@ -80,33 +80,48 @@ interface SeaDayDefinition {
 
 const SEA_DAY_DEFINITIONS: SeaDayDefinition[] = [
   {
-    title: 'Actual Day at Sea',
-    description: 'Main propulsion machinery runs ≥4 hours within the same calendar day, OR vessel is powered by wind (sail yachts only)',
+    title: 'Onboard Yacht Service',
+    description: 'All time signed on a yacht, regardless of activity.',
     department: 'both',
   },
   {
-    title: 'Watchkeeping Service (Deck)',
-    description: 'Bridge watch while vessel is underway. Every 4 hours of watchkeeping = 1 watchkeeping day. Requires OOW 3000 Certificate.',
+    title: 'Actual Days at Sea (Deck)',
+    description: 'Vessel underway with propulsion (engine ≥4 hours or sailing). Anchor time only counts if unavoidable during passage (berth waiting, canal transit, severe weather). Anchor time must not exceed previous voyage duration, cannot end a passage, and does not count if for rest or leisure.',
     department: 'deck',
   },
   {
-    title: 'Watchkeeping Service (Engineering)',
-    description: 'Engine room watch while vessel is underway. Every 4 hours = 1 watchkeeping day. Accumulative across multiple days.',
+    title: 'Actual Days at Sea (Engineering)',
+    description: 'Same propulsion and anchoring rules as Deck. Anchor time may qualify as Additional Watchkeeping, not sea time.',
     department: 'engineering',
   },
   {
-    title: 'Additional Watchkeeping (Engineering)',
-    description: 'Engine room watchkeeping while vessel is at anchor or moored. Generators must be running with safe watchkeeping maintained.',
+    title: 'Watchkeeping Service - Bridge Watch (Deck)',
+    description: 'Must be OOW 3000 CoC holder in charge of the navigational watch. Every 4 hours = 1 day, cumulative allowed. Watchkeeping days cannot exceed actual days at sea.',
+    department: 'deck',
+  },
+  {
+    title: 'Watchkeeping Service - Engine Room Underway (Engineering)',
+    description: 'Every 4 hours = 1 day, cumulative allowed. OOW: may be subsidiary. Chief Engineer: must be in full charge or UMS. Cannot exceed days at sea.',
     department: 'engineering',
   },
   {
-    title: 'Yard Service',
-    description: 'Standing by a vessel during build, refit, or serious repair. Maximum 90 days per OOW 3000 application. Routine maintenance does NOT qualify.',
-    department: 'both',
+    title: 'Additional Watchkeeping (Engineering Only)',
+    description: 'Engine room watch while stationary (anchor or alongside). Generators must be running. Cannot be logged on the same day as a sea day. Only valid for Yacht-restricted CoCs (not full SV).',
+    department: 'engineering',
   },
   {
-    title: 'Anchor Time',
-    description: 'Generally excluded. Included ONLY if: part of active 24-hour passage, operational necessity (berth wait, canal transit, weather), anchor duration ≤ previous voyage segment, not final end of passage.',
+    title: 'Shipyard (Yard) Service - Deck',
+    description: 'Time standing by during build, refit, or major repair. Routine maintenance excluded. Maximum 90 days per OOW 3000 NOE application. Over 90 days requires supporting documentation.',
+    department: 'deck',
+  },
+  {
+    title: 'Shipyard (Yard) Service - Engineering',
+    description: 'Applies when vessel is in dock, drydock, or service facility. Must involve major engine, auxiliary, or systems work (e.g. engines, gearboxes, pumps, firefighting systems, hull fittings). Over 90 days requires works list and job descriptions. Evidence must be submitted with NOE application.',
+    department: 'engineering',
+  },
+  {
+    title: 'Administrative Rules',
+    description: 'Digital testimonials only via PYA profile; no letters, logs, or spreadsheets. No overlapping testimonials permitted. Off-rotation time must be deducted and recorded as leave. Start and end dates are inclusive when calculating days. Captains cannot sign their own testimonials (owner/manager must sign). Chase boat service must be recorded on a separate testimonial.',
     department: 'both',
   },
 ];
@@ -416,6 +431,19 @@ const createStyles = (isDark: boolean) =>
       fontSize: 14,
       color: isDark ? colors.text : colors.textLight,
       flex: 1,
+    },
+    infoBox: {
+      backgroundColor: colors.primary + '15',
+      borderRadius: 10,
+      padding: 14,
+      marginBottom: 16,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+    },
+    infoText: {
+      fontSize: 13,
+      color: isDark ? colors.text : colors.textLight,
+      lineHeight: 20,
     },
   });
 
@@ -887,7 +915,14 @@ export default function ProfileScreen() {
 
           {profile.department && (
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Sea Day Definitions</Text>
+              <Text style={styles.sectionTitle}>
+                {profile.department === 'Deck' ? 'Deck Department - Sea Service Definitions (MSN 1858)' : 'Engineering Department - Sea Service Definitions (MSN 1904)'}
+              </Text>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoText}>
+                  These definitions ensure your sea time records are compliant with MCA regulations for {profile.department === 'Deck' ? 'Deck' : 'Engineering'} officers. All data capture in this app follows these standards.
+                </Text>
+              </View>
               {filteredDefinitions.map((definition, index) => (
                 <View key={index} style={styles.definitionCard}>
                   <Text style={styles.definitionTitle}>{definition.title}</Text>
