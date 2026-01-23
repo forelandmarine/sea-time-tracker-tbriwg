@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -623,12 +623,7 @@ export default function LogbookScreen() {
   const [voyageFrom, setVoyageFrom] = useState('');
   const [voyageTo, setVoyageTo] = useState('');
 
-  useEffect(() => {
-    console.log('[LogbookScreen] Component mounted, loading data');
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       console.log('[LogbookScreen] Fetching sea time entries and vessels');
       const [entriesData, vesselsData] = await Promise.all([
@@ -646,13 +641,18 @@ export default function LogbookScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
-  const onRefresh = () => {
+  useEffect(() => {
+    console.log('[LogbookScreen] Component mounted, loading data');
+    loadData();
+  }, [loadData]);
+
+  const onRefresh = useCallback(() => {
     console.log('[LogbookScreen] User initiated refresh');
     setRefreshing(true);
     loadData();
-  };
+  }, [loadData]);
 
   const handleAddEntry = () => {
     console.log('[LogbookScreen] User tapped Add Entry button');
