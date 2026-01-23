@@ -314,6 +314,16 @@ export function register(app: App, fastify: FastifyInstance) {
 
     app.logger.info({ userId, startDate, endDate }, 'Generating PDF report for user');
 
+    // Fetch user profile data
+    const userProfile = await app.db.query.user.findFirst({
+      where: eq(authSchema.user.id, userId),
+    });
+
+    if (!userProfile) {
+      app.logger.warn({ userId }, 'User profile not found for PDF report');
+      return reply.code(401).send({ error: 'User profile not found' });
+    }
+
     // Fetch sea time entries for authenticated user with vessel data
     let entries = await app.db.query.sea_time_entries.findMany({
       with: {
@@ -407,77 +417,176 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     });
 
-    // Create PDF document
+    // Create PDF document with increased top margin for header
     const doc = new PDFDocument({
       bufferPages: true,
       margin: 40,
+      bufferSize: 4096,
     });
 
     const PRIMARY_COLOR = '#0077BE';
     const LIGHT_COLOR = '#E8F4F8';
-    const TEXT_COLOR = '#333333';
+    const LIGHT_GRAY = '#F5F7FA';
+    const SECONDARY_COLOR = '#5A6C7D';
+    const DARK_TEXT = '#1A1A1A';
+    const BORDER_COLOR = '#D0D8E0';
 
-    // HEADER SECTION
-    doc.fillColor(PRIMARY_COLOR).fontSize(26).font('Helvetica-Bold').text('SeaTime Tracker', { align: 'center' });
-    doc.fillColor(TEXT_COLOR).fontSize(10).font('Helvetica').text('Sea Time Report', { align: 'center' });
-    doc.fontSize(9).fillColor('#666666').text(`Generated: ${formatDate(new Date())}`, { align: 'center' });
+    // Helper function to format date of birth
+    const formatDateOfBirth = (date: Date | string | null | undefined): string => {
+      if (!date) return '';
+      const d = typeof date === 'string' ? new Date(date) : date;
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    };
+
+    // Helper function to format department
+    const formatDepartment = (dept: string | null | undefined): string => {
+      if (!dept) return '';
+      return dept.charAt(0).toUpperCase() + dept.slice(1);
+    };
+
+    // BRANDING HEADER
+    doc.fillColor(PRIMARY_COLOR).fontSize(28).font('Helvetica-Bold').text('SeaTime Tracker', { align: 'center' });
+    doc.fillColor(SECONDARY_COLOR).fontSize(11).font('Helvetica').text('Sea Time Report', { align: 'center' });
+    doc.moveDown(1.2);
+
+    // USER INFORMATION HEADER BOX
+    const headerBoxY = doc.y;
+    doc.fillColor(LIGHT_GRAY).rect(40, headerBoxY, 520, 140).fill();
+    doc.strokeColor(BORDER_COLOR).lineWidth(1).rect(40, headerBoxY, 520, 140).stroke();
+
+    doc.fillColor(DARK_TEXT).fontSize(18).font('Helvetica-Bold');
+    doc.text(userProfile.name, 50, headerBoxY + 10, { width: 500 });
+
+    doc.fontSize(11).font('Helvetica').fillColor(SECONDARY_COLOR);
+    let headerY = headerBoxY + 35;
+
+    // Email
+    doc.text(`Email: ${userProfile.email}`, 50, headerY);
+    headerY += 16;
+
+    // Department if set
+    if (userProfile.department) {
+      doc.text(`Department: ${formatDepartment(userProfile.department)}`, 50, headerY);
+      headerY += 16;
+    }
+
+    // Multi-column layout for additional info
+    const leftX = 50;
+    const rightX = 300;
+    let currentY = headerY;
+
+    if (userProfile.address) {
+      doc.text(`Address: ${userProfile.address}`, leftX, currentY, { width: 230 });
+    }
+    if (userProfile.tel_no) {
+      doc.text(`Tel: ${userProfile.tel_no}`, rightX, Math.max(currentY, doc.y - 16), { width: 230 });
+    }
+    currentY = Math.max(doc.y, currentY + 32);
+
+    if (userProfile.date_of_birth) {
+      doc.text(`DOB: ${formatDateOfBirth(userProfile.date_of_birth)}`, leftX, currentY, { width: 230 });
+    }
+    if (userProfile.nationality) {
+      doc.text(`Nationality: ${userProfile.nationality}`, rightX, Math.max(currentY, doc.y - 16), { width: 230 });
+    }
+    currentY = Math.max(doc.y, currentY + 32);
+
+    if (userProfile.srb_no) {
+      doc.text(`SRB No: ${userProfile.srb_no}`, leftX, currentY, { width: 230 });
+    }
+    if (userProfile.pya_membership_no) {
+      doc.text(`PYA Membership: ${userProfile.pya_membership_no}`, rightX, Math.max(currentY, doc.y - 16), { width: 230 });
+    }
+
+    doc.y = headerBoxY + 145;
+    doc.moveDown(0.5);
+
+    // REPORT METADATA
+    doc.fillColor(DARK_TEXT).fontSize(11).font('Helvetica');
+    doc.text(`Generated: ${formatDate(new Date())}`, { align: 'left' });
 
     if (startDate || endDate) {
       const dateRange = [startDate && formatDate(startDate), endDate && formatDate(endDate)]
         .filter(Boolean)
         .join(' to ');
-      doc.text(`Period: ${dateRange}`, { align: 'center' });
+      doc.text(`Report Period: ${dateRange}`, { align: 'left' });
     }
 
-    doc.fillColor(TEXT_COLOR).moveDown(1.5);
+    // Horizontal separator line
+    doc.moveDown(0.8);
+    doc.strokeColor(BORDER_COLOR).lineWidth(1).moveTo(40, doc.y).lineTo(560, doc.y).stroke();
+    doc.moveDown(1);
 
     // VESSEL-BY-VESSEL BREAKDOWN SECTION
     if (Object.keys(entriesByVessel).length > 0) {
-      doc.fontSize(14).font('Helvetica-Bold').fillColor(PRIMARY_COLOR).text('Vessel-by-Vessel Breakdown');
-      doc.fillColor(TEXT_COLOR).moveDown(0.5);
+      doc.fontSize(18).font('Helvetica-Bold').fillColor(PRIMARY_COLOR).text('Vessel-by-Vessel Breakdown');
+      doc.moveDown(0.8);
 
-      Object.entries(entriesByVessel).forEach(([vesselId, vesselEntries]) => {
+      Object.entries(entriesByVessel).forEach(([vesselId, vesselEntries], vesselIndex) => {
         const vessel = allVessels.find((v) => v.id === vesselId);
         if (!vessel) return;
 
         // Check if we need a new page
-        if (doc.y > doc.page.height - 200) {
+        if (doc.y > doc.page.height - 250) {
           doc.addPage();
+          // Reprint section header on new page
+          doc.fontSize(18).font('Helvetica-Bold').fillColor(PRIMARY_COLOR).text('Vessel-by-Vessel Breakdown (continued)');
+          doc.moveDown(0.8);
         }
 
         // Vessel header with background
-        doc.fillColor(LIGHT_COLOR).rect(40, doc.y, 520, 22).fill();
-        doc.fillColor(PRIMARY_COLOR).fontSize(12).font('Helvetica-Bold');
-        doc.text(vessel.vessel_name, 45, doc.y + 4);
-        doc.moveDown(1.2);
+        const vesselHeaderY = doc.y;
+        doc.fillColor(LIGHT_COLOR).rect(40, vesselHeaderY, 520, 28).fill();
+        doc.strokeColor(PRIMARY_COLOR).lineWidth(2).rect(40, vesselHeaderY, 520, 28).stroke();
+        doc.fillColor(PRIMARY_COLOR).fontSize(14).font('Helvetica-Bold');
+        doc.text(vessel.vessel_name, 50, vesselHeaderY + 5, { width: 500 });
+        doc.moveDown(1.8);
 
-        // Vessel particulars
-        doc.fillColor(TEXT_COLOR).fontSize(9).font('Helvetica');
-        const particulars = [];
-        if (vessel.mmsi) particulars.push(`MMSI: ${vessel.mmsi}`);
-        if (vessel.callsign) particulars.push(`Callsign: ${vessel.callsign}`);
-        if (vessel.flag) particulars.push(`Flag: ${vessel.flag}`);
-        if (vessel.official_number) particulars.push(`Official Number: ${vessel.official_number}`);
-        if (vessel.type) particulars.push(`Type: ${vessel.type}`);
-        if (vessel.length_metres) particulars.push(`Length: ${vessel.length_metres}m`);
-        if (vessel.gross_tonnes) particulars.push(`Gross Tonnes: ${vessel.gross_tonnes}`);
+        // Vessel particulars - two column layout
+        doc.fillColor(DARK_TEXT).fontSize(11).font('Helvetica');
+        const particulars: Array<[string, string]> = [];
 
-        // Output particulars in two columns
+        if (vessel.mmsi) particulars.push(['MMSI', vessel.mmsi]);
+        if (vessel.callsign) particulars.push(['Callsign', vessel.callsign]);
+        if (vessel.flag) particulars.push(['Flag', vessel.flag]);
+        if (vessel.official_number) particulars.push(['Official Number', vessel.official_number]);
+        if (vessel.type) particulars.push(['Type', vessel.type]);
+        if (vessel.length_metres) particulars.push(['Length', `${vessel.length_metres}m`]);
+        if (vessel.gross_tonnes) particulars.push(['Gross Tonnes', String(vessel.gross_tonnes)]);
+
+        // Output in two-column format
+        const leftX = 50;
+        const rightX = 300;
+        let currentY = doc.y;
+
         for (let i = 0; i < particulars.length; i += 2) {
-          const line1 = particulars[i];
-          const line2 = particulars[i + 1];
-          if (line2) {
-            doc.text(line1, 50, doc.y, { width: 240, continued: true });
-            doc.text(line2, 310, doc.y);
-          } else {
-            doc.text(line1, 50, doc.y);
+          const [label1, value1] = particulars[i];
+          const [label2, value2] = particulars[i + 1] || [null, null];
+
+          doc.fillColor(SECONDARY_COLOR).fontSize(10).font('Helvetica-Bold');
+          doc.text(`${label1}:`, leftX, currentY);
+          doc.fillColor(DARK_TEXT).fontSize(10).font('Helvetica');
+          doc.text(value1, leftX + 80, currentY, { width: 150 });
+
+          if (label2) {
+            doc.fillColor(SECONDARY_COLOR).fontSize(10).font('Helvetica-Bold');
+            doc.text(`${label2}:`, rightX, currentY);
+            doc.fillColor(DARK_TEXT).fontSize(10).font('Helvetica');
+            doc.text(value2, rightX + 80, currentY, { width: 150 });
           }
+
+          currentY += 18;
         }
 
-        // Service type breakdown for this vessel
+        doc.y = currentY;
         doc.moveDown(0.5);
-        doc.fontSize(10).font('Helvetica-Bold').fillColor(PRIMARY_COLOR).text('Sea Service Definition Breakdown:');
-        doc.fillColor(TEXT_COLOR).fontSize(9).font('Helvetica');
+
+        // Service type breakdown for this vessel
+        doc.fontSize(12).font('Helvetica-Bold').fillColor(PRIMARY_COLOR).text('Sea Service Definition Breakdown:');
+        doc.moveDown(0.4);
 
         // Group entries by service type for this vessel
         const vesselServiceTypes: { [key: string]: number } = {};
@@ -491,13 +600,16 @@ export function register(app: App, fastify: FastifyInstance) {
           }
         });
 
+        doc.fillColor(DARK_TEXT).fontSize(11).font('Helvetica');
         Object.entries(vesselServiceTypes).forEach(([serviceType, hours]) => {
           const days = Math.round((hours / 24) * 100) / 100;
           const label = formatServiceType(serviceType);
-          doc.text(`  • ${label}: ${Math.round(hours * 100) / 100} hours (${days} days)`);
+          const hoursFormatted = Math.round(hours * 100) / 100;
+          doc.text(`  • ${label}`, 50, doc.y);
+          doc.text(`${hoursFormatted}h (${days}d)`, 450, doc.y - 16, { align: 'right', width: 80 });
         });
 
-        // Vessel totals
+        // Vessel totals in highlighted box
         let vesselHours = 0;
         vesselEntries.forEach((entry) => {
           if (entry.duration_hours) {
@@ -506,64 +618,144 @@ export function register(app: App, fastify: FastifyInstance) {
         });
         const vesselDays = Math.round((vesselHours / 24) * 100) / 100;
 
-        doc.moveDown(0.3);
-        doc.fontSize(10).font('Helvetica-Bold').fillColor(PRIMARY_COLOR);
-        doc.text(`Vessel Subtotal: ${Math.round(vesselHours * 100) / 100} hours (${vesselDays} days)`);
-        doc.fillColor(TEXT_COLOR).moveDown(1);
+        doc.moveDown(0.6);
+        const vesselSubtotalY = doc.y;
+        doc.fillColor(LIGHT_COLOR).rect(40, vesselSubtotalY, 520, 24).fill();
+        doc.strokeColor(PRIMARY_COLOR).lineWidth(1).rect(40, vesselSubtotalY, 520, 24).stroke();
+        doc.fillColor(PRIMARY_COLOR).fontSize(11).font('Helvetica-Bold');
+        doc.text(`Vessel Subtotal: ${Math.round(vesselHours * 100) / 100} hours (${vesselDays} days)`, 50, vesselSubtotalY + 4);
+        doc.moveDown(1.6);
+
+        // Add spacing between vessels
+        if (vesselIndex < Object.keys(entriesByVessel).length - 1) {
+          doc.moveDown(0.5);
+        }
       });
 
-      doc.moveDown(0.5);
+      doc.moveDown(1);
     }
 
     // GRAND TOTAL SUMMARY SECTION
-    doc.fontSize(14).font('Helvetica-Bold').fillColor(PRIMARY_COLOR).text('Summary Totals');
-    doc.fillColor(TEXT_COLOR).moveDown(0.5);
+    // Separator line
+    doc.strokeColor(BORDER_COLOR).lineWidth(1).moveTo(40, doc.y).lineTo(560, doc.y).stroke();
+    doc.moveDown(1);
 
-    // Summary box background
-    doc.fillColor(LIGHT_COLOR).rect(40, doc.y, 520, 120).fill();
-    doc.fillColor(TEXT_COLOR).fontSize(11).font('Helvetica');
+    doc.fontSize(18).font('Helvetica-Bold').fillColor(PRIMARY_COLOR).text('Summary Totals');
+    doc.moveDown(0.8);
 
-    let summaryY = doc.y + 10;
-    doc.text(`Total Hours Across All Vessels: ${Math.round(totalHours * 100) / 100}`, 50, summaryY);
-    summaryY += 20;
-    doc.text(`Total Days Across All Vessels: ${totalDays}`, 50, summaryY);
-    summaryY += 20;
+    // Main summary box with large text
+    const summaryBoxY = doc.y;
+    doc.fillColor(LIGHT_COLOR).rect(40, summaryBoxY, 520, 80).fill();
+    doc.strokeColor(PRIMARY_COLOR).lineWidth(2).rect(40, summaryBoxY, 520, 80).stroke();
 
-    doc.fontSize(10).font('Helvetica-Bold').fillColor(PRIMARY_COLOR).text('Breakdown by Service Type:', 50, summaryY);
-    summaryY += 18;
+    doc.fillColor(DARK_TEXT).fontSize(14).font('Helvetica-Bold');
+    doc.text(`Total Hours: ${Math.round(totalHours * 100) / 100}`, 50, summaryBoxY + 12, { width: 240 });
+    doc.text(`Total Days: ${totalDays}`, 320, summaryBoxY + 12, { width: 220 });
 
-    doc.fillColor(TEXT_COLOR).fontSize(9).font('Helvetica');
-    Object.entries(serviceTypeTotals)
-      .sort((a, b) => b[1] - a[1])
-      .forEach(([serviceType, hours]) => {
-        const days = Math.round((hours / 24) * 100) / 100;
-        const label = formatServiceType(serviceType);
-        doc.text(`  • ${label}: ${Math.round(hours * 100) / 100} hours (${days} days)`, 50, summaryY);
-        summaryY += 16;
-      });
+    doc.fontSize(11).font('Helvetica');
+    doc.fillColor(SECONDARY_COLOR).text('Across all vessels', 50, summaryBoxY + 35);
+    doc.text('24-hour periods', 320, summaryBoxY + 35);
 
-    doc.moveDown(6);
+    doc.y = summaryBoxY + 85;
+    doc.moveDown(0.8);
+
+    // Service type breakdown
+    doc.fontSize(12).font('Helvetica-Bold').fillColor(PRIMARY_COLOR).text('Breakdown by Service Type:');
+    doc.moveDown(0.6);
+
+    doc.fillColor(DARK_TEXT).fontSize(11).font('Helvetica');
+    const sortedServiceTypes = Object.entries(serviceTypeTotals)
+      .sort((a, b) => b[1] - a[1]);
+
+    sortedServiceTypes.forEach(([serviceType, hours], index) => {
+      const days = Math.round((hours / 24) * 100) / 100;
+      const label = formatServiceType(serviceType);
+      const hoursFormatted = Math.round(hours * 100) / 100;
+
+      // Alternate row background
+      if (index % 2 === 0) {
+        doc.fillColor(LIGHT_GRAY).rect(40, doc.y - 2, 520, 18).fill();
+      }
+
+      doc.fillColor(DARK_TEXT).text(`  • ${label}`, 50, doc.y);
+      doc.text(`${hoursFormatted}h (${days}d)`, 450, doc.y - 16, { align: 'right', width: 80 });
+    });
+
+    doc.moveDown(1.5);
+
+    // SERVICE TYPE LEGEND
+    doc.strokeColor(BORDER_COLOR).lineWidth(1).moveTo(40, doc.y).lineTo(560, doc.y).stroke();
+    doc.moveDown(1);
+
+    doc.fontSize(14).font('Helvetica-Bold').fillColor(PRIMARY_COLOR).text('Service Type Definitions');
+    doc.moveDown(0.6);
+
+    const serviceTypeDefinitions = [
+      {
+        type: 'Actual Sea Service',
+        desc: 'Sea service performed while the vessel is underway, engaged in trading or on passage.',
+      },
+      {
+        type: 'Watchkeeping Service',
+        desc: 'Time spent on bridge watch or engine room watch while at sea.',
+      },
+      {
+        type: 'Stand-by Service',
+        desc: 'Service performed during periods of standby while the vessel is at sea.',
+      },
+      {
+        type: 'Service in Port',
+        desc: 'Service performed while the vessel is in port, including maintenance and cargo operations.',
+      },
+      {
+        type: 'Yard Service',
+        desc: 'Service performed during shipyard periods, including new building or major repairs.',
+      },
+    ];
+
+    doc.fillColor(DARK_TEXT).fontSize(10).font('Helvetica');
+    serviceTypeDefinitions.forEach((def, index) => {
+      if (index % 2 === 0) {
+        doc.fillColor(LIGHT_GRAY).rect(40, doc.y - 2, 520, 28).fill();
+      }
+
+      doc.fillColor(PRIMARY_COLOR).fontSize(10).font('Helvetica-Bold');
+      doc.text(def.type, 50, doc.y);
+      doc.fillColor(DARK_TEXT).fontSize(9).font('Helvetica');
+      doc.text(def.desc, 50, doc.y, { width: 480 });
+    });
 
     // FOOTER with page numbers and company details
     const pageCount = doc.bufferedPageRange().count;
     for (let i = 0; i < pageCount; i++) {
       doc.switchToPage(i);
 
+      // Separator line above footer
+      doc.strokeColor(BORDER_COLOR).lineWidth(1);
+      doc.moveTo(40, doc.page.height - 50).lineTo(560, doc.page.height - 50).stroke();
+
       // Company footer
-      doc.fontSize(8).fillColor('#666666');
+      doc.fontSize(9).fillColor(DARK_TEXT).font('Helvetica');
       doc.text(
-        'Foreland Marine Consultancy Ltd, 7 Bell Yard, London WC2A 2JR United Kingdom',
+        'Foreland Marine Consultancy Ltd',
         50,
-        doc.page.height - 40,
-        { align: 'center' }
+        doc.page.height - 44,
+        { align: 'left' }
+      );
+      doc.fontSize(8).fillColor(SECONDARY_COLOR).font('Helvetica');
+      doc.text(
+        '7 Bell Yard, London WC2A 2JR United Kingdom',
+        50,
+        doc.page.height - 32,
+        { align: 'left' }
       );
 
-      // Page number
-      doc.fontSize(7).fillColor('#999999');
+      // Page number and generation info
+      doc.fontSize(8).fillColor(SECONDARY_COLOR).font('Helvetica');
       doc.text(
-        `Page ${i + 1} of ${pageCount}`,
+        `Page ${i + 1} of ${pageCount} | Generated by SeaTime Tracker`,
         50,
-        doc.page.height - 25,
+        doc.page.height - 20,
         { align: 'center' }
       );
     }
