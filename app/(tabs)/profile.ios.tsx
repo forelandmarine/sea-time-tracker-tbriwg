@@ -761,6 +761,53 @@ export default function ProfileScreen() {
             )}
           </View>
 
+          {!loadingSummary && summary && summary.entries_by_vessel.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Download Reports</Text>
+              <View style={styles.card}>
+                <TouchableOpacity
+                  style={styles.reportButton}
+                  onPress={handleDownloadPDF}
+                  disabled={downloadingPDF}
+                >
+                  {downloadingPDF ? (
+                    <ActivityIndicator color="#ffffff" />
+                  ) : (
+                    <>
+                      <IconSymbol
+                        ios_icon_name="doc.fill"
+                        android_material_icon_name="description"
+                        size={24}
+                        color="#ffffff"
+                      />
+                      <Text style={styles.reportButtonText}>Download PDF Report</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.reportButton}
+                  onPress={handleDownloadCSV}
+                  disabled={downloadingCSV}
+                >
+                  {downloadingCSV ? (
+                    <ActivityIndicator color="#ffffff" />
+                  ) : (
+                    <>
+                      <IconSymbol
+                        ios_icon_name="tablecells"
+                        android_material_icon_name="grid-on"
+                        size={24}
+                        color="#ffffff"
+                      />
+                      <Text style={styles.reportButtonText}>Download CSV Report</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Sea Time Summary</Text>
             <View style={styles.card}>
@@ -861,53 +908,6 @@ export default function ProfileScreen() {
                   <Text style={styles.definitionDescription}>{definition.description}</Text>
                 </View>
               ))}
-            </View>
-          )}
-
-          {!loadingSummary && summary && summary.entries_by_vessel.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Download Reports</Text>
-              <View style={styles.card}>
-                <TouchableOpacity
-                  style={styles.reportButton}
-                  onPress={handleDownloadPDF}
-                  disabled={downloadingPDF}
-                >
-                  {downloadingPDF ? (
-                    <ActivityIndicator color="#ffffff" />
-                  ) : (
-                    <>
-                      <IconSymbol
-                        ios_icon_name="doc.fill"
-                        android_material_icon_name="description"
-                        size={24}
-                        color="#ffffff"
-                      />
-                      <Text style={styles.reportButtonText}>Download PDF Report</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.reportButton}
-                  onPress={handleDownloadCSV}
-                  disabled={downloadingCSV}
-                >
-                  {downloadingCSV ? (
-                    <ActivityIndicator color="#ffffff" />
-                  ) : (
-                    <>
-                      <IconSymbol
-                        ios_icon_name="tablecells"
-                        android_material_icon_name="grid-on"
-                        size={24}
-                        color="#ffffff"
-                      />
-                      <Text style={styles.reportButtonText}>Download CSV Report</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
             </View>
           )}
 
