@@ -1032,18 +1032,13 @@ export default function VesselDetailScreen() {
     }
   };
 
-  const calculateTotalHours = (): number => {
+  const calculateTotalDays = (): number => {
     const total = entries
       .filter((e) => e.status === 'confirmed' && e.duration_hours !== null && e.duration_hours !== undefined)
       .reduce((sum, e) => sum + (Number(e.duration_hours) || 0), 0);
     
-    console.log('[VesselDetailScreen iOS] calculateTotalHours result:', total);
-    return total || 0;
-  };
-
-  const calculateTotalDays = (): number => {
-    const hours = calculateTotalHours();
-    return Math.floor(hours / 24);
+    console.log('[VesselDetailScreen iOS] calculateTotalDays - total hours:', total);
+    return Math.floor(total / 24);
   };
 
   const groupEntriesByDate = () => {
@@ -1092,7 +1087,6 @@ export default function VesselDetailScreen() {
   }
 
   const groupedEntries = groupEntriesByDate();
-  const totalHours = calculateTotalHours();
   const totalDays = calculateTotalDays();
 
   const aisName = formatAISValue(aisData?.name);
@@ -1251,10 +1245,6 @@ export default function VesselDetailScreen() {
             <Text style={styles.statLabel}>Total Days</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{totalHours.toFixed(1)}</Text>
-            <Text style={styles.statLabel}>Total Hours</Text>
-          </View>
-          <View style={styles.statCard}>
             <Text style={styles.statValue}>{entries.length}</Text>
             <Text style={styles.statLabel}>Total Entries</Text>
           </View>
@@ -1313,8 +1303,7 @@ export default function VesselDetailScreen() {
                       )}
                       {entry.duration_hours !== null && entry.duration_hours !== undefined && (
                         <Text style={styles.entryDetailText}>
-                          Duration: {Number(entry.duration_hours).toFixed(1)} hours (
-                          {(Number(entry.duration_hours) / 24).toFixed(2)} days)
+                          Duration: {Math.floor(Number(entry.duration_hours) / 24)} {Math.floor(Number(entry.duration_hours) / 24) === 1 ? 'day' : 'days'}
                         </Text>
                       )}
                       {entry.notes && (

@@ -1016,6 +1016,8 @@ export default function LogbookScreen() {
     );
   }
 
+  const totalSeaDays = calculateTotalSeaDays();
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -1239,7 +1241,7 @@ export default function LogbookScreen() {
                 <Text style={styles.summaryTitle}>Summary</Text>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Total Sea Days</Text>
-                  <Text style={styles.summaryValue}>{calculateTotalSeaDays()}</Text>
+                  <Text style={styles.summaryValue}>{totalSeaDays}</Text>
                 </View>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Confirmed Entries</Text>

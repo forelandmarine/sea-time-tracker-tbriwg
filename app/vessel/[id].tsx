@@ -354,14 +354,10 @@ export default function VesselDetailScreen() {
     }
   };
 
-  const calculateTotalHours = (): number => {
-    return seaTimeEntries
+  const calculateTotalDays = (): number => {
+    const totalHours = seaTimeEntries
       .filter(entry => entry.status === 'confirmed')
       .reduce((total, entry) => total + (entry.duration_hours || 0), 0);
-  };
-
-  const calculateTotalDays = (): number => {
-    const totalHours = calculateTotalHours();
     return Math.floor(totalHours / 24);
   };
 
@@ -422,7 +418,6 @@ export default function VesselDetailScreen() {
   }
 
   const groupedEntries = groupEntriesByDate();
-  const totalHours = calculateTotalHours();
   const totalDays = calculateTotalDays();
 
   return (
@@ -597,10 +592,6 @@ export default function VesselDetailScreen() {
               <Text style={styles.summaryLabel}>Days</Text>
             </View>
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryValue}>{totalHours.toFixed(1)}</Text>
-              <Text style={styles.summaryLabel}>Hours</Text>
-            </View>
-            <View style={styles.summaryItem}>
               <Text style={styles.summaryValue}>{seaTimeEntries.length}</Text>
               <Text style={styles.summaryLabel}>Entries</Text>
             </View>
@@ -647,7 +638,7 @@ export default function VesselDetailScreen() {
 
                     {entry.duration_hours !== null && (
                       <Text style={styles.entryDuration}>
-                        {entry.duration_hours.toFixed(1)} hours
+                        {Math.floor(entry.duration_hours / 24)} {Math.floor(entry.duration_hours / 24) === 1 ? 'day' : 'days'}
                       </Text>
                     )}
 

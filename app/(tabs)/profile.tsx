@@ -356,7 +356,7 @@ const createStyles = (isDark: boolean) =>
       color: isDark ? colors.text : colors.textLight,
       marginBottom: 2,
     },
-    vesselHours: {
+    vesselDays: {
       fontSize: 13,
       color: colors.primary,
     },
@@ -770,8 +770,7 @@ export default function ProfileScreen() {
   const imageUrl = profile.imageUrl || (profile.image ? `${seaTimeApi.API_BASE_URL}/${profile.image}` : null);
   const displayName = profile.name || 'User';
   const initials = getInitials(profile.name);
-  const totalDaysDisplay = summary?.total_days.toFixed(2) || '0.00';
-  const totalHoursDisplay = summary?.total_hours.toFixed(2) || '0.00';
+  const totalDays = summary ? Math.floor(summary.total_hours / 24) : 0;
 
   const userDepartment = profile?.department?.toLowerCase();
   const filteredDefinitions = SEA_DAY_DEFINITIONS.filter(
@@ -834,13 +833,9 @@ export default function ProfileScreen() {
 
                   {summary.entries_by_vessel.length > 0 && (
                     <>
-                      <View style={styles.summaryRow}>
-                        <Text style={styles.summaryLabel}>Total Hours</Text>
-                        <Text style={styles.summaryValue}>{totalHoursDisplay} hrs</Text>
-                      </View>
                       <View style={[styles.summaryRow, styles.summaryRowLast]}>
                         <Text style={styles.summaryLabel}>Total Days</Text>
-                        <Text style={styles.summaryValue}>{totalDaysDisplay} days</Text>
+                        <Text style={styles.summaryValue}>{totalDays}</Text>
                       </View>
                     </>
                   )}
@@ -856,8 +851,7 @@ export default function ProfileScreen() {
               <Text style={styles.sectionTitle}>Sea Time by Vessel</Text>
               <View style={styles.card}>
                 {summary.entries_by_vessel.map((vessel, index) => {
-                  const vesselDays = (vessel.total_hours / 24).toFixed(2);
-                  const vesselHours = vessel.total_hours.toFixed(2);
+                  const vesselDays = Math.floor(vessel.total_hours / 24);
                   const isLast = index === summary.entries_by_vessel.length - 1;
                   
                   return (
@@ -868,8 +862,8 @@ export default function ProfileScreen() {
                     >
                       <View style={styles.vesselButtonLeft}>
                         <Text style={styles.vesselName}>{vessel.vessel_name}</Text>
-                        <Text style={styles.vesselHours}>
-                          {vesselDays} days ({vesselHours} hrs)
+                        <Text style={styles.vesselDays}>
+                          {vesselDays} {vesselDays === 1 ? 'day' : 'days'}
                         </Text>
                       </View>
                       <IconSymbol
@@ -890,7 +884,7 @@ export default function ProfileScreen() {
               <Text style={styles.sectionTitle}>Sea Time by Service Type</Text>
               <View style={styles.card}>
                 {allServiceTypes.map((serviceEntry, index) => {
-                  const serviceDays = (serviceEntry.total_hours / 24).toFixed(2);
+                  const serviceDays = Math.floor(serviceEntry.total_hours / 24);
                   const isLast = index === allServiceTypes.length - 1;
                   const formattedType = formatServiceType(serviceEntry.service_type);
                   
@@ -901,7 +895,7 @@ export default function ProfileScreen() {
                     >
                       <Text style={styles.summaryLabel}>{formattedType}</Text>
                       <Text style={styles.summaryValue}>
-                        {serviceDays} days
+                        {serviceDays}
                       </Text>
                     </View>
                   );

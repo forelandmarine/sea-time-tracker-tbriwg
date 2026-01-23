@@ -464,8 +464,7 @@ export default function ReportsScreen() {
     (def) => def.department === 'both' || def.department === userDepartment
   );
 
-  const totalDaysDisplay = summary?.total_days.toFixed(2) || '0.00';
-  const totalHoursDisplay = summary?.total_hours.toFixed(2) || '0.00';
+  const totalDays = summary ? Math.floor(summary.total_hours / 24) : 0;
 
   return (
     <View style={styles.container}>
@@ -486,13 +485,9 @@ export default function ReportsScreen() {
                 <Text style={styles.loadingText}>Loading summary...</Text>
               ) : summary ? (
                 <>
-                  <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Total Hours</Text>
-                    <Text style={styles.summaryValue}>{totalHoursDisplay} hrs</Text>
-                  </View>
                   <View style={[styles.summaryRow, styles.summaryRowLast]}>
                     <Text style={styles.summaryLabel}>Total Days</Text>
-                    <Text style={styles.summaryValue}>{totalDaysDisplay} days</Text>
+                    <Text style={styles.summaryValue}>{totalDays}</Text>
                   </View>
                 </>
               ) : (
@@ -506,8 +501,7 @@ export default function ReportsScreen() {
               <Text style={styles.sectionTitle}>Sea Time by Vessel</Text>
               <View style={styles.card}>
                 {summary.entries_by_vessel.map((vessel, index) => {
-                  const vesselDays = (vessel.total_hours / 24).toFixed(2);
-                  const vesselHours = vessel.total_hours.toFixed(2);
+                  const vesselDays = Math.floor(vessel.total_hours / 24);
                   const isLast = index === summary.entries_by_vessel.length - 1;
                   
                   return (
@@ -519,7 +513,7 @@ export default function ReportsScreen() {
                       <View style={styles.vesselButtonLeft}>
                         <Text style={styles.vesselName}>{vessel.vessel_name}</Text>
                         <Text style={styles.vesselHours}>
-                          {vesselDays} days ({vesselHours} hrs)
+                          {vesselDays} {vesselDays === 1 ? 'day' : 'days'}
                         </Text>
                       </View>
                       <IconSymbol
@@ -540,8 +534,7 @@ export default function ReportsScreen() {
               <Text style={styles.sectionTitle}>Sea Time by Service Type</Text>
               <View style={styles.card}>
                 {summary.entries_by_service_type.map((serviceEntry, index) => {
-                  const serviceDays = (serviceEntry.total_hours / 24).toFixed(2);
-                  const serviceHours = serviceEntry.total_hours.toFixed(2);
+                  const serviceDays = Math.floor(serviceEntry.total_hours / 24);
                   const isLast = index === summary.entries_by_service_type!.length - 1;
                   const formattedType = formatServiceType(serviceEntry.service_type);
                   
@@ -552,7 +545,7 @@ export default function ReportsScreen() {
                     >
                       <Text style={styles.summaryLabel}>{formattedType}</Text>
                       <Text style={styles.summaryValue}>
-                        {serviceDays} days
+                        {serviceDays}
                       </Text>
                     </View>
                   );

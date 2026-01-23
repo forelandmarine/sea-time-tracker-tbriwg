@@ -887,8 +887,9 @@ export default function LogbookScreen() {
 
   const formatDays = (hours: number | string | null | undefined): string => {
     const h = toNumber(hours);
-    const days = (h / 24).toFixed(1);
-    return `${days} days`;
+    const days = Math.floor(h / 24);
+    const daysText = days === 1 ? 'day' : 'days';
+    return `${days} ${daysText}`;
   };
 
   const calculateTotalHours = () => {
@@ -898,7 +899,8 @@ export default function LogbookScreen() {
   };
 
   const calculateTotalDays = () => {
-    return (calculateTotalHours() / 24).toFixed(1);
+    const totalHours = calculateTotalHours();
+    return Math.floor(totalHours / 24);
   };
 
   const handleDatePress = (day: any) => {
@@ -1014,6 +1016,8 @@ export default function LogbookScreen() {
     );
   }
 
+  const totalDays = calculateTotalDays();
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -1115,63 +1119,67 @@ export default function LogbookScreen() {
               </Text>
               {getEntriesForDate(selectedDate).length > 0 ? (
                 <React.Fragment>
-                  {getEntriesForDate(selectedDate).map((entry) => (
-                    <TouchableOpacity
-                      key={entry.id}
-                      style={styles.selectedDateEntry}
-                      onPress={() => handleEditEntry(entry)}
-                    >
-                      <View style={styles.entryHeader}>
-                        <Text style={styles.vesselName}>
-                          {entry.vessel?.vessel_name || 'Unknown Vessel'}
-                        </Text>
-                        <View
-                          style={[
-                            styles.statusBadge,
-                            { backgroundColor: getStatusColor(entry.status) },
-                          ]}
-                        >
-                          <Text style={styles.statusText}>
-                            {entry.status.toUpperCase()}
+                  {getEntriesForDate(selectedDate).map((entry) => {
+                    const daysDisplay = formatDays(entry.duration_hours);
+                    
+                    return (
+                      <TouchableOpacity
+                        key={entry.id}
+                        style={styles.selectedDateEntry}
+                        onPress={() => handleEditEntry(entry)}
+                      >
+                        <View style={styles.entryHeader}>
+                          <Text style={styles.vesselName}>
+                            {entry.vessel?.vessel_name || 'Unknown Vessel'}
                           </Text>
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              { backgroundColor: getStatusColor(entry.status) },
+                            ]}
+                          >
+                            <Text style={styles.statusText}>
+                              {entry.status.toUpperCase()}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
 
-                      <View style={styles.entryRow}>
-                        <IconSymbol
-                          ios_icon_name="calendar"
-                          android_material_icon_name="calendar-today"
-                          size={16}
-                          color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                          style={styles.entryIcon}
-                        />
-                        <Text style={styles.entryText}>
-                          {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
-                          {entry.end_time &&
-                            ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
-                        </Text>
-                      </View>
-
-                      {entry.duration_hours !== null && (
-                        <Text style={styles.durationText}>
-                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
-                        </Text>
-                      )}
-
-                      {entry.notes && (
                         <View style={styles.entryRow}>
                           <IconSymbol
-                            ios_icon_name="note.text"
-                            android_material_icon_name="description"
+                            ios_icon_name="calendar"
+                            android_material_icon_name="calendar-today"
                             size={16}
                             color={isDark ? colors.textSecondary : colors.textSecondaryLight}
                             style={styles.entryIcon}
                           />
-                          <Text style={styles.entryText}>{entry.notes}</Text>
+                          <Text style={styles.entryText}>
+                            {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
+                            {entry.end_time &&
+                              ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
+                          </Text>
                         </View>
-                      )}
-                    </TouchableOpacity>
-                  ))}
+
+                        {entry.duration_hours !== null && (
+                          <Text style={styles.durationText}>
+                            {daysDisplay}
+                          </Text>
+                        )}
+
+                        {entry.notes && (
+                          <View style={styles.entryRow}>
+                            <IconSymbol
+                              ios_icon_name="note.text"
+                              android_material_icon_name="description"
+                              size={16}
+                              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                              style={styles.entryIcon}
+                            />
+                            <Text style={styles.entryText}>{entry.notes}</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </React.Fragment>
               ) : (
                 <Text style={styles.noEntriesText}>No entries recorded for this date</Text>
@@ -1221,14 +1229,8 @@ export default function LogbookScreen() {
               <View style={styles.summaryCard}>
                 <Text style={styles.summaryTitle}>Summary</Text>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Total Confirmed Days</Text>
-                  <Text style={styles.summaryValue}>{calculateTotalDays()}</Text>
-                </View>
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Total Confirmed Hours</Text>
-                  <Text style={styles.summaryValue}>
-                    {calculateTotalHours().toFixed(1)}h
-                  </Text>
+                  <Text style={styles.summaryLabel}>Total Days</Text>
+                  <Text style={styles.summaryValue}>{totalDays}</Text>
                 </View>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Confirmed Entries</Text>
@@ -1248,7 +1250,8 @@ export default function LogbookScreen() {
                       (sum, entry) => sum + toNumber(entry.duration_hours),
                       0
                     );
-                    const vesselTotalDays = (vesselTotalHours / 24).toFixed(1);
+                    const vesselTotalDays = Math.floor(vesselTotalHours / 24);
+                    const vesselDaysText = vesselTotalDays === 1 ? 'day' : 'days';
                     
                     return (
                       <React.Fragment key={vesselId}>
@@ -1263,65 +1266,69 @@ export default function LogbookScreen() {
                             </View>
                             <View style={styles.vesselStat}>
                               <Text style={styles.vesselStatText}>Total:</Text>
-                              <Text style={styles.vesselStatValue}>{vesselTotalDays} days</Text>
+                              <Text style={styles.vesselStatValue}>{vesselTotalDays} {vesselDaysText}</Text>
                             </View>
                           </View>
                         </View>
                         
-                        {group.entries.map((entry) => (
-                          <TouchableOpacity
-                            key={entry.id}
-                            style={styles.entryCard}
-                            onPress={() => handleEditEntry(entry)}
-                          >
-                            <View style={styles.entryHeader}>
-                              <View
-                                style={[
-                                  styles.statusBadge,
-                                  { backgroundColor: getStatusColor(entry.status) },
-                                ]}
-                              >
-                                <Text style={styles.statusText}>
-                                  {entry.status.toUpperCase()}
-                                </Text>
+                        {group.entries.map((entry) => {
+                          const entryDaysDisplay = formatDays(entry.duration_hours);
+                          
+                          return (
+                            <TouchableOpacity
+                              key={entry.id}
+                              style={styles.entryCard}
+                              onPress={() => handleEditEntry(entry)}
+                            >
+                              <View style={styles.entryHeader}>
+                                <View
+                                  style={[
+                                    styles.statusBadge,
+                                    { backgroundColor: getStatusColor(entry.status) },
+                                  ]}
+                                >
+                                  <Text style={styles.statusText}>
+                                    {entry.status.toUpperCase()}
+                                  </Text>
+                                </View>
                               </View>
-                            </View>
 
-                            <View style={styles.entryRow}>
-                              <IconSymbol
-                                ios_icon_name="calendar"
-                                android_material_icon_name="calendar-today"
-                                size={16}
-                                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                                style={styles.entryIcon}
-                              />
-                              <Text style={styles.entryText}>
-                                {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
-                                {entry.end_time &&
-                                  ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
-                              </Text>
-                            </View>
-
-                            {entry.duration_hours !== null && (
-                              <Text style={styles.durationText}>
-                                {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
-                              </Text>
-                            )}
-
-                            {entry.notes && (
                               <View style={styles.entryRow}>
                                 <IconSymbol
-                                  ios_icon_name="note.text"
-                                  android_material_icon_name="description"
+                                  ios_icon_name="calendar"
+                                  android_material_icon_name="calendar-today"
                                   size={16}
                                   color={isDark ? colors.textSecondary : colors.textSecondaryLight}
                                   style={styles.entryIcon}
                                 />
-                                <Text style={styles.entryText}>{entry.notes}</Text>
+                                <Text style={styles.entryText}>
+                                  {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
+                                  {entry.end_time &&
+                                    ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
+                                </Text>
                               </View>
-                            )}
-                          </TouchableOpacity>
-                        ))}
+
+                              {entry.duration_hours !== null && (
+                                <Text style={styles.durationText}>
+                                  {entryDaysDisplay}
+                                </Text>
+                              )}
+
+                              {entry.notes && (
+                                <View style={styles.entryRow}>
+                                  <IconSymbol
+                                    ios_icon_name="note.text"
+                                    android_material_icon_name="description"
+                                    size={16}
+                                    color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                                    style={styles.entryIcon}
+                                  />
+                                  <Text style={styles.entryText}>{entry.notes}</Text>
+                                </View>
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })}
                       </React.Fragment>
                     );
                   })}
@@ -1331,53 +1338,57 @@ export default function LogbookScreen() {
               {pendingEntries.length > 0 && (
                 <React.Fragment>
                   <Text style={styles.sectionTitle}>Pending Review</Text>
-                  {pendingEntries.map((entry) => (
-                    <TouchableOpacity
-                      key={entry.id}
-                      style={styles.entryCard}
-                      onPress={() => {
-                        console.log('[LogbookScreen iOS] User tapped pending entry, navigating to Review tab');
-                        router.push('/(tabs)/confirmations');
-                      }}
-                    >
-                      <View style={styles.entryHeader}>
-                        <Text style={styles.vesselName}>
-                          {entry.vessel?.vessel_name || 'Unknown Vessel'}
-                        </Text>
-                        <View
-                          style={[
-                            styles.statusBadge,
-                            { backgroundColor: getStatusColor(entry.status) },
-                          ]}
-                        >
-                          <Text style={styles.statusText}>
-                            {entry.status.toUpperCase()}
+                  {pendingEntries.map((entry) => {
+                    const pendingDaysDisplay = formatDays(entry.duration_hours);
+                    
+                    return (
+                      <TouchableOpacity
+                        key={entry.id}
+                        style={styles.entryCard}
+                        onPress={() => {
+                          console.log('[LogbookScreen iOS] User tapped pending entry, navigating to Review tab');
+                          router.push('/(tabs)/confirmations');
+                        }}
+                      >
+                        <View style={styles.entryHeader}>
+                          <Text style={styles.vesselName}>
+                            {entry.vessel?.vessel_name || 'Unknown Vessel'}
+                          </Text>
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              { backgroundColor: getStatusColor(entry.status) },
+                            ]}
+                          >
+                            <Text style={styles.statusText}>
+                              {entry.status.toUpperCase()}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.entryRow}>
+                          <IconSymbol
+                            ios_icon_name="calendar"
+                            android_material_icon_name="calendar-today"
+                            size={16}
+                            color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                            style={styles.entryIcon}
+                          />
+                          <Text style={styles.entryText}>
+                            {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
+                            {entry.end_time &&
+                              ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
                           </Text>
                         </View>
-                      </View>
 
-                      <View style={styles.entryRow}>
-                        <IconSymbol
-                          ios_icon_name="calendar"
-                          android_material_icon_name="calendar-today"
-                          size={16}
-                          color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                          style={styles.entryIcon}
-                        />
-                        <Text style={styles.entryText}>
-                          {formatDate(entry.start_time)} at {formatTime(entry.start_time)}
-                          {entry.end_time &&
-                            ` - ${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`}
-                        </Text>
-                      </View>
-
-                      {entry.duration_hours !== null && (
-                        <Text style={styles.durationText}>
-                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  ))}
+                        {entry.duration_hours !== null && (
+                          <Text style={styles.durationText}>
+                            {pendingDaysDisplay}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </React.Fragment>
               )}
             </React.Fragment>

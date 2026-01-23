@@ -326,15 +326,11 @@ export default function ConfirmationsScreen() {
     return `${convertToDMS(latNum, true)}, ${convertToDMS(lonNum, false)}`;
   };
 
-  const formatDuration = (hours: number | string | null | undefined): string => {
-    const num = toNumber(hours);
-    return `${num.toFixed(1)} hours`;
-  };
-
   const formatDays = (hours: number | string | null | undefined): string => {
     const num = toNumber(hours);
-    const days = num / 24;
-    return `${days.toFixed(2)} days`;
+    const days = Math.floor(num / 24);
+    const daysText = days === 1 ? 'day' : 'days';
+    return `${days} ${daysText}`;
   };
 
   const formatServiceType = (serviceType: string | null | undefined): string => {
@@ -367,8 +363,7 @@ export default function ConfirmationsScreen() {
       return null;
     }
     
-    const hours = toNumber(entry.detection_window_hours || entry.duration_hours);
-    return `Movement detected over ${hours.toFixed(1)} hours. This does not meet the MCA 4-hour requirement but has been flagged for review to avoid missing potential sea days.`;
+    return `This entry does not meet the MCA 4-hour requirement but has been flagged for review to avoid missing potential sea days.`;
   };
 
   if (loading) {
@@ -456,7 +451,7 @@ export default function ConfirmationsScreen() {
                       </Text>
                       <View style={styles.durationBadge}>
                         <Text style={styles.durationText}>
-                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
+                          {formatDays(entry.duration_hours)}
                         </Text>
                       </View>
                     </View>
@@ -503,17 +498,10 @@ export default function ConfirmationsScreen() {
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Duration:</Text>
                         <Text style={styles.detailValue}>
-                          {formatDuration(entry.duration_hours)} ({formatDays(entry.duration_hours)})
+                          {formatDays(entry.duration_hours)}
                         </Text>
                       </View>
-                      {entry.detection_window_hours && (
-                        <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Detection Window:</Text>
-                          <Text style={styles.detailValue}>
-                            {formatDuration(entry.detection_window_hours)}
-                          </Text>
-                        </View>
-                      )}
+
                       {(entry.start_latitude || entry.start_longitude) && (
                         <View style={styles.detailRow}>
                           <Text style={styles.detailLabel}>Start Position:</Text>
