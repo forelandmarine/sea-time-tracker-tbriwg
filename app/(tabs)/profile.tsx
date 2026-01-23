@@ -387,7 +387,7 @@ const createStyles = (isDark: boolean) =>
       padding: 20,
     },
     modalContent: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
       borderRadius: 16,
       padding: 20,
       width: '100%',
@@ -399,11 +399,14 @@ const createStyles = (isDark: boolean) =>
       justifyContent: 'space-between',
       alignItems: 'center',
       marginBottom: 16,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
     },
     modalTitle: {
       fontSize: 20,
       fontWeight: '700',
-      color: isDark ? colors.text : colors.textLight,
+      color: isDark ? '#ffffff' : '#000000',
       flex: 1,
     },
     closeButton: {
@@ -413,8 +416,7 @@ const createStyles = (isDark: boolean) =>
       maxHeight: 400,
     },
     particularRow: {
-      flexDirection: 'row',
-      paddingVertical: 10,
+      paddingVertical: 12,
       borderBottomWidth: 1,
       borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
     },
@@ -422,15 +424,15 @@ const createStyles = (isDark: boolean) =>
       borderBottomWidth: 0,
     },
     particularLabel: {
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: '600',
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      width: 120,
+      color: isDark ? '#8e8e93' : '#8e8e93',
+      marginBottom: 4,
     },
     particularValue: {
-      fontSize: 14,
-      color: isDark ? colors.text : colors.textLight,
-      flex: 1,
+      fontSize: 16,
+      color: isDark ? '#ffffff' : '#000000',
+      fontWeight: '500',
     },
     infoBox: {
       backgroundColor: colors.primary + '15',
