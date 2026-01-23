@@ -7,6 +7,20 @@ import PDFDocument from "pdfkit";
 import { Readable } from "stream";
 import { extractUserIdFromRequest } from "../middleware/auth.js";
 
+// Helper function to fetch and convert image URL to Buffer
+async function fetchImageAsBuffer(url: string): Promise<Buffer | null> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image: ${response.statusText}`);
+    }
+    return Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    console.error(`Error fetching image from ${url}:`, error);
+    return null;
+  }
+}
+
 export function register(app: App, fastify: FastifyInstance) {
   // GET /api/reports/csv - Generate CSV file of sea time entries with date filtering
   fastify.get<{ Querystring: { startDate?: string; endDate?: string } }>('/api/reports/csv', {
@@ -447,10 +461,40 @@ export function register(app: App, fastify: FastifyInstance) {
       return dept.charAt(0).toUpperCase() + dept.slice(1);
     };
 
-    // BRANDING HEADER
-    doc.fillColor(PRIMARY_COLOR).fontSize(28).font('Helvetica-Bold').text('SeaTime Tracker', { align: 'center' });
-    doc.fillColor(SECONDARY_COLOR).fontSize(11).font('Helvetica').text('Sea Time Report', { align: 'center' });
-    doc.moveDown(1.2);
+    // BRANDING HEADER WITH LOGO
+    const logoUrl = 'https://prod-finalquest-user-projects-storage-bucket-aws.s3.amazonaws.com/user-projects/5e2bc1ec-bfa9-4840-8ffd-37bba15e1b0e/assets/images/86a53a61-65cc-44db-824b-a54b2f2d660f.png';
+    const logoBuffer = await fetchImageAsBuffer(logoUrl);
+
+    // Position logo on the top left
+    if (logoBuffer) {
+      try {
+        doc.image(logoBuffer, 40, 30, { width: 150 });
+        app.logger.info({}, 'Logo embedded successfully in PDF');
+      } catch (error) {
+        app.logger.warn({ err: error }, 'Failed to embed logo in PDF, continuing without logo');
+      }
+    } else {
+      app.logger.warn({}, 'Logo buffer is null, continuing without logo');
+    }
+
+    // BRANDING HEADER TEXT (positioned to the right and below logo)
+    const logoHeight = 90; // Approximate logo height with 150px width maintaining aspect ratio
+    doc.fillColor(PRIMARY_COLOR).fontSize(26).font('Helvetica-Bold').text('SeaTime Tracker', {
+      x: 200,
+      y: 35,
+      width: 360,
+      align: 'left'
+    });
+    doc.fillColor(SECONDARY_COLOR).fontSize(11).font('Helvetica').text('Sea Time Report', {
+      x: 200,
+      y: doc.y,
+      width: 360,
+      align: 'left'
+    });
+
+    // Move down after logo area
+    doc.y = Math.max(doc.y + 20, 30 + logoHeight + 20);
+    doc.moveDown(0.5);
 
     // USER INFORMATION HEADER BOX
     const headerBoxY = doc.y;
