@@ -119,11 +119,6 @@ const SEA_DAY_DEFINITIONS: SeaDayDefinition[] = [
     description: 'Applies when vessel is in dock, drydock, or service facility. Must involve major engine, auxiliary, or systems work (e.g. engines, gearboxes, pumps, firefighting systems, hull fittings). Over 90 days requires works list and job descriptions. Evidence must be submitted with NOE application.',
     department: 'engineering',
   },
-  {
-    title: 'Administrative Rules',
-    description: 'Digital testimonials only via PYA profile; no letters, logs, or spreadsheets. No overlapping testimonials permitted. Off-rotation time must be deducted and recorded as leave. Start and end dates are inclusive when calculating days. Captains cannot sign their own testimonials (owner/manager must sign). Chase boat service must be recorded on a separate testimonial.',
-    department: 'both',
-  },
 ];
 
 const ALL_SERVICE_TYPES = [
@@ -776,7 +771,7 @@ export default function ProfileScreen() {
 
   const userDepartment = profile?.department?.toLowerCase();
   const filteredDefinitions = SEA_DAY_DEFINITIONS.filter(
-    (def) => def.department === 'both' || def.department === userDepartment
+    (def) => (def.department === 'both' || def.department === userDepartment) && def.title !== 'Administrative Rules'
   );
 
   const allServiceTypes = getAllServiceTypesWithHours();
