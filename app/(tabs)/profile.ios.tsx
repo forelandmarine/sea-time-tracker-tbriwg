@@ -515,10 +515,7 @@ export default function ProfileScreen() {
     router.push('/scheduled-tasks');
   };
 
-  const handleMCARequirements = () => {
-    console.log('User tapped MCA Requirements');
-    router.push('/mca-requirements');
-  };
+
 
   const handleVesselPress = (vesselName: string) => {
     console.log('User tapped vessel:', vesselName);
@@ -957,7 +954,7 @@ export default function ProfileScreen() {
                 />
               </TouchableOpacity>
 
-              <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/notification-settings')}>
+              <TouchableOpacity style={[styles.menuItem, styles.menuItemLast]} onPress={() => router.push('/notification-settings')}>
                 <IconSymbol
                   ios_icon_name="bell"
                   android_material_icon_name="notifications"
@@ -966,27 +963,6 @@ export default function ProfileScreen() {
                   style={styles.menuItemIcon}
                 />
                 <Text style={styles.menuItemText}>Notification Settings</Text>
-                <IconSymbol
-                  ios_icon_name="chevron.right"
-                  android_material_icon_name="arrow-forward"
-                  size={20}
-                  color={colors.textSecondary}
-                  style={styles.menuItemChevron}
-                />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.menuItem, styles.menuItemLast]}
-                onPress={handleMCARequirements}
-              >
-                <IconSymbol
-                  ios_icon_name="doc.text"
-                  android_material_icon_name="description"
-                  size={24}
-                  color={colors.primary}
-                  style={styles.menuItemIcon}
-                />
-                <Text style={styles.menuItemText}>MCA Requirements</Text>
                 <IconSymbol
                   ios_icon_name="chevron.right"
                   android_material_icon_name="arrow-forward"
