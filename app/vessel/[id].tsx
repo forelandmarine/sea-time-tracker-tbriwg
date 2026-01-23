@@ -277,7 +277,21 @@ export default function VesselDetailScreen() {
       Alert.alert('Success', 'AIS data updated');
     } catch (error: any) {
       console.error('[VesselDetail] Failed to check AIS:', error);
-      Alert.alert('Error', 'Failed to check AIS: ' + error.message);
+      
+      // Parse error message to provide user-friendly feedback
+      let userMessage = 'Failed to check vessel location. Please try again.';
+      
+      if (error.message) {
+        if (error.message.includes('502') || error.message.includes('temporarily unavailable')) {
+          userMessage = 'Location service is temporarily unavailable. Please try again later.';
+        } else if (error.message.includes('404') || error.message.includes('not found')) {
+          userMessage = 'Vessel not found in tracking system. Please verify the MMSI number.';
+        } else if (error.message.includes('401') || error.message.includes('authentication')) {
+          userMessage = 'Authentication error. Please contact support.';
+        }
+      }
+      
+      Alert.alert('Error', userMessage);
     } finally {
       setCheckingAIS(false);
     }

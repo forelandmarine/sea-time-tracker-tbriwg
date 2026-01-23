@@ -309,9 +309,9 @@ export default function DebugScreen() {
           }
         >
           <View style={styles.header}>
-            <Text style={styles.title}>AIS API Debug Logs</Text>
+            <Text style={styles.title}>AIS Debug Logs</Text>
             <Text style={styles.subtitle}>
-              Detailed API call history and responses for vessel monitoring
+              Detailed call history and responses for vessel monitoring
             </Text>
           </View>
 
@@ -389,11 +389,6 @@ export default function DebugScreen() {
 
                   {isExpanded && (
                     <>
-                      <View style={styles.logRow}>
-                        <Text style={styles.logLabel}>API URL:</Text>
-                        <Text style={[styles.logValue, { fontSize: 11 }]}>{log.api_url}</Text>
-                      </View>
-
                       {log.response_body && (
                         <View style={styles.responseBody}>
                           <Text style={styles.responseBodyText}>
