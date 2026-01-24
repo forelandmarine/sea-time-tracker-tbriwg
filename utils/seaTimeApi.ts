@@ -208,13 +208,42 @@ export const getVessels = async () => {
 };
 
 // Create a new vessel
-export const createVessel = async (mmsi: string, vessel_name: string, is_active: boolean = false) => {
-  console.log('[seaTimeApi] Creating vessel:', { mmsi, vessel_name, is_active });
+export const createVessel = async (
+  mmsi: string, 
+  vessel_name: string, 
+  is_active: boolean = false,
+  flag?: string,
+  official_number?: string,
+  type?: string,
+  length_metres?: number,
+  gross_tonnes?: number,
+  callsign?: string
+) => {
+  console.log('[seaTimeApi] Creating vessel:', { 
+    mmsi, 
+    vessel_name, 
+    is_active,
+    flag,
+    official_number,
+    type,
+    length_metres,
+    gross_tonnes,
+    callsign
+  });
+  
+  const body: any = { mmsi, vessel_name, is_active };
+  if (flag) body.flag = flag;
+  if (official_number) body.official_number = official_number;
+  if (type) body.type = type;
+  if (length_metres !== undefined) body.length_metres = length_metres;
+  if (gross_tonnes !== undefined) body.gross_tonnes = gross_tonnes;
+  if (callsign) body.callsign = callsign;
+  
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/vessels`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ mmsi, vessel_name, is_active }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
