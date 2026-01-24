@@ -465,14 +465,16 @@ export default function ProfileScreen() {
 
   console.log('ProfileScreen rendered');
 
+  // Initial load on mount
   useEffect(() => {
+    console.log('ProfileScreen: Initial mount, loading data');
     loadProfile();
     loadSummary();
     loadVessels();
     checkBiometricStatus();
   }, []);
 
-  // Listen to refreshTrigger and reload data when it changes
+  // Listen to refreshTrigger and reload data when it changes (but not on initial mount)
   useEffect(() => {
     if (refreshTrigger > 0) {
       console.log('ProfileScreen: Global refresh triggered, reloading profile data');

@@ -458,13 +458,15 @@ export default function ProfileScreen() {
 
   console.log('ProfileScreen rendered (iOS)');
 
+  // Initial load on mount
   useEffect(() => {
+    console.log('ProfileScreen (iOS): Initial mount, loading data');
     loadProfile();
     loadSummary();
     loadVessels();
   }, []);
 
-  // Listen to refreshTrigger and reload data when it changes
+  // Listen to refreshTrigger and reload data when it changes (but not on initial mount)
   useEffect(() => {
     if (refreshTrigger > 0) {
       console.log('ProfileScreen (iOS): Global refresh triggered, reloading profile data');
