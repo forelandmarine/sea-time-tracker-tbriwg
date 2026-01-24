@@ -1447,12 +1447,13 @@ export default function LogbookScreen() {
                 </Text>
 
                 <ScrollView 
-                  style={{ maxHeight: 400 }} 
+                  style={{ flex: 1 }} 
                   contentContainerStyle={styles.modalScrollContent}
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={true}
                   bounces={true}
                   scrollEnabled={true}
+                  nestedScrollEnabled={true}
                 >
                   {!editingEntry && (
                     <TouchableOpacity style={styles.mcaButton} onPress={handleViewMCARequirements}>

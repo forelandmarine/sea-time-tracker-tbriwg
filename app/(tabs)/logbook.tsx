@@ -1466,7 +1466,14 @@ export default function LogbookScreen() {
                   {editingEntry ? 'Update your sea time record' : 'Record a sea day: 4+ hours underway in any 24-hour period. Only one entry per day allowed.'}
                 </Text>
 
-                <ScrollView style={{ maxHeight: 500 }} contentContainerStyle={styles.modalScrollContent}>
+                <ScrollView 
+                  style={{ flex: 1 }} 
+                  contentContainerStyle={styles.modalScrollContent}
+                  showsVerticalScrollIndicator={true}
+                  bounces={true}
+                  scrollEnabled={true}
+                  nestedScrollEnabled={true}
+                >
                   {!editingEntry && (
                     <TouchableOpacity style={styles.mcaButton} onPress={handleViewMCARequirements}>
                       <IconSymbol
