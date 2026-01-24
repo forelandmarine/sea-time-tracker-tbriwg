@@ -202,10 +202,10 @@ async function processScheduledTask(
  * 1. Analyze all AIS checks in the last 24 hours
  * 2. For each pair of checks spanning 1-3 hours, check if position changed >0.1 degrees
  * 3. Calculate total underway hours from all movement windows
- * 4. Create pending entry if total underway time >= 2 hours:
- *    - mca_compliant = true if duration >= 4 hours (meets MCA requirement)
- *    - mca_compliant = false if duration 2-4 hours (detected movement, flagged for review)
- *    - No entry if less than 2 hours (insufficient data)
+ * 4. Create pending entry ONLY if total underway time >= 4 hours (MCA compliant):
+ *    - mca_compliant = true (all entries meet MCA 4-hour requirement)
+ *    - sea_days = 1 (counts as one full sea day)
+ *    - No entry if less than 4 hours (insufficient movement for MCA compliance)
  */
 async function handleSeaTimeEntries(
   app: App,
@@ -335,16 +335,15 @@ async function handleSeaTimeEntries(
       underwayPeriodsCount: underwayPeriods.length,
       totalUnderwayHours: totalUnderwayHoursRounded,
       meetsMCAThreshold: totalUnderwayHours >= 4,
-      meetsMinThreshold: totalUnderwayHours >= 2,
     },
     `24-hour analysis complete for vessel ${vessel_name}: ${underwayPeriods.length} movement periods detected, ${totalUnderwayHoursRounded} total underway hours`
   );
 
-  // Only proceed if we have at least 2 hours of detected movement
-  if (totalUnderwayHours < 2) {
+  // Only proceed if we have at least 4 hours of detected movement (MCA compliant threshold)
+  if (totalUnderwayHours < 4) {
     app.logger.info(
       { vesselId, mmsi, totalHours: totalUnderwayHoursRounded },
-      `Vessel ${vessel_name} has only ${totalUnderwayHoursRounded} underway hours (need 2+), skipping entry creation`
+      `Vessel ${vessel_name} has only ${totalUnderwayHoursRounded} underway hours (need 4+ for MCA compliance), skipping entry creation`
     );
     return;
   }
@@ -414,15 +413,9 @@ async function handleSeaTimeEntries(
     return;
   }
 
-  // Determine MCA compliance and generate appropriate note
-  const mca_compliant = totalUnderwayHours >= 4;
-  let notes: string;
-
-  if (mca_compliant) {
-    notes = `Movement detected over ${totalUnderwayHoursRounded} hours. Meets MCA 4-hour requirement.`;
-  } else {
-    notes = `Movement detected over ${totalUnderwayHoursRounded} hours. Does not meet MCA 4-hour requirement but flagged for review to avoid missing potential sea days.`;
-  }
+  // All entries created by scheduler are MCA-compliant (only created for 4+ hours)
+  const mca_compliant = true;
+  const notes = `MCA-compliant sea day detected: ${totalUnderwayHoursRounded} hours of movement observed`;
 
   // Create new sea time entry with mca_compliant flag
   const [new_entry] = await app.db
@@ -433,7 +426,7 @@ async function handleSeaTimeEntries(
       start_time: firstStartCheck.check_time,
       end_time: lastEndCheck.check_time,
       duration_hours: String(totalUnderwayHoursRounded),
-      sea_days: mca_compliant ? 1 : 0,
+      sea_days: 1,
       start_latitude: String(startLat),
       start_longitude: String(startLng),
       end_latitude: String(endLat),
@@ -460,8 +453,8 @@ async function handleSeaTimeEntries(
       endLng,
       movementPeriods: underwayPeriods.length,
       totalUnderwayHours: totalUnderwayHoursRounded,
-      mcaCompliant: mca_compliant,
+      mcaCompliant: true,
     },
-    `Created sea day entry for vessel ${vessel_name}: ${underwayPeriods.length} movement periods in 24h window, ${totalUnderwayHoursRounded} total underway hours, MCA compliant=${mca_compliant}, position change (${startLat}, ${startLng}) → (${endLat}, ${endLng})`
+    `Created MCA-compliant sea day entry for vessel ${vessel_name}: ${underwayPeriods.length} movement periods in 24h window, ${totalUnderwayHoursRounded} total underway hours, position change (${startLat}, ${startLng}) → (${endLat}, ${endLng})`
   );
 }
