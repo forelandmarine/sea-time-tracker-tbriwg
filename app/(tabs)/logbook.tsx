@@ -378,7 +378,7 @@ const createStyles = (isDark: boolean) =>
       padding: 24,
       width: '90%',
       maxWidth: 500,
-      maxHeight: '85%',
+      maxHeight: '90%',
     },
     modalScrollContent: {
       paddingBottom: 20,
@@ -582,7 +582,6 @@ const createStyles = (isDark: boolean) =>
     },
   });
 
-// Helper function to format date in local timezone as YYYY-MM-DD
 const formatDateToLocalString = (date: Date): string => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -605,10 +604,8 @@ export default function LogbookScreen() {
   const [showVesselPicker, setShowVesselPicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  // Edit mode state
   const [editingEntry, setEditingEntry] = useState<SeaTimeEntry | null>(null);
 
-  // Form state
   const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
@@ -619,7 +616,6 @@ export default function LogbookScreen() {
   const [notes, setNotes] = useState('');
   const [serviceType, setServiceType] = useState<ServiceType>('seagoing');
   
-  // Voyage location fields
   const [voyageFrom, setVoyageFrom] = useState('');
   const [voyageTo, setVoyageTo] = useState('');
 
@@ -664,12 +660,10 @@ export default function LogbookScreen() {
     console.log('[LogbookScreen] User tapped to edit entry:', entry.id);
     setEditingEntry(entry);
     
-    // Pre-fill form with existing data
     setSelectedVessel(entry.vessel);
     setStartDate(new Date(entry.start_time));
     setEndDate(entry.end_time ? new Date(entry.end_time) : null);
     
-    // Map backend service_type to UI service type
     const backendToUIServiceType: { [key: string]: ServiceType } = {
       'actual_sea_service': 'seagoing',
       'watchkeeping_service': 'seagoing',
@@ -682,7 +676,6 @@ export default function LogbookScreen() {
       : 'seagoing';
     setServiceType(uiServiceType);
     
-    // Parse notes to extract voyage locations
     const notesText = entry.notes || '';
     const lines = notesText.split('\n');
     
@@ -788,7 +781,6 @@ export default function LogbookScreen() {
       const fromCoords = parseLatLong(voyageFrom);
       const toCoords = parseLatLong(voyageTo);
 
-      // Map UI service type to backend service_type values
       const serviceTypeMap: { [key: string]: string } = {
         'seagoing': 'actual_sea_service',
         'standby': 'standby_service',
@@ -796,7 +788,6 @@ export default function LogbookScreen() {
       };
       const backendServiceType = serviceTypeMap[serviceType] || 'actual_sea_service';
 
-      // Build notes with voyage information
       const voyageFromNote = voyageFrom ? `From: ${voyageFrom}` : '';
       const voyageToNote = voyageTo ? `To: ${voyageTo}` : '';
       
@@ -804,7 +795,6 @@ export default function LogbookScreen() {
       const fullNotes = noteParts.join('\n');
 
       if (editingEntry) {
-        // Update existing entry
         console.log('[LogbookScreen] Updating sea time entry:', editingEntry.id);
         await seaTimeApi.updateSeaTimeEntry(editingEntry.id, {
           notes: fullNotes || null,
@@ -812,7 +802,6 @@ export default function LogbookScreen() {
         });
         Alert.alert('Success', 'Sea time entry updated successfully');
       } else {
-        // Create new entry
         console.log('[LogbookScreen] Creating manual sea time entry with service_type:', backendServiceType);
         await seaTimeApi.createManualSeaTimeEntry({
           vessel_id: selectedVessel.id,
@@ -927,7 +916,6 @@ export default function LogbookScreen() {
 
   const getEntriesForDate = (dateString: string): SeaTimeEntry[] => {
     const dateEntries = entries.filter((entry) => {
-      // Show confirmed entries on calendar
       if (entry.status !== 'confirmed') return false;
       
       const entryDate = new Date(entry.start_time);
@@ -943,7 +931,6 @@ export default function LogbookScreen() {
   const getMarkedDates = () => {
     const marked: any = {};
     
-    // Filter for confirmed entries only
     const confirmedEntries = entries.filter((e) => e.status === 'confirmed' && e.sea_days === 1);
     console.log('[LogbookScreen] Marking calendar - Total entries:', entries.length, 'Confirmed sea days:', confirmedEntries.length);
     
@@ -1429,7 +1416,7 @@ export default function LogbookScreen() {
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
+          style={{ flex: 1 }}
         >
           <TouchableOpacity
             style={styles.modalOverlay}
@@ -1467,12 +1454,13 @@ export default function LogbookScreen() {
                 </Text>
 
                 <ScrollView 
-                  style={{ flex: 1 }} 
+                  style={{ maxHeight: '70%' }} 
                   contentContainerStyle={styles.modalScrollContent}
                   showsVerticalScrollIndicator={true}
                   bounces={true}
                   scrollEnabled={true}
                   nestedScrollEnabled={true}
+                  keyboardShouldPersistTaps="handled"
                 >
                   {!editingEntry && (
                     <TouchableOpacity style={styles.mcaButton} onPress={handleViewMCARequirements}>

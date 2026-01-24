@@ -358,7 +358,7 @@ const createStyles = (isDark: boolean, topInset: number) =>
       borderTopRightRadius: 20,
       padding: 24,
       paddingBottom: 40,
-      maxHeight: '90%',
+      maxHeight: '95%',
     },
     modalScrollContent: {
       paddingBottom: 20,
@@ -651,7 +651,6 @@ export default function LogbookScreen() {
     setStartDate(new Date(entry.start_time));
     setEndDate(entry.end_time ? new Date(entry.end_time) : null);
     
-    // Map backend service_type to UI service type
     const backendToUIServiceType: { [key: string]: ServiceType } = {
       'actual_sea_service': 'seagoing',
       'watchkeeping_service': 'watchkeeping',
@@ -769,7 +768,6 @@ export default function LogbookScreen() {
       const fromCoords = parseLatLong(voyageFrom);
       const toCoords = parseLatLong(voyageTo);
 
-      // Map UI service type to backend service_type values
       const serviceTypeMap: { [key: string]: string } = {
         'seagoing': 'actual_sea_service',
         'watchkeeping': 'watchkeeping_service',
@@ -1417,8 +1415,8 @@ export default function LogbookScreen() {
         >
           <KeyboardAvoidingView 
             behavior="padding" 
-            style={{ width: '100%', justifyContent: 'flex-end' }}
-            keyboardVerticalOffset={insets.bottom}
+            style={{ width: '100%', maxHeight: '95%' }}
+            keyboardVerticalOffset={0}
           >
             <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
               <View style={styles.modalContent}>
@@ -1447,7 +1445,7 @@ export default function LogbookScreen() {
                 </Text>
 
                 <ScrollView 
-                  style={{ flex: 1 }} 
+                  style={{ flexGrow: 1, flexShrink: 1 }} 
                   contentContainerStyle={styles.modalScrollContent}
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={true}
