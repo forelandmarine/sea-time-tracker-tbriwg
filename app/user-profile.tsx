@@ -1,10 +1,9 @@
 
 import { IconSymbol } from '@/components/IconSymbol';
-import * as seaTimeApi from '@/utils/seaTimeApi';
-import React, { useState, useEffect } from 'react';
-import { colors } from '@/styles/commonStyles';
-import * as ImagePicker from 'expo-image-picker';
+import { useAuth } from '@/contexts/AuthContext';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import React, { useState, useEffect } from 'react';
+import * as seaTimeApi from '@/utils/seaTimeApi';
 import {
   View,
   Text,
@@ -20,7 +19,8 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
 } from 'react-native';
-import { useAuth } from '@/contexts/AuthContext';
+import * as ImagePicker from 'expo-image-picker';
+import { colors } from '@/styles/commonStyles';
 import { Stack, useRouter } from 'expo-router';
 
 interface UserProfile {
@@ -315,7 +315,7 @@ export default function UserProfileScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
-  const { user, signOut } = useAuth();
+  const { user, signOut, triggerRefresh } = useAuth();
   const router = useRouter();
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -393,6 +393,7 @@ export default function UserProfileScreen() {
       const currentDepartment = profile?.department ? profile.department.charAt(0).toUpperCase() + profile.department.slice(1) : '';
       if (editDepartment !== currentDepartment) {
         updates.department = editDepartment ? editDepartment.toLowerCase() : null;
+        console.log('Department changed from', currentDepartment, 'to', editDepartment, '(backend value:', updates.department, ')');
       }
       
       if (Object.keys(updates).length === 0) {
@@ -405,6 +406,13 @@ export default function UserProfileScreen() {
       console.log('Profile updated successfully');
       setProfile(updatedProfile);
       setEditModalVisible(false);
+      
+      // If department was changed, trigger global refresh to update all screens
+      if (updates.department !== undefined) {
+        console.log('Department was changed, triggering global refresh to update all screens');
+        triggerRefresh();
+      }
+      
       Alert.alert('Success', 'Profile updated successfully');
     } catch (error: any) {
       console.error('Failed to update profile:', error);

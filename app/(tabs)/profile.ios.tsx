@@ -114,11 +114,6 @@ const SEA_DAY_DEFINITIONS: SeaDayDefinition[] = [
     description: 'Applies when vessel is in dock, drydock, or service facility. Must involve major engine, auxiliary, or systems work (e.g. engines, gearboxes, pumps, firefighting systems, hull fittings). Over 90 days requires works list and job descriptions. Evidence must be submitted with NOE application.',
     department: 'engineering',
   },
-  {
-    title: 'Administrative Rules',
-    description: 'Digital testimonials only via PYA profile; no letters, logs, or spreadsheets. No overlapping testimonials permitted. Off-rotation time must be deducted and recorded as leave. Start and end dates are inclusive when calculating days. Captains cannot sign their own testimonials (owner/manager must sign). Chase boat service must be recorded on a separate testimonial.',
-    department: 'both',
-  },
 ];
 
 const ALL_SERVICE_TYPES = [
@@ -459,7 +454,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const styles = createStyles(isDark, insets.top);
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, refreshTrigger } = useAuth();
 
   console.log('ProfileScreen rendered (iOS)');
 
@@ -468,6 +463,16 @@ export default function ProfileScreen() {
     loadSummary();
     loadVessels();
   }, []);
+
+  // Listen to refreshTrigger and reload data when it changes
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      console.log('ProfileScreen (iOS): Global refresh triggered, reloading profile data');
+      loadProfile();
+      loadSummary();
+      loadVessels();
+    }
+  }, [refreshTrigger]);
 
   const loadProfile = async () => {
     console.log('Loading user profile');
@@ -721,6 +726,7 @@ export default function ProfileScreen() {
   const allServiceTypes = getAllServiceTypesWithHours();
 
   console.log('Profile image URL:', imageUrl);
+  console.log('User department:', userDepartment, '- Showing', filteredDefinitions.length, 'definitions');
 
   return (
     <View style={styles.container}>
@@ -755,7 +761,7 @@ export default function ProfileScreen() {
             {profile.department && (
               <View style={styles.departmentBadge}>
                 <Text style={styles.departmentBadgeText}>
-                  {profile.department === 'Deck' ? '⚓ Deck Department' : '⚙️ Engineering Department'}
+                  {profile.department.toLowerCase() === 'deck' ? '⚓ Deck Department' : '⚙️ Engineering Department'}
                 </Text>
               </View>
             )}
@@ -895,11 +901,11 @@ export default function ProfileScreen() {
           {profile.department && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>
-                {profile.department === 'Deck' ? 'Deck Department - Sea Service Definitions (MSN 1858)' : 'Engineering Department - Sea Service Definitions (MSN 1904)'}
+                {profile.department.toLowerCase() === 'deck' ? 'Deck Department - Sea Service Definitions (MSN 1858)' : 'Engineering Department - Sea Service Definitions (MSN 1904)'}
               </Text>
               <View style={styles.infoBox}>
                 <Text style={styles.infoText}>
-                  These definitions ensure your sea time records are compliant with MCA regulations for {profile.department === 'Deck' ? 'Deck' : 'Engineering'} officers. All data capture in this app follows these standards.
+                  These definitions ensure your sea time records are compliant with MCA regulations for {profile.department.toLowerCase() === 'deck' ? 'Deck' : 'Engineering'} officers. All data capture in this app follows these standards.
                 </Text>
               </View>
               {filteredDefinitions.map((definition, index) => (

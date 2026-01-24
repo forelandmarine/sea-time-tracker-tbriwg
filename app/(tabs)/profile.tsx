@@ -461,7 +461,7 @@ export default function ProfileScreen() {
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, refreshTrigger } = useAuth();
 
   console.log('ProfileScreen rendered');
 
@@ -471,6 +471,16 @@ export default function ProfileScreen() {
     loadVessels();
     checkBiometricStatus();
   }, []);
+
+  // Listen to refreshTrigger and reload data when it changes
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      console.log('ProfileScreen: Global refresh triggered, reloading profile data');
+      loadProfile();
+      loadSummary();
+      loadVessels();
+    }
+  }, [refreshTrigger]);
 
   const checkBiometricStatus = async () => {
     const available = await isBiometricAvailable();
@@ -777,6 +787,7 @@ export default function ProfileScreen() {
   const allServiceTypes = getAllServiceTypesWithHours();
 
   console.log('Profile image URL:', imageUrl);
+  console.log('User department:', userDepartment, '- Showing', filteredDefinitions.length, 'definitions');
 
   return (
     <View style={styles.container}>
@@ -811,7 +822,7 @@ export default function ProfileScreen() {
             {profile.department && (
               <View style={styles.departmentBadge}>
                 <Text style={styles.departmentBadgeText}>
-                  {profile.department === 'Deck' ? '⚓ Deck Department' : '⚙️ Engineering Department'}
+                  {profile.department.toLowerCase() === 'deck' ? '⚓ Deck Department' : '⚙️ Engineering Department'}
                 </Text>
               </View>
             )}
@@ -951,11 +962,11 @@ export default function ProfileScreen() {
           {profile.department && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>
-                {profile.department === 'Deck' ? 'Deck Department - Sea Service Definitions (MSN 1858)' : 'Engineering Department - Sea Service Definitions (MSN 1904)'}
+                {profile.department.toLowerCase() === 'deck' ? 'Deck Department - Sea Service Definitions (MSN 1858)' : 'Engineering Department - Sea Service Definitions (MSN 1904)'}
               </Text>
               <View style={styles.infoBox}>
                 <Text style={styles.infoText}>
-                  These definitions ensure your sea time records are compliant with MCA regulations for {profile.department === 'Deck' ? 'Deck' : 'Engineering'} officers. All data capture in this app follows these standards.
+                  These definitions ensure your sea time records are compliant with MCA regulations for {profile.department.toLowerCase() === 'deck' ? 'Deck' : 'Engineering'} officers. All data capture in this app follows these standards.
                 </Text>
               </View>
               {filteredDefinitions.map((definition, index) => (
