@@ -454,16 +454,31 @@ export default function SeaTimeScreen() {
                 ) : null}
               </TouchableOpacity>
 
-              {/* Map showing vessel location */}
+              {/* Map showing vessel location - always show if we have any location data */}
               {activeVesselLocation && 
                activeVesselLocation.latitude !== null && 
-               activeVesselLocation.longitude !== null && (
+               activeVesselLocation.longitude !== null ? (
                 <View style={styles.mapContainer}>
                   <CartoMap
                     latitude={activeVesselLocation.latitude}
                     longitude={activeVesselLocation.longitude}
                     vesselName={activeVessel.vessel_name}
                   />
+                </View>
+              ) : (
+                <View style={styles.mapPlaceholder}>
+                  <IconSymbol
+                    ios_icon_name="map"
+                    android_material_icon_name="map"
+                    size={48}
+                    color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  />
+                  <Text style={styles.mapPlaceholderText}>
+                    {locationLoading ? 'Loading position...' : 'No position data available'}
+                  </Text>
+                  <Text style={styles.mapPlaceholderSubtext}>
+                    {locationLoading ? 'Please wait' : 'Check AIS to update vessel location'}
+                  </Text>
                 </View>
               )}
             </View>
@@ -926,6 +941,30 @@ function createStyles(isDark: boolean) {
       overflow: 'hidden',
       borderWidth: 1,
       borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    mapPlaceholder: {
+      marginTop: 12,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      padding: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+      minHeight: 200,
+    },
+    mapPlaceholderText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginTop: 12,
+      textAlign: 'center',
+    },
+    mapPlaceholderSubtext: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 4,
+      textAlign: 'center',
     },
     statusIndicator: {
       width: 12,
