@@ -156,11 +156,17 @@ export default function AuthScreen() {
       console.log('[AuthScreen] Apple Authentication available:', isAvailable);
       
       if (!isAvailable) {
-        Alert.alert('Error', 'Sign in with Apple is not available on this device');
+        Alert.alert(
+          'Not Available',
+          'Sign in with Apple is not available on this device. Please use email and password instead.',
+          [{ text: 'OK' }]
+        );
         return;
       }
 
+      setLoading(true);
       console.log('[AuthScreen] Requesting Apple credentials...');
+      
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
@@ -177,29 +183,64 @@ export default function AuthScreen() {
 
       if (!credential.identityToken) {
         console.error('[AuthScreen] No identity token received from Apple');
-        Alert.alert('Error', 'Failed to get Apple authentication token');
+        Alert.alert('Error', 'Failed to get Apple authentication token. Please try again.');
+        setLoading(false);
         return;
       }
 
       console.log('[AuthScreen] Sending Apple credentials to backend...');
-      await signInWithApple(credential.identityToken, {
-        email: credential.email,
-        name: credential.fullName,
-      });
       
-      console.log('[AuthScreen] Apple sign in successful, navigating to home');
-      router.replace('/(tabs)');
+      try {
+        await signInWithApple(credential.identityToken, {
+          email: credential.email,
+          name: credential.fullName,
+        });
+        
+        console.log('[AuthScreen] Apple sign in successful, navigating to home');
+        router.replace('/(tabs)');
+      } catch (backendError: any) {
+        console.error('[AuthScreen] Backend Apple sign in failed:', backendError);
+        
+        // Provide helpful error messages
+        let errorMessage = 'Unable to sign in with Apple. ';
+        if (backendError.message?.includes('Network') || backendError.message?.includes('fetch')) {
+          errorMessage += 'Please check your internet connection and try again.';
+        } else if (backendError.message?.includes('token')) {
+          errorMessage += 'Authentication token is invalid. Please try again.';
+        } else {
+          errorMessage += backendError.message || 'Please try again later.';
+        }
+        
+        Alert.alert('Sign In Failed', errorMessage, [
+          { text: 'Try Again', onPress: handleAppleSignIn },
+          { text: 'Cancel', style: 'cancel' }
+        ]);
+      }
     } catch (error: any) {
-      if (error.code === 'ERR_CANCELED') {
+      if (error.code === 'ERR_CANCELED' || error.code === 'ERR_REQUEST_CANCELED') {
         console.log('[AuthScreen] User cancelled Apple sign in');
+      } else if (error.code === 'ERR_INVALID_RESPONSE') {
+        console.error('[AuthScreen] Invalid response from Apple:', error);
+        Alert.alert(
+          'Sign In Error',
+          'Received an invalid response from Apple. Please try again.',
+          [{ text: 'OK' }]
+        );
       } else {
         console.error('[AuthScreen] Apple sign in failed:', {
           code: error.code,
           message: error.message,
           error: error,
         });
-        Alert.alert('Error', `Apple sign in failed: ${error.message || 'Unknown error'}`);
+        
+        Alert.alert(
+          'Sign In Error',
+          `Unable to sign in with Apple: ${error.message || 'Unknown error'}. Please try again or use email and password.`,
+          [{ text: 'OK' }]
+        );
       }
+    } finally {
+      setLoading(false);
     }
   };
 

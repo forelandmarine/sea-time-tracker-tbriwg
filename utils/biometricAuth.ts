@@ -15,22 +15,40 @@ interface BiometricCredentials {
  */
 export async function isBiometricAvailable(): Promise<boolean> {
   try {
+    console.log('[BiometricAuth] Checking biometric availability...');
+    
     const compatible = await LocalAuthentication.hasHardwareAsync();
     if (!compatible) {
       console.log('[BiometricAuth] Device does not support biometric authentication');
       return false;
     }
+    console.log('[BiometricAuth] Device has biometric hardware');
 
     const enrolled = await LocalAuthentication.isEnrolledAsync();
     if (!enrolled) {
       console.log('[BiometricAuth] No biometric credentials enrolled on device');
       return false;
     }
+    console.log('[BiometricAuth] Biometric credentials are enrolled');
 
-    console.log('[BiometricAuth] Biometric authentication is available');
+    // Check security level (iOS specific)
+    const securityLevel = await LocalAuthentication.getEnrolledLevelAsync();
+    console.log('[BiometricAuth] Security level:', securityLevel);
+    
+    if (securityLevel === LocalAuthentication.SecurityLevel.NONE) {
+      console.log('[BiometricAuth] No secure authentication available');
+      return false;
+    }
+
+    console.log('[BiometricAuth] Biometric authentication is available and ready');
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('[BiometricAuth] Error checking biometric availability:', error);
+    console.error('[BiometricAuth] Error details:', {
+      message: error?.message,
+      code: error?.code,
+      name: error?.name,
+    });
     return false;
   }
 }
@@ -64,6 +82,13 @@ export async function getBiometricType(): Promise<string> {
  */
 export async function authenticateWithBiometrics(): Promise<boolean> {
   try {
+    // Check if biometric is still available
+    const available = await isBiometricAvailable();
+    if (!available) {
+      console.warn('[BiometricAuth] Biometric authentication no longer available');
+      return false;
+    }
+
     const biometricType = await getBiometricType();
     console.log('[BiometricAuth] Requesting biometric authentication:', biometricType);
 
@@ -79,10 +104,27 @@ export async function authenticateWithBiometrics(): Promise<boolean> {
       return true;
     } else {
       console.log('[BiometricAuth] Biometric authentication failed:', result.error);
+      
+      // Log specific error types for debugging
+      if (result.error === 'user_cancel') {
+        console.log('[BiometricAuth] User cancelled authentication');
+      } else if (result.error === 'system_cancel') {
+        console.log('[BiometricAuth] System cancelled authentication');
+      } else if (result.error === 'lockout') {
+        console.warn('[BiometricAuth] Too many failed attempts - biometric locked');
+      } else if (result.error === 'not_enrolled') {
+        console.warn('[BiometricAuth] No biometric credentials enrolled');
+      }
+      
       return false;
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('[BiometricAuth] Error during biometric authentication:', error);
+    console.error('[BiometricAuth] Error details:', {
+      message: error?.message,
+      code: error?.code,
+      name: error?.name,
+    });
     return false;
   }
 }

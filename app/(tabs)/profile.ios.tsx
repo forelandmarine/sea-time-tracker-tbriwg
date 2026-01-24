@@ -18,6 +18,7 @@ import {
   Image,
   ActivityIndicator,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
@@ -445,6 +446,7 @@ export default function ProfileScreen() {
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [downloadingCSV, setDownloadingCSV] = useState(false);
   const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
@@ -476,41 +478,82 @@ export default function ProfileScreen() {
     }
   }, [refreshTrigger]);
 
-  const loadProfile = async () => {
-    console.log('Loading user profile');
+  const loadProfile = async (retryCount = 0) => {
+    const maxRetries = 2;
+    console.log(`Loading user profile (attempt ${retryCount + 1}/${maxRetries + 1})`);
+    
     try {
       const data = await seaTimeApi.getUserProfile();
-      console.log('User profile loaded:', data);
+      console.log('User profile loaded successfully:', data?.email);
       setProfile(data);
-    } catch (error) {
-      console.error('Failed to load profile:', error);
-      Alert.alert('Error', 'Failed to load profile');
-    } finally {
       setLoading(false);
+    } catch (error: any) {
+      console.error(`Failed to load profile (attempt ${retryCount + 1}):`, error?.message);
+      
+      // Retry on network errors
+      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
+        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        console.log(`Retrying profile load in ${waitTime}ms...`);
+        setTimeout(() => loadProfile(retryCount + 1), waitTime);
+      } else {
+        setLoading(false);
+        Alert.alert(
+          'Profile Load Error',
+          'Unable to load your profile. Please check your internet connection and try again.',
+          [
+            { text: 'Retry', onPress: () => loadProfile(0) },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+      }
     }
   };
 
-  const loadSummary = async () => {
-    console.log('Loading sea time summary');
+  const loadSummary = async (retryCount = 0) => {
+    const maxRetries = 2;
+    console.log(`Loading sea time summary (attempt ${retryCount + 1}/${maxRetries + 1})`);
+    
     try {
       const data = await seaTimeApi.getReportSummary();
-      console.log('Sea time summary loaded:', data);
+      console.log('Sea time summary loaded successfully');
       setSummary(data);
-    } catch (error) {
-      console.error('Failed to load sea time summary:', error);
-    } finally {
       setLoadingSummary(false);
+    } catch (error: any) {
+      console.error(`Failed to load sea time summary (attempt ${retryCount + 1}):`, error?.message);
+      
+      // Retry on network errors
+      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
+        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        console.log(`Retrying summary load in ${waitTime}ms...`);
+        setTimeout(() => loadSummary(retryCount + 1), waitTime);
+      } else {
+        setLoadingSummary(false);
+        // Don't show alert for summary - it's not critical
+        console.warn('Summary load failed after retries, continuing without summary');
+      }
     }
   };
 
-  const loadVessels = async () => {
-    console.log('Loading vessels');
+  const loadVessels = async (retryCount = 0) => {
+    const maxRetries = 2;
+    console.log(`Loading vessels (attempt ${retryCount + 1}/${maxRetries + 1})`);
+    
     try {
       const data = await seaTimeApi.getVessels();
-      console.log('Vessels loaded:', data);
+      console.log('Vessels loaded successfully:', data?.length);
       setVessels(data);
-    } catch (error) {
-      console.error('Failed to load vessels:', error);
+    } catch (error: any) {
+      console.error(`Failed to load vessels (attempt ${retryCount + 1}):`, error?.message);
+      
+      // Retry on network errors
+      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
+        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        console.log(`Retrying vessels load in ${waitTime}ms...`);
+        setTimeout(() => loadVessels(retryCount + 1), waitTime);
+      } else {
+        // Don't show alert for vessels - it's not critical
+        console.warn('Vessels load failed after retries, continuing without vessels');
+      }
     }
   };
 
@@ -539,6 +582,22 @@ export default function ProfileScreen() {
     console.log('User closed vessel modal');
     setShowVesselModal(false);
     setSelectedVessel(null);
+  };
+
+  const handleRefresh = async () => {
+    console.log('User pulled to refresh profile');
+    setRefreshing(true);
+    try {
+      await Promise.all([
+        loadProfile(0),
+        loadSummary(0),
+        loadVessels(0),
+      ]);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const formatServiceType = (serviceType: string): string => {
@@ -701,16 +760,50 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: colors.text }}>Loading...</Text>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ color: isDark ? colors.text : colors.textLight, marginTop: 16, fontSize: 16 }}>
+          Loading your profile...
+        </Text>
+        <Text style={{ color: isDark ? colors.textSecondary : colors.textSecondaryLight, marginTop: 8, fontSize: 14, textAlign: 'center' }}>
+          This may take a moment on slower connections
+        </Text>
       </View>
     );
   }
 
   if (!profile) {
     return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ color: colors.text }}>Failed to load profile</Text>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+        <IconSymbol
+          ios_icon_name="exclamationmark.triangle"
+          android_material_icon_name="warning"
+          size={48}
+          color={colors.primary}
+        />
+        <Text style={{ color: isDark ? colors.text : colors.textLight, marginTop: 16, fontSize: 18, fontWeight: '600' }}>
+          Unable to Load Profile
+        </Text>
+        <Text style={{ color: isDark ? colors.textSecondary : colors.textSecondaryLight, marginTop: 8, fontSize: 14, textAlign: 'center' }}>
+          Please check your internet connection
+        </Text>
+        <TouchableOpacity
+          style={[styles.reportButton, { marginTop: 20, width: 200 }]}
+          onPress={() => {
+            setLoading(true);
+            loadProfile(0);
+            loadSummary(0);
+            loadVessels(0);
+          }}
+        >
+          <IconSymbol
+            ios_icon_name="arrow.clockwise"
+            android_material_icon_name="refresh"
+            size={20}
+            color="#ffffff"
+          />
+          <Text style={styles.reportButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -748,7 +841,17 @@ export default function ProfileScreen() {
         </View>
       </View>
 
-      <ScrollView style={styles.scrollView}>
+      <ScrollView 
+        style={styles.scrollView}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
+      >
         <View style={styles.content}>
           <View style={styles.profileSection}>
             <View style={styles.profileImageContainer}>

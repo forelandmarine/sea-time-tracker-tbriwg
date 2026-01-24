@@ -111,80 +111,100 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.warn('[Auth] Auth check timeout - stopping loading state');
         setLoading(false);
       }
-    }, 5000); // 5 second timeout
+    }, 8000); // 8 second timeout (increased for slower connections)
     
     return () => clearTimeout(timeout);
   }, [loading]);
 
   const checkAuth = async () => {
-    try {
-      console.log('[Auth] Checking authentication status...');
-      console.log('[Auth] API URL:', API_URL);
-      console.log('[Auth] Platform:', Platform.OS);
-      
-      if (!API_URL) {
-        console.warn('[Auth] Backend URL not configured, skipping auth check');
-        setLoading(false);
-        setUser(null);
-        return;
-      }
-
-      const token = await tokenStorage.getToken();
-      
-      if (!token) {
-        console.log('[Auth] No token found');
-        setLoading(false);
-        setUser(null);
-        return;
-      }
-
-      console.log('[Auth] Token found, verifying with backend...');
-      
-      // Add timeout for fetch request
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
-      
+    const maxRetries = 2;
+    let retryCount = 0;
+    
+    while (retryCount <= maxRetries) {
       try {
-        const response = await fetch(`${API_URL}/api/auth/user`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[Auth] User authenticated:', data.user?.email || 'unknown');
-          setUser(data.user);
-        } else {
-          console.log('[Auth] Token invalid, clearing... Status:', response.status);
-          await tokenStorage.removeToken();
+        console.log(`[Auth] Checking authentication status... (attempt ${retryCount + 1}/${maxRetries + 1})`);
+        console.log('[Auth] API URL:', API_URL);
+        console.log('[Auth] Platform:', Platform.OS);
+        
+        if (!API_URL) {
+          console.warn('[Auth] Backend URL not configured, skipping auth check');
+          setLoading(false);
           setUser(null);
+          return;
         }
-      } catch (fetchError: any) {
-        clearTimeout(timeoutId);
+
+        const token = await tokenStorage.getToken();
         
-        if (fetchError.name === 'AbortError') {
-          console.warn('[Auth] Auth check timed out');
-        } else {
-          console.error('[Auth] Fetch error:', fetchError);
+        if (!token) {
+          console.log('[Auth] No token found');
+          setLoading(false);
+          setUser(null);
+          return;
         }
+
+        console.log('[Auth] Token found, verifying with backend...');
         
-        // Don't clear token on network errors - might be temporary
-        if (fetchError instanceof TypeError && fetchError.message.includes('Network')) {
-          console.warn('[Auth] Network error during auth check, keeping token');
-        } else {
-          await tokenStorage.removeToken();
+        // Add timeout for fetch request - increased for iOS
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        try {
+          const response = await fetch(`${API_URL}/api/auth/user`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log('[Auth] User authenticated:', data.user?.email || 'unknown');
+            setUser(data.user);
+            setLoading(false);
+            return; // Success - exit retry loop
+          } else {
+            console.log('[Auth] Token invalid, clearing... Status:', response.status);
+            await tokenStorage.removeToken();
+            setUser(null);
+            setLoading(false);
+            return; // Invalid token - don't retry
+          }
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId);
+          
+          if (fetchError.name === 'AbortError') {
+            console.warn(`[Auth] Auth check timed out (attempt ${retryCount + 1})`);
+          } else {
+            console.error(`[Auth] Fetch error (attempt ${retryCount + 1}):`, fetchError);
+          }
+          
+          // On last retry, handle the error
+          if (retryCount === maxRetries) {
+            // Don't clear token on network errors - might be temporary
+            if (fetchError instanceof TypeError && fetchError.message.includes('Network')) {
+              console.warn('[Auth] Network error during auth check, keeping token for next app launch');
+            } else if (fetchError.name !== 'AbortError') {
+              await tokenStorage.removeToken();
+            }
+            setUser(null);
+            setLoading(false);
+            return;
+          }
+          
+          // Wait before retrying (exponential backoff)
+          const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+          console.log(`[Auth] Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          retryCount++;
         }
+      } catch (error) {
+        console.error('[Auth] Check auth failed:', error);
         setUser(null);
+        setLoading(false);
+        return;
       }
-    } catch (error) {
-      console.error('[Auth] Check auth failed:', error);
-      setUser(null);
-    } finally {
-      setLoading(false);
     }
   };
 
