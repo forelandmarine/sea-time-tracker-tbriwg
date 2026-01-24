@@ -66,7 +66,7 @@ export async function registerForPushNotificationsAsync(): Promise<boolean> {
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#007AFF',
       sound: 'default',
-      description: 'Notifications for automatic sea time entries that need review',
+      description: 'Notifications for sea time entries that need review',
     });
     console.log('[Notifications] Android notification channel created');
   }
@@ -76,11 +76,11 @@ export async function registerForPushNotificationsAsync(): Promise<boolean> {
 }
 
 /**
- * Schedule a local notification for a new sea time entry
+ * Schedule a local notification for a new sea time entry (4+ hours only)
  * @param vesselName - Name of the vessel
  * @param entryId - ID of the sea time entry
  * @param durationHours - Duration of the sea time in hours
- * @param mcaCompliant - Whether the entry meets MCA 4-hour requirement
+ * @param mcaCompliant - Whether the entry meets MCA 4-hour requirement (should always be true)
  * @returns notification ID or null if not supported/failed
  */
 export async function scheduleSeaTimeNotification(
@@ -108,17 +108,12 @@ export async function scheduleSeaTimeNotification(
     const displayDuration = durationHours + bufferHours;
     const durationDays = (displayDuration / 24).toFixed(2);
     
-    // Customize message based on MCA compliance
-    let body = '';
-    if (mcaCompliant) {
-      body = `${vesselName} - ${displayDuration.toFixed(1)} hours (${durationDays} days) at sea. Tap to review and confirm.`;
-    } else {
-      body = `${vesselName} - Movement detected (${durationHours.toFixed(1)}h + 2.5h buffer = ${displayDuration.toFixed(1)}h). Review to confirm if this becomes a valid sea day.`;
-    }
+    // Friendly notification message for 4+ hour sea days
+    const body = `${vesselName} - ${displayDuration.toFixed(1)} hours (${durationDays} days) at sea detected. Please review and confirm this sea day.`;
     
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: mcaCompliant ? '⚓️ New Sea Day Ready' : '⚠️ Movement Detected',
+        title: '⚓️ Sea Day Ready for Review',
         body: body,
         data: {
           entryId,

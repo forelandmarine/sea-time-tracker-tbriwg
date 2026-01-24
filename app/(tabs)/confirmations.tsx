@@ -90,9 +90,22 @@ export default function ConfirmationsScreen() {
       const result = await seaTimeApi.getNewSeaTimeEntries();
       
       if (result.newEntries && result.newEntries.length > 0) {
-        console.log('[Confirmations] Found', result.newEntries.length, 'new entries to notify');
+        console.log('[Confirmations] Found', result.newEntries.length, 'new entries');
         
-        for (const entry of result.newEntries) {
+        // Filter to only MCA-compliant entries (4+ hours)
+        const mcaCompliantEntries = result.newEntries.filter((entry: any) => {
+          const durationHours = typeof entry.duration_hours === 'string' 
+            ? parseFloat(entry.duration_hours) 
+            : entry.duration_hours || 0;
+          const mcaCompliant = entry.mca_compliant !== null && entry.mca_compliant !== undefined 
+            ? entry.mca_compliant 
+            : durationHours >= 4.0;
+          return mcaCompliant;
+        });
+        
+        console.log('[Confirmations] Filtered to', mcaCompliantEntries.length, 'MCA-compliant entries (4+ hours)');
+        
+        for (const entry of mcaCompliantEntries) {
           // Skip if we've already notified about this entry in this session
           if (notifiedEntriesRef.current.has(entry.id)) {
             console.log('[Confirmations] Skipping already notified entry:', entry.id);
@@ -103,23 +116,21 @@ export default function ConfirmationsScreen() {
           const durationHours = typeof entry.duration_hours === 'string' 
             ? parseFloat(entry.duration_hours) 
             : entry.duration_hours || 0;
-          const mcaCompliant = entry.mca_compliant !== null && entry.mca_compliant !== undefined 
-            ? entry.mca_compliant 
-            : durationHours >= 4.0;
 
-          console.log('[Confirmations] Scheduling notification for entry:', {
+          console.log('[Confirmations] Scheduling notification for MCA-compliant entry:', {
             id: entry.id,
             vesselName,
             durationHours,
-            mcaCompliant,
           });
 
-          await scheduleSeaTimeNotification(vesselName, entry.id, durationHours, mcaCompliant);
+          await scheduleSeaTimeNotification(vesselName, entry.id, durationHours, true);
           notifiedEntriesRef.current.add(entry.id);
         }
 
         // Reload data to show the new entries
-        await loadData();
+        if (mcaCompliantEntries.length > 0) {
+          await loadData();
+        }
       } else {
         console.log('[Confirmations] No new entries to notify');
       }
@@ -134,7 +145,7 @@ export default function ConfirmationsScreen() {
 
     // Set up polling for new entries every 30 seconds (only on native platforms)
     if (Platform.OS !== 'web') {
-      console.log('[Confirmations] Setting up notification polling');
+      console.log('[Confirmations] Setting up notification polling for MCA-compliant entries only');
       pollIntervalRef.current = setInterval(checkForNewEntries, 30000);
     } else {
       console.log('[Confirmations] Skipping notification polling on web');
