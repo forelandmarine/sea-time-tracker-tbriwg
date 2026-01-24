@@ -51,6 +51,12 @@ async function checkEntryExistsForDay(app: App, userId: string, calendarDay: str
 
 // Helper function to transform vessel object for API response
 function transformVesselForResponse(vessel: any) {
+  // Parse numeric fields to numbers
+  let engine_kw = null;
+  if (vessel.engine_kw) {
+    engine_kw = parseFloat(String(vessel.engine_kw));
+  }
+
   return {
     id: vessel.id,
     mmsi: vessel.mmsi,
@@ -58,6 +64,8 @@ function transformVesselForResponse(vessel: any) {
     callsign: vessel.callsign,
     flag: vessel.flag,
     vessel_type: vessel.type, // Map 'type' database field to 'vessel_type' in API response
+    engine_kw: engine_kw,
+    engine_type: vessel.engine_type || null,
     is_active: vessel.is_active,
     created_at: vessel.created_at,
   };
@@ -224,6 +232,8 @@ export function register(app: App, fastify: FastifyInstance) {
                   mmsi: { type: 'string' },
                   vessel_name: { type: 'string' },
                   callsign: { type: ['string', 'null'] },
+                  engine_kw: { type: ['number', 'null'] },
+                  engine_type: { type: ['string', 'null'] },
                   is_active: { type: 'boolean' },
                   created_at: { type: 'string', format: 'date-time' },
                 },

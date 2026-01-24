@@ -12,6 +12,8 @@ export const vessels = pgTable('vessels', {
   type: text('type'), // 'Motor' or 'Sail'
   length_metres: decimal('length_metres', { precision: 8, scale: 2 }),
   gross_tonnes: decimal('gross_tonnes', { precision: 10, scale: 2 }),
+  engine_kw: decimal('engine_kw', { precision: 10, scale: 2 }), // Engine Kilowatts
+  engine_type: text('engine_type'), // Engine type: 'Diesel', 'Petrol', 'Electric', 'Hybrid', etc.
   is_active: boolean('is_active').notNull().default(false),
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull(),
