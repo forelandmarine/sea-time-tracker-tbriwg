@@ -103,17 +103,12 @@ export async function scheduleSeaTimeNotification(
       mcaCompliant,
     });
 
-    // Add 2hr30min buffer to duration for display (150 minutes = 2.5 hours)
-    const bufferHours = 2.5;
-    const displayDuration = durationHours + bufferHours;
-    const durationDays = (displayDuration / 24).toFixed(2);
-    
-    // Friendly notification message for 4+ hour sea days
-    const body = `${vesselName} - ${displayDuration.toFixed(1)} hours (${durationDays} days) at sea detected. Please review and confirm this sea day.`;
+    // Simple, clear notification message
+    const body = 'Sea day detected - tap to review';
     
     const notificationId = await Notifications.scheduleNotificationAsync({
       content: {
-        title: '⚓️ Sea Day Ready for Review',
+        title: '⚓️ Sea Day Detected',
         body: body,
         data: {
           entryId,

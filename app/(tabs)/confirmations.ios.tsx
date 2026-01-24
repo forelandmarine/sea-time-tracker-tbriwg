@@ -99,7 +99,7 @@ export default function ConfirmationsScreen() {
           return mcaCompliant;
         });
         
-        console.log('[Confirmations] Filtered to', mcaCompliantEntries.length, 'MCA-compliant entries (4+ hours)');
+        console.log('[Confirmations] Filtered to', mcaCompliantEntries.length, 'MCA-compliant sea days (4+ hours movement detected)');
         
         for (const entry of mcaCompliantEntries) {
           if (notifiedEntriesRef.current.has(entry.id)) {
@@ -112,10 +112,11 @@ export default function ConfirmationsScreen() {
             ? parseFloat(entry.duration_hours) 
             : entry.duration_hours || 0;
 
-          console.log('[Confirmations] Scheduling notification for MCA-compliant entry:', {
+          console.log('[Confirmations] Scheduling "Sea day detected" notification for entry:', {
             id: entry.id,
             vesselName,
             durationHours,
+            mcaCompliant: true,
           });
 
           await scheduleSeaTimeNotification(vesselName, entry.id, durationHours, true);
@@ -137,7 +138,7 @@ export default function ConfirmationsScreen() {
     console.log('[Confirmations] Component mounted, loading data');
     loadData();
 
-    console.log('[Confirmations] Setting up notification polling for MCA-compliant entries only');
+    console.log('[Confirmations] Setting up notification polling - will only notify for 4+ hour sea days');
     pollIntervalRef.current = setInterval(checkForNewEntries, 30000);
 
     return () => {
