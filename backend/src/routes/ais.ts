@@ -518,14 +518,18 @@ export async function fetchVesselAISData(
 
 export function register(app: App, fastify: FastifyInstance) {
   // POST /api/ais/check/:vesselId - Check vessel AIS data and manage sea time entries
-  fastify.post<{ Params: { vesselId: string } }>('/api/ais/check/:vesselId', {
+  fastify.post<{ Params: { vesselId: string }; Querystring: { forceRefresh?: string } }>('/api/ais/check/:vesselId', {
     schema: {
-      description: 'Fetch real-time AIS data and manage sea time entries',
+      description: 'Fetch real-time AIS data and manage sea time entries with rate limiting (2-hour interval)',
       tags: ['ais'],
       params: {
         type: 'object',
         required: ['vesselId'],
         properties: { vesselId: { type: 'string' } },
+      },
+      querystring: {
+        type: 'object',
+        properties: { forceRefresh: { type: 'string', description: 'Set to "true" to bypass rate limiting for manual checks' } },
       },
       response: {
         200: {
@@ -541,11 +545,13 @@ export function register(app: App, fastify: FastifyInstance) {
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
+        429: { type: 'object', properties: { error: { type: 'string' }, nextQueryTime: { type: 'number' } } },
         502: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
     const { vesselId } = request.params;
+    const forceRefresh = request.query.forceRefresh === 'true';
 
     // Check if API key is configured
     if (!MYSHIPTRACKING_API_KEY) {
@@ -568,6 +574,36 @@ export function register(app: App, fastify: FastifyInstance) {
     if (!vessel[0].is_active) {
       app.logger.warn(`Cannot track inactive vessel: ${vesselId}`);
       return reply.code(400).send({ error: 'Vessel is not active. Please activate the vessel first.' });
+    }
+
+    // Rate limiting check (2-hour interval per vessel)
+    const RATE_LIMIT_SECONDS = 7200; // 2 hours
+    if (!forceRefresh) {
+      const lastQuery = await app.db
+        .select()
+        .from(schema.ais_query_timestamps)
+        .where(eq(schema.ais_query_timestamps.vessel_id, vesselId));
+
+      if (lastQuery.length > 0) {
+        const lastQueryTime = new Date(lastQuery[0].last_query_time).getTime();
+        const currentTime = new Date().getTime();
+        const secondsSinceLastQuery = (currentTime - lastQueryTime) / 1000;
+
+        if (secondsSinceLastQuery < RATE_LIMIT_SECONDS) {
+          const secondsRemaining = Math.ceil(RATE_LIMIT_SECONDS - secondsSinceLastQuery);
+          const minutesRemaining = Math.ceil(secondsRemaining / 60);
+
+          app.logger.warn(
+            { vesselId, secondsSinceLastQuery, secondsRemaining },
+            `Rate limit exceeded for vessel. Next query allowed in ${minutesRemaining} minutes`
+          );
+
+          return reply.code(429).send({
+            error: `Rate limit: Please wait ${minutesRemaining} minute${minutesRemaining !== 1 ? 's' : ''} before checking AIS again. This helps conserve API credits.`,
+            nextQueryTime: lastQueryTime + RATE_LIMIT_SECONDS * 1000,
+          });
+        }
+      }
     }
 
     const mmsi = vessel[0].mmsi;
@@ -630,6 +666,41 @@ export function register(app: App, fastify: FastifyInstance) {
     app.logger.info(
       `Stored AIS check: ${ais_check.id} for vessel ${vesselId} - is_moving: ${ais_data.is_moving}, speed: ${ais_data.speed_knots}`
     );
+
+    // Update or insert the last query timestamp for rate limiting
+    try {
+      const existingTimestamp = await app.db
+        .select()
+        .from(schema.ais_query_timestamps)
+        .where(eq(schema.ais_query_timestamps.vessel_id, vesselId));
+
+      if (existingTimestamp.length > 0) {
+        // Update existing timestamp
+        await app.db
+          .update(schema.ais_query_timestamps)
+          .set({
+            last_query_time: check_time,
+            updated_at: check_time,
+          })
+          .where(eq(schema.ais_query_timestamps.vessel_id, vesselId))
+          .execute();
+
+        app.logger.debug({ vesselId }, 'Updated AIS query timestamp for rate limiting');
+      } else {
+        // Insert new timestamp
+        await app.db
+          .insert(schema.ais_query_timestamps)
+          .values({
+            vessel_id: vesselId,
+            last_query_time: check_time,
+          })
+          .execute();
+
+        app.logger.debug({ vesselId }, 'Created AIS query timestamp for rate limiting');
+      }
+    } catch (timestampError) {
+      app.logger.warn({ err: timestampError, vesselId }, 'Failed to update AIS query timestamp, continuing');
+    }
 
     let sea_time_entry_created = false;
     let sea_time_entry_ended = false;

@@ -135,6 +135,17 @@ export const notification_schedules = pgTable('notification_schedules', {
   index('notification_schedules_user_active_idx').on(table.user_id, table.is_active),
 ]);
 
+export const ais_query_timestamps = pgTable('ais_query_timestamps', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  vessel_id: uuid('vessel_id').notNull().references(() => vessels.id, { onDelete: 'cascade' }).unique(),
+  last_query_time: timestamp('last_query_time').notNull(),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+  updated_at: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => [
+  index('ais_query_timestamps_vessel_id_idx').on(table.vessel_id),
+  index('ais_query_timestamps_last_query_time_idx').on(table.last_query_time),
+]);
+
 export const ais_debug_logsRelations = relations(ais_debug_logs, ({ one }) => ({
   vessel: one(vessels, {
     fields: [ais_debug_logs.vessel_id],
@@ -145,6 +156,13 @@ export const ais_debug_logsRelations = relations(ais_debug_logs, ({ one }) => ({
 export const scheduled_tasksRelations = relations(scheduled_tasks, ({ one }) => ({
   vessel: one(vessels, {
     fields: [scheduled_tasks.vessel_id],
+    references: [vessels.id],
+  }),
+}));
+
+export const ais_query_timestampsRelations = relations(ais_query_timestamps, ({ one }) => ({
+  vessel: one(vessels, {
+    fields: [ais_query_timestamps.vessel_id],
     references: [vessels.id],
   }),
 }));
