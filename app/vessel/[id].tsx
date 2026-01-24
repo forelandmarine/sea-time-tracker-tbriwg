@@ -92,9 +92,6 @@ export default function VesselDetailScreen() {
   const [editedCallSign, setEditedCallSign] = useState('');
   const [checkingAIS, setCheckingAIS] = useState(false);
 
-  // Use global refresh hook
-  const { triggerRefresh } = useGlobalRefresh(loadData);
-
   const vesselId = Array.isArray(id) ? id[0] : id;
 
   const loadData = useCallback(async () => {
@@ -156,6 +153,9 @@ export default function VesselDetailScreen() {
       setLoading(false);
     }
   }, [vesselId]);
+
+  // Use global refresh hook - but don't pass loadData to avoid infinite loop
+  const { triggerRefresh } = useGlobalRefresh();
 
   useEffect(() => {
     loadData();
@@ -402,14 +402,6 @@ export default function VesselDetailScreen() {
     if (lat === null || lon === null) return 'N/A';
     return `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
   };
-
-  // Trigger refresh when navigating back
-  useEffect(() => {
-    return () => {
-      console.log('[VesselDetail] Screen unmounting, triggering global refresh');
-      triggerRefresh();
-    };
-  }, [triggerRefresh]);
 
   if (loading) {
     return (
