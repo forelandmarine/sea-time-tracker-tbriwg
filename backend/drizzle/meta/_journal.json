@@ -148,13 +148,6 @@
       "when": 1769255759547,
       "tag": "20260124115559_common_gravity",
       "breakpoints": true
-    },
-    {
-      "idx": 21,
-      "version": "7",
-      "when": 1769273425004,
-      "tag": "20260124165025_wandering_tarantula",
-      "breakpoints": true
     }
   ]
 }

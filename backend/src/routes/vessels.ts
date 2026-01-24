@@ -7,12 +7,6 @@ import { extractUserIdFromRequest, verifyVesselOwnership } from "../middleware/a
 
 // Helper function to transform vessel object for API response
 function transformVesselForResponse(vessel: any) {
-  // Parse numeric fields to numbers
-  let engine_kw = null;
-  if (vessel.engine_kw) {
-    engine_kw = parseFloat(String(vessel.engine_kw));
-  }
-
   return {
     id: vessel.id,
     mmsi: vessel.mmsi,
@@ -23,8 +17,6 @@ function transformVesselForResponse(vessel: any) {
     vessel_type: vessel.type, // Map 'type' database field to 'vessel_type' in API response
     length_metres: vessel.length_metres,
     gross_tonnes: vessel.gross_tonnes,
-    engine_kw: engine_kw,
-    engine_type: vessel.engine_type || null,
     is_active: vessel.is_active,
     created_at: vessel.created_at,
     updated_at: vessel.updated_at,
@@ -52,8 +44,6 @@ export function register(app: App, fastify: FastifyInstance) {
               vessel_type: { type: ['string', 'null'] },
               length_metres: { type: ['string', 'null'] },
               gross_tonnes: { type: ['string', 'null'] },
-              engine_kw: { type: ['number', 'null'] },
-              engine_type: { type: ['string', 'null'] },
               is_active: { type: 'boolean' },
               created_at: { type: 'string' },
               updated_at: { type: 'string' },
@@ -90,8 +80,6 @@ export function register(app: App, fastify: FastifyInstance) {
       type?: string;
       length_metres?: number;
       gross_tonnes?: number;
-      engine_kw?: number;
-      engine_type?: string;
       is_active?: boolean;
     }
   }>('/api/vessels', {
@@ -110,8 +98,6 @@ export function register(app: App, fastify: FastifyInstance) {
           type: { type: 'string', enum: ['Motor', 'Sail'] },
           length_metres: { type: 'number' },
           gross_tonnes: { type: 'number' },
-          engine_kw: { type: 'number', description: 'Engine Kilowatts' },
-          engine_type: { type: 'string', description: 'Engine type (e.g., Diesel, Petrol, Electric, Hybrid)' },
           is_active: { type: 'boolean', default: false },
         },
       },
@@ -128,8 +114,6 @@ export function register(app: App, fastify: FastifyInstance) {
             vessel_type: { type: ['string', 'null'] },
             length_metres: { type: ['string', 'null'] },
             gross_tonnes: { type: ['string', 'null'] },
-            engine_kw: { type: ['number', 'null'] },
-            engine_type: { type: ['string', 'null'] },
             is_active: { type: 'boolean' },
             created_at: { type: 'string' },
             updated_at: { type: 'string' },
@@ -155,8 +139,6 @@ export function register(app: App, fastify: FastifyInstance) {
       type,
       length_metres,
       gross_tonnes,
-      engine_kw,
-      engine_type,
       is_active = false,
     } = request.body;
 
@@ -198,8 +180,6 @@ export function register(app: App, fastify: FastifyInstance) {
         type,
         length_metres: length_metres ? String(length_metres) : null,
         gross_tonnes: gross_tonnes ? String(gross_tonnes) : null,
-        engine_kw: engine_kw ? String(engine_kw) : null,
-        engine_type: engine_type || null,
         is_active,
       })
       .returning();
@@ -476,14 +456,12 @@ export function register(app: App, fastify: FastifyInstance) {
       type?: string;
       length_metres?: number;
       gross_tonnes?: number;
-      engine_kw?: number;
-      engine_type?: string;
     };
   }>(
     '/api/vessels/:id/particulars',
     {
       schema: {
-        description: 'Update vessel particulars (vessel_name, callsign, flag, official number, type, length, gross tonnes, engine_kw, engine_type). Requires authentication.',
+        description: 'Update vessel particulars (vessel_name, callsign, flag, official number, type, length, gross tonnes). Requires authentication.',
         tags: ['vessels'],
         params: {
           type: 'object',
@@ -500,8 +478,6 @@ export function register(app: App, fastify: FastifyInstance) {
             type: { type: 'string', enum: ['Motor', 'Sail'] },
             length_metres: { type: 'number' },
             gross_tonnes: { type: 'number' },
-            engine_kw: { type: 'number', description: 'Engine Kilowatts' },
-            engine_type: { type: 'string', description: 'Engine type (e.g., Diesel, Petrol, Electric, Hybrid)' },
           },
         },
         response: {
@@ -517,8 +493,6 @@ export function register(app: App, fastify: FastifyInstance) {
               vessel_type: { type: ['string', 'null'] },
               length_metres: { type: ['string', 'null'] },
               gross_tonnes: { type: ['string', 'null'] },
-              engine_kw: { type: ['number', 'null'] },
-              engine_type: { type: ['string', 'null'] },
               is_active: { type: 'boolean' },
               created_at: { type: 'string' },
               updated_at: { type: 'string' },
@@ -533,7 +507,7 @@ export function register(app: App, fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const { id } = request.params;
-      const { vessel_name, callsign, flag, official_number, type, length_metres, gross_tonnes, engine_kw, engine_type } = request.body;
+      const { vessel_name, callsign, flag, official_number, type, length_metres, gross_tonnes } = request.body;
 
       app.logger.info({ vesselId: id }, 'Updating vessel particulars');
 
@@ -567,7 +541,7 @@ export function register(app: App, fastify: FastifyInstance) {
 
       // Verify at least one field is provided for update
       if (vessel_name === undefined && callsign === undefined && flag === undefined && official_number === undefined && type === undefined &&
-          length_metres === undefined && gross_tonnes === undefined && engine_kw === undefined && engine_type === undefined) {
+          length_metres === undefined && gross_tonnes === undefined) {
         app.logger.warn({ vesselId: id }, 'Vessel particulars update with no fields to update');
         return reply.code(400).send({ error: 'At least one field must be provided for update' });
       }
@@ -598,8 +572,6 @@ export function register(app: App, fastify: FastifyInstance) {
       if (type !== undefined) updateData.type = type;
       if (length_metres !== undefined) updateData.length_metres = length_metres ? String(length_metres) : null;
       if (gross_tonnes !== undefined) updateData.gross_tonnes = gross_tonnes ? String(gross_tonnes) : null;
-      if (engine_kw !== undefined) updateData.engine_kw = engine_kw ? String(engine_kw) : null;
-      if (engine_type !== undefined) updateData.engine_type = engine_type || null;
 
       // Update vessel
       const [updated] = await app.db
