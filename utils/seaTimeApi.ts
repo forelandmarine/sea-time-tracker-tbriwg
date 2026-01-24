@@ -1,5 +1,6 @@
 
 import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 
@@ -8,6 +9,10 @@ export const API_BASE_URL =
 export const TOKEN_KEY = 'seatime_auth_token';
 export const BIOMETRIC_CREDENTIALS_KEY = 'seatime_biometric_credentials';
 
+// Rate limiting constants
+const VESSEL_QUERY_INTERVAL = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
+const LAST_QUERY_TIME_PREFIX = 'vessel_last_query_time_';
+
 // Helper to normalize vessel data from API
 const normalizeVessel = (vessel: any) => {
   if (!vessel) return null;
@@ -15,6 +20,52 @@ const normalizeVessel = (vessel: any) => {
     ...vessel,
     vessel_type: vessel.vessel_type || vessel.type,
   };
+};
+
+// Rate limiting helpers
+const getLastQueryTime = async (vesselId: string): Promise<Date | null> => {
+  try {
+    const timeString = await AsyncStorage.getItem(`${LAST_QUERY_TIME_PREFIX}${vesselId}`);
+    return timeString ? new Date(timeString) : null;
+  } catch (error) {
+    console.error('[seaTimeApi] Error getting last query time:', error);
+    return null;
+  }
+};
+
+const setLastQueryTime = async (vesselId: string, time: Date): Promise<void> => {
+  try {
+    await AsyncStorage.setItem(`${LAST_QUERY_TIME_PREFIX}${vesselId}`, time.toISOString());
+    console.log('[seaTimeApi] Set last query time for vessel:', vesselId, 'at', time.toISOString());
+  } catch (error) {
+    console.error('[seaTimeApi] Error setting last query time:', error);
+  }
+};
+
+const shouldQueryVessel = async (vesselId: string, forceRefresh: boolean = false): Promise<boolean> => {
+  if (forceRefresh) {
+    console.log('[seaTimeApi] Force refresh requested for vessel:', vesselId);
+    return true;
+  }
+
+  const lastQueryTime = await getLastQueryTime(vesselId);
+  if (!lastQueryTime) {
+    console.log('[seaTimeApi] No previous query time found for vessel:', vesselId, '- allowing query');
+    return true;
+  }
+
+  const now = new Date();
+  const timeSinceLastQuery = now.getTime() - lastQueryTime.getTime();
+  const shouldQuery = timeSinceLastQuery > VESSEL_QUERY_INTERVAL;
+
+  if (shouldQuery) {
+    console.log('[seaTimeApi] Last query was', Math.floor(timeSinceLastQuery / 1000 / 60), 'minutes ago - allowing query');
+  } else {
+    const minutesRemaining = Math.ceil((VESSEL_QUERY_INTERVAL - timeSinceLastQuery) / 1000 / 60);
+    console.log('[seaTimeApi] Rate limit active - last query was', Math.floor(timeSinceLastQuery / 1000 / 60), 'minutes ago. Next query allowed in', minutesRemaining, 'minutes');
+  }
+
+  return shouldQuery;
 };
 
 // Check if backend is configured
@@ -272,11 +323,22 @@ export const getVesselSeaTime = async (vesselId: string) => {
   }));
 };
 
-// Check AIS for a vessel
-export const checkVesselAIS = async (vesselId: string) => {
-  console.log('[seaTimeApi] Checking AIS for vessel:', vesselId);
+// Check AIS for a vessel with rate limiting
+// The backend now handles rate limiting (2-hour interval per vessel)
+// Pass forceRefresh=true to bypass rate limiting for manual user checks
+export const checkVesselAIS = async (vesselId: string, forceRefresh: boolean = false) => {
+  console.log('[seaTimeApi] Checking AIS for vessel:', vesselId, 'forceRefresh:', forceRefresh);
+  
   const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/ais/check/${vesselId}`, {
+  
+  // Add forceRefresh as query parameter if true
+  const url = forceRefresh 
+    ? `${API_BASE_URL}/api/ais/check/${vesselId}?forceRefresh=true`
+    : `${API_BASE_URL}/api/ais/check/${vesselId}`;
+  
+  console.log('[seaTimeApi] POST request to:', url);
+  
+  const response = await fetch(url, {
     method: 'POST',
     headers,
     body: JSON.stringify({}),
@@ -285,10 +347,26 @@ export const checkVesselAIS = async (vesselId: string) => {
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[seaTimeApi] Failed to check vessel AIS:', response.status, errorText);
-    throw new Error(`Failed to check vessel AIS: ${response.status}`);
+    
+    // Handle 429 rate limit error from backend
+    if (response.status === 429) {
+      try {
+        const errorData = JSON.parse(errorText);
+        // Backend returns error message with time remaining
+        throw new Error(errorData.error || 'Rate limit exceeded. Please try again later.');
+      } catch (parseError) {
+        throw new Error('Rate limit: Please wait before checking AIS again. This helps conserve API credits.');
+      }
+    }
+    
+    throw new Error(`Failed to check vessel AIS: ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
+  
+  // Update last query time on successful check for client-side tracking
+  await setLastQueryTime(vesselId, new Date());
+  
   console.log('[seaTimeApi] Vessel AIS checked successfully');
   return data;
 };
@@ -311,6 +389,7 @@ export const getVesselAISStatus = async (vesselId: string) => {
 };
 
 // Get AIS location for a vessel - FIXED: Use correct endpoint
+// This is a read-only operation that doesn't trigger a new API query, so no rate limiting
 export const getVesselAISLocation = async (vesselId: string, extended: boolean = false) => {
   console.log('[seaTimeApi] Fetching AIS location for vessel:', vesselId, 'extended:', extended);
   const options = await getFetchOptions('GET');
@@ -326,6 +405,22 @@ export const getVesselAISLocation = async (vesselId: string, extended: boolean =
   const data = await response.json();
   console.log('[seaTimeApi] Vessel AIS location fetched successfully');
   return data;
+};
+
+// Get the time remaining until next AIS check is allowed
+export const getTimeUntilNextAISCheck = async (vesselId: string): Promise<{ canCheck: boolean; minutesRemaining: number }> => {
+  const lastQueryTime = await getLastQueryTime(vesselId);
+  
+  if (!lastQueryTime) {
+    return { canCheck: true, minutesRemaining: 0 };
+  }
+
+  const now = new Date();
+  const timeSinceLastQuery = now.getTime() - lastQueryTime.getTime();
+  const canCheck = timeSinceLastQuery > VESSEL_QUERY_INTERVAL;
+  const minutesRemaining = canCheck ? 0 : Math.ceil((VESSEL_QUERY_INTERVAL - timeSinceLastQuery) / 1000 / 60);
+
+  return { canCheck, minutesRemaining };
 };
 
 // Schedule AIS checks for a vessel

@@ -910,19 +910,19 @@ export default function VesselDetailScreen() {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-      console.log('[VesselDetailScreen iOS] 🔍 CHECK AIS BUTTON CLICKED');
+      console.log('[VesselDetailScreen iOS] 🔍 CHECK AIS BUTTON CLICKED - Manual check requested');
       console.log('[VesselDetailScreen iOS] Using vessel from particulars:');
       console.log('[VesselDetailScreen iOS] - Vessel ID:', vessel.id);
       console.log('[VesselDetailScreen iOS] - Vessel Name:', vessel.vessel_name);
       console.log('[VesselDetailScreen iOS] - MMSI:', vessel.mmsi);
       console.log('[VesselDetailScreen iOS] - Call Sign:', vessel.callsign || 'Not set');
-      console.log('[VesselDetailScreen iOS] Calling checkVesselAIS with vessel ID:', vessel.id);
+      console.log('[VesselDetailScreen iOS] Calling checkVesselAIS with vessel ID:', vessel.id, 'forceRefresh: true');
       console.log('[VesselDetailScreen iOS] Backend will look up MMSI from database for this vessel ID');
       
       setCheckingAIS(true);
       
-      // First trigger the AIS check (POST) which updates the database
-      await seaTimeApi.checkVesselAIS(vessel.id);
+      // First trigger the AIS check (POST) with forceRefresh=true to bypass rate limiting
+      await seaTimeApi.checkVesselAIS(vessel.id, true);
       
       // Then fetch the detailed AIS location data (GET)
       const aisLocation = await seaTimeApi.getVesselAISLocation(vessel.id, true);
@@ -961,6 +961,7 @@ export default function VesselDetailScreen() {
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
+      // Show the error message directly - it will include rate limit info if applicable
       Alert.alert('AIS Check Failed', error.message);
     } finally {
       setCheckingAIS(false);

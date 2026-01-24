@@ -244,10 +244,10 @@ export default function VesselDetailScreen() {
 
     try {
       setCheckingAIS(true);
-      console.log('[VesselDetail] User action: Checking AIS data');
+      console.log('[VesselDetail] User action: Manual AIS check requested');
       
-      // First trigger the AIS check (POST) which updates the database
-      await seaTimeApi.checkVesselAIS(vessel.id);
+      // First trigger the AIS check (POST) with forceRefresh=true to bypass rate limiting
+      await seaTimeApi.checkVesselAIS(vessel.id, true);
       
       // Then fetch the detailed AIS location data (GET)
       const aisLocation = await seaTimeApi.getVesselAISLocation(vessel.id, true);
@@ -282,7 +282,10 @@ export default function VesselDetailScreen() {
       let userMessage = 'Failed to check vessel location. Please try again.';
       
       if (error.message) {
-        if (error.message.includes('502') || error.message.includes('temporarily unavailable')) {
+        if (error.message.includes('Rate limit')) {
+          // Show the rate limit message directly to the user
+          userMessage = error.message;
+        } else if (error.message.includes('502') || error.message.includes('temporarily unavailable')) {
           userMessage = 'Location service is temporarily unavailable. Please try again later.';
         } else if (error.message.includes('404') || error.message.includes('not found')) {
           userMessage = 'Vessel not found in tracking system. Please verify the MMSI number.';
