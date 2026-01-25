@@ -1670,7 +1670,16 @@ export default function LogbookScreen() {
 
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Start Date & Time</Text>
-                    <View style={styles.dateTimeButton}>
+                    <TouchableOpacity
+                      style={styles.dateTimeButton}
+                      onPress={() => {
+                        if (!editingEntry) {
+                          console.log('[LogbookScreen] User tapped start date/time button');
+                          setShowStartDatePicker(true);
+                        }
+                      }}
+                      disabled={!!editingEntry}
+                    >
                       <Text style={startDate ? styles.dateTimeText : styles.dateTimePlaceholder}>
                         {startDate ? formatDateTime(startDate) : 'Select start date & time'}
                       </Text>
@@ -1680,7 +1689,7 @@ export default function LogbookScreen() {
                         size={20}
                         color={isDark ? colors.textSecondary : colors.textSecondaryLight}
                       />
-                    </View>
+                    </TouchableOpacity>
                     {editingEntry && (
                       <Text style={styles.helperText}>
                         Start date cannot be changed when editing
@@ -1693,7 +1702,16 @@ export default function LogbookScreen() {
                       End Date & Time{' '}
                       <Text style={styles.inputLabelOptional}>(Optional)</Text>
                     </Text>
-                    <View style={styles.dateTimeButton}>
+                    <TouchableOpacity
+                      style={styles.dateTimeButton}
+                      onPress={() => {
+                        if (!editingEntry) {
+                          console.log('[LogbookScreen] User tapped end date/time button');
+                          setShowEndDatePicker(true);
+                        }
+                      }}
+                      disabled={!!editingEntry}
+                    >
                       <Text style={endDate ? styles.dateTimeText : styles.dateTimePlaceholder}>
                         {endDate ? formatDateTime(endDate) : 'Select end date & time'}
                       </Text>
@@ -1703,7 +1721,7 @@ export default function LogbookScreen() {
                         size={20}
                         color={isDark ? colors.textSecondary : colors.textSecondaryLight}
                       />
-                    </View>
+                    </TouchableOpacity>
                     {editingEntry && (
                       <Text style={styles.helperText}>
                         End date cannot be changed when editing
@@ -1801,6 +1819,7 @@ export default function LogbookScreen() {
           onChange={(event, selectedDate) => {
             setShowStartDatePicker(false);
             if (selectedDate) {
+              console.log('[LogbookScreen] Start date selected:', selectedDate.toISOString());
               const newDate = startDate ? new Date(startDate) : new Date();
               newDate.setFullYear(selectedDate.getFullYear());
               newDate.setMonth(selectedDate.getMonth());
@@ -1820,6 +1839,7 @@ export default function LogbookScreen() {
           onChange={(event, selectedTime) => {
             setShowStartTimePicker(false);
             if (selectedTime) {
+              console.log('[LogbookScreen] Start time selected:', selectedTime.toISOString());
               const newDate = startDate ? new Date(startDate) : new Date();
               newDate.setHours(selectedTime.getHours());
               newDate.setMinutes(selectedTime.getMinutes());
@@ -1837,6 +1857,7 @@ export default function LogbookScreen() {
           onChange={(event, selectedDate) => {
             setShowEndDatePicker(false);
             if (selectedDate) {
+              console.log('[LogbookScreen] End date selected:', selectedDate.toISOString());
               const newDate = endDate ? new Date(endDate) : new Date();
               newDate.setFullYear(selectedDate.getFullYear());
               newDate.setMonth(selectedDate.getMonth());
@@ -1856,6 +1877,7 @@ export default function LogbookScreen() {
           onChange={(event, selectedTime) => {
             setShowEndTimePicker(false);
             if (selectedTime) {
+              console.log('[LogbookScreen] End time selected:', selectedTime.toISOString());
               const newDate = endDate ? new Date(endDate) : new Date();
               newDate.setHours(selectedTime.getHours());
               newDate.setMinutes(selectedTime.getMinutes());
@@ -1886,6 +1908,7 @@ export default function LogbookScreen() {
                 display="spinner"
                 onChange={(event, selectedDate) => {
                   if (selectedDate) {
+                    console.log('[LogbookScreen] Start date/time selected:', selectedDate.toISOString());
                     setStartDate(selectedDate);
                   }
                 }}
@@ -1925,6 +1948,7 @@ export default function LogbookScreen() {
                 display="spinner"
                 onChange={(event, selectedDate) => {
                   if (selectedDate) {
+                    console.log('[LogbookScreen] End date/time selected:', selectedDate.toISOString());
                     setEndDate(selectedDate);
                   }
                 }}
