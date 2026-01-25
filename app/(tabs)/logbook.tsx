@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -827,6 +827,7 @@ export default function LogbookScreen() {
   };
 
   const resetForm = () => {
+    console.log('[LogbookScreen] Resetting form');
     setEditingEntry(null);
     setSelectedVessel(null);
     setStartDate(null);
@@ -840,8 +841,10 @@ export default function LogbookScreen() {
 
   const handleCancelModal = () => {
     console.log('[LogbookScreen] User cancelled modal');
-    resetForm();
     setShowAddModal(false);
+    setTimeout(() => {
+      resetForm();
+    }, 300);
   };
 
   const formatDateTime = (date: Date | null) => {
@@ -890,7 +893,6 @@ export default function LogbookScreen() {
     const h = typeof hours === 'number' ? hours : parseFloat(hours);
     if (isNaN(h) || h === 0) return 'In progress';
     
-    // If duration is >= 24 hours, express as days
     if (h >= 24) {
       const days = Math.floor(h / 24);
       const remainingHours = Math.round(h % 24);
@@ -900,7 +902,6 @@ export default function LogbookScreen() {
       return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours}h`;
     }
     
-    // If < 24 hours, express as hours
     const wholeHours = Math.floor(h);
     const minutes = Math.round((h - wholeHours) * 60);
     if (minutes === 0) return `${wholeHours}h`;
@@ -942,7 +943,7 @@ export default function LogbookScreen() {
     setSelectedDate(dateString);
   };
 
-  const getEntriesForDate = (dateString: string): SeaTimeEntry[] => {
+  const getEntriesForDate = useCallback((dateString: string): SeaTimeEntry[] => {
     const dateEntries = entries.filter((entry) => {
       if (entry.status !== 'confirmed') return false;
       
@@ -952,21 +953,17 @@ export default function LogbookScreen() {
       return entryDateString === dateString;
     });
     
-    console.log('[LogbookScreen] Entries for date', dateString, ':', dateEntries.length);
     return dateEntries;
-  };
+  }, [entries]);
 
-  const getMarkedDates = () => {
+  const markedDates = useMemo(() => {
     const marked: any = {};
     
     const confirmedEntries = entries.filter((e) => e.status === 'confirmed' && e.sea_days === 1);
-    console.log('[LogbookScreen] Marking calendar - Total entries:', entries.length, 'Confirmed sea days:', confirmedEntries.length);
     
     confirmedEntries.forEach((entry) => {
       const entryDate = new Date(entry.start_time);
       const dateString = formatDateToLocalString(entryDate);
-      
-      console.log('[LogbookScreen] Marking date:', dateString, 'for entry:', entry.id);
       
       marked[dateString] = {
         marked: true,
@@ -977,9 +974,8 @@ export default function LogbookScreen() {
       };
     });
     
-    console.log('[LogbookScreen] Marked dates for calendar:', Object.keys(marked).length, 'days', Object.keys(marked));
     return marked;
-  };
+  }, [entries, selectedDate]);
 
   const groupEntriesByVessel = () => {
     const confirmedEntries = entries.filter((e) => e.status === 'confirmed');
@@ -1101,7 +1097,7 @@ export default function LogbookScreen() {
         >
           <View style={styles.calendarCard}>
             <Calendar
-              markedDates={getMarkedDates()}
+              markedDates={markedDates}
               onDayPress={handleDatePress}
               theme={{
                 backgroundColor: 'transparent',

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -815,6 +815,7 @@ export default function LogbookScreen() {
   };
 
   const resetForm = () => {
+    console.log('[LogbookScreen iOS] Resetting form');
     setEditingEntry(null);
     setSelectedVessel(null);
     setStartDate(null);
@@ -828,8 +829,10 @@ export default function LogbookScreen() {
 
   const handleCancelModal = () => {
     console.log('[LogbookScreen iOS] User cancelled modal');
-    resetForm();
     setShowAddModal(false);
+    setTimeout(() => {
+      resetForm();
+    }, 300);
   };
 
   const formatDateTime = (date: Date | null) => {
@@ -913,7 +916,7 @@ export default function LogbookScreen() {
     setSelectedDate(dateString);
   };
 
-  const getEntriesForDate = (dateString: string): SeaTimeEntry[] => {
+  const getEntriesForDate = useCallback((dateString: string): SeaTimeEntry[] => {
     const dateEntries = entries.filter((entry) => {
       if (entry.status !== 'confirmed') return false;
       
@@ -929,15 +932,13 @@ export default function LogbookScreen() {
       return entryStartDate < nextDay && entryEndDate >= selectedDateObj;
     });
     
-    console.log('[LogbookScreen iOS] Entries for date', dateString, ':', dateEntries.length);
     return dateEntries;
-  };
+  }, [entries]);
 
-  const getMarkedDates = () => {
+  const markedDates = useMemo(() => {
     const marked: any = {};
     
     const confirmedEntries = entries.filter((e) => e.status === 'confirmed');
-    console.log('[LogbookScreen iOS] Marking calendar - Total entries:', entries.length, 'Confirmed:', confirmedEntries.length);
     
     confirmedEntries.forEach((entry) => {
       const startDate = new Date(entry.start_time);
@@ -949,11 +950,8 @@ export default function LogbookScreen() {
       const endDateNormalized = new Date(endDate);
       endDateNormalized.setHours(23, 59, 59, 999);
       
-      console.log('[LogbookScreen iOS] Marking dates for entry:', entry.id, 'Start:', startDate.toISOString(), 'End:', endDate.toISOString());
-      
       while (currentDate <= endDateNormalized) {
         const dateString = formatDateToLocalString(currentDate);
-        console.log('[LogbookScreen iOS] Marking date:', dateString, 'for entry:', entry.id);
         
         marked[dateString] = {
           marked: true,
@@ -966,9 +964,8 @@ export default function LogbookScreen() {
       }
     });
     
-    console.log('[LogbookScreen iOS] Marked dates for calendar:', Object.keys(marked).length, 'days', Object.keys(marked));
     return marked;
-  };
+  }, [entries, selectedDate]);
 
   const groupEntriesByVessel = () => {
     const confirmedEntries = entries.filter((e) => e.status === 'confirmed');
@@ -1090,7 +1087,7 @@ export default function LogbookScreen() {
         >
           <View style={styles.calendarCard}>
             <Calendar
-              markedDates={getMarkedDates()}
+              markedDates={markedDates}
               onDayPress={handleDatePress}
               theme={{
                 backgroundColor: 'transparent',
