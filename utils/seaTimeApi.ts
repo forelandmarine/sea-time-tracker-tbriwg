@@ -912,3 +912,23 @@ export const verifyVesselTasks = async () => {
   console.log('[seaTimeApi] Vessel tasks verification completed:', data);
   return data;
 };
+
+// Get vessel diagnostic status - detailed sea time detection analysis
+export const getVesselDiagnosticStatus = async (mmsi: string) => {
+  console.log('[seaTimeApi] Fetching vessel diagnostic status for MMSI:', mmsi);
+  const options = await getFetchOptions('GET');
+  const response = await fetch(`${API_BASE_URL}/api/admin/vessel-status/${mmsi}`, options);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[seaTimeApi] Failed to fetch vessel diagnostic status:', response.status, errorText);
+    throw new Error(`Failed to fetch vessel diagnostic status: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log('[seaTimeApi] Vessel diagnostic status fetched successfully');
+  return data;
+};
+
+// Export getAuthToken for use in other components
+export { getAuthToken };
