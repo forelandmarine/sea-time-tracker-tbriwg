@@ -108,6 +108,7 @@ const createStyles = (isDark: boolean) =>
     content: {
       padding: 20,
       paddingTop: Platform.OS === 'android' ? 48 : 20,
+      paddingBottom: Platform.OS === 'web' ? 100 : 40,
     },
     section: {
       marginBottom: 24,
@@ -193,6 +194,7 @@ const createStyles = (isDark: boolean) =>
       paddingVertical: 4,
       alignSelf: 'flex-start',
       marginTop: 6,
+      marginBottom: 12,
     },
     departmentBadgeText: {
       fontSize: 11,
@@ -231,6 +233,7 @@ const createStyles = (isDark: boolean) =>
       borderRadius: 12,
       padding: 15,
       marginBottom: 10,
+      minHeight: 50,
     },
     reportButtonText: {
       color: '#ffffff',
@@ -246,8 +249,9 @@ const createStyles = (isDark: boolean) =>
       borderRadius: 12,
       padding: 15,
       marginBottom: 10,
-      borderWidth: 1,
+      borderWidth: 2,
       borderColor: colors.primary,
+      minHeight: 50,
     },
     diagnosticButtonText: {
       color: colors.primary,
@@ -498,7 +502,7 @@ export default function ReportsScreen() {
         }}
       />
 
-      <ScrollView style={styles.scrollView}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={{ flexGrow: 1 }}>
         <View style={styles.content}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Sea Time Summary</Text>
