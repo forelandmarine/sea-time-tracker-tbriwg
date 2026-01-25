@@ -885,6 +885,28 @@ export default function LogbookScreen() {
     }
   };
 
+  const formatDuration = (hours: number | string | null | undefined): string => {
+    if (hours === null || hours === undefined) return 'In progress';
+    const h = typeof hours === 'number' ? hours : parseFloat(hours);
+    if (isNaN(h) || h === 0) return 'In progress';
+    
+    // If duration is >= 24 hours, express as days
+    if (h >= 24) {
+      const days = Math.floor(h / 24);
+      const remainingHours = Math.round(h % 24);
+      if (remainingHours === 0) {
+        return `${days} ${days === 1 ? 'day' : 'days'}`;
+      }
+      return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours}h`;
+    }
+    
+    // If < 24 hours, express as hours
+    const wholeHours = Math.floor(h);
+    const minutes = Math.round((h - wholeHours) * 60);
+    if (minutes === 0) return `${wholeHours}h`;
+    return `${wholeHours}h ${minutes}m`;
+  };
+
   const formatSeaDay = (seaDays: number | null | undefined): string => {
     if (seaDays === 1) {
       return '✓ Sea Day Qualified';
@@ -1149,6 +1171,21 @@ export default function LogbookScreen() {
                         </Text>
                       </View>
 
+                      {entry.duration_hours !== null && entry.duration_hours !== undefined && (
+                        <View style={styles.entryRow}>
+                          <IconSymbol
+                            ios_icon_name="clock"
+                            android_material_icon_name="schedule"
+                            size={16}
+                            color={colors.primary}
+                            style={styles.entryIcon}
+                          />
+                          <Text style={[styles.entryText, { color: colors.primary, fontWeight: '600' }]}>
+                            {formatDuration(entry.duration_hours)}
+                          </Text>
+                        </View>
+                      )}
+
                       <View style={styles.seaDayBadge}>
                         <Text style={styles.seaDayText}>
                           {formatSeaDay(entry.sea_days)}
@@ -1312,6 +1349,21 @@ export default function LogbookScreen() {
                               </Text>
                             </View>
 
+                            {entry.duration_hours !== null && entry.duration_hours !== undefined && (
+                              <View style={styles.entryRow}>
+                                <IconSymbol
+                                  ios_icon_name="clock"
+                                  android_material_icon_name="schedule"
+                                  size={16}
+                                  color={colors.primary}
+                                  style={styles.entryIcon}
+                                />
+                                <Text style={[styles.entryText, { color: colors.primary, fontWeight: '600' }]}>
+                                  {formatDuration(entry.duration_hours)}
+                                </Text>
+                              </View>
+                            )}
+
                             <View style={styles.seaDayBadge}>
                               <Text style={styles.seaDayText}>
                                 {formatSeaDay(entry.sea_days)}
@@ -1448,7 +1500,7 @@ export default function LogbookScreen() {
                   )}
                 </View>
                 <Text style={styles.modalSubtitle}>
-                  {editingEntry ? 'Update your sea time record' : 'Record a sea day: 4+ hours underway in any 24-hour period. Only one entry per day allowed.'}
+                  {editingEntry ? 'Update your sea time record' : 'Record a sea day: 4+ hours underway in any 24-hour period. Only one sea day can be recorded per calendar day.'}
                 </Text>
 
                 <ScrollView 

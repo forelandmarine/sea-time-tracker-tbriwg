@@ -1069,6 +1069,26 @@ export default function VesselDetailScreen() {
     return `${lat.toFixed(6)}°, ${lon.toFixed(6)}°`;
   };
 
+  const formatDuration = (hours: number | null): string => {
+    if (hours === null || hours === 0) return 'In progress';
+    
+    // If duration is >= 24 hours, express as days
+    if (hours >= 24) {
+      const days = Math.floor(hours / 24);
+      const remainingHours = Math.round(hours % 24);
+      if (remainingHours === 0) {
+        return `${days} ${days === 1 ? 'day' : 'days'}`;
+      }
+      return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours}h`;
+    }
+    
+    // If < 24 hours, express as hours
+    const wholeHours = Math.floor(hours);
+    const minutes = Math.round((hours - wholeHours) * 60);
+    if (minutes === 0) return `${wholeHours}h`;
+    return `${wholeHours}h ${minutes}m`;
+  };
+
   if (loading || !vessel) {
     return (
       <View style={styles.container}>
@@ -1304,7 +1324,7 @@ export default function VesselDetailScreen() {
                       )}
                       {entry.duration_hours !== null && entry.duration_hours !== undefined && (
                         <Text style={styles.entryDetailText}>
-                          Duration: {Math.floor(Number(entry.duration_hours) / 24)} {Math.floor(Number(entry.duration_hours) / 24) === 1 ? 'day' : 'days'}
+                          Duration: {formatDuration(Number(entry.duration_hours))}
                         </Text>
                       )}
                       {entry.notes && (

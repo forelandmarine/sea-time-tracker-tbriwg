@@ -647,7 +647,21 @@ export default function VesselDetailScreen() {
 
                     {entry.duration_hours !== null && (
                       <Text style={styles.entryDuration}>
-                        {Math.floor(entry.duration_hours / 24)} {Math.floor(entry.duration_hours / 24) === 1 ? 'day' : 'days'}
+                        {(() => {
+                          const hours = entry.duration_hours;
+                          if (hours >= 24) {
+                            const days = Math.floor(hours / 24);
+                            const remainingHours = Math.round(hours % 24);
+                            if (remainingHours === 0) {
+                              return `${days} ${days === 1 ? 'day' : 'days'}`;
+                            }
+                            return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours}h`;
+                          }
+                          const wholeHours = Math.floor(hours);
+                          const minutes = Math.round((hours - wholeHours) * 60);
+                          if (minutes === 0) return `${wholeHours}h`;
+                          return `${wholeHours}h ${minutes}m`;
+                        })()}
                       </Text>
                     )}
 

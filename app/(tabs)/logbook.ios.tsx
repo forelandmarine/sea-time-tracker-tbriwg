@@ -1439,7 +1439,7 @@ export default function LogbookScreen() {
                   )}
                 </View>
                 <Text style={styles.modalSubtitle}>
-                  {editingEntry ? 'Update your sea time record' : 'Manually record your sea time with voyage details'}
+                  {editingEntry ? 'Update your sea time record' : 'Manually record your sea time with voyage details. Only one sea day can be recorded per calendar day.'}
                 </Text>
 
                 <ScrollView 

@@ -358,11 +358,25 @@ export default function ConfirmationsScreen() {
     return `${convertToDMS(latNum, true)}, ${convertToDMS(lonNum, false)}`;
   };
 
-  const formatDays = (hours: number | string | null | undefined): string => {
+  const formatDuration = (hours: number | string | null | undefined): string => {
     const num = toNumber(hours);
-    const hoursRounded = Math.round(num * 10) / 10;
-    const hoursText = `${hoursRounded}h`;
-    return hoursText;
+    if (num === 0) return 'In progress';
+    
+    // If duration is >= 24 hours, express as days
+    if (num >= 24) {
+      const days = Math.floor(num / 24);
+      const remainingHours = Math.round(num % 24);
+      if (remainingHours === 0) {
+        return `${days} ${days === 1 ? 'day' : 'days'}`;
+      }
+      return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours}h`;
+    }
+    
+    // If < 24 hours, express as hours
+    const wholeHours = Math.floor(num);
+    const minutes = Math.round((num - wholeHours) * 60);
+    if (minutes === 0) return `${wholeHours}h`;
+    return `${wholeHours}h ${minutes}m`;
   };
 
   const isMCACompliant = (entry: SeaTimeEntry): boolean => {
@@ -464,7 +478,7 @@ export default function ConfirmationsScreen() {
                       </Text>
                       <View style={styles.durationBadge}>
                         <Text style={styles.durationText}>
-                          {formatDays(entry.duration_hours)}
+                          {formatDuration(entry.duration_hours)}
                         </Text>
                       </View>
                     </View>
@@ -510,7 +524,7 @@ export default function ConfirmationsScreen() {
                       <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Duration:</Text>
                         <Text style={styles.detailValue}>
-                          {formatDays(entry.duration_hours)}
+                          {formatDuration(entry.duration_hours)}
                         </Text>
                       </View>
 
