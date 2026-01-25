@@ -838,6 +838,12 @@ export default function LogbookScreen() {
     setShowVesselPicker(false);
   };
 
+  const handleCancelModal = () => {
+    console.log('[LogbookScreen] User cancelled modal');
+    resetForm();
+    setShowAddModal(false);
+  };
+
   const formatDateTime = (date: Date | null) => {
     if (!date) return '';
     return date.toLocaleString('en-GB', {
@@ -1408,11 +1414,7 @@ export default function LogbookScreen() {
         visible={showAddModal}
         transparent
         animationType="slide"
-        onRequestClose={() => {
-          console.log('[LogbookScreen] Add modal closed');
-          setShowAddModal(false);
-          resetForm();
-        }}
+        onRequestClose={handleCancelModal}
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -1421,11 +1423,7 @@ export default function LogbookScreen() {
           <TouchableOpacity
             style={styles.modalOverlay}
             activeOpacity={1}
-            onPress={() => {
-              console.log('[LogbookScreen] User tapped outside modal, closing');
-              setShowAddModal(false);
-              resetForm();
-            }}
+            onPress={handleCancelModal}
           >
             <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
               <View style={styles.modalContent}>
@@ -1726,11 +1724,7 @@ export default function LogbookScreen() {
                 <View style={styles.modalButtons}>
                   <TouchableOpacity
                     style={[styles.modalButton, styles.cancelButton]}
-                    onPress={() => {
-                      console.log('[LogbookScreen] User cancelled');
-                      setShowAddModal(false);
-                      resetForm();
-                    }}
+                    onPress={handleCancelModal}
                   >
                     <Text style={[styles.modalButtonText, styles.cancelButtonText]}>
                       Cancel
