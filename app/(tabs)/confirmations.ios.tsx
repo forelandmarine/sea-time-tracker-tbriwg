@@ -66,12 +66,48 @@ export default function ConfirmationsScreen() {
   const notifiedEntriesRef = useRef<Set<string>>(new Set());
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const toNumber = (value: number | string | null | undefined): number => {
+    if (value === null || value === undefined) return 0;
+    if (typeof value === 'number') return value;
+    const parsed = parseFloat(value);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const isValidEntry = (entry: SeaTimeEntry): boolean => {
+    const hasEndTime = entry.end_time !== null && entry.end_time !== undefined;
+    const durationHours = toNumber(entry.duration_hours);
+    const isMCACompliant = durationHours >= 4.0;
+    const hasStartLocation = entry.start_latitude !== null && entry.start_latitude !== undefined && 
+                            entry.start_longitude !== null && entry.start_longitude !== undefined;
+    const hasEndLocation = entry.end_latitude !== null && entry.end_latitude !== undefined && 
+                          entry.end_longitude !== null && entry.end_longitude !== undefined;
+    
+    const isValid = hasEndTime && isMCACompliant && hasStartLocation && hasEndLocation;
+    
+    if (!isValid) {
+      console.log('[Confirmations] Entry filtered out:', {
+        id: entry.id,
+        hasEndTime,
+        durationHours,
+        isMCACompliant,
+        hasStartLocation,
+        hasEndLocation,
+      });
+    }
+    
+    return isValid;
+  };
+
   const loadData = useCallback(async () => {
     try {
       console.log('[Confirmations] Loading pending entries');
       const pendingEntries = await seaTimeApi.getPendingEntries();
-      setEntries(pendingEntries);
-      console.log('[Confirmations] Loaded', pendingEntries.length, 'pending entries');
+      
+      const validEntries = pendingEntries.filter(isValidEntry);
+      
+      console.log('[Confirmations] Loaded', pendingEntries.length, 'pending entries,', validEntries.length, 'valid (4+ hours with complete location data)');
+      
+      setEntries(validEntries);
     } catch (error: any) {
       console.error('[Confirmations] Failed to load data:', error);
       Alert.alert('Error', 'Failed to load data: ' + error.message);
@@ -88,20 +124,23 @@ export default function ConfirmationsScreen() {
       if (result.newEntries && result.newEntries.length > 0) {
         console.log('[Confirmations] Found', result.newEntries.length, 'new entries');
         
-        // Filter to only MCA-compliant entries (4+ hours)
-        const mcaCompliantEntries = result.newEntries.filter((entry: any) => {
+        const validEntries = result.newEntries.filter((entry: any) => {
+          const hasEndTime = entry.end_time !== null && entry.end_time !== undefined;
           const durationHours = typeof entry.duration_hours === 'string' 
             ? parseFloat(entry.duration_hours) 
             : entry.duration_hours || 0;
-          const mcaCompliant = entry.mca_compliant !== null && entry.mca_compliant !== undefined 
-            ? entry.mca_compliant 
-            : durationHours >= 4.0;
-          return mcaCompliant;
+          const isMCACompliant = durationHours >= 4.0;
+          const hasStartLocation = entry.start_latitude !== null && entry.start_latitude !== undefined && 
+                                  entry.start_longitude !== null && entry.start_longitude !== undefined;
+          const hasEndLocation = entry.end_latitude !== null && entry.end_latitude !== undefined && 
+                                entry.end_longitude !== null && entry.end_longitude !== undefined;
+          
+          return hasEndTime && isMCACompliant && hasStartLocation && hasEndLocation;
         });
         
-        console.log('[Confirmations] Filtered to', mcaCompliantEntries.length, 'MCA-compliant sea days (4+ hours movement detected)');
+        console.log('[Confirmations] Filtered to', validEntries.length, 'valid MCA-compliant sea days (4+ hours with complete voyage data)');
         
-        for (const entry of mcaCompliantEntries) {
+        for (const entry of validEntries) {
           if (notifiedEntriesRef.current.has(entry.id)) {
             console.log('[Confirmations] Skipping already notified entry:', entry.id);
             continue;
@@ -123,7 +162,7 @@ export default function ConfirmationsScreen() {
           notifiedEntriesRef.current.add(entry.id);
         }
 
-        if (mcaCompliantEntries.length > 0) {
+        if (validEntries.length > 0) {
           await loadData();
         }
       } else {
@@ -138,7 +177,7 @@ export default function ConfirmationsScreen() {
     console.log('[Confirmations] Component mounted, loading data');
     loadData();
 
-    console.log('[Confirmations] Setting up notification polling - will only notify for 4+ hour sea days');
+    console.log('[Confirmations] Setting up notification polling - will only notify for 4+ hour sea days with complete voyage data');
     pollIntervalRef.current = setInterval(checkForNewEntries, 30000);
 
     return () => {
@@ -285,13 +324,6 @@ export default function ConfirmationsScreen() {
     }
   };
 
-  const toNumber = (value: number | string | null | undefined): number => {
-    if (value === null || value === undefined) return 0;
-    if (typeof value === 'number') return value;
-    const parsed = parseFloat(value);
-    return isNaN(parsed) ? 0 : parsed;
-  };
-
   const formatCoordinate = (value: number | string | null | undefined): string => {
     const num = toNumber(value);
     return num.toFixed(6);
@@ -328,9 +360,9 @@ export default function ConfirmationsScreen() {
 
   const formatDays = (hours: number | string | null | undefined): string => {
     const num = toNumber(hours);
-    const days = Math.floor(num / 24);
-    const daysText = days === 1 ? 'day' : 'days';
-    return `${days} ${daysText}`;
+    const hoursRounded = Math.round(num * 10) / 10;
+    const hoursText = `${hoursRounded}h`;
+    return hoursText;
   };
 
   const isMCACompliant = (entry: SeaTimeEntry): boolean => {
