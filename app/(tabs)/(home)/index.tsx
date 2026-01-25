@@ -141,9 +141,10 @@ export default function SeaTimeScreen() {
     }
 
     try {
+      const vesselNameTrimmed = newVesselName.trim();
       console.log('[Home] User action: Creating new vessel:', { 
         mmsi: newMMSI, 
-        name: newVesselName,
+        name: vesselNameTrimmed,
         callsign: newCallSign,
         flag: newFlag,
         official_number: newOfficialNumber,
@@ -152,23 +153,15 @@ export default function SeaTimeScreen() {
         gross_tonnes: newGrossTonnes
       });
       
-      // Check if there are any existing vessels
-      const hasNoActiveVessel = !vessels.some(v => v.is_active);
-      const isFirstVessel = vessels.length === 0;
+      // ALWAYS activate new vessels - this ensures they become the active tracked vessel
+      // with an attributed scheduled task created automatically by the backend
+      const shouldActivate = true;
       
-      // Automatically activate if this is the first vessel OR if there's no active vessel
-      const shouldActivate = isFirstVessel || hasNoActiveVessel;
-      
-      console.log('[Home] Vessel activation logic:', {
-        isFirstVessel,
-        hasNoActiveVessel,
-        shouldActivate,
-        totalVessels: vessels.length
-      });
+      console.log('[Home] New vessel will be automatically activated and tracked');
       
       await seaTimeApi.createVessel(
         newMMSI.trim(), 
-        newVesselName.trim(), 
+        vesselNameTrimmed, 
         shouldActivate,
         newFlag.trim() || undefined,
         newOfficialNumber.trim() || undefined,
@@ -189,11 +182,7 @@ export default function SeaTimeScreen() {
       setNewGrossTonnes('');
       await loadData();
       
-      if (shouldActivate) {
-        Alert.alert('Success', `${newVesselName.trim()} has been added and is now being tracked`);
-      } else {
-        Alert.alert('Success', 'Vessel added successfully');
-      }
+      Alert.alert('Success', `${vesselNameTrimmed} has been added and is now being tracked`);
     } catch (error: any) {
       console.error('[Home] Failed to add vessel:', error);
       Alert.alert('Error', 'Failed to add vessel: ' + error.message);
