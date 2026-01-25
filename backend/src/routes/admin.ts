@@ -292,7 +292,7 @@ export function register(app: App, fastify: FastifyInstance) {
                 user_id: vessel.user_id,
                 task_type: 'vessel_tracking',
                 vessel_id: vessel.id,
-                interval_hours: '2',
+                interval_hours: '4',
                 is_active: true,
                 next_run: now,
                 last_run: null,
