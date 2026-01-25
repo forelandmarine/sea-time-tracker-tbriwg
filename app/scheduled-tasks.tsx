@@ -9,7 +9,6 @@ import {
   useColorScheme,
   RefreshControl,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
@@ -38,7 +37,6 @@ export default function ScheduledTasksScreen() {
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     loadTasks();
@@ -79,44 +77,6 @@ export default function ScheduledTasksScreen() {
     } catch (error: any) {
       console.error('Failed to toggle task:', error);
       Alert.alert('Error', 'Failed to update task: ' + error.message);
-    }
-  };
-
-  const handleVerifyVesselTasks = async () => {
-    try {
-      console.log('User tapped Verify Vessel Tasks button');
-      setVerifying(true);
-      
-      const response = await seaTimeApi.verifyVesselTasks();
-      console.log('Vessel tasks verification response:', response);
-      
-      const message = response.message || 'Verification complete';
-      const details = response.details || {};
-      
-      const detailsText = `
-Active vessels checked: ${details.active_vessels_checked || 0}
-Tasks created: ${details.tasks_created || 0}
-Already had tasks: ${details.already_had_tasks || 0}
-      `.trim();
-      
-      Alert.alert(
-        'Verification Complete',
-        `${message}\n\n${detailsText}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              console.log('Reloading tasks after verification');
-              loadTasks();
-            }
-          }
-        ]
-      );
-    } catch (error: any) {
-      console.error('Failed to verify vessel tasks:', error);
-      Alert.alert('Error', 'Failed to verify vessel tasks: ' + error.message);
-    } finally {
-      setVerifying(false);
     }
   };
 
@@ -368,34 +328,6 @@ Already had tasks: ${details.already_had_tasks || 0}
                 );
               })
             )}
-          </View>
-
-          {/* Admin Tools Section */}
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Admin Tools</Text>
-            <TouchableOpacity
-              style={styles.verifyButton}
-              onPress={handleVerifyVesselTasks}
-              disabled={verifying}
-            >
-              {verifying ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <>
-                  <IconSymbol
-                    ios_icon_name="checkmark.shield.fill"
-                    android_material_icon_name="verified"
-                    size={20}
-                    color="#FFFFFF"
-                    style={styles.verifyButtonIcon}
-                  />
-                  <Text style={styles.verifyButtonText}>Verify Vessel Tasks</Text>
-                </>
-              )}
-            </TouchableOpacity>
-            <Text style={styles.verifyButtonDescription}>
-              Checks all active vessels and creates missing scheduled tasks
-            </Text>
           </View>
 
           {/* Important Notes Section */}
@@ -658,29 +590,6 @@ function createStyles(isDark: boolean) {
       fontSize: 13,
       fontWeight: '600',
       color: colors.primary,
-    },
-    verifyButton: {
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      padding: 16,
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 8,
-    },
-    verifyButtonIcon: {
-      marginRight: 8,
-    },
-    verifyButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: '#FFFFFF',
-    },
-    verifyButtonDescription: {
-      fontSize: 13,
-      color: secondaryTextColor,
-      textAlign: 'center',
-      paddingHorizontal: 16,
     },
     noteContainer: {
       backgroundColor: cardColor,
