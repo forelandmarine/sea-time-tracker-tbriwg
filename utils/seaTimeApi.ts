@@ -490,11 +490,11 @@ export const getScheduledTasks = async () => {
   return data;
 };
 
-// Toggle scheduled task
+// Toggle scheduled task - FIXED: Use correct endpoint without /toggle
 export const toggleScheduledTask = async (taskId: string, isActive: boolean) => {
   console.log('[seaTimeApi] Toggling scheduled task:', taskId, 'active:', isActive);
   const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/ais/scheduled-tasks/${taskId}/toggle`, {
+  const response = await fetch(`${API_BASE_URL}/api/ais/scheduled-tasks/${taskId}`, {
     method: 'PUT',
     headers,
     body: JSON.stringify({ is_active: isActive }),
