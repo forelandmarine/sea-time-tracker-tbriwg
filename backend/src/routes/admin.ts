@@ -179,4 +179,215 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     }
   );
+
+  // POST /api/admin/verify-vessel-tasks - Verify and repair scheduled tasks for all active vessels
+  fastify.post('/api/admin/verify-vessel-tasks', {
+    schema: {
+      description: 'Verify that all active vessels have scheduled tracking tasks. Creates missing tasks automatically.',
+      tags: ['admin'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            summary: {
+              type: 'object',
+              properties: {
+                total_active_vessels: { type: 'number' },
+                tasks_created: { type: 'number' },
+                tasks_reactivated: { type: 'number' },
+                tasks_already_active: { type: 'number' },
+              },
+            },
+            details: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  vessel_id: { type: 'string' },
+                  vessel_name: { type: 'string' },
+                  mmsi: { type: 'string' },
+                  action: { type: 'string', enum: ['created', 'reactivated', 'already_active'] },
+                  error: { type: ['string', 'null'] },
+                },
+              },
+            },
+          },
+        },
+        500: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            error: { type: 'string' },
+            summary: {
+              type: 'object',
+              properties: {
+                total_active_vessels: { type: 'number' },
+                tasks_created: { type: 'number' },
+                tasks_reactivated: { type: 'number' },
+                tasks_already_active: { type: 'number' },
+              },
+            },
+            details: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  vessel_id: { type: 'string' },
+                  vessel_name: { type: 'string' },
+                  mmsi: { type: 'string' },
+                  action: { type: 'string', enum: ['created', 'reactivated', 'already_active'] },
+                  error: { type: ['string', 'null'] },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    app.logger.info({}, 'Starting vessel tracking task verification and repair');
+
+    const summary = {
+      total_active_vessels: 0,
+      tasks_created: 0,
+      tasks_reactivated: 0,
+      tasks_already_active: 0,
+    };
+
+    const details: Array<{
+      vessel_id: string;
+      vessel_name: string;
+      mmsi: string;
+      action: 'created' | 'reactivated' | 'already_active';
+      error?: string;
+    }> = [];
+
+    try {
+      // Get all active vessels
+      const activeVessels = await app.db
+        .select()
+        .from(schema.vessels)
+        .where(eq(schema.vessels.is_active, true));
+
+      app.logger.info({ count: activeVessels.length }, 'Found active vessels to verify');
+
+      summary.total_active_vessels = activeVessels.length;
+
+      // Process each active vessel
+      for (const vessel of activeVessels) {
+        try {
+          // Check if a scheduled task exists for this vessel
+          const existingTasks = await app.db
+            .select()
+            .from(schema.scheduled_tasks)
+            .where(eq(schema.scheduled_tasks.vessel_id, vessel.id));
+
+          if (existingTasks.length === 0) {
+            // No task exists - create one
+            const now = new Date();
+            const [newTask] = await app.db
+              .insert(schema.scheduled_tasks)
+              .values({
+                user_id: vessel.user_id,
+                task_type: 'vessel_tracking',
+                vessel_id: vessel.id,
+                interval_hours: '2',
+                is_active: true,
+                next_run: now,
+                last_run: null,
+              })
+              .returning();
+
+            app.logger.info(
+              { vessel_id: vessel.id, vessel_name: vessel.vessel_name, mmsi: vessel.mmsi, task_id: newTask.id },
+              'Created missing tracking task for vessel'
+            );
+
+            summary.tasks_created++;
+            details.push({
+              vessel_id: vessel.id,
+              vessel_name: vessel.vessel_name,
+              mmsi: vessel.mmsi,
+              action: 'created',
+            });
+          } else {
+            const existingTask = existingTasks[0];
+
+            if (!existingTask.is_active) {
+              // Task exists but is inactive - reactivate it
+              await app.db
+                .update(schema.scheduled_tasks)
+                .set({ is_active: true })
+                .where(eq(schema.scheduled_tasks.id, existingTask.id));
+
+              app.logger.info(
+                { vessel_id: vessel.id, vessel_name: vessel.vessel_name, mmsi: vessel.mmsi, task_id: existingTask.id },
+                'Reactivated tracking task for vessel'
+              );
+
+              summary.tasks_reactivated++;
+              details.push({
+                vessel_id: vessel.id,
+                vessel_name: vessel.vessel_name,
+                mmsi: vessel.mmsi,
+                action: 'reactivated',
+              });
+            } else {
+              // Task exists and is active - no action needed
+              app.logger.debug(
+                { vessel_id: vessel.id, vessel_name: vessel.vessel_name, mmsi: vessel.mmsi, task_id: existingTask.id },
+                'Tracking task already active for vessel'
+              );
+
+              summary.tasks_already_active++;
+              details.push({
+                vessel_id: vessel.id,
+                vessel_name: vessel.vessel_name,
+                mmsi: vessel.mmsi,
+                action: 'already_active',
+              });
+            }
+          }
+        } catch (error) {
+          app.logger.error(
+            { err: error, vessel_id: vessel.id, vessel_name: vessel.vessel_name, mmsi: vessel.mmsi },
+            'Failed to verify/repair task for vessel'
+          );
+
+          details.push({
+            vessel_id: vessel.id,
+            vessel_name: vessel.vessel_name,
+            mmsi: vessel.mmsi,
+            action: 'created',
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
+
+      app.logger.info(
+        {
+          total_active_vessels: summary.total_active_vessels,
+          tasks_created: summary.tasks_created,
+          tasks_reactivated: summary.tasks_reactivated,
+          tasks_already_active: summary.tasks_already_active,
+        },
+        'Vessel tracking task verification and repair completed'
+      );
+
+      return reply.code(200).send({
+        success: true,
+        summary,
+        details,
+      });
+    } catch (error) {
+      app.logger.error({ err: error }, 'Error during vessel tracking task verification');
+      return reply.code(500).send({
+        success: false,
+        error: 'Failed to verify vessel tracking tasks',
+        summary,
+        details,
+      });
+    }
+  });
 }
