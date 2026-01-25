@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { eq, and, isNull, desc, lte, gte } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, desc, lte, gte } from "drizzle-orm";
 import * as schema from "../db/schema.js";
 import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
@@ -444,7 +444,15 @@ export function register(app: App, fastify: FastifyInstance) {
     const entries = await app.db.query.sea_time_entries.findMany({
       where: and(
         eq(schema.sea_time_entries.user_id, userId),
-        gte(schema.sea_time_entries.created_at, cutoffTime)
+        gte(schema.sea_time_entries.created_at, cutoffTime),
+        // Filter for complete, MCA-compliant entries only
+        isNotNull(schema.sea_time_entries.end_time),
+        gte(schema.sea_time_entries.duration_hours, '4.0'),
+        isNotNull(schema.sea_time_entries.start_latitude),
+        isNotNull(schema.sea_time_entries.start_longitude),
+        isNotNull(schema.sea_time_entries.end_latitude),
+        isNotNull(schema.sea_time_entries.end_longitude),
+        eq(schema.sea_time_entries.status, 'pending')
       ),
       with: {
         vessel: true,
