@@ -83,47 +83,44 @@ export default function SeaTimeScreen() {
     }
   }, [refreshTrigger]);
 
-  const loadActiveVesselLocation = useCallback(async () => {
-    if (!activeVessel) {
-      console.log('No active vessel to load location for');
-      return;
-    }
-
+  const loadActiveVesselLocation = useCallback(async (vesselId: string) => {
     try {
       setLocationLoading(true);
-      console.log('Loading location for active vessel:', activeVessel.id);
-      const locationData = await seaTimeApi.getVesselAISLocation(activeVessel.id, false);
+      console.log('[Home] Loading location for vessel:', vesselId);
+      const locationData = await seaTimeApi.getVesselAISLocation(vesselId, false);
       setActiveVesselLocation({
         latitude: locationData.latitude,
         longitude: locationData.longitude,
         timestamp: locationData.timestamp,
       });
-      console.log('Active vessel location loaded:', locationData.latitude, locationData.longitude, 'timestamp:', locationData.timestamp);
+      console.log('[Home] Location loaded:', locationData.latitude, locationData.longitude, 'timestamp:', locationData.timestamp);
     } catch (error: any) {
-      console.error('Failed to load active vessel location:', error);
+      console.error('[Home] Failed to load vessel location:', error);
       // Don't show alert for location errors, just log them
       setActiveVesselLocation(null);
     } finally {
       setLocationLoading(false);
     }
-  }, [activeVessel]);
-
-  useEffect(() => {
-    if (activeVessel) {
-      loadActiveVesselLocation();
-    } else {
-      setActiveVesselLocation(null);
-    }
-  }, [activeVessel, loadActiveVesselLocation]);
+  }, []);
 
   const loadData = async () => {
     try {
-      console.log('Loading vessels...');
+      console.log('[Home] Loading vessels...');
       const vesselsData = await seaTimeApi.getVessels();
       setVessels(vesselsData);
-      console.log('Data loaded successfully - Active vessels:', vesselsData.filter(v => v.is_active).length, 'Historic vessels:', vesselsData.filter(v => !v.is_active).length);
+      console.log('[Home] Vessels loaded - Active:', vesselsData.filter(v => v.is_active).length, 'Historic:', vesselsData.filter(v => !v.is_active).length);
+      
+      // Load location for the active vessel
+      const newActiveVessel = vesselsData.find(v => v.is_active);
+      if (newActiveVessel) {
+        console.log('[Home] Found active vessel, loading location:', newActiveVessel.vessel_name);
+        await loadActiveVesselLocation(newActiveVessel.id);
+      } else {
+        console.log('[Home] No active vessel found, clearing location');
+        setActiveVesselLocation(null);
+      }
     } catch (error: any) {
-      console.error('Failed to load data:', error);
+      console.error('[Home] Failed to load data:', error);
       Alert.alert('Error', 'Failed to load data: ' + error.message);
     } finally {
       setLoading(false);
@@ -131,11 +128,9 @@ export default function SeaTimeScreen() {
   };
 
   const onRefresh = async () => {
+    console.log('[Home] User triggered refresh');
     setRefreshing(true);
     await loadData();
-    if (activeVessel) {
-      await loadActiveVesselLocation();
-    }
     setRefreshing(false);
   };
 
@@ -164,7 +159,7 @@ export default function SeaTimeScreen() {
       // Automatically activate if this is the first vessel OR if there's no active vessel
       const shouldActivate = isFirstVessel || hasNoActiveVessel;
       
-      console.log('Vessel activation logic:', {
+      console.log('[Home] Vessel activation logic:', {
         isFirstVessel,
         hasNoActiveVessel,
         shouldActivate,
@@ -200,7 +195,7 @@ export default function SeaTimeScreen() {
         Alert.alert('Success', 'Vessel added successfully');
       }
     } catch (error: any) {
-      console.error('Failed to add vessel:', error);
+      console.error('[Home] Failed to add vessel:', error);
       Alert.alert('Error', 'Failed to add vessel: ' + error.message);
     }
   };
@@ -224,7 +219,7 @@ export default function SeaTimeScreen() {
               await loadData();
               Alert.alert('Success', `${vesselName} is now being tracked`);
             } catch (error: any) {
-              console.error('Failed to activate vessel:', error);
+              console.error('[Home] Failed to activate vessel:', error);
               Alert.alert('Error', 'Failed to activate vessel: ' + error.message);
             }
           },
@@ -249,7 +244,7 @@ export default function SeaTimeScreen() {
               await loadData();
               Alert.alert('Success', 'Vessel deleted');
             } catch (error: any) {
-              console.error('Failed to delete vessel:', error);
+              console.error('[Home] Failed to delete vessel:', error);
               Alert.alert('Error', 'Failed to delete vessel: ' + error.message);
             }
           },
@@ -259,7 +254,7 @@ export default function SeaTimeScreen() {
   };
 
   const handleVesselPress = (vesselId: string) => {
-    console.log('Navigating to vessel detail:', vesselId);
+    console.log('[Home] Navigating to vessel detail:', vesselId);
     router.push(`/vessel/${vesselId}` as any);
   };
 
@@ -296,7 +291,7 @@ export default function SeaTimeScreen() {
       const date = new Date(timestamp);
       return date.toLocaleString();
     } catch (e) {
-      console.error('Failed to format timestamp:', e);
+      console.error('[Home] Failed to format timestamp:', e);
       return '';
     }
   };
