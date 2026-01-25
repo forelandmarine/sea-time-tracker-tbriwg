@@ -390,4 +390,321 @@ export function register(app: App, fastify: FastifyInstance) {
       });
     }
   });
+
+  // GET /api/admin/vessel-status/:mmsi - Diagnostic endpoint for vessel sea time detection status
+  fastify.get<{ Params: { mmsi: string } }>('/api/admin/vessel-status/:mmsi', {
+    schema: {
+      description: 'Get detailed diagnostic information about a vessel\'s sea time detection status',
+      tags: ['admin'],
+      params: {
+        type: 'object',
+        required: ['mmsi'],
+        properties: { mmsi: { type: 'string' } },
+      },
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            vessel: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                mmsi: { type: 'string' },
+                vessel_name: { type: 'string' },
+                is_active: { type: 'boolean' },
+                user_id: { type: ['string', 'null'] },
+              },
+            },
+            scheduled_task: {
+              type: ['object', 'null'],
+              properties: {
+                id: { type: 'string' },
+                is_active: { type: 'boolean' },
+                last_run: { type: ['string', 'null'], format: 'date-time' },
+                next_run: { type: 'string', format: 'date-time' },
+                interval_hours: { type: 'string' },
+              },
+            },
+            ais_checks_last_24h: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  check_time: { type: 'string', format: 'date-time' },
+                  is_moving: { type: 'boolean' },
+                  speed_knots: { type: ['number', 'null'] },
+                  latitude: { type: ['number', 'null'] },
+                  longitude: { type: ['number', 'null'] },
+                  time_since_previous_hours: { type: ['number', 'null'] },
+                  position_change_degrees: { type: ['number', 'null'] },
+                },
+              },
+            },
+            movement_analysis: {
+              type: 'object',
+              properties: {
+                total_checks: { type: 'number' },
+                movement_windows: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      start_time: { type: 'string', format: 'date-time' },
+                      end_time: { type: 'string', format: 'date-time' },
+                      duration_hours: { type: 'number' },
+                      position_change: { type: 'number' },
+                      movement_detected: { type: 'boolean' },
+                    },
+                  },
+                },
+                total_underway_hours: { type: 'number' },
+                meets_mca_threshold: { type: 'boolean' },
+              },
+            },
+            sea_time_entries: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  start_time: { type: 'string', format: 'date-time' },
+                  end_time: { type: ['string', 'null'], format: 'date-time' },
+                  duration_hours: { type: ['number', 'null'] },
+                  status: { type: 'string' },
+                  mca_compliant: { type: ['boolean', 'null'] },
+                  detection_window_hours: { type: ['number', 'null'] },
+                },
+              },
+            },
+            entry_creation_status: {
+              type: 'object',
+              properties: {
+                should_create_entry: { type: 'boolean' },
+                reason: { type: 'string' },
+                calendar_day_check: {
+                  type: 'object',
+                  properties: {
+                    today: { type: 'string' },
+                    has_existing_entry: { type: 'boolean' },
+                  },
+                },
+              },
+            },
+          },
+        },
+        404: { type: 'object', properties: { error: { type: 'string' } } },
+        500: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const { mmsi } = request.params;
+
+    app.logger.info({ mmsi }, 'Checking vessel status for diagnostic');
+
+    try {
+      // 1. Find vessel by MMSI
+      const vessels = await app.db
+        .select()
+        .from(schema.vessels)
+        .where(eq(schema.vessels.mmsi, mmsi));
+
+      if (vessels.length === 0) {
+        app.logger.warn({ mmsi }, 'Vessel not found');
+        return reply.code(404).send({ error: `Vessel with MMSI ${mmsi} not found` });
+      }
+
+      const vessel = vessels[0];
+      app.logger.debug({ vesselId: vessel.id, mmsi }, 'Vessel found');
+
+      // 2. Find scheduled task for this vessel
+      const scheduledTasks = await app.db
+        .select()
+        .from(schema.scheduled_tasks)
+        .where(eq(schema.scheduled_tasks.vessel_id, vessel.id));
+
+      const scheduledTask = scheduledTasks.length > 0 ? scheduledTasks[0] : null;
+
+      // 3. Get all AIS checks in the last 24 hours
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const aisChecks = await app.db
+        .select()
+        .from(schema.ais_checks)
+        .where(eq(schema.ais_checks.vessel_id, vessel.id))
+        .then(checks => checks.filter(c => new Date(c.check_time) >= twentyFourHoursAgo))
+        .then(checks => checks.sort((a, b) => new Date(a.check_time).getTime() - new Date(b.check_time).getTime()));
+
+      // 4. Analyze AIS checks for movement patterns
+      const aisChecksWithAnalysis = aisChecks.map((check, index) => {
+        let timeSincePrevious: number | null = null;
+        let positionChange: number | null = null;
+
+        if (index > 0) {
+          const prevCheck = aisChecks[index - 1];
+          const timeDiff = new Date(check.check_time).getTime() - new Date(prevCheck.check_time).getTime();
+          timeSincePrevious = Math.round((timeDiff / (1000 * 60 * 60)) * 100) / 100;
+
+          // Calculate position change if both checks have coordinates
+          if (
+            prevCheck.latitude &&
+            prevCheck.longitude &&
+            check.latitude &&
+            check.longitude
+          ) {
+            const lat1 = parseFloat(prevCheck.latitude.toString());
+            const lon1 = parseFloat(prevCheck.longitude.toString());
+            const lat2 = parseFloat(check.latitude.toString());
+            const lon2 = parseFloat(check.longitude.toString());
+
+            // Simple degree distance (not geodesic)
+            positionChange = Math.sqrt(Math.pow(lat2 - lat1, 2) + Math.pow(lon2 - lon1, 2));
+            positionChange = Math.round(positionChange * 10000) / 10000;
+          }
+        }
+
+        return {
+          check_time: check.check_time.toISOString(),
+          is_moving: check.is_moving,
+          speed_knots: check.speed_knots ? parseFloat(check.speed_knots.toString()) : null,
+          latitude: check.latitude ? parseFloat(check.latitude.toString()) : null,
+          longitude: check.longitude ? parseFloat(check.longitude.toString()) : null,
+          time_since_previous_hours: timeSincePrevious,
+          position_change_degrees: positionChange,
+        };
+      });
+
+      // 5. Detect movement windows (consecutive checks with movement > 0.1 degrees)
+      const movementWindows: Array<{
+        start_time: string;
+        end_time: string;
+        duration_hours: number;
+        position_change: number;
+        movement_detected: boolean;
+      }> = [];
+
+      for (let i = 1; i < aisChecksWithAnalysis.length; i++) {
+        const currentCheck = aisChecksWithAnalysis[i];
+        if (currentCheck.position_change_degrees && currentCheck.position_change_degrees > 0.1) {
+          const prevCheck = aisChecksWithAnalysis[i - 1];
+          const startTime = new Date(prevCheck.check_time);
+          const endTime = new Date(currentCheck.check_time);
+          const durationMs = endTime.getTime() - startTime.getTime();
+          const durationHours = Math.round((durationMs / (1000 * 60 * 60)) * 100) / 100;
+
+          movementWindows.push({
+            start_time: startTime.toISOString(),
+            end_time: endTime.toISOString(),
+            duration_hours: durationHours,
+            position_change: currentCheck.position_change_degrees,
+            movement_detected: true,
+          });
+        }
+      }
+
+      // 6. Calculate total underway hours from movement windows
+      const totalUnderwayHours = movementWindows.length > 0
+        ? movementWindows.reduce((sum, window) => sum + window.duration_hours, 0)
+        : 0;
+
+      const meetsMcaThreshold = totalUnderwayHours >= 4;
+
+      // 7. Get sea time entries for this vessel
+      const seaTimeEntries = await app.db
+        .select()
+        .from(schema.sea_time_entries)
+        .where(eq(schema.sea_time_entries.vessel_id, vessel.id))
+        .then(entries => entries.sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()));
+
+      const seaTimeEntriesFormatted = seaTimeEntries.map(entry => {
+        let durationHours = null;
+        if (entry.start_time && entry.end_time) {
+          const startTime = new Date(entry.start_time);
+          const endTime = new Date(entry.end_time);
+          const diffMs = endTime.getTime() - startTime.getTime();
+          durationHours = Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100;
+        }
+
+        return {
+          id: entry.id,
+          start_time: entry.start_time.toISOString(),
+          end_time: entry.end_time ? entry.end_time.toISOString() : null,
+          duration_hours: durationHours,
+          status: entry.status,
+          mca_compliant: entry.mca_compliant,
+          detection_window_hours: entry.detection_window_hours ? parseFloat(entry.detection_window_hours.toString()) : null,
+        };
+      });
+
+      // 8. Check if entry already exists for today
+      const today = new Date().toISOString().split('T')[0];
+      const todayEntries = seaTimeEntries.filter(entry => {
+        const entryDay = new Date(entry.start_time).toISOString().split('T')[0];
+        return entryDay === today;
+      });
+
+      const hasExistingEntryToday = todayEntries.length > 0;
+
+      // 9. Determine entry creation status
+      let shouldCreateEntry = false;
+      let reason = '';
+
+      if (!meetsMcaThreshold) {
+        reason = `Insufficient underway hours: ${Math.round(totalUnderwayHours * 100) / 100}h detected (need 4h+ for MCA compliance)`;
+      } else if (hasExistingEntryToday) {
+        reason = `Entry already exists for today (${todayEntries.length} existing)`;
+      } else {
+        shouldCreateEntry = true;
+        reason = 'Meets all criteria for automatic sea time entry creation';
+      }
+
+      app.logger.info(
+        {
+          vesselId: vessel.id,
+          mmsi,
+          totalUnderwayHours: Math.round(totalUnderwayHours * 100) / 100,
+          meetsMcaThreshold,
+          hasExistingEntryToday,
+          shouldCreateEntry,
+        },
+        'Vessel diagnostic analysis complete'
+      );
+
+      return reply.code(200).send({
+        vessel: {
+          id: vessel.id,
+          mmsi: vessel.mmsi,
+          vessel_name: vessel.vessel_name,
+          is_active: vessel.is_active,
+          user_id: vessel.user_id,
+        },
+        scheduled_task: scheduledTask
+          ? {
+              id: scheduledTask.id,
+              is_active: scheduledTask.is_active,
+              last_run: scheduledTask.last_run ? scheduledTask.last_run.toISOString() : null,
+              next_run: scheduledTask.next_run.toISOString(),
+              interval_hours: scheduledTask.interval_hours,
+            }
+          : null,
+        ais_checks_last_24h: aisChecksWithAnalysis,
+        movement_analysis: {
+          total_checks: aisChecksWithAnalysis.length,
+          movement_windows: movementWindows,
+          total_underway_hours: Math.round(totalUnderwayHours * 100) / 100,
+          meets_mca_threshold: meetsMcaThreshold,
+        },
+        sea_time_entries: seaTimeEntriesFormatted,
+        entry_creation_status: {
+          should_create_entry: shouldCreateEntry,
+          reason,
+          calendar_day_check: {
+            today,
+            has_existing_entry: hasExistingEntryToday,
+          },
+        },
+      });
+    } catch (error) {
+      app.logger.error({ err: error, mmsi }, 'Error checking vessel status');
+      return reply.code(500).send({ error: 'Failed to retrieve vessel status' });
+    }
+  });
 }
