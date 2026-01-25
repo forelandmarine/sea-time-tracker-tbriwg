@@ -238,6 +238,23 @@ const createStyles = (isDark: boolean) =>
       fontWeight: '600',
       marginLeft: 10,
     },
+    diagnosticButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 12,
+      padding: 15,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: colors.primary,
+    },
+    diagnosticButtonText: {
+      color: colors.primary,
+      fontSize: 16,
+      fontWeight: '600',
+      marginLeft: 10,
+    },
     loadingText: {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
@@ -459,6 +476,11 @@ export default function ReportsScreen() {
     }
   };
 
+  const handleVesselDiagnostic = () => {
+    console.log('User tapped Vessel Diagnostic button');
+    router.push('/vessel-diagnostic');
+  };
+
   const userDepartment = profile?.department?.toLowerCase();
   const filteredDefinitions = SEA_DAY_DEFINITIONS.filter(
     (def) => def.department === 'both' || def.department === userDepartment
@@ -612,6 +634,19 @@ export default function ReportsScreen() {
                     <Text style={styles.reportButtonText}>Download CSV Report</Text>
                   </>
                 )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.diagnosticButton}
+                onPress={handleVesselDiagnostic}
+              >
+                <IconSymbol
+                  ios_icon_name="stethoscope"
+                  android_material_icon_name="settings"
+                  size={24}
+                  color={colors.primary}
+                />
+                <Text style={styles.diagnosticButtonText}>Vessel Diagnostic</Text>
               </TouchableOpacity>
             </View>
           </View>
