@@ -891,3 +891,24 @@ export const checkNotificationDue = async () => {
   console.log('[seaTimeApi] Notification due check completed:', data);
   return data;
 };
+
+// Verify vessel tasks - ensures all active vessels have scheduled tasks
+export const verifyVesselTasks = async () => {
+  console.log('[seaTimeApi] Verifying vessel tasks');
+  const headers = await getApiHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/admin/verify-vessel-tasks`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({}),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[seaTimeApi] Failed to verify vessel tasks:', response.status, errorText);
+    throw new Error(`Failed to verify vessel tasks: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log('[seaTimeApi] Vessel tasks verification completed:', data);
+  return data;
+};
