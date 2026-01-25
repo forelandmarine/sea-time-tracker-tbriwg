@@ -198,6 +198,8 @@ export default function AdminVerifyScreen() {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [verifyTasksLoading, setVerifyTasksLoading] = useState(false);
+  const [verifyTasksResult, setVerifyTasksResult] = useState<any>(null);
 
   console.log('AdminVerifyScreen rendered');
 
@@ -236,6 +238,47 @@ export default function AdminVerifyScreen() {
       Alert.alert('Error', err.message || 'Failed to verify sea time data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyVesselTasks = async () => {
+    console.log('User tapped Verify Vessel Tasks button');
+    
+    setVerifyTasksLoading(true);
+    setVerifyTasksResult(null);
+
+    try {
+      console.log('Calling verify vessel tasks endpoint:', `${API_BASE_URL}/api/admin/verify-vessel-tasks`);
+      
+      const response = await fetch(
+        `${API_BASE_URL}/api/admin/verify-vessel-tasks`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
+        }
+      );
+
+      console.log('Verify vessel tasks response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to verify vessel tasks');
+      }
+
+      const data = await response.json();
+      console.log('Verify vessel tasks data received:', data);
+      setVerifyTasksResult(data);
+      
+      const message = `Verification complete!\n\nActive vessels: ${data.activeVessels}\nTasks created: ${data.tasksCreated}\nAlready had tasks: ${data.alreadyHadTasks}`;
+      Alert.alert('Success', message);
+    } catch (err: any) {
+      console.error('Verify vessel tasks error:', err);
+      Alert.alert('Error', err.message || 'Failed to verify vessel tasks');
+    } finally {
+      setVerifyTasksLoading(false);
     }
   };
 
@@ -285,6 +328,46 @@ export default function AdminVerifyScreen() {
       />
 
       <ScrollView style={styles.content}>
+        <Text style={styles.title}>Admin Tools</Text>
+
+        {/* Verify Vessel Tasks Section */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Verify Vessel Tasks</Text>
+          <Text style={[styles.rowValue, { marginBottom: 15 }]}>
+            Check all active vessels have scheduled tracking tasks and create missing tasks.
+          </Text>
+          
+          <TouchableOpacity
+            style={styles.button}
+            onPress={handleVerifyVesselTasks}
+            disabled={verifyTasksLoading}
+          >
+            {verifyTasksLoading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.buttonText}>Verify Vessel Tasks</Text>
+            )}
+          </TouchableOpacity>
+
+          {verifyTasksResult && (
+            <View style={{ marginTop: 15 }}>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Active Vessels:</Text>
+                <Text style={styles.rowValue}>{verifyTasksResult.activeVessels}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Tasks Created:</Text>
+                <Text style={styles.rowValue}>{verifyTasksResult.tasksCreated}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Already Had Tasks:</Text>
+                <Text style={styles.rowValue}>{verifyTasksResult.alreadyHadTasks}</Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Verify Sea Time Data Section */}
         <Text style={styles.title}>Verify Sea Time Data</Text>
 
         <View style={styles.inputGroup}>
@@ -320,7 +403,7 @@ export default function AdminVerifyScreen() {
           {loading ? (
             <ActivityIndicator color="#ffffff" />
           ) : (
-            <Text style={styles.buttonText}>Verify</Text>
+            <Text style={styles.buttonText}>Verify Sea Time</Text>
           )}
         </TouchableOpacity>
 
