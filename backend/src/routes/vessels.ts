@@ -5,6 +5,47 @@ import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
 import { extractUserIdFromRequest, verifyVesselOwnership } from "../middleware/auth.js";
 
+// Helper function to ensure a scheduled task exists for a vessel
+async function ensureScheduledTask(app: App, vesselId: string, userId: string): Promise<void> {
+  try {
+    // Check if a scheduled task already exists for this vessel
+    const existingTask = await app.db
+      .select()
+      .from(schema.scheduled_tasks)
+      .where(eq(schema.scheduled_tasks.vessel_id, vesselId));
+
+    if (existingTask.length > 0) {
+      app.logger.debug({ vesselId }, 'Scheduled task already exists for vessel');
+      return;
+    }
+
+    // Create a new scheduled task for the vessel
+    const now = new Date();
+    const [newTask] = await app.db
+      .insert(schema.scheduled_tasks)
+      .values({
+        user_id: userId,
+        task_type: 'ais_check',
+        vessel_id: vesselId,
+        interval_hours: '2',
+        is_active: true,
+        next_run: now,
+        last_run: null,
+      })
+      .returning();
+
+    app.logger.info(
+      { vesselId, taskId: newTask.id, interval: '2 hours' },
+      'Created scheduled task for vessel'
+    );
+  } catch (error) {
+    app.logger.error(
+      { err: error, vesselId },
+      'Failed to create scheduled task for vessel'
+    );
+  }
+}
+
 // Helper function to transform vessel object for API response
 function transformVesselForResponse(vessel: any) {
   return {
@@ -189,6 +230,11 @@ export function register(app: App, fastify: FastifyInstance) {
       'Vessel created successfully'
     );
 
+    // Create scheduled task if vessel is active
+    if (is_active) {
+      await ensureScheduledTask(app, vessel.id, userId);
+    }
+
     return reply.code(201).send(transformVesselForResponse(vessel));
   });
 
@@ -270,6 +316,9 @@ export function register(app: App, fastify: FastifyInstance) {
       { userId, vesselId: activated.id, vesselName: activated.vessel_name },
       'Vessel activated successfully'
     );
+
+    // Create scheduled task for activated vessel
+    await ensureScheduledTask(app, activated.id, userId);
 
     return reply.code(200).send(transformVesselForResponse(activated));
   });
