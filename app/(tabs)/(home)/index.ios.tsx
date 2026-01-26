@@ -75,10 +75,12 @@ export default function SeaTimeScreen() {
     loadData();
   }, []);
 
-  const loadActiveVesselLocation = useCallback(async (vesselId: string) => {
+  const loadActiveVesselLocation = useCallback(async (vesselId: string, forceRefresh: boolean = false) => {
     try {
       setLocationLoading(true);
-      console.log('[Home iOS] Loading location for vessel:', vesselId);
+      console.log('[Home iOS] Loading location for vessel:', vesselId, 'forceRefresh:', forceRefresh);
+      
+      // First, get the current cached location
       const locationData = await seaTimeApi.getVesselAISLocation(vesselId, false);
       setActiveVesselLocation({
         latitude: locationData.latitude,
@@ -86,6 +88,27 @@ export default function SeaTimeScreen() {
         timestamp: locationData.timestamp,
       });
       console.log('[Home iOS] Location loaded:', locationData.latitude, locationData.longitude, 'timestamp:', locationData.timestamp);
+      
+      // If forceRefresh is true OR data is stale (>2 hours), trigger a fresh AIS check
+      if (forceRefresh || isLocationStale(locationData.timestamp)) {
+        console.log('[Home iOS] Data is stale or refresh requested, triggering fresh AIS check');
+        try {
+          // This will trigger a fresh API call to MyShipTracking
+          await seaTimeApi.checkVesselAIS(vesselId, true);
+          
+          // Reload the location after the fresh check
+          const freshLocationData = await seaTimeApi.getVesselAISLocation(vesselId, false);
+          setActiveVesselLocation({
+            latitude: freshLocationData.latitude,
+            longitude: freshLocationData.longitude,
+            timestamp: freshLocationData.timestamp,
+          });
+          console.log('[Home iOS] Fresh location loaded:', freshLocationData.latitude, freshLocationData.longitude, 'timestamp:', freshLocationData.timestamp);
+        } catch (aisError: any) {
+          console.error('[Home iOS] Failed to get fresh AIS data:', aisError);
+          // Keep the cached data, just log the error
+        }
+      }
     } catch (error: any) {
       console.error('[Home iOS] Failed to load vessel location:', error);
       // Don't show alert for location errors, just log them
@@ -120,9 +143,23 @@ export default function SeaTimeScreen() {
   }, [loadActiveVesselLocation]);
 
   const onRefresh = async () => {
-    console.log('[Home iOS] User triggered refresh');
+    console.log('[Home iOS] User triggered refresh - will force fresh AIS check if data is stale');
     setRefreshing(true);
-    await loadData();
+    
+    // Reload vessels first
+    const vesselsData = await seaTimeApi.getVessels();
+    setVessels(vesselsData);
+    
+    // Load location for the active vessel with force refresh
+    const newActiveVessel = vesselsData.find(v => v.is_active);
+    if (newActiveVessel) {
+      console.log('[Home iOS] Found active vessel, loading location with force refresh:', newActiveVessel.vessel_name);
+      await loadActiveVesselLocation(newActiveVessel.id, true);
+    } else {
+      console.log('[Home iOS] No active vessel found, clearing location');
+      setActiveVesselLocation(null);
+    }
+    
     setRefreshing(false);
   };
 
@@ -283,7 +320,8 @@ export default function SeaTimeScreen() {
       const date = new Date(timestamp);
       const now = new Date();
       const hoursSinceUpdate = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-      return hoursSinceUpdate > 24;
+      // Consider data stale if it's more than 2 hours old (matching the AIS check interval)
+      return hoursSinceUpdate > 2;
     } catch (e) {
       return false;
     }
@@ -445,7 +483,7 @@ export default function SeaTimeScreen() {
                                   color={colors.warning}
                                 />
                                 <Text style={styles.staleWarningText}>
-                                  Location data is more than 24 hours old
+                                  Position data is more than 2 hours old. Pull down to refresh.
                                 </Text>
                               </View>
                             )}
