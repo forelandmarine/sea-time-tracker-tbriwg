@@ -807,4 +807,170 @@ export function register(app: App, fastify: FastifyInstance) {
       return reply.code(500).send({ error: 'Failed to retrieve scheduled tasks status' });
     }
   });
+
+  // GET /api/admin/scheduler-status - Diagnostic endpoint for scheduler status and AIS checks
+  fastify.get('/api/admin/scheduler-status', {
+    schema: {
+      description: 'Diagnostic endpoint for scheduler status and recent AIS checks',
+      tags: ['admin'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            current_time: { type: 'string', format: 'date-time' },
+            scheduler_info: {
+              type: 'object',
+              properties: {
+                status: { type: 'string' },
+                next_check_interval_minutes: { type: 'number' },
+              },
+            },
+            scheduled_tasks: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  vessel_name: { type: 'string' },
+                  mmsi: { type: 'string' },
+                  task_type: { type: 'string' },
+                  interval_hours: { type: 'string' },
+                  is_active: { type: 'boolean' },
+                  last_run: { type: ['string', 'null'], format: 'date-time' },
+                  next_run: { type: 'string', format: 'date-time' },
+                  vessel_is_active: { type: 'boolean' },
+                },
+              },
+            },
+            recent_ais_checks: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  vessel_name: { type: 'string' },
+                  mmsi: { type: 'string' },
+                  check_time: { type: 'string', format: 'date-time' },
+                  is_moving: { type: 'boolean' },
+                  speed_knots: { type: ['number', 'null'] },
+                  latitude: { type: ['number', 'null'] },
+                  longitude: { type: ['number', 'null'] },
+                  created_at: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
+            summary: {
+              type: 'object',
+              properties: {
+                total_scheduled_tasks: { type: 'number' },
+                active_tasks: { type: 'number' },
+                due_tasks: { type: 'number' },
+                total_ais_checks_all_time: { type: 'number' },
+                recent_ais_checks_count: { type: 'number' },
+              },
+            },
+          },
+        },
+        500: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    app.logger.info({}, 'Retrieving scheduler diagnostic status');
+
+    try {
+      const now = new Date();
+
+      // Get all scheduled tasks with vessel information
+      const allTasks = await app.db
+        .select({
+          task: schema.scheduled_tasks,
+          vessel: schema.vessels,
+        })
+        .from(schema.scheduled_tasks)
+        .leftJoin(schema.vessels, eq(schema.vessels.id, schema.scheduled_tasks.vessel_id));
+
+      // Find due tasks (same query as scheduler uses)
+      const dueTasks = allTasks.filter(({ task, vessel }) =>
+        task.task_type === 'ais_check' &&
+        task.is_active === true &&
+        vessel &&
+        vessel.is_active === true &&
+        task.next_run <= now
+      );
+
+      // Format task information
+      const formattedTasks = allTasks.map(({ task, vessel }) => ({
+        id: task.id,
+        vessel_name: vessel ? vessel.vessel_name : 'Unknown',
+        mmsi: vessel ? vessel.mmsi : 'N/A',
+        task_type: task.task_type,
+        interval_hours: task.interval_hours,
+        is_active: task.is_active,
+        last_run: task.last_run ? task.last_run.toISOString() : null,
+        next_run: task.next_run.toISOString(),
+        vessel_is_active: vessel ? vessel.is_active : false,
+      }));
+
+      // Get last 10 AIS checks across all vessels
+      const recentAisChecks = await app.db
+        .select({
+          check: schema.ais_checks,
+          vessel: schema.vessels,
+        })
+        .from(schema.ais_checks)
+        .leftJoin(schema.vessels, eq(schema.vessels.id, schema.ais_checks.vessel_id))
+        .orderBy(schema.ais_checks.check_time)
+        .then(results => results.reverse().slice(0, 10));
+
+      // Format AIS checks
+      const formattedAisChecks = recentAisChecks.map(({ check, vessel }) => ({
+        id: check.id,
+        vessel_name: vessel ? vessel.vessel_name : 'Unknown',
+        mmsi: vessel ? vessel.mmsi : 'N/A',
+        check_time: check.check_time.toISOString(),
+        is_moving: check.is_moving,
+        speed_knots: check.speed_knots ? parseFloat(check.speed_knots.toString()) : null,
+        latitude: check.latitude ? parseFloat(check.latitude.toString()) : null,
+        longitude: check.longitude ? parseFloat(check.longitude.toString()) : null,
+        created_at: check.created_at.toISOString(),
+      }));
+
+      // Get total AIS checks count
+      const totalAisChecksResult = await app.db
+        .select({ count: schema.ais_checks.id })
+        .from(schema.ais_checks);
+
+      const totalAisChecks = totalAisChecksResult.length > 0 ? parseInt(String(Object.keys(totalAisChecksResult[0])[0])) : 0;
+
+      app.logger.info(
+        {
+          totalTasks: allTasks.length,
+          activeTasks: allTasks.filter(t => t.task.is_active).length,
+          dueTasks: dueTasks.length,
+          recentAisChecksCount: formattedAisChecks.length,
+        },
+        'Scheduler diagnostic data retrieved'
+      );
+
+      return reply.code(200).send({
+        current_time: now.toISOString(),
+        scheduler_info: {
+          status: 'running',
+          next_check_interval_minutes: 1,
+        },
+        scheduled_tasks: formattedTasks,
+        recent_ais_checks: formattedAisChecks,
+        summary: {
+          total_scheduled_tasks: allTasks.length,
+          active_tasks: allTasks.filter(t => t.task.is_active).length,
+          due_tasks: dueTasks.length,
+          total_ais_checks_all_time: totalAisChecks,
+          recent_ais_checks_count: formattedAisChecks.length,
+        },
+      });
+    } catch (error) {
+      app.logger.error({ err: error }, 'Error retrieving scheduler diagnostic status');
+      return reply.code(500).send({ error: 'Failed to retrieve scheduler diagnostic status' });
+    }
+  });
 }
