@@ -35,6 +35,9 @@ const createStyles = (isDark: boolean) =>
       flex: 1,
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
+    scrollView: {
+      flex: 1,
+    },
     scrollContent: {
       padding: 20,
       paddingBottom: 40,
@@ -105,6 +108,7 @@ const createStyles = (isDark: boolean) =>
       borderWidth: 1,
       borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
       backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
+      overflow: 'hidden',
     },
     vesselOption: {
       padding: 16,
@@ -204,6 +208,7 @@ const createStyles = (isDark: boolean) =>
       bottom: 0,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'flex-end',
+      zIndex: 9999,
     },
     datePickerContainer: {
       backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
@@ -409,9 +414,11 @@ export default function AddSeaTimeScreen() {
       
       <View style={styles.container}>
         <ScrollView
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={true}
+          bounces={true}
         >
           <TouchableOpacity style={styles.mcaButton} onPress={handleViewMCARequirements}>
             <IconSymbol
