@@ -56,7 +56,7 @@ async function runSchedulerIteration(app: App): Promise<void> {
 
   try {
     const now = new Date();
-    app.logger.debug(`Scheduler check at ${now.toISOString()}`);
+    app.logger.debug(`Scheduler iteration at ${now.toISOString()}`);
 
     // Process notification schedules
     try {
@@ -82,15 +82,29 @@ async function runSchedulerIteration(app: App): Promise<void> {
       );
 
     if (dueTasks.length === 0) {
-      app.logger.debug('No due tasks found');
+      app.logger.debug('No due AIS check tasks found');
       return;
     }
 
-    app.logger.info(`Found ${dueTasks.length} due scheduled task(s)`);
+    app.logger.info(
+      { taskCount: dueTasks.length, timestamp: now.toISOString() },
+      `Found ${dueTasks.length} due AIS check task(s) - checking vessel positions every 2 hours`
+    );
 
     // Process each due task
     for (const { task, vessel } of dueTasks) {
       try {
+        app.logger.info(
+          {
+            taskId: task.id,
+            vesselId: vessel.id,
+            vesselName: vessel.vessel_name,
+            mmsi: vessel.mmsi,
+            interval: task.interval_hours,
+          },
+          `Executing AIS check task for vessel ${vessel.vessel_name} (MMSI: ${vessel.mmsi}) with ${task.interval_hours}-hour interval`
+        );
+
         await processScheduledTask(app, task, vessel);
       } catch (error) {
         app.logger.error(
@@ -188,19 +202,21 @@ async function processScheduledTask(
       taskId,
       vesselId,
       mmsi,
+      vesselName: vessel_name,
       lastRun: check_time.toISOString(),
       nextRun: nextRunTime.toISOString(),
+      interval: intervalHours,
     },
-    `Updated scheduled task for vessel ${vessel_name}: next check at ${nextRunTime.toISOString()}`
+    `Scheduled task complete for vessel ${vessel_name} (MMSI: ${mmsi}): next 2-hour position check at ${nextRunTime.toISOString()}`
   );
 }
 
 /**
- * Handle sea time entry creation with simplified 4-hour window logic
+ * Handle sea time entry creation with simplified 2-hour window logic
  *
  * SIMPLIFIED ALGORITHM:
  * 1. Get current AIS position (from check_time)
- * 2. Get AIS position from 4 hours ago
+ * 2. Get AIS position from 2 hours ago
  * 3. If position difference > 0.1 degrees (latitude or longitude):
  *    - Create a pending sea time entry with both positions and timestamps
  *    - User will review on the confirmations page
@@ -217,8 +233,8 @@ async function handleSeaTimeEntries(
   check_time: Date,
   taskId: string
 ): Promise<void> {
-  // Get AIS position from 4 hours ago
-  const fourHoursAgo = new Date(check_time.getTime() - 4 * 60 * 60 * 1000);
+  // Using 2-hour position check interval
+  const twoHoursAgo = new Date(check_time.getTime() - 2 * 60 * 60 * 1000);
 
   const allChecks = await app.db
     .select()
@@ -226,15 +242,20 @@ async function handleSeaTimeEntries(
     .where(eq(schema.ais_checks.vessel_id, vesselId))
     .orderBy(schema.ais_checks.check_time);
 
-  // Find the most recent check before 4 hours ago
+  app.logger.debug(
+    { vesselId, mmsi, checkTime: check_time.toISOString(), twoHoursAgoTime: twoHoursAgo.toISOString() },
+    `Using 2-hour position check interval for vessel ${vessel_name}`
+  );
+
+  // Find the most recent check before 2 hours ago
   const oldCheck = allChecks
-    .filter(check => check.check_time <= fourHoursAgo)
+    .filter(check => check.check_time <= twoHoursAgo)
     .sort((a, b) => new Date(b.check_time).getTime() - new Date(a.check_time).getTime())[0];
 
   if (!oldCheck) {
     app.logger.debug(
-      { vesselId, mmsi, fourHoursAgoTime: fourHoursAgo.toISOString() },
-      `No AIS check found from 4 hours ago for vessel ${vessel_name}, skipping entry creation`
+      { vesselId, mmsi, twoHoursAgoTime: twoHoursAgo.toISOString() },
+      `No AIS check found from 2 hours ago for vessel ${vessel_name}, skipping entry creation`
     );
     return;
   }
@@ -275,7 +296,7 @@ async function handleSeaTimeEntries(
       maxDiff: Math.round(maxDiff * 10000) / 10000,
       movementDetected: maxDiff > LOCATION_CHANGE_THRESHOLD,
     },
-    `4-hour window analysis for vessel ${vessel_name}: position change ${Math.round(maxDiff * 10000) / 10000}°`
+    `2-hour window analysis for vessel ${vessel_name}: position change ${Math.round(maxDiff * 10000) / 10000}° (threshold: ${LOCATION_CHANGE_THRESHOLD}°)`
   );
 
   // No movement detected

@@ -292,7 +292,7 @@ export function register(app: App, fastify: FastifyInstance) {
                 user_id: vessel.user_id,
                 task_type: 'vessel_tracking',
                 vessel_id: vessel.id,
-                interval_hours: '4',
+                interval_hours: '2',
                 is_active: true,
                 next_run: now,
                 last_run: null,
@@ -300,8 +300,8 @@ export function register(app: App, fastify: FastifyInstance) {
               .returning();
 
             app.logger.info(
-              { vessel_id: vessel.id, vessel_name: vessel.vessel_name, mmsi: vessel.mmsi, task_id: newTask.id },
-              'Created missing tracking task for vessel'
+              { vessel_id: vessel.id, vessel_name: vessel.vessel_name, mmsi: vessel.mmsi, task_id: newTask.id, interval: '2 hours' },
+              'Created missing tracking task for vessel with 2-hour position check interval'
             );
 
             summary.tasks_created++;
@@ -705,6 +705,106 @@ export function register(app: App, fastify: FastifyInstance) {
     } catch (error) {
       app.logger.error({ err: error, mmsi }, 'Error checking vessel status');
       return reply.code(500).send({ error: 'Failed to retrieve vessel status' });
+    }
+  });
+
+  // GET /api/admin/scheduled-tasks-status - Get status of all scheduled tasks
+  fastify.get('/api/admin/scheduled-tasks-status', {
+    schema: {
+      description: 'Get status of all scheduled AIS check tasks to verify deployment',
+      tags: ['admin'],
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            summary: {
+              type: 'object',
+              properties: {
+                total_tasks: { type: 'number' },
+                active_tasks: { type: 'number' },
+                inactive_tasks: { type: 'number' },
+              },
+            },
+            tasks: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  vessel_name: { type: 'string' },
+                  mmsi: { type: 'string' },
+                  interval_hours: { type: 'string' },
+                  is_active: { type: 'boolean' },
+                  last_run: { type: ['string', 'null'], format: 'date-time' },
+                  next_run: { type: 'string', format: 'date-time' },
+                },
+              },
+            },
+            next_scheduled_run: { type: ['string', 'null'], format: 'date-time' },
+            current_time: { type: 'string', format: 'date-time' },
+          },
+        },
+        500: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    app.logger.info({}, 'Retrieving scheduled tasks status');
+
+    try {
+      // Get all scheduled tasks with vessel information
+      const tasks = await app.db
+        .select({
+          task: schema.scheduled_tasks,
+          vessel: schema.vessels,
+        })
+        .from(schema.scheduled_tasks)
+        .leftJoin(schema.vessels, eq(schema.vessels.id, schema.scheduled_tasks.vessel_id))
+        .orderBy(schema.scheduled_tasks.next_run);
+
+      // Format task information
+      const formattedTasks = tasks.map(({ task, vessel }) => ({
+        id: task.id,
+        vessel_name: vessel ? vessel.vessel_name : 'Unknown',
+        mmsi: vessel ? vessel.mmsi : 'N/A',
+        interval_hours: task.interval_hours,
+        is_active: task.is_active,
+        last_run: task.last_run ? task.last_run.toISOString() : null,
+        next_run: task.next_run.toISOString(),
+      }));
+
+      // Calculate summary statistics
+      const totalTasks = formattedTasks.length;
+      const activeTasks = formattedTasks.filter(t => t.is_active).length;
+      const inactiveTasks = totalTasks - activeTasks;
+
+      // Find next scheduled run time
+      const nextRun = formattedTasks.length > 0 ? formattedTasks[0].next_run : null;
+
+      const now = new Date();
+
+      app.logger.info(
+        {
+          totalTasks,
+          activeTasks,
+          inactiveTasks,
+          nextRun,
+        },
+        'Scheduled tasks status retrieved'
+      );
+
+      return reply.code(200).send({
+        summary: {
+          total_tasks: totalTasks,
+          active_tasks: activeTasks,
+          inactive_tasks: inactiveTasks,
+        },
+        tasks: formattedTasks,
+        next_scheduled_run: nextRun,
+        current_time: now.toISOString(),
+      });
+    } catch (error) {
+      app.logger.error({ err: error }, 'Error retrieving scheduled tasks status');
+      return reply.code(500).send({ error: 'Failed to retrieve scheduled tasks status' });
     }
   });
 }
