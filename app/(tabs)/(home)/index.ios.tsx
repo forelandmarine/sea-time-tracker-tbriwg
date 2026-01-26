@@ -328,6 +328,19 @@ export default function SeaTimeScreen() {
             </TouchableOpacity>
           </View>
 
+          {/* Info Banner */}
+          <View style={styles.infoBanner}>
+            <IconSymbol
+              ios_icon_name="info.circle.fill"
+              android_material_icon_name="info"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.infoBannerText}>
+              Only one vessel can be actively tracked at a time. Historic vessels are archived and not tracked.
+            </Text>
+          </View>
+
           {!activeVessel ? (
             <View style={styles.emptyState}>
               <IconSymbol
@@ -771,6 +784,23 @@ function createStyles(isDark: boolean, topInset: number) {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginTop: 4,
+    },
+    infoBanner: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      backgroundColor: colors.primary + '15',
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: 12,
+      gap: 10,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.primary,
+    },
+    infoBannerText: {
+      flex: 1,
+      fontSize: 13,
+      color: isDark ? colors.text : colors.textLight,
+      lineHeight: 18,
     },
     addButton: {
       padding: 4,
