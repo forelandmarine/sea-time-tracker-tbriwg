@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import * as schema from "../db/schema.js";
 import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
@@ -199,14 +199,32 @@ export function register(app: App, fastify: FastifyInstance) {
       return reply.code(409).send({ error: 'MMSI already exists' });
     }
 
-    // If creating as active, deactivate all others for this user
+    // If creating as active, deactivate all others and delete their scheduled tasks
     if (is_active) {
+      // Get all other vessels for this user
+      const otherVessels = await app.db
+        .select()
+        .from(schema.vessels)
+        .where(eq(schema.vessels.user_id, userId));
+
+      // Deactivate all other vessels
       await app.db
         .update(schema.vessels)
         .set({ is_active: false })
         .where(eq(schema.vessels.user_id, userId));
 
-      app.logger.info({ userId }, 'Deactivated all other vessels for new active vessel');
+      // Delete scheduled tasks for all other vessels
+      const otherVesselIds = otherVessels.map(v => v.id);
+      if (otherVesselIds.length > 0) {
+        await app.db
+          .delete(schema.scheduled_tasks)
+          .where(inArray(schema.scheduled_tasks.vessel_id, otherVesselIds));
+
+        app.logger.info(
+          { userId, deactivatedVesselCount: otherVesselIds.length },
+          `Deactivated ${otherVesselIds.length} other vessels and deleted their scheduled tasks`
+        );
+      }
     }
 
     const [vessel] = await app.db
@@ -299,11 +317,33 @@ export function register(app: App, fastify: FastifyInstance) {
       return reply.code(403).send({ error: 'Not authorized to activate this vessel' });
     }
 
-    // Deactivate all other vessels for this user
+    // Get all other vessels for this user to delete their tasks
+    const otherVessels = await app.db
+      .select()
+      .from(schema.vessels)
+      .where(eq(schema.vessels.user_id, userId));
+
+    const otherVesselIds = otherVessels
+      .filter(v => v.id !== id)
+      .map(v => v.id);
+
+    // Deactivate all other vessels
     await app.db
       .update(schema.vessels)
       .set({ is_active: false })
       .where(eq(schema.vessels.user_id, userId));
+
+    // Delete scheduled tasks for all other vessels
+    if (otherVesselIds.length > 0) {
+      await app.db
+        .delete(schema.scheduled_tasks)
+        .where(inArray(schema.scheduled_tasks.vessel_id, otherVesselIds));
+
+      app.logger.info(
+        { userId, deactivatedCount: otherVesselIds.length },
+        `Deactivated ${otherVesselIds.length} other vessels and deleted their scheduled tasks`
+      );
+    }
 
     // Activate the specified vessel
     const [activated] = await app.db
@@ -637,4 +677,54 @@ export function register(app: App, fastify: FastifyInstance) {
       return reply.code(200).send(transformVesselForResponse(updated));
     }
   );
+
+  // GET /api/vessels/archived - Return all inactive vessels for authenticated user
+  fastify.get('/api/vessels/archived', {
+    schema: {
+      description: 'Get all archived (inactive) vessels for the authenticated user',
+      tags: ['vessels'],
+      response: {
+        200: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              mmsi: { type: 'string' },
+              vessel_name: { type: 'string' },
+              callsign: { type: ['string', 'null'] },
+              flag: { type: ['string', 'null'] },
+              official_number: { type: ['string', 'null'] },
+              vessel_type: { type: ['string', 'null'] },
+              length_metres: { type: ['string', 'null'] },
+              gross_tonnes: { type: ['string', 'null'] },
+              is_active: { type: 'boolean' },
+              created_at: { type: 'string' },
+              updated_at: { type: 'string' },
+            },
+          },
+        },
+        401: { type: 'object', properties: { error: { type: 'string' } } },
+      },
+    },
+  }, async (request, reply) => {
+    const userId = await extractUserIdFromRequest(request, app);
+    if (!userId) {
+      app.logger.warn({}, 'Archived vessels list requested without authentication');
+      return reply.code(401).send({ error: 'Authentication required' });
+    }
+
+    app.logger.info({ userId }, 'Fetching archived (inactive) vessels for user');
+
+    const vessels = await app.db
+      .select()
+      .from(schema.vessels)
+      .where(eq(schema.vessels.user_id, userId));
+
+    // Filter to only inactive vessels
+    const archivedVessels = vessels.filter(v => !v.is_active);
+
+    app.logger.info({ userId, count: archivedVessels.length }, 'Archived vessels fetched');
+    return archivedVessels.map(transformVesselForResponse);
+  });
 }

@@ -65,7 +65,7 @@ async function runSchedulerIteration(app: App): Promise<void> {
       app.logger.error({ err: error }, 'Error processing notification schedules');
     }
 
-    // Find all due scheduled tasks that are active
+    // Find all due scheduled tasks that are active AND for active vessels only
     const dueTasks = await app.db
       .select({
         task: schema.scheduled_tasks,
@@ -77,18 +77,19 @@ async function runSchedulerIteration(app: App): Promise<void> {
         and(
           eq(schema.scheduled_tasks.task_type, 'ais_check'),
           eq(schema.scheduled_tasks.is_active, true),
+          eq(schema.vessels.is_active, true),
           lte(schema.scheduled_tasks.next_run, now)
         )
       );
 
     if (dueTasks.length === 0) {
-      app.logger.debug('No due AIS check tasks found');
+      app.logger.debug('No due AIS check tasks found for active vessels');
       return;
     }
 
     app.logger.info(
       { taskCount: dueTasks.length, timestamp: now.toISOString() },
-      `Found ${dueTasks.length} due AIS check task(s) - checking vessel positions every 2 hours`
+      `Found ${dueTasks.length} due AIS check task(s) for active vessels - checking vessel positions every 2 hours`
     );
 
     // Process each due task
@@ -129,10 +130,18 @@ async function processScheduledTask(
   vessel: typeof schema.vessels.$inferSelect
 ): Promise<void> {
   const { id: taskId, vessel_id: vesselId, interval_hours, next_run } = task;
-  const { vessel_name, mmsi, id } = vessel;
+  const { vessel_name, mmsi, id, is_active } = vessel;
 
   app.logger.info(
-    `Processing scheduled AIS check: task=${taskId}, vessel=${vessel_name} (MMSI: ${mmsi}), scheduled_for=${next_run.toISOString()}`
+    {
+      taskId,
+      vesselId,
+      vesselName: vessel_name,
+      mmsi,
+      isActive: is_active,
+      scheduledFor: next_run.toISOString(),
+    },
+    `Processing scheduled AIS check for active vessel ${vessel_name} (MMSI: ${mmsi}): checking 2-hour position window`
   );
 
   const apiKey = process.env.MYSHIPTRACKING_API_KEY;
