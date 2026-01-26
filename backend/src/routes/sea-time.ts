@@ -539,14 +539,9 @@ export function register(app: App, fastify: FastifyInstance) {
     const duration_hours = calculateDurationHours(current_entry.start_time, end_time);
     const calculated_sea_days = calculateSeaDays(duration_hours);
 
-    // Check if another entry already exists for this calendar day (excluding this entry)
-    const calendarDay = getCalendarDay(new Date(current_entry.start_time));
-    const anotherEntryExistsForDay = await checkEntryExistsForDay(app, userId, calendarDay, id);
-
-    if (anotherEntryExistsForDay) {
-      app.logger.warn({ userId, entryId: id, calendarDay }, 'Cannot confirm: another entry exists for the same calendar day');
-      return reply.code(400).send({ error: 'You can only have one sea time period per day (00:00-23:59). Another entry exists for this day.' });
-    }
+    // Note: Calendar day restriction has been removed to allow multiple entries per day as vessels move throughout the day
+    // The scheduler now creates multiple entries (every 2 hours) when movement is detected
+    app.logger.debug({ userId, entryId: id }, 'Confirming entry - multiple entries per calendar day are now allowed');
 
     const [updated] = await app.db
       .update(schema.sea_time_entries)
@@ -1527,14 +1522,9 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     }
 
-    // Check if entry already exists for this calendar day
-    const calendarDay = getCalendarDay(startDate);
-    const entryExistsForDay = await checkEntryExistsForDay(app, session.userId, calendarDay);
-
-    if (entryExistsForDay) {
-      app.logger.warn({ userId: session.userId, calendarDay }, 'Duplicate entry attempt for same calendar day');
-      return reply.code(400).send({ error: 'You can only register one sea time period per day (00:00-23:59)' });
-    }
+    // Note: Calendar day restriction has been removed to allow multiple entries per day as vessels move throughout the day
+    // The scheduler creates multiple entries (every 2 hours) when movement is detected
+    app.logger.debug({ userId: session.userId }, 'Creating entry - multiple entries per calendar day are now allowed');
 
     // Create the sea time entry (marked as confirmed for manually created entries)
     try {
