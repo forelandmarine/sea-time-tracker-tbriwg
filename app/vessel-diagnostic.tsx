@@ -68,6 +68,7 @@ export default function VesselDiagnosticScreen() {
   const [data, setData] = useState<DiagnosticData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [forcingCheck, setForcingCheck] = useState(false);
+  const [amalgamating, setAmalgamating] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
@@ -152,6 +153,47 @@ export default function VesselDiagnosticScreen() {
       showModalMessage('Error', err instanceof Error ? err.message : 'Failed to force AIS check', 'error');
     } finally {
       setForcingCheck(false);
+    }
+  };
+
+  const handleAmalgamate = async () => {
+    if (!data?.vessel?.mmsi || !data?.vessel?.user_id) return;
+
+    console.log('[VesselDiagnostic] Amalgamating sea time for MMSI:', data.vessel.mmsi);
+    setAmalgamating(true);
+
+    try {
+      const headers = await getApiHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/admin/amalgamate-sea-time`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          mmsi: data.vessel.mmsi,
+          date: '26 Jan 2026',
+        }),
+      });
+
+      console.log('[VesselDiagnostic] Amalgamate response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('[VesselDiagnostic] Amalgamate result:', result);
+
+      const durationText = result.duration_hours ? `${result.duration_hours.toFixed(1)} hours` : 'N/A';
+      const message = `Sea time entry amalgamated successfully!\n\nStart: ${formatDateTime(result.start_time)}\nEnd: ${formatDateTime(result.end_time)}\nDuration: ${durationText}\n\nThe entry is now ready for review in the Confirmations tab.`;
+      showModalMessage('Amalgamation Complete', message, 'success');
+      
+      // Reload diagnostics after modal is closed
+      setTimeout(() => loadDiagnostics(), 500);
+    } catch (err) {
+      console.error('[VesselDiagnostic] Error amalgamating:', err);
+      showModalMessage('Error', err instanceof Error ? err.message : 'Failed to amalgamate sea time', 'error');
+    } finally {
+      setAmalgamating(false);
     }
   };
 
@@ -352,6 +394,27 @@ export default function VesselDiagnosticScreen() {
           )}
         </TouchableOpacity>
 
+        {/* Amalgamate Button */}
+        <TouchableOpacity
+          style={[styles.amalgamateButton, amalgamating && styles.forceButtonDisabled]}
+          onPress={handleAmalgamate}
+          disabled={amalgamating}
+        >
+          {amalgamating ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <IconSymbol
+                ios_icon_name="arrow.merge"
+                android_material_icon_name="merge"
+                size={20}
+                color="#fff"
+              />
+              <Text style={styles.forceButtonText}>Amalgamate Sea Time (26 Jan 2026)</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
@@ -534,6 +597,17 @@ function createStyles(isDark: boolean) {
     forceButton: {
       backgroundColor: colors.primary,
       margin: 16,
+      padding: 16,
+      borderRadius: 12,
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: 8,
+    },
+    amalgamateButton: {
+      backgroundColor: colors.success,
+      marginHorizontal: 16,
+      marginBottom: 16,
       padding: 16,
       borderRadius: 12,
       flexDirection: 'row',
