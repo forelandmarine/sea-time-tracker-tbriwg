@@ -72,24 +72,19 @@ export default function ConfirmationsScreen() {
   };
 
   const isValidEntry = (entry: SeaTimeEntry): boolean => {
+    // Only require that the entry has an end_time
+    // Remove the MCA compliance check so all pending entries show up
     const hasEndTime = entry.end_time !== null && entry.end_time !== undefined;
-    const durationHours = toNumber(entry.duration_hours);
-    const isMCACompliant = durationHours >= 4.0;
     
-    // Location data is optional - don't filter out entries without coordinates
-    const isValid = hasEndTime && isMCACompliant;
-    
-    if (!isValid) {
-      console.log('[Confirmations] Entry filtered out:', {
+    if (!hasEndTime) {
+      console.log('[Confirmations] Entry filtered out (no end_time):', {
         id: entry.id,
         vesselName: entry.vessel?.vessel_name,
         hasEndTime,
-        durationHours,
-        isMCACompliant,
       });
     }
     
-    return isValid;
+    return hasEndTime;
   };
 
   const loadData = useCallback(async () => {
@@ -99,7 +94,7 @@ export default function ConfirmationsScreen() {
       
       const validEntries = pendingEntries.filter(isValidEntry);
       
-      console.log('[Confirmations] Loaded', pendingEntries.length, 'pending entries,', validEntries.length, 'valid (4+ hours with end time)');
+      console.log('[Confirmations] Loaded', pendingEntries.length, 'pending entries,', validEntries.length, 'valid (with end time)');
       
       setEntries(validEntries);
     } catch (error: any) {
@@ -130,7 +125,7 @@ export default function ConfirmationsScreen() {
             : entry.duration_hours || 0;
           const isMCACompliant = durationHours >= 4.0;
           
-          // Location data is optional - don't filter out entries without coordinates
+          // Only notify for MCA-compliant entries (4+ hours)
           return hasEndTime && isMCACompliant;
         });
         
