@@ -113,6 +113,10 @@ async function runSchedulerIteration(app: App): Promise<void> {
       `Found ${dueTasks.length} due AIS check task(s) for active vessels - checking vessel positions every 2 hours`
     );
 
+    // Process each due task and track results
+    let processedSuccessfully = 0;
+    let processedWithErrors = 0;
+
     // Process each due task
     for (const { task, vessel } of dueTasks) {
       try {
@@ -122,23 +126,71 @@ async function runSchedulerIteration(app: App): Promise<void> {
             vesselId: vessel.id,
             vesselName: vessel.vessel_name,
             mmsi: vessel.mmsi,
+            userId: vessel.user_id,
             interval: task.interval_hours,
           },
           `Executing AIS check task for vessel ${vessel.vessel_name} (MMSI: ${vessel.mmsi}) with ${task.interval_hours}-hour interval`
         );
 
         await processScheduledTask(app, task, vessel);
+        processedSuccessfully++;
       } catch (error) {
+        processedWithErrors++;
         app.logger.error(
           { err: error, taskId: task.id, vesselId: vessel.id, mmsi: vessel.mmsi },
           `Error processing scheduled task for vessel ${vessel.vessel_name} (MMSI: ${vessel.mmsi})`
         );
       }
     }
+
+    // Log summary of scheduler iteration
+    app.logger.info(
+      {
+        totalTasksFound: dueTasks.length,
+        processedSuccessfully,
+        processedWithErrors,
+        completionRate: dueTasks.length > 0 ? `${Math.round((processedSuccessfully / dueTasks.length) * 100)}%` : 'N/A',
+        iterationTime: now.toISOString(),
+      },
+      `Scheduler iteration complete: ${dueTasks.length} tasks found, ${processedSuccessfully} processed successfully, ${processedWithErrors} failed`
+    );
   } catch (error) {
     app.logger.error({ err: error }, 'Error in scheduler iteration');
   } finally {
     isSchedulerRunning = false;
+  }
+}
+
+/**
+ * Update the scheduled task's next_run time
+ */
+async function updateScheduledTaskNextRun(
+  app: App,
+  taskId: string,
+  intervalHours: string
+): Promise<void> {
+  try {
+    const checkTime = new Date();
+    const intervalHoursNum = parseInt(intervalHours);
+    const nextRunTime = new Date(checkTime.getTime() + intervalHoursNum * 60 * 60 * 1000);
+
+    await app.db
+      .update(schema.scheduled_tasks)
+      .set({
+        last_run: checkTime,
+        next_run: nextRunTime,
+      })
+      .where(eq(schema.scheduled_tasks.id, taskId));
+
+    app.logger.debug(
+      { taskId, lastRun: checkTime.toISOString(), nextRun: nextRunTime.toISOString() },
+      `Updated scheduled task next_run time`
+    );
+  } catch (error) {
+    app.logger.error(
+      { err: error, taskId },
+      `Failed to update scheduled task next_run time`
+    );
   }
 }
 
@@ -151,7 +203,7 @@ async function processScheduledTask(
   vessel: typeof schema.vessels.$inferSelect
 ): Promise<void> {
   const { id: taskId, vessel_id: vesselId, interval_hours, next_run } = task;
-  const { vessel_name, mmsi, id, is_active } = vessel;
+  const { vessel_name, mmsi, id, is_active, user_id } = vessel;
 
   app.logger.info(
     {
@@ -159,10 +211,11 @@ async function processScheduledTask(
       vesselId,
       vesselName: vessel_name,
       mmsi,
+      userId: user_id,
       isActive: is_active,
       scheduledFor: next_run.toISOString(),
     },
-    `Processing scheduled AIS check for active vessel ${vessel_name} (MMSI: ${mmsi}): checking 2-hour position window`
+    `Processing scheduled AIS check for active vessel ${vessel_name} (MMSI: ${mmsi}) for user ${user_id}: checking 2-hour position window`
   );
 
   const apiKey = process.env.MYSHIPTRACKING_API_KEY;
@@ -171,14 +224,16 @@ async function processScheduledTask(
     return;
   }
 
-  // Fetch current vessel AIS data
-  const ais_data = await fetchVesselAISData(mmsi, apiKey, app.logger, vesselId, app, true);
+  // Fetch current vessel AIS data with userId for proper logging
+  const ais_data = await fetchVesselAISData(mmsi, apiKey, app.logger, vesselId, app, true, user_id);
 
   if (ais_data.error) {
     app.logger.warn(
-      { error: ais_data.error },
+      { error: ais_data.error, taskId, vesselId, mmsi },
       `Failed to fetch AIS data for scheduled task: ${taskId}, vessel=${vessel_name} (MMSI: ${mmsi})`
     );
+    // Still update the task's next_run time even on fetch error
+    await updateScheduledTaskNextRun(app, taskId, interval_hours);
     return;
   }
 
@@ -190,7 +245,7 @@ async function processScheduledTask(
       taskId,
       vesselId,
       mmsi,
-      userId: vessel.user_id,
+      userId: user_id,
       checkTime: check_time.toISOString(),
       isMoving: ais_data.is_moving,
       speed: ais_data.speed_knots,
@@ -200,12 +255,14 @@ async function processScheduledTask(
     `About to insert AIS check for vessel ${vessel_name} (MMSI: ${mmsi})`
   );
 
-  let ais_check: typeof schema.ais_checks.$inferSelect;
+  let ais_check: typeof schema.ais_checks.$inferSelect | null = null;
+  let insertError: Error | null = null;
+
   try {
     const insertResult = await app.db
       .insert(schema.ais_checks)
       .values({
-        user_id: vessel.user_id,
+        user_id: user_id,
         vessel_id: vesselId,
         check_time,
         is_moving: ais_data.is_moving,
@@ -220,44 +277,46 @@ async function processScheduledTask(
         { taskId, vesselId, mmsi },
         `AIS check insert returned no results for vessel ${vessel_name} (MMSI: ${mmsi})`
       );
-      return;
+      insertError = new Error('Insert returned no results');
+    } else {
+      ais_check = insertResult[0];
+
+      app.logger.info(
+        {
+          taskId,
+          vesselId,
+          mmsi,
+          checkId: ais_check.id,
+          isMoving: ais_data.is_moving,
+          speed: ais_data.speed_knots,
+          latitude: ais_data.latitude,
+          longitude: ais_data.longitude,
+          checkTime: ais_check.check_time.toISOString(),
+        },
+        `AIS check inserted successfully for vessel ${vessel_name} (MMSI: ${mmsi}): checkId=${ais_check.id}, is_moving=${ais_data.is_moving}, speed=${ais_data.speed_knots} knots, lat=${ais_data.latitude}, lng=${ais_data.longitude}, time=${ais_check.check_time.toISOString()}`
+      );
     }
-
-    ais_check = insertResult[0];
-
-    app.logger.info(
-      {
-        taskId,
-        vesselId,
-        mmsi,
-        checkId: ais_check.id,
-        isMoving: ais_data.is_moving,
-        speed: ais_data.speed_knots,
-        latitude: ais_data.latitude,
-        longitude: ais_data.longitude,
-        checkTime: ais_check.check_time.toISOString(),
-      },
-      `AIS check inserted successfully for vessel ${vessel_name} (MMSI: ${mmsi}): is_moving=${ais_data.is_moving}, speed=${ais_data.speed_knots} knots`
-    );
-  } catch (insertError) {
+  } catch (err) {
+    insertError = err instanceof Error ? err : new Error(String(err));
     app.logger.error(
       {
         err: insertError,
         taskId,
         vesselId,
         mmsi,
-        userId: vessel.user_id,
+        userId: user_id,
         checkTime: check_time.toISOString(),
       },
       `Failed to insert AIS check for vessel ${vessel_name} (MMSI: ${mmsi})`
     );
-    return;
   }
 
-  // Handle sea time entry lifecycle based on movement analysis
-  await handleSeaTimeEntries(app, vessel, vesselId, vessel_name, mmsi, ais_data.is_moving, check_time, taskId);
+  // Handle sea time entry lifecycle based on movement analysis (only if AIS check was successful)
+  if (ais_check) {
+    await handleSeaTimeEntries(app, vessel, vesselId, vessel_name, mmsi, ais_data.is_moving, check_time, taskId);
+  }
 
-  // Update the scheduled task with new run times
+  // Always update the scheduled task with new run times
   const intervalHours = parseInt(interval_hours);
   const nextRunTime = new Date(check_time.getTime() + intervalHours * 60 * 60 * 1000);
 
@@ -273,7 +332,7 @@ async function processScheduledTask(
     `Updating scheduled task: last_run=${check_time.toISOString()}, next_run=${nextRunTime.toISOString()}`
   );
 
-  let updatedTask: typeof schema.scheduled_tasks.$inferSelect;
+  let taskUpdateSuccess = false;
   try {
     const updateResult = await app.db
       .update(schema.scheduled_tasks)
@@ -285,14 +344,17 @@ async function processScheduledTask(
       .returning();
 
     if (!updateResult || updateResult.length === 0) {
-      app.logger.error(
+      app.logger.warn(
         { taskId, vesselId, mmsi },
-        `Failed to update scheduled task: no result returned`
+        `Task update returned no results but may have succeeded`
       );
-      return;
+    } else {
+      taskUpdateSuccess = true;
+      app.logger.debug(
+        { taskId, vesselId, mmsi, nextRun: nextRunTime.toISOString() },
+        `Scheduled task updated successfully`
+      );
     }
-
-    updatedTask = updateResult[0];
   } catch (updateError) {
     app.logger.error(
       {
@@ -303,20 +365,23 @@ async function processScheduledTask(
       },
       `Failed to update scheduled task for vessel ${vessel_name} (MMSI: ${mmsi})`
     );
-    return;
   }
 
+  const successStatus = ais_check ? 'with AIS check' : 'without AIS check (insert failed)';
   app.logger.info(
     {
       taskId,
       vesselId,
       mmsi,
       vesselName: vessel_name,
+      userId: user_id,
       lastRun: check_time.toISOString(),
       nextRun: nextRunTime.toISOString(),
       interval: intervalHours,
+      aisCheckInserted: ais_check ? ais_check.id : 'failed',
+      taskUpdateSuccess,
     },
-    `Scheduled task complete for vessel ${vessel_name} (MMSI: ${mmsi}): next 2-hour position check at ${nextRunTime.toISOString()}`
+    `Scheduled task complete for vessel ${vessel_name} (MMSI: ${mmsi}) ${successStatus}: next 2-hour position check at ${nextRunTime.toISOString()}`
   );
 }
 
