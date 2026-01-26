@@ -216,7 +216,32 @@ export default function ConfirmationsScreen() {
     } catch (error: any) {
       console.error('[Confirmations] Failed to confirm entry:', error);
       setProcessingEntryId(null);
-      Alert.alert('Error', 'Failed to confirm entry: ' + error.message);
+      setShowServiceTypeModal(false);
+      setSelectedEntry(null);
+      
+      // Extract the actual error message from the backend
+      let errorMessage = error.message || 'Unknown error occurred';
+      
+      // If the error message contains "400", try to extract the actual backend error
+      if (errorMessage.includes('400')) {
+        // The error message format is typically "Failed to confirm sea time entry: 400 - {actual error}"
+        const parts = errorMessage.split(' - ');
+        if (parts.length > 1) {
+          errorMessage = parts[1];
+        } else {
+          // Try to parse if it's a JSON error response
+          try {
+            const errorObj = JSON.parse(errorMessage);
+            if (errorObj.error) {
+              errorMessage = errorObj.error;
+            }
+          } catch (e) {
+            // Not JSON, use as is
+          }
+        }
+      }
+      
+      Alert.alert('Cannot Confirm Entry', errorMessage);
     }
   };
 
