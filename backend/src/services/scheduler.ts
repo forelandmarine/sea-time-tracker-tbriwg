@@ -386,6 +386,33 @@ async function processScheduledTask(
 }
 
 /**
+ * Calculate great circle distance between two coordinates using Haversine formula
+ * Returns distance in Nautical Miles
+ *
+ * Formula: distance = 2 * R * asin(sqrt(sin²(Δlat/2) + cos(lat1) * cos(lat2) * sin²(Δlon/2)))
+ * R = 3440.065 nautical miles (Earth's radius)
+ */
+function calculateDistanceNauticalMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const EARTH_RADIUS_NM = 3440.065; // Nautical miles
+
+  // Convert degrees to radians
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const lat1Rad = lat1 * (Math.PI / 180);
+  const lat2Rad = lat2 * (Math.PI / 180);
+
+  // Haversine formula
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.asin(Math.sqrt(a));
+  const distance = EARTH_RADIUS_NM * c;
+
+  // Round to 2 decimal places
+  return Math.round(distance * 100) / 100;
+}
+
+/**
  * Helper function to extract calendar day (YYYY-MM-DD) from a date
  */
 function getCalendarDay(date: Date): string {
@@ -497,14 +524,18 @@ async function handleSeaTimeEntries(
   const durationMs = currentCheck.check_time.getTime() - oldCheck.check_time.getTime();
   const durationHours = Math.round((durationMs / (1000 * 60 * 60)) * 100) / 100;
 
+  // Calculate distance in Nautical Miles using Haversine formula
+  const distanceNm = calculateDistanceNauticalMiles(oldLat, oldLng, currentLat, currentLng);
+
   app.logger.info(
     {
       vesselId,
       mmsi,
-      positionChange: Math.round(maxDiff * 10000) / 10000,
+      positionChangeDegrees: Math.round(maxDiff * 10000) / 10000,
+      distanceNauticalMiles: distanceNm,
       durationHours,
     },
-    `Movement detected for vessel ${vessel_name}: ${Math.round(maxDiff * 10000) / 10000}° over ${durationHours} hours`
+    `Movement detected for vessel ${vessel_name}: ${distanceNm} nm (${Math.round(maxDiff * 10000) / 10000}°) over ${durationHours} hours`
   );
 
   // Get calendar day for the old check (start of this observation window)
@@ -540,7 +571,7 @@ async function handleSeaTimeEntries(
       const totalDurationHours = Math.round((totalDurationMs / (1000 * 60 * 60)) * 100) / 100;
 
       // Update the existing entry with the new end position and time
-      const updatedNotes = `Movement detected: vessel moved ${Math.round(maxDiff * 10000) / 10000}° over ${durationHours} hours (now ${totalDurationHours} hours total for the day)`;
+      const updatedNotes = `Movement detected: vessel moved ${distanceNm} nm (${Math.round(maxDiff * 10000) / 10000}°) over ${durationHours} hours (now ${totalDurationHours} hours total for the day)`;
 
       const [updated_entry] = await app.db
         .update(schema.sea_time_entries)
@@ -564,9 +595,10 @@ async function handleSeaTimeEntries(
           newEndTime: currentCheck.check_time.toISOString(),
           previousDurationHours: existingEntryForDay.duration_hours ? parseFloat(String(existingEntryForDay.duration_hours)) : 0,
           newTotalDurationHours: totalDurationHours,
-          positionChange: Math.round(maxDiff * 10000) / 10000,
+          distanceNauticalMiles: distanceNm,
+          positionChangeDegrees: Math.round(maxDiff * 10000) / 10000,
         },
-        `Extended existing sea time entry [${existingEntryForDay.id}] for vessel ${vessel_name}: now ${totalDurationHours} hours total (added ${durationHours} hours from movement of ${Math.round(maxDiff * 10000) / 10000}°)`
+        `Extended existing sea time entry [${existingEntryForDay.id}] for vessel ${vessel_name}: now ${totalDurationHours} hours total (added ${durationHours} hours from ${distanceNm} nm movement of ${Math.round(maxDiff * 10000) / 10000}°)`
       );
     } catch (error) {
       app.logger.error(
@@ -576,7 +608,7 @@ async function handleSeaTimeEntries(
     }
   } else {
     // CREATE a new pending sea time entry
-    const notes = `Movement detected: vessel moved ${Math.round(maxDiff * 10000) / 10000}° over ${durationHours} hours`;
+    const notes = `Movement detected: vessel moved ${distanceNm} nm (${Math.round(maxDiff * 10000) / 10000}°) over ${durationHours} hours`;
 
     try {
       const [new_entry] = await app.db
@@ -606,10 +638,11 @@ async function handleSeaTimeEntries(
           startTime: oldCheck.check_time.toISOString(),
           endTime: currentCheck.check_time.toISOString(),
           durationHours,
-          positionChange: Math.round(maxDiff * 10000) / 10000,
+          distanceNauticalMiles: distanceNm,
+          positionChangeDegrees: Math.round(maxDiff * 10000) / 10000,
           calendarDay,
         },
-        `Created new pending sea time entry for vessel ${vessel_name}: ${Math.round(maxDiff * 10000) / 10000}° movement over ${durationHours} hours`
+        `Created new pending sea time entry for vessel ${vessel_name}: ${distanceNm} nm (${Math.round(maxDiff * 10000) / 10000}°) over ${durationHours} hours`
       );
     } catch (error) {
       app.logger.error(
