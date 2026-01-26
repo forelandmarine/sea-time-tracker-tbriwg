@@ -1728,4 +1728,317 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     }
   );
+
+  // POST /api/admin/amalgamate-sea-time - Merge multiple AIS detections into a single sea time entry
+  fastify.post<{ Body: { email: string; mmsi: string; date: string } }>(
+    '/api/admin/amalgamate-sea-time',
+    {
+      schema: {
+        description: 'Amalgamate multiple AIS detections on a specific date into a single sea time entry',
+        tags: ['admin'],
+        body: {
+          type: 'object',
+          required: ['email', 'mmsi', 'date'],
+          properties: {
+            email: { type: 'string', format: 'email', description: 'User email' },
+            mmsi: { type: 'string', description: 'Vessel MMSI' },
+            date: { type: 'string', description: 'Date in format "26 Jan 2026" or "2026-01-26"' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              entry: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  vessel_id: { type: 'string' },
+                  vessel_name: { type: 'string' },
+                  start_time: { type: 'string', format: 'date-time' },
+                  end_time: { type: ['string', 'null'], format: 'date-time' },
+                  duration_hours: { type: ['number', 'null'] },
+                  status: { type: 'string' },
+                  notes: { type: ['string', 'null'] },
+                  created_at: { type: 'string', format: 'date-time' },
+                  start_latitude: { type: ['number', 'null'] },
+                  start_longitude: { type: ['number', 'null'] },
+                  end_latitude: { type: ['number', 'null'] },
+                  end_longitude: { type: ['number', 'null'] },
+                  service_type: { type: 'string' },
+                },
+              },
+              detections_merged: { type: 'number' },
+              total_distance_nm: { type: 'number' },
+              detection_times: {
+                type: 'array',
+                items: { type: 'string' },
+              },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { email, mmsi, date } = request.body;
+
+      app.logger.info({ email, mmsi, date }, 'Starting sea time entry amalgamation');
+
+      try {
+        // Step 1: Parse the date
+        let targetDate: Date;
+        try {
+          // Try parsing "26 Jan 2026" format
+          if (date.includes(' ')) {
+            const parsed = new Date(date);
+            targetDate = parsed;
+          } else {
+            // Try parsing "2026-01-26" format
+            targetDate = new Date(date);
+          }
+
+          if (isNaN(targetDate.getTime())) {
+            throw new Error('Invalid date');
+          }
+        } catch {
+          app.logger.warn({ date }, 'Invalid date format');
+          return reply.code(400).send({
+            error: `Invalid date format: ${date}. Use "26 Jan 2026" or "2026-01-26"`,
+          });
+        }
+
+        // Step 2: Find user by email
+        const users = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email.toLowerCase()));
+
+        if (users.length === 0) {
+          app.logger.warn({ email }, 'User not found for amalgamation');
+          return reply.code(404).send({ error: `User with email ${email} not found` });
+        }
+
+        const user = users[0];
+
+        // Step 3: Find vessel by MMSI
+        const vessels = await app.db
+          .select()
+          .from(schema.vessels)
+          .where(eq(schema.vessels.mmsi, mmsi));
+
+        if (vessels.length === 0) {
+          app.logger.warn({ mmsi }, 'Vessel not found for amalgamation');
+          return reply.code(404).send({ error: `Vessel with MMSI ${mmsi} not found` });
+        }
+
+        const vessel = vessels[0];
+
+        // Step 4: Get AIS debug logs for this vessel and date
+        const allDebugLogs = await app.db
+          .select()
+          .from(schema.ais_debug_logs)
+          .where(eq(schema.ais_debug_logs.vessel_id, vessel.id));
+
+        // Filter logs for the target date
+        const targetDateStr = targetDate.toISOString().split('T')[0]; // YYYY-MM-DD format
+        const logsForDate = allDebugLogs.filter(log => {
+          const logDateStr = new Date(log.request_time).toISOString().split('T')[0];
+          return logDateStr === targetDateStr;
+        });
+
+        app.logger.debug(
+          { vesselId: vessel.id, mmsi, date: targetDateStr, logsCount: logsForDate.length },
+          `Found ${logsForDate.length} AIS debug logs for date`
+        );
+
+        if (logsForDate.length === 0) {
+          return reply.code(404).send({
+            error: `No AIS API logs found for vessel ${mmsi} on ${date}`,
+          });
+        }
+
+        // Step 5: Extract position data from response bodies
+        interface Detection {
+          timestamp: Date;
+          latitude: number;
+          longitude: number;
+          logTime: string;
+        }
+
+        const detections: Detection[] = [];
+
+        for (const log of logsForDate) {
+          try {
+            if (log.response_body) {
+              const responseData = JSON.parse(log.response_body);
+
+              // Extract position data from different possible API response formats
+              let latitude: number | null = null;
+              let longitude: number | null = null;
+
+              // Try common response structures
+              if (responseData.latitude !== undefined && responseData.longitude !== undefined) {
+                latitude = responseData.latitude;
+                longitude = responseData.longitude;
+              } else if (
+                responseData.data &&
+                responseData.data.latitude !== undefined &&
+                responseData.data.longitude !== undefined
+              ) {
+                latitude = responseData.data.latitude;
+                longitude = responseData.data.longitude;
+              } else if (
+                responseData.position &&
+                responseData.position.latitude !== undefined &&
+                responseData.position.longitude !== undefined
+              ) {
+                latitude = responseData.position.latitude;
+                longitude = responseData.position.longitude;
+              }
+
+              if (latitude !== null && longitude !== null) {
+                detections.push({
+                  timestamp: new Date(log.request_time),
+                  latitude,
+                  longitude,
+                  logTime: new Date(log.request_time).toISOString(),
+                });
+              }
+            }
+          } catch (err) {
+            app.logger.debug(
+              { logId: log.id, err },
+              'Failed to parse response body for detection'
+            );
+          }
+        }
+
+        if (detections.length === 0) {
+          return reply.code(404).send({
+            error: `No position data found in AIS API responses for ${date}`,
+          });
+        }
+
+        // Sort detections by timestamp
+        detections.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+        // Step 6: Calculate total distance across all detections
+        let totalDistance = 0;
+        for (let i = 1; i < detections.length; i++) {
+          const prev = detections[i - 1];
+          const curr = detections[i];
+
+          // Use Haversine formula
+          const EARTH_RADIUS_NM = 3440.065;
+          const dLat = (curr.latitude - prev.latitude) * (Math.PI / 180);
+          const dLon = (curr.longitude - prev.longitude) * (Math.PI / 180);
+          const lat1Rad = prev.latitude * (Math.PI / 180);
+          const lat2Rad = curr.latitude * (Math.PI / 180);
+
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+          const c = 2 * Math.asin(Math.sqrt(a));
+          const distance = EARTH_RADIUS_NM * c;
+
+          totalDistance += distance;
+        }
+
+        totalDistance = Math.round(totalDistance * 100) / 100;
+
+        // Step 7: Find existing sea time entry for this date
+        const allEntries = await app.db
+          .select()
+          .from(schema.sea_time_entries)
+          .where(eq(schema.sea_time_entries.vessel_id, vessel.id));
+
+        const entriesForDate = allEntries.filter(entry => {
+          const entryDateStr = new Date(entry.start_time).toISOString().split('T')[0];
+          return entryDateStr === targetDateStr;
+        });
+
+        if (entriesForDate.length === 0) {
+          return reply.code(404).send({
+            error: `No sea time entry found for vessel on ${date}`,
+          });
+        }
+
+        const existingEntry = entriesForDate[0];
+
+        // Step 8: Calculate amalgamated duration
+        const startTime = detections[0].timestamp;
+        const endTime = detections[detections.length - 1].timestamp;
+        const durationMs = endTime.getTime() - startTime.getTime();
+        const durationHours = Math.round((durationMs / (1000 * 60 * 60)) * 100) / 100;
+
+        // Step 9: Create updated notes with all detection times
+        const detectionTimesList = detections.map(d => d.logTime).join(', ');
+        const updatedNotes = `Amalgamated from ${detections.length} AIS checks: vessel moved ${totalDistance} nm over ${durationHours} hours. Detections at: ${detectionTimesList}`;
+
+        // Step 10: Update the sea time entry
+        const [updatedEntry] = await app.db
+          .update(schema.sea_time_entries)
+          .set({
+            start_time: startTime,
+            end_time: endTime,
+            duration_hours: String(durationHours),
+            start_latitude: String(detections[0].latitude),
+            start_longitude: String(detections[0].longitude),
+            end_latitude: String(detections[detections.length - 1].latitude),
+            end_longitude: String(detections[detections.length - 1].longitude),
+            notes: updatedNotes,
+          })
+          .where(eq(schema.sea_time_entries.id, existingEntry.id))
+          .returning();
+
+        app.logger.info(
+          {
+            userId: user.id,
+            vesselId: vessel.id,
+            mmsi,
+            entryId: updatedEntry.id,
+            detectionsCount: detections.length,
+            totalDistance,
+            durationHours,
+          },
+          `Amalgamated ${detections.length} AIS detections into single entry`
+        );
+
+        // Format response
+        const entryResponse = {
+          id: updatedEntry.id,
+          vessel_id: updatedEntry.vessel_id,
+          vessel_name: vessel.vessel_name,
+          start_time: updatedEntry.start_time.toISOString(),
+          end_time: updatedEntry.end_time ? updatedEntry.end_time.toISOString() : null,
+          duration_hours: updatedEntry.duration_hours ? parseFloat(String(updatedEntry.duration_hours)) : null,
+          status: updatedEntry.status,
+          notes: updatedEntry.notes,
+          created_at: updatedEntry.created_at.toISOString(),
+          start_latitude: updatedEntry.start_latitude ? parseFloat(String(updatedEntry.start_latitude)) : null,
+          start_longitude: updatedEntry.start_longitude ? parseFloat(String(updatedEntry.start_longitude)) : null,
+          end_latitude: updatedEntry.end_latitude ? parseFloat(String(updatedEntry.end_latitude)) : null,
+          end_longitude: updatedEntry.end_longitude ? parseFloat(String(updatedEntry.end_longitude)) : null,
+          service_type: updatedEntry.service_type,
+        };
+
+        return reply.code(200).send({
+          success: true,
+          message: `Successfully amalgamated ${detections.length} AIS detections into a single sea time entry`,
+          entry: entryResponse,
+          detections_merged: detections.length,
+          total_distance_nm: totalDistance,
+          detection_times: detections.map(d => d.logTime),
+        });
+      } catch (error) {
+        app.logger.error({ err: error, email, mmsi, date }, 'Error amalgamating sea time entry');
+        return reply.code(500).send({ error: 'Failed to amalgamate sea time entry' });
+      }
+    }
+  );
 }
