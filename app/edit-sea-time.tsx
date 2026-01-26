@@ -14,7 +14,7 @@ import {
   Pressable,
   ActivityIndicator,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import * as seaTimeApi from '@/utils/seaTimeApi';
@@ -27,6 +27,23 @@ interface Vessel {
   is_active: boolean;
   created_at: string;
   callsign?: string;
+}
+
+interface SeaTimeEntry {
+  id: string;
+  vessel: Vessel | null;
+  start_time: string;
+  end_time: string | null;
+  duration_hours: number | string | null;
+  sea_days: number | null;
+  status: 'pending' | 'confirmed' | 'rejected';
+  notes: string | null;
+  created_at: string;
+  start_latitude?: number | string | null;
+  start_longitude?: number | string | null;
+  end_latitude?: number | string | null;
+  end_longitude?: number | string | null;
+  service_type?: string | null;
 }
 
 type ServiceType = 'seagoing' | 'standby' | 'yard';
@@ -57,8 +74,9 @@ const createStyles = (isDark: boolean) =>
       padding: 8,
       marginLeft: -8,
     },
-    headerRight: {
-      width: 40,
+    deleteButton: {
+      padding: 8,
+      marginRight: -8,
     },
     scrollView: {
       flex: 1,
@@ -283,6 +301,9 @@ const createStyles = (isDark: boolean) =>
       fontSize: 16,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
+    disabledInput: {
+      opacity: 0.6,
+    },
   });
 
 const formatDateTime = (date: Date | null) => {
@@ -296,99 +317,107 @@ const formatDateTime = (date: Date | null) => {
   });
 };
 
-export default function AddSeaTimeScreen() {
+export default function EditSeaTimeScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const entryId = params.id as string;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [vessels, setVessels] = useState<Vessel[]>([]);
-  const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
-  const [showStartDatePicker, setShowStartDatePicker] = useState(false);
-  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-  const [showEndDatePicker, setShowEndDatePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [entry, setEntry] = useState<SeaTimeEntry | null>(null);
   const [notes, setNotes] = useState('');
   const [serviceType, setServiceType] = useState<ServiceType>('seagoing');
   const [voyageFrom, setVoyageFrom] = useState('');
   const [voyageTo, setVoyageTo] = useState('');
-  const [showVesselPicker, setShowVesselPicker] = useState(false);
 
   useEffect(() => {
-    console.log('[AddSeaTimeScreen] Component mounted');
-    loadVessels();
-  }, []);
+    console.log('[EditSeaTimeScreen] Component mounted, loading entry:', entryId);
+    loadEntry();
+  }, [entryId]);
 
-  const loadVessels = async () => {
+  const loadEntry = async () => {
     try {
-      console.log('[AddSeaTimeScreen] Loading vessels');
+      console.log('[EditSeaTimeScreen] Fetching entry details');
       setLoading(true);
-      const vesselsData = await seaTimeApi.getVessels();
-      console.log('[AddSeaTimeScreen] Loaded vessels:', vesselsData.length);
-      setVessels(vesselsData);
+      const entries = await seaTimeApi.getSeaTimeEntries();
+      const foundEntry = entries.find((e) => e.id === entryId);
+      
+      if (!foundEntry) {
+        Alert.alert('Error', 'Sea time entry not found');
+        router.back();
+        return;
+      }
+
+      console.log('[EditSeaTimeScreen] Entry loaded:', foundEntry);
+      setEntry(foundEntry);
+
+      const backendToUIServiceType: { [key: string]: ServiceType } = {
+        'actual_sea_service': 'seagoing',
+        'watchkeeping_service': 'seagoing',
+        'standby_service': 'standby',
+        'yard_service': 'yard',
+        'service_in_port': 'seagoing',
+      };
+      const uiServiceType = foundEntry.service_type 
+        ? (backendToUIServiceType[foundEntry.service_type] || 'seagoing')
+        : 'seagoing';
+      setServiceType(uiServiceType);
+      
+      const notesText = foundEntry.notes || '';
+      const lines = notesText.split('\n');
+      
+      let extractedFrom = '';
+      let extractedTo = '';
+      let remainingNotes: string[] = [];
+      
+      lines.forEach(line => {
+        if (line.startsWith('From:')) {
+          extractedFrom = line.replace('From:', '').trim();
+        } else if (line.startsWith('To:')) {
+          extractedTo = line.replace('To:', '').trim();
+        } else if (line.trim()) {
+          remainingNotes.push(line);
+        }
+      });
+      
+      setVoyageFrom(extractedFrom);
+      setVoyageTo(extractedTo);
+      setNotes(remainingNotes.join('\n'));
     } catch (error) {
-      console.error('[AddSeaTimeScreen] Error loading vessels:', error);
-      Alert.alert('Error', 'Failed to load vessels');
+      console.error('[EditSeaTimeScreen] Error loading entry:', error);
+      Alert.alert('Error', 'Failed to load sea time entry');
+      router.back();
     } finally {
       setLoading(false);
     }
   };
 
   const handleViewMCARequirements = async () => {
-    console.log('[AddSeaTimeScreen] User tapped View MCA Requirements');
+    console.log('[EditSeaTimeScreen] User tapped View MCA Requirements');
     try {
       const userProfile = await seaTimeApi.getUserProfile();
       const department = userProfile?.department?.toLowerCase() || 'deck';
-      console.log('[AddSeaTimeScreen] User department:', department);
+      console.log('[EditSeaTimeScreen] User department:', department);
       router.push(`/mca-requirements?department=${department}`);
     } catch (error) {
-      console.error('[AddSeaTimeScreen] Failed to get user profile:', error);
+      console.error('[EditSeaTimeScreen] Failed to get user profile:', error);
       router.push('/mca-requirements?department=deck');
     }
   };
 
-  const parseLatLong = (text: string): { lat: number | null; lon: number | null } => {
-    const coordPattern = /(-?\d+\.?\d*)\s*[,\s]\s*(-?\d+\.?\d*)/;
-    const match = text.match(coordPattern);
-    
-    if (match) {
-      const lat = parseFloat(match[1]);
-      const lon = parseFloat(match[2]);
-      
-      if (!isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
-        return { lat, lon };
-      }
-    }
-    
-    return { lat: null, lon: null };
-  };
-
   const handleSave = async () => {
-    console.log('[AddSeaTimeScreen] User tapped Save');
+    console.log('[EditSeaTimeScreen] User tapped Save');
     
-    if (!selectedVessel) {
-      Alert.alert('Error', 'Please select a vessel');
-      return;
-    }
-    
-    if (!startDate) {
-      Alert.alert('Error', 'Please select a start date and time');
-      return;
-    }
-
-    if (endDate && endDate <= startDate) {
-      Alert.alert('Error', 'End date must be after start date');
+    if (!entry) {
+      Alert.alert('Error', 'Entry not found');
       return;
     }
 
     try {
       setSaving(true);
-      const fromCoords = parseLatLong(voyageFrom);
-      const toCoords = parseLatLong(voyageTo);
 
       const serviceTypeMap: { [key: string]: string } = {
         'seagoing': 'actual_sea_service',
@@ -403,31 +432,78 @@ export default function AddSeaTimeScreen() {
       const noteParts = [voyageFromNote, voyageToNote, notes].filter(Boolean);
       const fullNotes = noteParts.join('\n');
 
-      console.log('[AddSeaTimeScreen] Creating manual sea time entry');
-      await seaTimeApi.createManualSeaTimeEntry({
-        vessel_id: selectedVessel.id,
-        start_time: startDate.toISOString(),
-        end_time: endDate?.toISOString() || null,
+      console.log('[EditSeaTimeScreen] Updating sea time entry');
+      await seaTimeApi.updateSeaTimeEntry(entry.id, {
         notes: fullNotes || null,
-        start_latitude: fromCoords.lat,
-        start_longitude: fromCoords.lon,
-        end_latitude: toCoords.lat,
-        end_longitude: toCoords.lon,
         service_type: backendServiceType,
       });
 
-      Alert.alert('Success', 'Sea time entry added successfully', [
+      Alert.alert('Success', 'Sea time entry updated successfully', [
         {
           text: 'OK',
           onPress: () => router.back(),
         },
       ]);
     } catch (error: any) {
-      console.error('[AddSeaTimeScreen] Error saving entry:', error);
-      Alert.alert('Error', error.message || 'Failed to save sea time entry');
+      console.error('[EditSeaTimeScreen] Error saving entry:', error);
+      Alert.alert('Error', error.message || 'Failed to update sea time entry');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDelete = () => {
+    if (!entry) return;
+
+    console.log('[EditSeaTimeScreen] User tapped delete button');
+    
+    Alert.alert(
+      'Delete Entry',
+      'Are you sure you want to delete this sea time entry? This action cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => console.log('[EditSeaTimeScreen] Delete cancelled'),
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              console.log('[EditSeaTimeScreen] Deleting sea time entry:', entry.id);
+              await seaTimeApi.deleteSeaTimeEntry(entry.id);
+              Alert.alert('Success', 'Sea time entry deleted successfully', [
+                {
+                  text: 'OK',
+                  onPress: () => router.back(),
+                },
+              ]);
+            } catch (error: any) {
+              console.error('[EditSeaTimeScreen] Error deleting entry:', error);
+              Alert.alert('Error', error.message || 'Failed to delete sea time entry');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-GB', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   };
 
   const mcaButtonText = 'View MCA Requirements';
@@ -438,12 +514,8 @@ export default function AddSeaTimeScreen() {
   const yardHelperText = 'Up to 90 days total (continuous or split)';
   const serviceTypeLabel = 'Service Type';
   const vesselLabel = 'Vessel';
-  const selectVesselPlaceholder = 'Select a vessel';
   const startDateLabel = 'Start Date & Time';
-  const startDatePlaceholder = 'Select start date & time';
   const endDateLabel = 'End Date & Time';
-  const optionalText = '(Optional)';
-  const endDatePlaceholder = 'Select end date & time';
   const voyageLocationsLabel = 'Voyage Locations';
   const voyageHelperText = 'Enter location names or coordinates (e.g., "51.5074, -0.1278")';
   const fromLabel = 'From';
@@ -451,17 +523,12 @@ export default function AddSeaTimeScreen() {
   const toLabel = 'To';
   const toPlaceholder = 'Port or coordinates';
   const notesLabel = 'Additional Notes';
+  const optionalText = '(Optional)';
   const notesPlaceholder = 'Add any notes about this sea time...';
-  const saveButtonText = saving ? 'Saving...' : 'Save Entry';
-  const noVesselsText = 'No vessels available';
-  const noVesselsSubtext = 'Add a vessel first from the Home tab';
-  const selectVesselTitle = 'Select Vessel';
-  const startDatePickerTitle = 'Select Start Date & Time';
-  const endDatePickerTitle = 'Select End Date & Time';
-  const doneButtonText = 'Done';
-  const loadingText = 'Loading vessels...';
-  const headerTitleText = 'Add Sea Time Entry';
-  const backButtonLabel = 'Back';
+  const saveButtonText = saving ? 'Saving...' : 'Update Entry';
+  const loadingText = 'Loading entry...';
+  const headerTitleText = 'Edit Sea Time Entry';
+  const cannotChangeText = 'Cannot be changed when editing';
 
   if (loading) {
     return (
@@ -478,7 +545,7 @@ export default function AddSeaTimeScreen() {
               />
             </TouchableOpacity>
             <Text style={styles.headerTitle}>{headerTitleText}</Text>
-            <View style={styles.headerRight} />
+            <View style={styles.deleteButton} />
           </View>
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={colors.primary} />
@@ -488,6 +555,15 @@ export default function AddSeaTimeScreen() {
       </>
     );
   }
+
+  if (!entry) {
+    return null;
+  }
+
+  const startDateDisplay = `${formatDate(entry.start_time)} at ${formatTime(entry.start_time)}`;
+  const endDateDisplay = entry.end_time 
+    ? `${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`
+    : 'Not set';
 
   return (
     <>
@@ -504,7 +580,14 @@ export default function AddSeaTimeScreen() {
             />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{headerTitleText}</Text>
-          <View style={styles.headerRight} />
+          <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+            <IconSymbol
+              ios_icon_name="trash"
+              android_material_icon_name="delete"
+              size={22}
+              color="#FF3B30"
+            />
+          </TouchableOpacity>
         </View>
 
         <ScrollView
@@ -590,78 +673,42 @@ export default function AddSeaTimeScreen() {
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>{vesselLabel}</Text>
-            <TouchableOpacity
-              style={styles.pickerButton}
-              onPress={() => {
-                console.log('[AddSeaTimeScreen] User tapped vessel picker');
-                setShowVesselPicker(true);
-              }}
-            >
-              <Text
-                style={
-                  selectedVessel
-                    ? styles.pickerButtonText
-                    : styles.pickerButtonPlaceholder
-                }
-              >
-                {selectedVessel ? selectedVessel.vessel_name : selectVesselPlaceholder}
+            <View style={[styles.pickerButton, styles.disabledInput]}>
+              <Text style={styles.pickerButtonText}>
+                {entry.vessel?.vessel_name || 'Unknown Vessel'}
               </Text>
-              <IconSymbol
-                ios_icon_name="chevron.down"
-                android_material_icon_name="arrow-drop-down"
-                size={20}
-                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-              />
-            </TouchableOpacity>
+            </View>
+            <Text style={styles.helperText}>{cannotChangeText}</Text>
           </View>
 
           <View style={styles.divider} />
 
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>{startDateLabel}</Text>
-            <TouchableOpacity
-              style={styles.dateTimeButton}
-              onPress={() => {
-                console.log('[AddSeaTimeScreen] User tapped start date/time');
-                setShowStartDatePicker(true);
-              }}
-            >
-              <Text style={startDate ? styles.dateTimeText : styles.dateTimePlaceholder}>
-                {startDate ? formatDateTime(startDate) : startDatePlaceholder}
-              </Text>
+            <View style={[styles.dateTimeButton, styles.disabledInput]}>
+              <Text style={styles.dateTimeText}>{startDateDisplay}</Text>
               <IconSymbol
                 ios_icon_name="calendar"
                 android_material_icon_name="calendar-today"
                 size={20}
                 color={isDark ? colors.textSecondary : colors.textSecondaryLight}
               />
-            </TouchableOpacity>
+            </View>
+            <Text style={styles.helperText}>{cannotChangeText}</Text>
           </View>
 
           <View style={styles.inputGroup}>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-              <Text style={styles.inputLabel}>{endDateLabel}</Text>
-              <Text style={styles.inputLabel}>
-                <Text style={styles.inputLabelOptional}> {optionalText}</Text>
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={styles.dateTimeButton}
-              onPress={() => {
-                console.log('[AddSeaTimeScreen] User tapped end date/time');
-                setShowEndDatePicker(true);
-              }}
-            >
-              <Text style={endDate ? styles.dateTimeText : styles.dateTimePlaceholder}>
-                {endDate ? formatDateTime(endDate) : endDatePlaceholder}
-              </Text>
+            <Text style={styles.inputLabel}>{endDateLabel}</Text>
+            <View style={[styles.dateTimeButton, styles.disabledInput]}>
+              <Text style={styles.dateTimeText}>{endDateDisplay}</Text>
               <IconSymbol
                 ios_icon_name="calendar"
                 android_material_icon_name="calendar-today"
                 size={20}
                 color={isDark ? colors.textSecondary : colors.textSecondaryLight}
               />
-            </TouchableOpacity>
+            </View>
+            <Text style={styles.helperText}>{cannotChangeText}</Text>
           </View>
 
           <View style={styles.divider} />
@@ -733,244 +780,6 @@ export default function AddSeaTimeScreen() {
             <Text style={styles.saveButtonText}>{saveButtonText}</Text>
           </TouchableOpacity>
         </ScrollView>
-
-        <Modal
-          visible={showVesselPicker}
-          transparent={true}
-          animationType="slide"
-          onRequestClose={() => setShowVesselPicker(false)}
-        >
-          <Pressable
-            style={styles.modalOverlay}
-            onPress={() => setShowVesselPicker(false)}
-          >
-            <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{selectVesselTitle}</Text>
-                <TouchableOpacity
-                  style={styles.modalCloseButton}
-                  onPress={() => setShowVesselPicker(false)}
-                >
-                  <IconSymbol
-                    ios_icon_name="xmark"
-                    android_material_icon_name="close"
-                    size={24}
-                    color={isDark ? colors.text : colors.textLight}
-                  />
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={styles.modalBody}>
-                {vessels.length > 0 ? (
-                  vessels.map((vessel, index) => {
-                    const vesselName = vessel.vessel_name;
-                    const mmsiText = `MMSI: ${vessel.mmsi}`;
-                    const callsignText = vessel.callsign ? ` • Call Sign: ${vessel.callsign}` : '';
-                    const subtextDisplay = mmsiText + callsignText;
-                    
-                    return (
-                      <TouchableOpacity
-                        key={vessel.id}
-                        style={[
-                          styles.vesselOption,
-                          index === vessels.length - 1 && styles.vesselOptionLast,
-                        ]}
-                        onPress={() => {
-                          console.log('[AddSeaTimeScreen] User selected vessel:', vessel.vessel_name);
-                          setSelectedVessel(vessel);
-                          setShowVesselPicker(false);
-                        }}
-                      >
-                        <Text style={styles.vesselOptionText}>{vesselName}</Text>
-                        <Text style={styles.vesselOptionSubtext}>
-                          {subtextDisplay}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })
-                ) : (
-                  <View style={styles.emptyState}>
-                    <Text style={styles.emptyStateText}>{noVesselsText}</Text>
-                    <Text style={styles.emptyStateText}>{noVesselsSubtext}</Text>
-                  </View>
-                )}
-              </ScrollView>
-            </Pressable>
-          </Pressable>
-        </Modal>
-
-        {showStartDatePicker && Platform.OS === 'ios' && (
-          <Modal
-            visible={showStartDatePicker}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={() => setShowStartDatePicker(false)}
-          >
-            <Pressable
-              style={styles.modalOverlay}
-              onPress={() => setShowStartDatePicker(false)}
-            >
-              <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>{startDatePickerTitle}</Text>
-                  <TouchableOpacity
-                    style={styles.modalCloseButton}
-                    onPress={() => setShowStartDatePicker(false)}
-                  >
-                    <IconSymbol
-                      ios_icon_name="xmark"
-                      android_material_icon_name="close"
-                      size={24}
-                      color={isDark ? colors.text : colors.textLight}
-                    />
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.datePickerContainer}>
-                  <DateTimePicker
-                    value={startDate || new Date()}
-                    mode="datetime"
-                    display="spinner"
-                    onChange={(event, selectedDate) => {
-                      if (selectedDate) {
-                        console.log('[AddSeaTimeScreen] Start date selected:', selectedDate);
-                        setStartDate(selectedDate);
-                      }
-                    }}
-                    textColor={isDark ? colors.text : colors.textLight}
-                  />
-                  <TouchableOpacity
-                    style={styles.datePickerButton}
-                    onPress={() => setShowStartDatePicker(false)}
-                  >
-                    <Text style={styles.datePickerButtonText}>{doneButtonText}</Text>
-                  </TouchableOpacity>
-                </View>
-              </Pressable>
-            </Pressable>
-          </Modal>
-        )}
-
-        {showEndDatePicker && Platform.OS === 'ios' && (
-          <Modal
-            visible={showEndDatePicker}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={() => setShowEndDatePicker(false)}
-          >
-            <Pressable
-              style={styles.modalOverlay}
-              onPress={() => setShowEndDatePicker(false)}
-            >
-              <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>{endDatePickerTitle}</Text>
-                  <TouchableOpacity
-                    style={styles.modalCloseButton}
-                    onPress={() => setShowEndDatePicker(false)}
-                  >
-                    <IconSymbol
-                      ios_icon_name="xmark"
-                      android_material_icon_name="close"
-                      size={24}
-                      color={isDark ? colors.text : colors.textLight}
-                    />
-                  </TouchableOpacity>
-                </View>
-                <View style={styles.datePickerContainer}>
-                  <DateTimePicker
-                    value={endDate || new Date()}
-                    mode="datetime"
-                    display="spinner"
-                    onChange={(event, selectedDate) => {
-                      if (selectedDate) {
-                        console.log('[AddSeaTimeScreen] End date selected:', selectedDate);
-                        setEndDate(selectedDate);
-                      }
-                    }}
-                    textColor={isDark ? colors.text : colors.textLight}
-                  />
-                  <TouchableOpacity
-                    style={styles.datePickerButton}
-                    onPress={() => setShowEndDatePicker(false)}
-                  >
-                    <Text style={styles.datePickerButtonText}>{doneButtonText}</Text>
-                  </TouchableOpacity>
-                </View>
-              </Pressable>
-            </Pressable>
-          </Modal>
-        )}
-
-        {showStartDatePicker && Platform.OS !== 'ios' && (
-          <DateTimePicker
-            value={startDate || new Date()}
-            mode="date"
-            display="default"
-            onChange={(event, selectedDate) => {
-              setShowStartDatePicker(false);
-              if (selectedDate) {
-                const newDate = startDate ? new Date(startDate) : new Date();
-                newDate.setFullYear(selectedDate.getFullYear());
-                newDate.setMonth(selectedDate.getMonth());
-                newDate.setDate(selectedDate.getDate());
-                setStartDate(newDate);
-                setShowStartTimePicker(true);
-              }
-            }}
-          />
-        )}
-
-        {showStartTimePicker && Platform.OS !== 'ios' && (
-          <DateTimePicker
-            value={startDate || new Date()}
-            mode="time"
-            display="default"
-            onChange={(event, selectedTime) => {
-              setShowStartTimePicker(false);
-              if (selectedTime) {
-                const newDate = startDate ? new Date(startDate) : new Date();
-                newDate.setHours(selectedTime.getHours());
-                newDate.setMinutes(selectedTime.getMinutes());
-                setStartDate(newDate);
-              }
-            }}
-          />
-        )}
-
-        {showEndDatePicker && Platform.OS !== 'ios' && (
-          <DateTimePicker
-            value={endDate || new Date()}
-            mode="date"
-            display="default"
-            onChange={(event, selectedDate) => {
-              setShowEndDatePicker(false);
-              if (selectedDate) {
-                const newDate = endDate ? new Date(endDate) : new Date();
-                newDate.setFullYear(selectedDate.getFullYear());
-                newDate.setMonth(selectedDate.getMonth());
-                newDate.setDate(selectedDate.getDate());
-                setEndDate(newDate);
-                setShowEndTimePicker(true);
-              }
-            }}
-          />
-        )}
-
-        {showEndTimePicker && Platform.OS !== 'ios' && (
-          <DateTimePicker
-            value={endDate || new Date()}
-            mode="time"
-            display="default"
-            onChange={(event, selectedTime) => {
-              setShowEndTimePicker(false);
-              if (selectedTime) {
-                const newDate = endDate ? new Date(endDate) : new Date();
-                newDate.setHours(selectedTime.getHours());
-                newDate.setMinutes(selectedTime.getMinutes());
-                setEndDate(newDate);
-              }
-            }}
-          />
-        )}
       </View>
     </>
   );

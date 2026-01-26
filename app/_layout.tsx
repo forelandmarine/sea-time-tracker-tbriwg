@@ -299,13 +299,22 @@ function RootLayoutNav() {
               }} 
             />
 
-            {/* Add Sea Time Entry screen - Changed to full screen for better reliability */}
+            {/* Add Sea Time Entry screen - Full screen page with back button */}
             <Stack.Screen 
               name="add-sea-time" 
               options={{ 
+                headerShown: false,
                 presentation: 'card',
-                title: 'Add Sea Time Entry',
-                headerShown: true,
+                headerBackTitle: 'Back',
+              }} 
+            />
+
+            {/* Edit Sea Time Entry screen - Full screen page with back button */}
+            <Stack.Screen 
+              name="edit-sea-time" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
                 headerBackTitle: 'Back',
               }} 
             />
