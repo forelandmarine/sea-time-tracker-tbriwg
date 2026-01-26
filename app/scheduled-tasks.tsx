@@ -88,16 +88,30 @@ export default function ScheduledTasksScreen() {
       const result = await seaTimeApi.verifyVesselTasks();
       console.log('Verification result:', result);
       
-      const messageLines = [];
-      messageLines.push(`✓ Total active vessels: ${result.totalActiveVessels || 0}`);
-      messageLines.push(`✓ Vessels with tasks: ${result.vesselsWithTasks || 0}`);
+      const totalActiveVessels = result.total_active_vessels || 0;
+      const tasksAlreadyActive = result.tasks_already_active || 0;
+      const tasksCreated = result.tasks_created || 0;
+      const tasksReactivated = result.tasks_reactivated || 0;
+      const vesselsWithTasks = tasksAlreadyActive + tasksCreated + tasksReactivated;
       
-      if (result.tasksCreated && result.tasksCreated > 0) {
-        messageLines.push(`✓ New tasks created: ${result.tasksCreated}`);
+      const messageLines = [];
+      messageLines.push(`✓ Total active vessels: ${totalActiveVessels}`);
+      messageLines.push(`✓ Vessels with tasks: ${vesselsWithTasks}`);
+      
+      if (tasksCreated > 0) {
+        messageLines.push(`✓ New tasks created: ${tasksCreated}`);
       }
       
-      if (result.vesselsWithoutTasks && result.vesselsWithoutTasks.length > 0) {
-        messageLines.push(`\n⚠️ Vessels without tasks: ${result.vesselsWithoutTasks.join(', ')}`);
+      if (tasksReactivated > 0) {
+        messageLines.push(`✓ Tasks reactivated: ${tasksReactivated}`);
+      }
+      
+      if (tasksAlreadyActive > 0) {
+        messageLines.push(`✓ Tasks already active: ${tasksAlreadyActive}`);
+      }
+      
+      if (result.vessels_without_tasks && result.vessels_without_tasks.length > 0) {
+        messageLines.push(`\n⚠️ Vessels without tasks: ${result.vessels_without_tasks.join(', ')}`);
       }
       
       Alert.alert(
