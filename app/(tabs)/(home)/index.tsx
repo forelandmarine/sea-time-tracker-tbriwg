@@ -103,7 +103,7 @@ export default function SeaTimeScreen() {
     }
   }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       console.log('[Home] Loading vessels...');
       const vesselsData = await seaTimeApi.getVessels();
@@ -125,7 +125,7 @@ export default function SeaTimeScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadActiveVesselLocation]);
 
   const onRefresh = async () => {
     console.log('[Home] User triggered refresh');
