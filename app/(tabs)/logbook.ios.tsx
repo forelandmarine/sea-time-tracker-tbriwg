@@ -360,6 +360,9 @@ const createStyles = (isDark: boolean, topInset: number) =>
       paddingBottom: 40,
       maxHeight: '90%',
     },
+    modalScrollView: {
+      maxHeight: 500,
+    },
     modalScrollContent: {
       paddingBottom: 20,
     },
@@ -726,7 +729,6 @@ export default function LogbookScreen() {
     console.log('[LogbookScreen iOS] User tapped View MCA Requirements from modal - closing modal first');
     setShowAddModal(false);
     
-    // Get user's department to show correct pathway
     try {
       const userProfile = await seaTimeApi.getUserProfile();
       const department = userProfile?.department?.toLowerCase() || 'deck';
@@ -1453,7 +1455,7 @@ export default function LogbookScreen() {
                 </Text>
 
                 <ScrollView 
-                  style={{ flex: 1 }} 
+                  style={styles.modalScrollView} 
                   contentContainerStyle={styles.modalScrollContent}
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={true}
