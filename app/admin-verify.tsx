@@ -231,8 +231,8 @@ export default function AdminVerifyScreen() {
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
 
-  const [email, setEmail] = useState('dan@forelandmarine.com');
-  const [mmsi, setMmsi] = useState('319031700');
+  const [email, setEmail] = useState('macnally@me.com');
+  const [mmsi, setMmsi] = useState('352978169');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<VerificationResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -242,6 +242,9 @@ export default function AdminVerifyScreen() {
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
   const [modalType, setModalType] = useState<'success' | 'error'>('success');
+  const [diagnosisLoading, setDiagnosisLoading] = useState(false);
+  const [diagnosisResult, setDiagnosisResult] = useState<any>(null);
+  const [fixLoading, setFixLoading] = useState(false);
 
   console.log('[AdminVerify] Screen rendered');
 
@@ -333,6 +336,98 @@ export default function AdminVerifyScreen() {
     }
   };
 
+  const handleDiagnoseWorkflow = async () => {
+    console.log('[AdminVerify] User tapped Diagnose Workflow button', { email, mmsi });
+    
+    if (!email || !mmsi) {
+      showModalMessage('Error', 'Please enter both email and MMSI', 'error');
+      return;
+    }
+
+    setDiagnosisLoading(true);
+    setDiagnosisResult(null);
+
+    try {
+      console.log('[AdminVerify] Calling diagnose vessel workflow endpoint');
+      
+      const headers = await getApiHeaders();
+      const response = await fetch(
+        `${API_BASE_URL}/api/admin/diagnose-vessel-workflow?email=${encodeURIComponent(email)}&mmsi=${encodeURIComponent(mmsi)}`,
+        { headers }
+      );
+
+      console.log('[AdminVerify] Diagnose workflow response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to diagnose workflow');
+      }
+
+      const data = await response.json();
+      console.log('[AdminVerify] Diagnosis data received:', data);
+      setDiagnosisResult(data);
+      
+      if (data.workflow_status === 'OK') {
+        showModalMessage('Success', 'Workflow is configured correctly!', 'success');
+      } else {
+        showModalMessage('Issues Found', data.workflow_status, 'error');
+      }
+    } catch (err: any) {
+      console.error('[AdminVerify] Diagnose workflow error:', err);
+      showModalMessage('Error', err.message || 'Failed to diagnose workflow', 'error');
+    } finally {
+      setDiagnosisLoading(false);
+    }
+  };
+
+  const handleFixWorkflow = async () => {
+    console.log('[AdminVerify] User tapped Fix Workflow button', { email, mmsi });
+    
+    if (!email || !mmsi) {
+      showModalMessage('Error', 'Please enter both email and MMSI', 'error');
+      return;
+    }
+
+    setFixLoading(true);
+
+    try {
+      console.log('[AdminVerify] Calling fix vessel workflow endpoint');
+      
+      const headers = await getApiHeaders();
+      const response = await fetch(
+        `${API_BASE_URL}/api/admin/fix-vessel-workflow`,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ email, mmsi }),
+        }
+      );
+
+      console.log('[AdminVerify] Fix workflow response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fix workflow');
+      }
+
+      const data = await response.json();
+      console.log('[AdminVerify] Fix workflow data received:', data);
+      
+      const actionsText = data.actions_taken.join('\n');
+      showModalMessage('Success', `Workflow fixed!\n\n${actionsText}`, 'success');
+      
+      // Refresh diagnosis after fix
+      setTimeout(() => {
+        handleDiagnoseWorkflow();
+      }, 1000);
+    } catch (err: any) {
+      console.error('[AdminVerify] Fix workflow error:', err);
+      showModalMessage('Error', err.message || 'Failed to fix workflow', 'error');
+    } finally {
+      setFixLoading(false);
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-GB', {
@@ -418,33 +513,102 @@ export default function AdminVerifyScreen() {
           )}
         </View>
 
+        {/* Diagnose & Fix Workflow Section */}
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Diagnose & Fix Workflow</Text>
+          <Text style={[styles.rowValue, { marginBottom: 15 }]}>
+            Diagnose why a specific vessel isn't creating sea time entries and fix the workflow.
+          </Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>User Email</Text>
+            <TextInput
+              style={styles.input}
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Enter user email"
+              placeholderTextColor={colors.textSecondary}
+              keyboardType="email-address"
+              autoCapitalize="none"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Vessel MMSI</Text>
+            <TextInput
+              style={styles.input}
+              value={mmsi}
+              onChangeText={setMmsi}
+              placeholder="Enter vessel MMSI"
+              placeholderTextColor={colors.textSecondary}
+              keyboardType="numeric"
+            />
+          </View>
+
+          <TouchableOpacity
+            style={styles.button}
+            onPress={handleDiagnoseWorkflow}
+            disabled={diagnosisLoading}
+          >
+            {diagnosisLoading ? (
+              <ActivityIndicator color="#ffffff" />
+            ) : (
+              <Text style={styles.buttonText}>Diagnose Workflow</Text>
+            )}
+          </TouchableOpacity>
+
+          {diagnosisResult && (
+            <View style={{ marginTop: 15 }}>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>User ID:</Text>
+                <Text style={styles.rowValue}>{diagnosisResult.user?.id || 'N/A'}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Vessel ID:</Text>
+                <Text style={styles.rowValue}>{diagnosisResult.vessel?.id || 'N/A'}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Vessel Active:</Text>
+                <Text style={styles.rowValue}>{diagnosisResult.vessel?.is_active ? 'Yes' : 'No'}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Task Active:</Text>
+                <Text style={styles.rowValue}>{diagnosisResult.scheduled_task?.is_active ? 'Yes' : 'No'}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>AIS Checks:</Text>
+                <Text style={styles.rowValue}>{diagnosisResult.recent_ais_checks?.length || 0}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Sea Time Entries:</Text>
+                <Text style={styles.rowValue}>{diagnosisResult.sea_time_entries?.length || 0}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.rowLabel}>Status:</Text>
+                <Text style={[styles.rowValue, { color: diagnosisResult.workflow_status === 'OK' ? '#4CAF50' : '#F44336' }]}>
+                  {diagnosisResult.workflow_status}
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {diagnosisResult && diagnosisResult.workflow_status !== 'OK' && (
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: '#FF9800', marginTop: 10 }]}
+              onPress={handleFixWorkflow}
+              disabled={fixLoading}
+            >
+              {fixLoading ? (
+                <ActivityIndicator color="#ffffff" />
+              ) : (
+                <Text style={styles.buttonText}>Fix Workflow</Text>
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
+
         {/* Verify Sea Time Data Section */}
         <Text style={styles.title}>Verify Sea Time Data</Text>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>User Email</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="Enter user email"
-            placeholderTextColor={colors.textSecondary}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Vessel MMSI</Text>
-          <TextInput
-            style={styles.input}
-            value={mmsi}
-            onChangeText={setMmsi}
-            placeholder="Enter vessel MMSI"
-            placeholderTextColor={colors.textSecondary}
-            keyboardType="numeric"
-          />
-        </View>
 
         <TouchableOpacity
           style={styles.button}
