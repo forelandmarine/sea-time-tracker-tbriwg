@@ -139,12 +139,27 @@ export default function ScheduledTasksScreen() {
     return `${dateText} ${timeText}`;
   };
 
+  const isTaskOverdue = (nextRunString: string) => {
+    const nextRun = new Date(nextRunString);
+    const now = new Date();
+    return nextRun.getTime() < now.getTime();
+  };
+
   const getTimeUntilNextRun = (nextRunString: string) => {
     const nextRun = new Date(nextRunString);
     const now = new Date();
     const diffMs = nextRun.getTime() - now.getTime();
     
-    if (diffMs < 0) return 'Overdue';
+    if (diffMs < 0) {
+      const overdueMins = Math.abs(Math.floor(diffMs / (1000 * 60)));
+      const overdueHours = Math.floor(overdueMins / 60);
+      
+      if (overdueHours > 0) {
+        return `Overdue by ${overdueHours}h`;
+      } else {
+        return `Overdue by ${overdueMins}m`;
+      }
+    }
     
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
     const diffHours = Math.floor(diffMinutes / 60);
@@ -299,6 +314,7 @@ export default function ScheduledTasksScreen() {
             ) : (
               tasks.map((task) => {
                 const isActive = task.is_active;
+                const isOverdue = isTaskOverdue(task.next_run);
                 const statusBgColor = isActive ? 'rgba(0, 200, 83, 0.2)' : 'rgba(255, 179, 0, 0.2)';
                 const statusTextColor = isActive ? colors.success : colors.warning;
                 const statusText = isActive ? 'Active' : 'Paused';
@@ -365,9 +381,25 @@ export default function ScheduledTasksScreen() {
                       </View>
 
                       {task.is_active && (
-                        <View style={styles.nextRunBanner}>
-                          <Text style={styles.nextRunText}>
-                            Next check {getTimeUntilNextRun(task.next_run)}
+                        <View style={[
+                          styles.nextRunBanner,
+                          isOverdue && styles.nextRunBannerOverdue
+                        ]}>
+                          {isOverdue && (
+                            <IconSymbol
+                              ios_icon_name="exclamationmark.triangle.fill"
+                              android_material_icon_name="warning"
+                              size={16}
+                              color={colors.error}
+                              style={styles.overdueIcon}
+                            />
+                          )}
+                          <Text style={[
+                            styles.nextRunText,
+                            isOverdue && styles.nextRunTextOverdue
+                          ]}>
+                            {isOverdue ? 'Next check ' : 'Next check '}
+                            {getTimeUntilNextRun(task.next_run)}
                           </Text>
                         </View>
                       )}
@@ -650,11 +682,22 @@ function createStyles(isDark: boolean) {
       padding: 10,
       marginTop: 4,
       alignItems: 'center',
+      flexDirection: 'row',
+      justifyContent: 'center',
+    },
+    nextRunBannerOverdue: {
+      backgroundColor: isDark ? 'rgba(255, 59, 48, 0.15)' : 'rgba(255, 59, 48, 0.1)',
+    },
+    overdueIcon: {
+      marginRight: 6,
     },
     nextRunText: {
       fontSize: 13,
       fontWeight: '600',
       color: colors.primary,
+    },
+    nextRunTextOverdue: {
+      color: colors.error,
     },
     noteContainer: {
       backgroundColor: cardColor,
