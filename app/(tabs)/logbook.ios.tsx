@@ -358,7 +358,7 @@ const createStyles = (isDark: boolean, topInset: number) =>
       borderTopRightRadius: 20,
       padding: 24,
       paddingBottom: 40,
-      maxHeight: '95%',
+      maxHeight: '90%',
     },
     modalScrollContent: {
       paddingBottom: 20,
@@ -475,7 +475,7 @@ const createStyles = (isDark: boolean, topInset: number) =>
       color: '#FFFFFF',
     },
     vesselPickerContainer: {
-      maxHeight: 300,
+      maxHeight: 200,
       marginTop: 8,
       borderRadius: 12,
       borderWidth: 1,
@@ -1410,7 +1410,7 @@ export default function LogbookScreen() {
         >
           <KeyboardAvoidingView 
             behavior="padding" 
-            style={{ width: '100%', maxHeight: '95%' }}
+            style={{ width: '100%', maxHeight: '90%' }}
             keyboardVerticalOffset={0}
           >
             <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
@@ -1440,7 +1440,7 @@ export default function LogbookScreen() {
                 </Text>
 
                 <ScrollView 
-                  style={{ flexGrow: 1, flexShrink: 1 }} 
+                  style={{ flex: 1 }} 
                   contentContainerStyle={styles.modalScrollContent}
                   keyboardShouldPersistTaps="handled"
                   showsVerticalScrollIndicator={true}
@@ -1600,7 +1600,7 @@ export default function LogbookScreen() {
                                 <Text style={styles.vesselOptionSubtext}>MMSI: {item.mmsi}</Text>
                               </TouchableOpacity>
                             )}
-                            scrollEnabled={vessels.length > 4}
+                            scrollEnabled={vessels.length > 3}
                             nestedScrollEnabled={true}
                           />
                         </View>

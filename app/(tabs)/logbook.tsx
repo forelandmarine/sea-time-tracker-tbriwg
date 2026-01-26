@@ -378,7 +378,7 @@ const createStyles = (isDark: boolean) =>
       padding: 24,
       width: '90%',
       maxWidth: 500,
-      maxHeight: '90%',
+      maxHeight: '80%',
     },
     modalScrollContent: {
       paddingBottom: 20,
@@ -495,7 +495,7 @@ const createStyles = (isDark: boolean) =>
       color: '#FFFFFF',
     },
     vesselPickerContainer: {
-      maxHeight: 300,
+      maxHeight: 200,
       marginTop: 8,
       borderRadius: 12,
       borderWidth: 1,
@@ -1500,7 +1500,7 @@ export default function LogbookScreen() {
                 </Text>
 
                 <ScrollView 
-                  style={{ maxHeight: '70%' }} 
+                  style={{ flex: 1 }} 
                   contentContainerStyle={styles.modalScrollContent}
                   showsVerticalScrollIndicator={true}
                   bounces={true}
@@ -1635,7 +1635,7 @@ export default function LogbookScreen() {
                                 </Text>
                               </TouchableOpacity>
                             )}
-                            scrollEnabled={vessels.length > 4}
+                            scrollEnabled={vessels.length > 3}
                             nestedScrollEnabled={true}
                           />
                         </View>
