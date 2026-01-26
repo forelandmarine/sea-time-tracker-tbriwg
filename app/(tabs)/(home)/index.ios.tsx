@@ -277,6 +277,18 @@ export default function SeaTimeScreen() {
     }
   };
 
+  const isLocationStale = (timestamp: string | null | undefined): boolean => {
+    if (!timestamp) return false;
+    try {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const hoursSinceUpdate = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+      return hoursSinceUpdate > 24;
+    } catch (e) {
+      return false;
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -433,9 +445,24 @@ export default function SeaTimeScreen() {
                           </View>
                         </View>
                         {activeVesselLocation.timestamp && (
-                          <Text style={styles.vesselTimestamp}>
-                            Updated: {formatTimestamp(activeVesselLocation.timestamp)}
-                          </Text>
+                          <View>
+                            <Text style={styles.vesselTimestamp}>
+                              Updated: {formatTimestamp(activeVesselLocation.timestamp)}
+                            </Text>
+                            {isLocationStale(activeVesselLocation.timestamp) && (
+                              <View style={styles.staleWarning}>
+                                <IconSymbol
+                                  ios_icon_name="exclamationmark.triangle.fill"
+                                  android_material_icon_name="warning"
+                                  size={16}
+                                  color={colors.warning}
+                                />
+                                <Text style={styles.staleWarningText}>
+                                  Location data is more than 24 hours old
+                                </Text>
+                              </View>
+                            )}
+                          </View>
                         )}
                       </View>
                     ) : null;
@@ -1126,6 +1153,23 @@ function createStyles(isDark: boolean, topInset: number) {
       color: '#fff',
       fontSize: 16,
       fontWeight: 'bold',
+    },
+    staleWarning: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 8,
+      padding: 8,
+      backgroundColor: colors.warning + '15',
+      borderRadius: 6,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.warning,
+    },
+    staleWarningText: {
+      flex: 1,
+      fontSize: 12,
+      color: isDark ? colors.text : colors.textLight,
+      fontWeight: '600',
     },
   });
 }
