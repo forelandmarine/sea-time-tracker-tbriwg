@@ -188,7 +188,7 @@ export default function SeaTimeScreen() {
       
       console.log('[Home iOS] New vessel will be automatically activated and tracked');
       
-      await seaTimeApi.createVessel(
+      const createdVessel = await seaTimeApi.createVessel(
         newMMSI.trim(), 
         vesselNameTrimmed, 
         shouldActivate,
@@ -199,6 +199,19 @@ export default function SeaTimeScreen() {
         newGrossTonnes ? parseFloat(newGrossTonnes) : undefined,
         newCallSign.trim() || undefined
       );
+      
+      console.log('[Home iOS] Vessel created successfully:', createdVessel.id);
+      
+      // Immediately capture the vessel's position by triggering an AIS check
+      console.log('[Home iOS] Capturing initial position for new vessel...');
+      try {
+        await seaTimeApi.checkVesselAIS(createdVessel.id, true);
+        console.log('[Home iOS] Initial position captured successfully');
+      } catch (aisError: any) {
+        console.error('[Home iOS] Failed to capture initial position:', aisError);
+        // Don't fail the whole operation if AIS check fails
+        // The scheduled task will pick it up on the next run
+      }
       
       setModalVisible(false);
       setNewMMSI('');
