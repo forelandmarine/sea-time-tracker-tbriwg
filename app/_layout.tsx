@@ -299,6 +299,19 @@ function RootLayoutNav() {
               }} 
             />
 
+            {/* Add Sea Time Entry screen */}
+            <Stack.Screen 
+              name="add-sea-time" 
+              options={{ 
+                presentation: 'formSheet',
+                title: 'Add Sea Time Entry',
+                headerShown: true,
+                sheetGrabberVisible: true,
+                sheetAllowedDetents: [0.9, 1.0],
+                sheetCornerRadius: 20,
+              }} 
+            />
+
             {/* User profile screen */}
             <Stack.Screen 
               name="user-profile" 

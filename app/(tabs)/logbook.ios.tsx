@@ -642,8 +642,7 @@ export default function LogbookScreen() {
 
   const handleAddEntry = () => {
     console.log('[LogbookScreen iOS] User tapped Add Entry button');
-    setEditingEntry(null);
-    setShowAddModal(true);
+    router.push('/add-sea-time');
   };
 
   const handleEditEntry = (entry: SeaTimeEntry) => {
