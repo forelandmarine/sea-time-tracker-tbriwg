@@ -21,6 +21,8 @@ async function ensureScheduledTask(app: App, vesselId: string, userId: string): 
 
     // Create a new scheduled task for the vessel with 2-hour check interval
     const now = new Date();
+    const nextRun = new Date(now.getTime() + 2 * 60 * 60 * 1000); // Schedule first check 2 hours from now
+
     const [newTask] = await app.db
       .insert(schema.scheduled_tasks)
       .values({
@@ -29,13 +31,13 @@ async function ensureScheduledTask(app: App, vesselId: string, userId: string): 
         vessel_id: vesselId,
         interval_hours: '2',
         is_active: true,
-        next_run: now,
+        next_run: nextRun,
         last_run: null,
       })
       .returning();
 
     app.logger.info(
-      { vesselId, taskId: newTask.id, interval: '2 hours' },
+      { vesselId, taskId: newTask.id, interval: '2 hours', nextRun: nextRun.toISOString() },
       'Created scheduled task for vessel with 2-hour position check interval'
     );
   } catch (error) {
