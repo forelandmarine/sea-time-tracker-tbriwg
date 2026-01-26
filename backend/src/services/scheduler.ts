@@ -386,14 +386,25 @@ async function processScheduledTask(
 }
 
 /**
- * Handle sea time entry creation with simplified 2-hour window logic
+ * Helper function to extract calendar day (YYYY-MM-DD) from a date
+ */
+function getCalendarDay(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Handle sea time entry creation with simplified 2-hour window logic and compounding for same calendar day
  *
- * SIMPLIFIED ALGORITHM:
+ * ALGORITHM:
  * 1. Get current AIS position (from check_time)
  * 2. Get AIS position from 2 hours ago
  * 3. If position difference > 0.1 degrees (latitude or longitude):
- *    - Create a pending sea time entry with both positions and timestamps
- *    - User will review on the confirmations page
+ *    a. Check if there's an existing PENDING sea time entry for the same vessel on the same calendar day
+ *    b. If YES: EXTEND the existing entry by updating its end_time and end position
+ *    c. If NO: CREATE a new pending sea time entry
  * 4. If difference <= 0.1 degrees:
  *    - No entry created (vessel hasn't moved significantly)
  */
@@ -482,7 +493,7 @@ async function handleSeaTimeEntries(
     return;
   }
 
-  // Calculate duration
+  // Calculate duration of this 2-hour window
   const durationMs = currentCheck.check_time.getTime() - oldCheck.check_time.getTime();
   const durationHours = Math.round((durationMs / (1000 * 60 * 60)) * 100) / 100;
 
@@ -496,45 +507,115 @@ async function handleSeaTimeEntries(
     `Movement detected for vessel ${vessel_name}: ${Math.round(maxDiff * 10000) / 10000}° over ${durationHours} hours`
   );
 
-  // Create pending sea time entry
-  const notes = `Movement detected: vessel moved ${Math.round(maxDiff * 10000) / 10000}° over ${durationHours} hours`;
+  // Get calendar day for the old check (start of this observation window)
+  const calendarDay = getCalendarDay(oldCheck.check_time);
 
-  try {
-    const [new_entry] = await app.db
-      .insert(schema.sea_time_entries)
-      .values({
-        user_id: vessel.user_id,
-        vessel_id: vesselId,
-        start_time: oldCheck.check_time,
-        end_time: currentCheck.check_time,
-        duration_hours: String(durationHours),
-        start_latitude: String(oldLat),
-        start_longitude: String(oldLng),
-        end_latitude: String(currentLat),
-        end_longitude: String(currentLng),
-        status: 'pending',
-        service_type: 'actual_sea_service',
-        notes: notes,
-      })
-      .returning();
+  app.logger.debug(
+    { vesselId, mmsi, calendarDay },
+    `Checking for existing pending entry on calendar day ${calendarDay}`
+  );
 
-    app.logger.info(
-      {
-        taskId,
-        vesselId,
-        mmsi,
-        entryId: new_entry.id,
-        startTime: oldCheck.check_time.toISOString(),
-        endTime: currentCheck.check_time.toISOString(),
-        durationHours,
-        positionChange: Math.round(maxDiff * 10000) / 10000,
-      },
-      `Created pending sea time entry for vessel ${vessel_name}: ${Math.round(maxDiff * 10000) / 10000}° movement over ${durationHours} hours`
+  // Check if there's an existing PENDING sea time entry for this vessel on the same calendar day
+  const existingEntries = await app.db
+    .select()
+    .from(schema.sea_time_entries)
+    .where(
+      and(
+        eq(schema.sea_time_entries.vessel_id, vesselId),
+        eq(schema.sea_time_entries.status, 'pending')
+      )
     );
-  } catch (error) {
-    app.logger.error(
-      { err: error, vesselId, mmsi, taskId },
-      `Failed to create sea time entry for vessel ${vessel_name}`
-    );
+
+  // Filter for entries on the same calendar day
+  const existingEntryForDay = existingEntries.find(entry => {
+    const entryDay = getCalendarDay(entry.start_time);
+    return entryDay === calendarDay;
+  });
+
+  if (existingEntryForDay) {
+    // EXTEND the existing entry
+    try {
+      // Calculate total duration from original start_time to current check_time
+      const totalDurationMs = currentCheck.check_time.getTime() - existingEntryForDay.start_time.getTime();
+      const totalDurationHours = Math.round((totalDurationMs / (1000 * 60 * 60)) * 100) / 100;
+
+      // Update the existing entry with the new end position and time
+      const updatedNotes = `Movement detected: vessel moved ${Math.round(maxDiff * 10000) / 10000}° over ${durationHours} hours (now ${totalDurationHours} hours total for the day)`;
+
+      const [updated_entry] = await app.db
+        .update(schema.sea_time_entries)
+        .set({
+          end_time: currentCheck.check_time,
+          end_latitude: String(currentLat),
+          end_longitude: String(currentLng),
+          duration_hours: String(totalDurationHours),
+          notes: updatedNotes,
+        })
+        .where(eq(schema.sea_time_entries.id, existingEntryForDay.id))
+        .returning();
+
+      app.logger.info(
+        {
+          taskId,
+          vesselId,
+          mmsi,
+          entryId: existingEntryForDay.id,
+          originalStartTime: existingEntryForDay.start_time.toISOString(),
+          newEndTime: currentCheck.check_time.toISOString(),
+          previousDurationHours: existingEntryForDay.duration_hours ? parseFloat(String(existingEntryForDay.duration_hours)) : 0,
+          newTotalDurationHours: totalDurationHours,
+          positionChange: Math.round(maxDiff * 10000) / 10000,
+        },
+        `Extended existing sea time entry [${existingEntryForDay.id}] for vessel ${vessel_name}: now ${totalDurationHours} hours total (added ${durationHours} hours from movement of ${Math.round(maxDiff * 10000) / 10000}°)`
+      );
+    } catch (error) {
+      app.logger.error(
+        { err: error, vesselId, mmsi, taskId, entryId: existingEntryForDay.id },
+        `Failed to extend sea time entry for vessel ${vessel_name}`
+      );
+    }
+  } else {
+    // CREATE a new pending sea time entry
+    const notes = `Movement detected: vessel moved ${Math.round(maxDiff * 10000) / 10000}° over ${durationHours} hours`;
+
+    try {
+      const [new_entry] = await app.db
+        .insert(schema.sea_time_entries)
+        .values({
+          user_id: vessel.user_id,
+          vessel_id: vesselId,
+          start_time: oldCheck.check_time,
+          end_time: currentCheck.check_time,
+          duration_hours: String(durationHours),
+          start_latitude: String(oldLat),
+          start_longitude: String(oldLng),
+          end_latitude: String(currentLat),
+          end_longitude: String(currentLng),
+          status: 'pending',
+          service_type: 'actual_sea_service',
+          notes: notes,
+        })
+        .returning();
+
+      app.logger.info(
+        {
+          taskId,
+          vesselId,
+          mmsi,
+          entryId: new_entry.id,
+          startTime: oldCheck.check_time.toISOString(),
+          endTime: currentCheck.check_time.toISOString(),
+          durationHours,
+          positionChange: Math.round(maxDiff * 10000) / 10000,
+          calendarDay,
+        },
+        `Created new pending sea time entry for vessel ${vessel_name}: ${Math.round(maxDiff * 10000) / 10000}° movement over ${durationHours} hours`
+      );
+    } catch (error) {
+      app.logger.error(
+        { err: error, vesselId, mmsi, taskId },
+        `Failed to create sea time entry for vessel ${vessel_name}`
+      );
+    }
   }
 }
