@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,8 @@ import {
   useColorScheme,
   TextInput,
   Platform,
-  FlatList,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
@@ -101,32 +102,6 @@ const createStyles = (isDark: boolean) =>
       fontSize: 16,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
-    vesselPickerContainer: {
-      maxHeight: 200,
-      marginTop: 8,
-      borderRadius: 12,
-      borderWidth: 1,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
-      overflow: 'hidden',
-    },
-    vesselOption: {
-      padding: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-    },
-    vesselOptionLast: {
-      borderBottomWidth: 0,
-    },
-    vesselOptionText: {
-      fontSize: 16,
-      color: isDark ? colors.text : colors.textLight,
-    },
-    vesselOptionSubtext: {
-      fontSize: 13,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 4,
-    },
     mcaButton: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -200,27 +175,55 @@ const createStyles = (isDark: boolean) =>
       fontWeight: '600',
       color: '#FFFFFF',
     },
-    datePickerModal: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+    modalOverlay: {
+      flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'flex-end',
-      zIndex: 9999,
     },
-    datePickerContainer: {
+    modalContent: {
       backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
-      padding: 20,
+      maxHeight: '80%',
     },
-    datePickerTitle: {
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    modalTitle: {
       fontSize: 20,
       fontWeight: '700',
       color: isDark ? colors.text : colors.textLight,
-      marginBottom: 16,
+    },
+    modalCloseButton: {
+      padding: 4,
+    },
+    modalBody: {
+      maxHeight: 400,
+    },
+    vesselOption: {
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    vesselOptionLast: {
+      borderBottomWidth: 0,
+    },
+    vesselOptionText: {
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
+    },
+    vesselOptionSubtext: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 4,
+    },
+    datePickerContainer: {
+      padding: 20,
     },
     datePickerButton: {
       backgroundColor: colors.primary,
@@ -233,6 +236,15 @@ const createStyles = (isDark: boolean) =>
       fontSize: 16,
       fontWeight: '600',
       color: '#FFFFFF',
+    },
+    emptyState: {
+      padding: 40,
+      alignItems: 'center',
+    },
+    emptyStateText: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      textAlign: 'center',
     },
   });
 
@@ -398,6 +410,7 @@ export default function AddSeaTimeScreen() {
   const saveButtonText = 'Save Entry';
   const noVesselsText = 'No vessels available';
   const noVesselsSubtext = 'Add a vessel first from the Home tab';
+  const selectVesselTitle = 'Select Vessel';
   const startDatePickerTitle = 'Select Start Date & Time';
   const endDatePickerTitle = 'Select End Date & Time';
   const doneButtonText = 'Done';
@@ -407,8 +420,8 @@ export default function AddSeaTimeScreen() {
       <Stack.Screen
         options={{
           title: 'Add Sea Time Entry',
-          presentation: 'formSheet',
           headerShown: true,
+          headerBackTitle: 'Back',
         }}
       />
       
@@ -500,7 +513,7 @@ export default function AddSeaTimeScreen() {
               style={styles.pickerButton}
               onPress={() => {
                 console.log('[AddSeaTimeScreen] User tapped vessel picker');
-                setShowVesselPicker(!showVesselPicker);
+                setShowVesselPicker(true);
               }}
             >
               <Text
@@ -519,51 +532,6 @@ export default function AddSeaTimeScreen() {
                 color={isDark ? colors.textSecondary : colors.textSecondaryLight}
               />
             </TouchableOpacity>
-            
-            {showVesselPicker && vessels.length > 0 && (
-              <View style={styles.vesselPickerContainer}>
-                <FlatList
-                  data={vessels}
-                  keyExtractor={(item) => item.id}
-                  renderItem={({ item, index }) => {
-                    const vesselName = item.vessel_name;
-                    const mmsiText = `MMSI: ${item.mmsi}`;
-                    const callsignText = item.callsign ? ` • Call Sign: ${item.callsign}` : '';
-                    const subtextDisplay = mmsiText + callsignText;
-                    
-                    return (
-                      <TouchableOpacity
-                        style={[
-                          styles.vesselOption,
-                          index === vessels.length - 1 && styles.vesselOptionLast,
-                        ]}
-                        onPress={() => {
-                          console.log('[AddSeaTimeScreen] User selected vessel:', item.vessel_name);
-                          setSelectedVessel(item);
-                          setShowVesselPicker(false);
-                        }}
-                      >
-                        <Text style={styles.vesselOptionText}>{vesselName}</Text>
-                        <Text style={styles.vesselOptionSubtext}>
-                          {subtextDisplay}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  }}
-                  scrollEnabled={vessels.length > 3}
-                  nestedScrollEnabled={true}
-                />
-              </View>
-            )}
-            
-            {showVesselPicker && vessels.length === 0 && (
-              <View style={styles.vesselPickerContainer}>
-                <View style={styles.vesselOption}>
-                  <Text style={styles.vesselOptionText}>{noVesselsText}</Text>
-                  <Text style={styles.vesselOptionSubtext}>{noVesselsSubtext}</Text>
-                </View>
-              </View>
-            )}
           </View>
 
           <View style={styles.divider} />
@@ -681,66 +649,170 @@ export default function AddSeaTimeScreen() {
           </TouchableOpacity>
         </ScrollView>
 
+        <Modal
+          visible={showVesselPicker}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setShowVesselPicker(false)}
+        >
+          <Pressable
+            style={styles.modalOverlay}
+            onPress={() => setShowVesselPicker(false)}
+          >
+            <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{selectVesselTitle}</Text>
+                <TouchableOpacity
+                  style={styles.modalCloseButton}
+                  onPress={() => setShowVesselPicker(false)}
+                >
+                  <IconSymbol
+                    ios_icon_name="xmark"
+                    android_material_icon_name="close"
+                    size={24}
+                    color={isDark ? colors.text : colors.textLight}
+                  />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.modalBody}>
+                {vessels.length > 0 ? (
+                  vessels.map((vessel, index) => {
+                    const vesselName = vessel.vessel_name;
+                    const mmsiText = `MMSI: ${vessel.mmsi}`;
+                    const callsignText = vessel.callsign ? ` • Call Sign: ${vessel.callsign}` : '';
+                    const subtextDisplay = mmsiText + callsignText;
+                    
+                    return (
+                      <TouchableOpacity
+                        key={vessel.id}
+                        style={[
+                          styles.vesselOption,
+                          index === vessels.length - 1 && styles.vesselOptionLast,
+                        ]}
+                        onPress={() => {
+                          console.log('[AddSeaTimeScreen] User selected vessel:', vessel.vessel_name);
+                          setSelectedVessel(vessel);
+                          setShowVesselPicker(false);
+                        }}
+                      >
+                        <Text style={styles.vesselOptionText}>{vesselName}</Text>
+                        <Text style={styles.vesselOptionSubtext}>
+                          {subtextDisplay}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })
+                ) : (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>{noVesselsText}</Text>
+                    <Text style={styles.emptyStateText}>{noVesselsSubtext}</Text>
+                  </View>
+                )}
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </Modal>
+
         {showStartDatePicker && Platform.OS === 'ios' && (
-          <View style={styles.datePickerModal}>
-            <TouchableOpacity
-              style={{ flex: 1 }}
-              activeOpacity={1}
+          <Modal
+            visible={showStartDatePicker}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowStartDatePicker(false)}
+          >
+            <Pressable
+              style={styles.modalOverlay}
               onPress={() => setShowStartDatePicker(false)}
-            />
-            <View style={styles.datePickerContainer}>
-              <Text style={styles.datePickerTitle}>{startDatePickerTitle}</Text>
-              <DateTimePicker
-                value={startDate || new Date()}
-                mode="datetime"
-                display="spinner"
-                onChange={(event, selectedDate) => {
-                  if (selectedDate) {
-                    console.log('[AddSeaTimeScreen] Start date selected:', selectedDate);
-                    setStartDate(selectedDate);
-                  }
-                }}
-                textColor={isDark ? colors.text : colors.textLight}
-              />
-              <TouchableOpacity
-                style={styles.datePickerButton}
-                onPress={() => setShowStartDatePicker(false)}
-              >
-                <Text style={styles.datePickerButtonText}>{doneButtonText}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+            >
+              <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{startDatePickerTitle}</Text>
+                  <TouchableOpacity
+                    style={styles.modalCloseButton}
+                    onPress={() => setShowStartDatePicker(false)}
+                  >
+                    <IconSymbol
+                      ios_icon_name="xmark"
+                      android_material_icon_name="close"
+                      size={24}
+                      color={isDark ? colors.text : colors.textLight}
+                    />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.datePickerContainer}>
+                  <DateTimePicker
+                    value={startDate || new Date()}
+                    mode="datetime"
+                    display="spinner"
+                    onChange={(event, selectedDate) => {
+                      if (selectedDate) {
+                        console.log('[AddSeaTimeScreen] Start date selected:', selectedDate);
+                        setStartDate(selectedDate);
+                      }
+                    }}
+                    textColor={isDark ? colors.text : colors.textLight}
+                  />
+                  <TouchableOpacity
+                    style={styles.datePickerButton}
+                    onPress={() => setShowStartDatePicker(false)}
+                  >
+                    <Text style={styles.datePickerButtonText}>{doneButtonText}</Text>
+                  </TouchableOpacity>
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
         )}
 
         {showEndDatePicker && Platform.OS === 'ios' && (
-          <View style={styles.datePickerModal}>
-            <TouchableOpacity
-              style={{ flex: 1 }}
-              activeOpacity={1}
+          <Modal
+            visible={showEndDatePicker}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowEndDatePicker(false)}
+          >
+            <Pressable
+              style={styles.modalOverlay}
               onPress={() => setShowEndDatePicker(false)}
-            />
-            <View style={styles.datePickerContainer}>
-              <Text style={styles.datePickerTitle}>{endDatePickerTitle}</Text>
-              <DateTimePicker
-                value={endDate || new Date()}
-                mode="datetime"
-                display="spinner"
-                onChange={(event, selectedDate) => {
-                  if (selectedDate) {
-                    console.log('[AddSeaTimeScreen] End date selected:', selectedDate);
-                    setEndDate(selectedDate);
-                  }
-                }}
-                textColor={isDark ? colors.text : colors.textLight}
-              />
-              <TouchableOpacity
-                style={styles.datePickerButton}
-                onPress={() => setShowEndDatePicker(false)}
-              >
-                <Text style={styles.datePickerButtonText}>{doneButtonText}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+            >
+              <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>{endDatePickerTitle}</Text>
+                  <TouchableOpacity
+                    style={styles.modalCloseButton}
+                    onPress={() => setShowEndDatePicker(false)}
+                  >
+                    <IconSymbol
+                      ios_icon_name="xmark"
+                      android_material_icon_name="close"
+                      size={24}
+                      color={isDark ? colors.text : colors.textLight}
+                    />
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.datePickerContainer}>
+                  <DateTimePicker
+                    value={endDate || new Date()}
+                    mode="datetime"
+                    display="spinner"
+                    onChange={(event, selectedDate) => {
+                      if (selectedDate) {
+                        console.log('[AddSeaTimeScreen] End date selected:', selectedDate);
+                        setEndDate(selectedDate);
+                      }
+                    }}
+                    textColor={isDark ? colors.text : colors.textLight}
+                  />
+                  <TouchableOpacity
+                    style={styles.datePickerButton}
+                    onPress={() => setShowEndDatePicker(false)}
+                  >
+                    <Text style={styles.datePickerButtonText}>{doneButtonText}</Text>
+                  </TouchableOpacity>
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
         )}
 
         {showStartDatePicker && Platform.OS !== 'ios' && (
