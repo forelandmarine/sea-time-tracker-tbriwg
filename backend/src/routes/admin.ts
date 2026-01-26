@@ -1321,4 +1321,411 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     }
   );
+
+  // GET /api/admin/diagnose-vessel-workflow - Diagnostic endpoint for vessel workflow issues
+  fastify.get<{ Querystring: { mmsi: string; email: string } }>(
+    '/api/admin/diagnose-vessel-workflow',
+    {
+      schema: {
+        description: 'Diagnose vessel workflow and sea time entry creation issues',
+        tags: ['admin'],
+        querystring: {
+          type: 'object',
+          required: ['mmsi', 'email'],
+          properties: {
+            mmsi: { type: 'string', description: 'Vessel MMSI (e.g., 352978169)' },
+            email: { type: 'string', format: 'email', description: 'User email (e.g., macnally@me.com)' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  email: { type: 'string' },
+                  name: { type: ['string', 'null'] },
+                },
+              },
+              vessel: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  mmsi: { type: 'string' },
+                  vessel_name: { type: 'string' },
+                  is_active: { type: 'boolean' },
+                  user_id: { type: ['string', 'null'] },
+                },
+              },
+              scheduled_task: {
+                type: ['object', 'null'],
+                properties: {
+                  id: { type: 'string' },
+                  task_type: { type: 'string' },
+                  interval_hours: { type: 'string' },
+                  is_active: { type: 'boolean' },
+                  last_run: { type: ['string', 'null'], format: 'date-time' },
+                  next_run: { type: 'string', format: 'date-time' },
+                },
+              },
+              recent_ais_checks: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    check_time: { type: 'string', format: 'date-time' },
+                    is_moving: { type: 'boolean' },
+                    speed_knots: { type: ['number', 'null'] },
+                    latitude: { type: ['number', 'null'] },
+                    longitude: { type: ['number', 'null'] },
+                  },
+                },
+              },
+              sea_time_entries: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    start_time: { type: 'string', format: 'date-time' },
+                    end_time: { type: ['string', 'null'], format: 'date-time' },
+                    duration_hours: { type: ['number', 'null'] },
+                    status: { type: 'string' },
+                  },
+                },
+              },
+              workflow_status: {
+                type: 'object',
+                properties: {
+                  status: { type: 'string', enum: ['OK', 'ISSUES_FOUND'] },
+                  issues: {
+                    type: 'array',
+                    items: { type: 'string' },
+                  },
+                },
+              },
+            },
+          },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { mmsi, email } = request.query;
+
+      app.logger.info({ mmsi, email }, 'Diagnosing vessel workflow');
+
+      try {
+        // Step 1: Find user by email
+        const users = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email.toLowerCase()));
+
+        if (users.length === 0) {
+          app.logger.warn({ email }, 'User not found for diagnosis');
+          return reply.code(404).send({ error: `User with email ${email} not found` });
+        }
+
+        const user = users[0];
+
+        // Step 2: Find vessel by MMSI
+        const vessels = await app.db
+          .select()
+          .from(schema.vessels)
+          .where(eq(schema.vessels.mmsi, mmsi));
+
+        if (vessels.length === 0) {
+          app.logger.warn({ mmsi }, 'Vessel not found for diagnosis');
+          return reply.code(404).send({ error: `Vessel with MMSI ${mmsi} not found` });
+        }
+
+        const vessel = vessels[0];
+
+        // Step 3: Get scheduled task for this vessel
+        const scheduledTasks = await app.db
+          .select()
+          .from(schema.scheduled_tasks)
+          .where(eq(schema.scheduled_tasks.vessel_id, vessel.id));
+
+        const scheduledTask = scheduledTasks.length > 0 ? scheduledTasks[0] : null;
+
+        // Step 4: Get recent AIS checks (last 10)
+        const aisChecks = await app.db
+          .select()
+          .from(schema.ais_checks)
+          .where(eq(schema.ais_checks.vessel_id, vessel.id))
+          .then(checks => checks.slice(-10));
+
+        // Step 5: Get all sea time entries
+        const seaTimeEntries = await app.db
+          .select()
+          .from(schema.sea_time_entries)
+          .where(eq(schema.sea_time_entries.vessel_id, vessel.id));
+
+        // Step 6: Analyze workflow status
+        const issues: string[] = [];
+
+        if (!vessel.user_id) {
+          issues.push(`Vessel has no user_id (expected: ${user.id})`);
+        } else if (vessel.user_id !== user.id) {
+          issues.push(`Vessel user_id mismatch: ${vessel.user_id} (expected: ${user.id})`);
+        }
+
+        if (!scheduledTask) {
+          issues.push('No scheduled task found for vessel');
+        } else if (!scheduledTask.is_active) {
+          issues.push('Scheduled task is inactive');
+        } else if (scheduledTask.task_type !== 'ais_check') {
+          issues.push(`Scheduled task type is "${scheduledTask.task_type}" (expected: "ais_check")`);
+        }
+
+        if (aisChecks.length === 0) {
+          issues.push('No AIS checks recorded for this vessel');
+        }
+
+        const workflowStatus = issues.length === 0 ? 'OK' : 'ISSUES_FOUND';
+
+        // Format response
+        const userResponse = {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        };
+
+        const vesselResponse = {
+          id: vessel.id,
+          mmsi: vessel.mmsi,
+          vessel_name: vessel.vessel_name,
+          is_active: vessel.is_active,
+          user_id: vessel.user_id,
+        };
+
+        const scheduledTaskResponse = scheduledTask
+          ? {
+              id: scheduledTask.id,
+              task_type: scheduledTask.task_type,
+              interval_hours: scheduledTask.interval_hours,
+              is_active: scheduledTask.is_active,
+              last_run: scheduledTask.last_run ? scheduledTask.last_run.toISOString() : null,
+              next_run: scheduledTask.next_run.toISOString(),
+            }
+          : null;
+
+        const recentAisChecksResponse = aisChecks.map(check => ({
+          id: check.id,
+          check_time: check.check_time.toISOString(),
+          is_moving: check.is_moving,
+          speed_knots: check.speed_knots ? parseFloat(String(check.speed_knots)) : null,
+          latitude: check.latitude ? parseFloat(String(check.latitude)) : null,
+          longitude: check.longitude ? parseFloat(String(check.longitude)) : null,
+        }));
+
+        const seaTimeEntriesResponse = seaTimeEntries.map(entry => ({
+          id: entry.id,
+          start_time: entry.start_time.toISOString(),
+          end_time: entry.end_time ? entry.end_time.toISOString() : null,
+          duration_hours: entry.duration_hours ? parseFloat(String(entry.duration_hours)) : null,
+          status: entry.status,
+        }));
+
+        app.logger.info(
+          {
+            userId: user.id,
+            vesselId: vessel.id,
+            mmsi,
+            workflowStatus,
+            issuesCount: issues.length,
+          },
+          'Vessel workflow diagnosis complete'
+        );
+
+        return reply.code(200).send({
+          user: userResponse,
+          vessel: vesselResponse,
+          scheduled_task: scheduledTaskResponse,
+          recent_ais_checks: recentAisChecksResponse,
+          sea_time_entries: seaTimeEntriesResponse,
+          workflow_status: {
+            status: workflowStatus,
+            issues,
+          },
+        });
+      } catch (error) {
+        app.logger.error({ err: error, mmsi, email }, 'Error diagnosing vessel workflow');
+        return reply.code(500).send({ error: 'Failed to diagnose vessel workflow' });
+      }
+    }
+  );
+
+  // POST /api/admin/fix-vessel-workflow - Fix vessel workflow issues
+  fastify.post<{ Body: { mmsi: string; email: string } }>(
+    '/api/admin/fix-vessel-workflow',
+    {
+      schema: {
+        description: 'Fix vessel workflow issues and ensure proper configuration',
+        tags: ['admin'],
+        body: {
+          type: 'object',
+          required: ['mmsi', 'email'],
+          properties: {
+            mmsi: { type: 'string', description: 'Vessel MMSI' },
+            email: { type: 'string', format: 'email', description: 'User email' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              actions_taken: {
+                type: 'array',
+                items: { type: 'string' },
+              },
+              vessel_id: { type: 'string' },
+              task_id: { type: 'string' },
+              user_id: { type: 'string' },
+            },
+          },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { mmsi, email } = request.body;
+
+      app.logger.info({ mmsi, email }, 'Fixing vessel workflow');
+
+      try {
+        const actionsTaken: string[] = [];
+
+        // Step 1: Find user by email
+        const users = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email.toLowerCase()));
+
+        if (users.length === 0) {
+          app.logger.warn({ email }, 'User not found for fix');
+          return reply.code(404).send({ error: `User with email ${email} not found` });
+        }
+
+        const user = users[0];
+
+        // Step 2: Find vessel by MMSI
+        const vessels = await app.db
+          .select()
+          .from(schema.vessels)
+          .where(eq(schema.vessels.mmsi, mmsi));
+
+        if (vessels.length === 0) {
+          app.logger.warn({ mmsi }, 'Vessel not found for fix');
+          return reply.code(404).send({ error: `Vessel with MMSI ${mmsi} not found` });
+        }
+
+        let vessel = vessels[0];
+
+        // Step 3: Update vessel.user_id if missing or incorrect
+        if (!vessel.user_id || vessel.user_id !== user.id) {
+          const [updatedVessel] = await app.db
+            .update(schema.vessels)
+            .set({ user_id: user.id })
+            .where(eq(schema.vessels.id, vessel.id))
+            .returning();
+
+          vessel = updatedVessel;
+          actionsTaken.push(`Updated vessel.user_id to ${user.id}`);
+          app.logger.info({ vesselId: vessel.id, userId: user.id }, 'Updated vessel user_id');
+        }
+
+        // Step 4: Find or create scheduled task
+        const scheduledTasks = await app.db
+          .select()
+          .from(schema.scheduled_tasks)
+          .where(eq(schema.scheduled_tasks.vessel_id, vessel.id));
+
+        let taskId: string;
+
+        if (scheduledTasks.length === 0) {
+          // Create new scheduled task
+          const now = new Date();
+          const [newTask] = await app.db
+            .insert(schema.scheduled_tasks)
+            .values({
+              user_id: user.id,
+              task_type: 'ais_check',
+              vessel_id: vessel.id,
+              interval_hours: '2',
+              is_active: true,
+              next_run: now, // Run immediately on next scheduler iteration
+              last_run: null,
+            })
+            .returning();
+
+          taskId = newTask.id;
+          actionsTaken.push(`Created new scheduled task with 2-hour interval (task_id: ${taskId})`);
+          app.logger.info({ vesselId: vessel.id, taskId }, 'Created new scheduled task');
+        } else {
+          const existingTask = scheduledTasks[0];
+          taskId = existingTask.id;
+
+          // Update task if needed
+          let taskUpdated = false;
+          const taskUpdates: any = {};
+
+          if (!existingTask.is_active) {
+            taskUpdates.is_active = true;
+            taskUpdated = true;
+          }
+
+          if (existingTask.user_id !== user.id) {
+            taskUpdates.user_id = user.id;
+            taskUpdated = true;
+          }
+
+          if (existingTask.next_run > new Date()) {
+            taskUpdates.next_run = new Date(); // Run immediately
+            taskUpdated = true;
+          }
+
+          if (taskUpdated) {
+            await app.db
+              .update(schema.scheduled_tasks)
+              .set(taskUpdates)
+              .where(eq(schema.scheduled_tasks.id, existingTask.id));
+
+            const updatesDesc = Object.keys(taskUpdates).join(', ');
+            actionsTaken.push(`Updated existing scheduled task: ${updatesDesc}`);
+            app.logger.info({ taskId, updates: taskUpdates }, 'Updated scheduled task');
+          }
+        }
+
+        app.logger.info(
+          {
+            userId: user.id,
+            vesselId: vessel.id,
+            taskId,
+            actionsTaken,
+          },
+          'Vessel workflow fix complete'
+        );
+
+        return reply.code(200).send({
+          success: true,
+          actions_taken: actionsTaken,
+          vessel_id: vessel.id,
+          task_id: taskId,
+          user_id: user.id,
+        });
+      } catch (error) {
+        app.logger.error({ err: error, mmsi, email }, 'Error fixing vessel workflow');
+        return reply.code(500).send({ error: 'Failed to fix vessel workflow' });
+      }
+    }
+  );
 }

@@ -37,13 +37,13 @@ async function ensureScheduledTask(app: App, vesselId: string, userId: string): 
       .returning();
 
     app.logger.info(
-      { vesselId, taskId: newTask.id, interval: '2 hours', nextRun: nextRun.toISOString() },
-      'Created scheduled task for vessel with 2-hour position check interval'
+      { vesselId, userId, taskId: newTask.id, interval: '2 hours', nextRun: nextRun.toISOString() },
+      `Created scheduled task for vessel with 2-hour position check interval (user: ${userId})`
     );
   } catch (error) {
     app.logger.error(
-      { err: error, vesselId },
-      'Failed to create scheduled task for vessel'
+      { err: error, vesselId, userId },
+      `Failed to create scheduled task for vessel (user: ${userId})`
     );
   }
 }

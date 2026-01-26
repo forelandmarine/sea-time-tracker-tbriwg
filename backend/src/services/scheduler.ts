@@ -96,12 +96,22 @@ async function runSchedulerIteration(app: App): Promise<void> {
           vesselId: vessel.id,
           vesselName: vessel.vessel_name,
           mmsi: vessel.mmsi,
+          userId: vessel.user_id,
           nextRun: task.next_run.toISOString(),
           isDue: task.next_run <= now,
         })),
       },
       `Query result: found ${dueTasks.length} due AIS check task(s) for active vessels`
     );
+
+    // Log which vessels are being checked
+    if (dueTasks.length > 0) {
+      const vesselsList = dueTasks.map(({ vessel }) => `${vessel.vessel_name} (MMSI: ${vessel.mmsi}, user: ${vessel.user_id})`).join('; ');
+      app.logger.debug(
+        { vesselCount: dueTasks.length, vessels: vesselsList },
+        `Checking positions for vessels: ${vesselsList}`
+      );
+    }
 
     if (dueTasks.length === 0) {
       app.logger.debug('No due AIS check tasks found for active vessels');
@@ -127,9 +137,10 @@ async function runSchedulerIteration(app: App): Promise<void> {
             vesselName: vessel.vessel_name,
             mmsi: vessel.mmsi,
             userId: vessel.user_id,
+            taskUserId: task.user_id,
             interval: task.interval_hours,
           },
-          `Executing AIS check task for vessel ${vessel.vessel_name} (MMSI: ${vessel.mmsi}) with ${task.interval_hours}-hour interval`
+          `Executing AIS check task for vessel ${vessel.vessel_name} (MMSI: ${vessel.mmsi}) for user ${vessel.user_id} with ${task.interval_hours}-hour interval`
         );
 
         await processScheduledTask(app, task, vessel);
@@ -313,7 +324,7 @@ async function processScheduledTask(
 
   // Handle sea time entry lifecycle based on movement analysis (only if AIS check was successful)
   if (ais_check) {
-    await handleSeaTimeEntries(app, vessel, vesselId, vessel_name, mmsi, ais_data.is_moving, check_time, taskId);
+    await handleSeaTimeEntries(app, vessel, vesselId, vessel_name, mmsi, ais_data.is_moving, check_time, taskId, user_id);
   }
 
   // Always update the scheduled task with new run times
@@ -443,7 +454,8 @@ async function handleSeaTimeEntries(
   mmsi: string,
   is_moving: boolean,
   check_time: Date,
-  taskId: string
+  taskId: string,
+  userId: string
 ): Promise<void> {
   // Using 2-hour position check interval
   const twoHoursAgo = new Date(check_time.getTime() - 2 * 60 * 60 * 1000);
@@ -455,8 +467,8 @@ async function handleSeaTimeEntries(
     .orderBy(schema.ais_checks.check_time);
 
   app.logger.debug(
-    { vesselId, mmsi, checkTime: check_time.toISOString(), twoHoursAgoTime: twoHoursAgo.toISOString() },
-    `Using 2-hour position check interval for vessel ${vessel_name}`
+    { vesselId, mmsi, userId, checkTime: check_time.toISOString(), twoHoursAgoTime: twoHoursAgo.toISOString() },
+    `Using 2-hour position check interval for vessel ${vessel_name} (user: ${userId})`
   );
 
   // Find the most recent check before 2 hours ago
@@ -542,8 +554,8 @@ async function handleSeaTimeEntries(
   const calendarDay = getCalendarDay(oldCheck.check_time);
 
   app.logger.debug(
-    { vesselId, mmsi, calendarDay },
-    `Checking for existing pending entry on calendar day ${calendarDay}`
+    { vesselId, mmsi, userId, calendarDay },
+    `Checking for existing pending entry on calendar day ${calendarDay} for user ${userId}`
   );
 
   // Check if there's an existing PENDING sea time entry for this vessel on the same calendar day
@@ -590,6 +602,7 @@ async function handleSeaTimeEntries(
           taskId,
           vesselId,
           mmsi,
+          userId,
           entryId: existingEntryForDay.id,
           originalStartTime: existingEntryForDay.start_time.toISOString(),
           newEndTime: currentCheck.check_time.toISOString(),
@@ -598,12 +611,12 @@ async function handleSeaTimeEntries(
           distanceNauticalMiles: distanceNm,
           positionChangeDegrees: Math.round(maxDiff * 10000) / 10000,
         },
-        `Extended existing sea time entry [${existingEntryForDay.id}] for vessel ${vessel_name}: now ${totalDurationHours} hours total (added ${durationHours} hours from ${distanceNm} nm movement of ${Math.round(maxDiff * 10000) / 10000}°)`
+        `Extended existing sea time entry [${existingEntryForDay.id}] for vessel ${vessel_name} (user: ${userId}): now ${totalDurationHours} hours total (added ${durationHours} hours from ${distanceNm} nm movement of ${Math.round(maxDiff * 10000) / 10000}°)`
       );
     } catch (error) {
       app.logger.error(
-        { err: error, vesselId, mmsi, taskId, entryId: existingEntryForDay.id },
-        `Failed to extend sea time entry for vessel ${vessel_name}`
+        { err: error, vesselId, mmsi, userId, taskId, entryId: existingEntryForDay.id },
+        `Failed to extend sea time entry for vessel ${vessel_name} (user: ${userId})`
       );
     }
   } else {
@@ -634,6 +647,7 @@ async function handleSeaTimeEntries(
           taskId,
           vesselId,
           mmsi,
+          userId,
           entryId: new_entry.id,
           startTime: oldCheck.check_time.toISOString(),
           endTime: currentCheck.check_time.toISOString(),
@@ -642,12 +656,12 @@ async function handleSeaTimeEntries(
           positionChangeDegrees: Math.round(maxDiff * 10000) / 10000,
           calendarDay,
         },
-        `Created new pending sea time entry for vessel ${vessel_name}: ${distanceNm} nm (${Math.round(maxDiff * 10000) / 10000}°) over ${durationHours} hours`
+        `Created new pending sea time entry for vessel ${vessel_name} (user: ${userId}): ${distanceNm} nm (${Math.round(maxDiff * 10000) / 10000}°) over ${durationHours} hours`
       );
     } catch (error) {
       app.logger.error(
-        { err: error, vesselId, mmsi, taskId },
-        `Failed to create sea time entry for vessel ${vessel_name}`
+        { err: error, vesselId, mmsi, userId, taskId },
+        `Failed to create sea time entry for vessel ${vessel_name} (user: ${userId})`
       );
     }
   }
