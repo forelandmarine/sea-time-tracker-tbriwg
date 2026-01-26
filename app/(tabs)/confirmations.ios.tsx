@@ -73,34 +73,18 @@ export default function ConfirmationsScreen() {
     return isNaN(parsed) ? 0 : parsed;
   };
 
-  const isValidEntry = (entry: SeaTimeEntry): boolean => {
-    // Only require that the entry has an end_time
-    // Remove the MCA compliance check so all pending entries show up
-    const hasEndTime = entry.end_time !== null && entry.end_time !== undefined;
-    
-    if (!hasEndTime) {
-      console.log('[Confirmations] Entry filtered out (no end_time):', {
-        id: entry.id,
-        vesselName: entry.vessel?.vessel_name,
-        hasEndTime,
-      });
-    }
-    
-    return hasEndTime;
-  };
-
   const loadData = useCallback(async () => {
     try {
-      console.log('[Confirmations] Loading pending entries');
+      console.log('[Confirmations iOS] Loading pending entries');
       const pendingEntries = await seaTimeApi.getPendingEntries();
       
-      const validEntries = pendingEntries.filter(isValidEntry);
+      console.log('[Confirmations iOS] Loaded', pendingEntries.length, 'pending entries from backend');
       
-      console.log('[Confirmations] Loaded', pendingEntries.length, 'pending entries,', validEntries.length, 'valid (with end time)');
-      
-      setEntries(validEntries);
+      // Show ALL pending entries returned by the backend
+      // The backend determines what should be pending, not the frontend
+      setEntries(pendingEntries);
     } catch (error: any) {
-      console.error('[Confirmations] Failed to load data:', error);
+      console.error('[Confirmations iOS] Failed to load data:', error);
       Alert.alert('Error', 'Failed to load data: ' + error.message);
     } finally {
       setLoading(false);
@@ -109,11 +93,11 @@ export default function ConfirmationsScreen() {
 
   const checkForNewEntries = useCallback(async () => {
     try {
-      console.log('[Confirmations] Checking for new entries to notify');
+      console.log('[Confirmations iOS] Checking for new entries to notify');
       const result = await seaTimeApi.getNewSeaTimeEntries();
       
       if (result.newEntries && result.newEntries.length > 0) {
-        console.log('[Confirmations] Found', result.newEntries.length, 'new entries');
+        console.log('[Confirmations iOS] Found', result.newEntries.length, 'new entries');
         
         const validEntries = result.newEntries.filter((entry: any) => {
           const hasEndTime = entry.end_time !== null && entry.end_time !== undefined;
@@ -126,11 +110,11 @@ export default function ConfirmationsScreen() {
           return hasEndTime && isMCACompliant;
         });
         
-        console.log('[Confirmations] Filtered to', validEntries.length, 'valid MCA-compliant sea days (4+ hours with end time)');
+        console.log('[Confirmations iOS] Filtered to', validEntries.length, 'valid MCA-compliant sea days (4+ hours with end time)');
         
         for (const entry of validEntries) {
           if (notifiedEntriesRef.current.has(entry.id)) {
-            console.log('[Confirmations] Skipping already notified entry:', entry.id);
+            console.log('[Confirmations iOS] Skipping already notified entry:', entry.id);
             continue;
           }
 
@@ -139,7 +123,7 @@ export default function ConfirmationsScreen() {
             ? parseFloat(entry.duration_hours) 
             : entry.duration_hours || 0;
 
-          console.log('[Confirmations] Scheduling "Sea day detected" notification for entry:', {
+          console.log('[Confirmations iOS] Scheduling "Sea day detected" notification for entry:', {
             id: entry.id,
             vesselName,
             durationHours,
@@ -154,22 +138,22 @@ export default function ConfirmationsScreen() {
           await loadData();
         }
       } else {
-        console.log('[Confirmations] No new entries to notify');
+        console.log('[Confirmations iOS] No new entries to notify');
       }
     } catch (error) {
-      console.error('[Confirmations] Failed to check for new entries:', error);
+      console.error('[Confirmations iOS] Failed to check for new entries:', error);
     }
   }, [loadData]);
 
   useEffect(() => {
-    console.log('[Confirmations] Component mounted, loading data');
+    console.log('[Confirmations iOS] Component mounted, loading data');
     loadData();
 
-    console.log('[Confirmations] Setting up notification polling - will only notify for 4+ hour sea days with end time');
+    console.log('[Confirmations iOS] Setting up notification polling - will only notify for 4+ hour sea days with end time');
     pollIntervalRef.current = setInterval(checkForNewEntries, 30000);
 
     return () => {
-      console.log('[Confirmations] Component unmounting, cleaning up polling');
+      console.log('[Confirmations iOS] Component unmounting, cleaning up polling');
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
       }
@@ -183,7 +167,7 @@ export default function ConfirmationsScreen() {
   };
 
   const handleConfirmEntry = (entry: SeaTimeEntry) => {
-    console.log('[Confirmations] User confirming entry:', entry.id);
+    console.log('[Confirmations iOS] User confirming entry:', entry.id);
     setSelectedEntry(entry);
     setSelectedServiceType('actual_sea_service');
     setShowServiceTypeModal(true);
@@ -193,7 +177,7 @@ export default function ConfirmationsScreen() {
     if (!selectedEntry) return;
 
     try {
-      console.log('[Confirmations] Confirming entry with service type:', selectedServiceType);
+      console.log('[Confirmations iOS] Confirming entry with service type:', selectedServiceType);
       setProcessingEntryId(selectedEntry.id);
       await seaTimeApi.confirmSeaTimeEntry(selectedEntry.id, selectedServiceType);
       setShowServiceTypeModal(false);
@@ -202,7 +186,7 @@ export default function ConfirmationsScreen() {
       await loadData();
       Alert.alert('Success', 'Sea time entry confirmed');
     } catch (error: any) {
-      console.error('[Confirmations] Failed to confirm entry:', error);
+      console.error('[Confirmations iOS] Failed to confirm entry:', error);
       setProcessingEntryId(null);
       setShowServiceTypeModal(false);
       setSelectedEntry(null);
@@ -234,10 +218,10 @@ export default function ConfirmationsScreen() {
   };
 
   const handleRejectEntry = async (entryId: string) => {
-    console.log('[Confirmations] User tapped Reject button for entry:', entryId);
+    console.log('[Confirmations iOS] User tapped Reject button for entry:', entryId);
     
     if (processingEntryId) {
-      console.log('[Confirmations] Already processing an entry, ignoring tap');
+      console.log('[Confirmations iOS] Already processing an entry, ignoring tap');
       return;
     }
 
@@ -249,7 +233,7 @@ export default function ConfirmationsScreen() {
           text: 'Cancel', 
           style: 'cancel',
           onPress: () => {
-            console.log('[Confirmations] User cancelled rejection');
+            console.log('[Confirmations iOS] User cancelled rejection');
           }
         },
         {
@@ -257,20 +241,20 @@ export default function ConfirmationsScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('[Confirmations] User confirmed rejection, calling API for entry:', entryId);
+              console.log('[Confirmations iOS] User confirmed rejection, calling API for entry:', entryId);
               setProcessingEntryId(entryId);
               
               await seaTimeApi.rejectSeaTimeEntry(entryId);
               
-              console.log('[Confirmations] Entry rejected successfully');
+              console.log('[Confirmations iOS] Entry rejected successfully');
               setProcessingEntryId(null);
               
               await loadData();
               
               Alert.alert('Success', 'Sea time entry rejected');
             } catch (error: any) {
-              console.error('[Confirmations] Failed to reject entry:', error);
-              console.error('[Confirmations] Error details:', {
+              console.error('[Confirmations iOS] Failed to reject entry:', error);
+              console.error('[Confirmations iOS] Error details:', {
                 message: error.message,
                 stack: error.stack,
                 name: error.name
@@ -285,7 +269,7 @@ export default function ConfirmationsScreen() {
   };
 
   const toggleExpanded = (entryId: string) => {
-    console.log('[Confirmations] Toggling expanded state for entry:', entryId);
+    console.log('[Confirmations iOS] Toggling expanded state for entry:', entryId);
     setExpandedEntries(prev => {
       const newSet = new Set(prev);
       if (newSet.has(entryId)) {
@@ -306,7 +290,7 @@ export default function ConfirmationsScreen() {
         year: 'numeric',
       });
     } catch (e) {
-      console.error('[Confirmations] Failed to format date:', e);
+      console.error('[Confirmations iOS] Failed to format date:', e);
       return dateString;
     }
   };
@@ -319,7 +303,7 @@ export default function ConfirmationsScreen() {
         minute: '2-digit',
       });
     } catch (e) {
-      console.error('[Confirmations] Failed to format time:', e);
+      console.error('[Confirmations iOS] Failed to format time:', e);
       return dateString;
     }
   };

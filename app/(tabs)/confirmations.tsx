@@ -1,8 +1,7 @@
 
-import { colors } from '@/styles/commonStyles';
-import { useRouter } from 'expo-router';
-import * as seaTimeApi from '@/utils/seaTimeApi';
 import { IconSymbol } from '@/components/IconSymbol';
+import { colors } from '@/styles/commonStyles';
+import * as seaTimeApi from '@/utils/seaTimeApi';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -19,6 +18,7 @@ import {
   Modal,
 } from 'react-native';
 import { scheduleSeaTimeNotification } from '@/utils/notifications';
+import { useRouter } from 'expo-router';
 
 interface Vessel {
   id: string;
@@ -71,32 +71,16 @@ export default function ConfirmationsScreen() {
     return isNaN(parsed) ? 0 : parsed;
   };
 
-  const isValidEntry = (entry: SeaTimeEntry): boolean => {
-    // Only require that the entry has an end_time
-    // Remove the MCA compliance check so all pending entries show up
-    const hasEndTime = entry.end_time !== null && entry.end_time !== undefined;
-    
-    if (!hasEndTime) {
-      console.log('[Confirmations] Entry filtered out (no end_time):', {
-        id: entry.id,
-        vesselName: entry.vessel?.vessel_name,
-        hasEndTime,
-      });
-    }
-    
-    return hasEndTime;
-  };
-
   const loadData = useCallback(async () => {
     try {
       console.log('[Confirmations] Loading pending entries');
       const pendingEntries = await seaTimeApi.getPendingEntries();
       
-      const validEntries = pendingEntries.filter(isValidEntry);
+      console.log('[Confirmations] Loaded', pendingEntries.length, 'pending entries from backend');
       
-      console.log('[Confirmations] Loaded', pendingEntries.length, 'pending entries,', validEntries.length, 'valid (with end time)');
-      
-      setEntries(validEntries);
+      // Show ALL pending entries returned by the backend
+      // The backend determines what should be pending, not the frontend
+      setEntries(pendingEntries);
     } catch (error: any) {
       console.error('[Confirmations] Failed to load data:', error);
       Alert.alert('Error', 'Failed to load data: ' + error.message);
