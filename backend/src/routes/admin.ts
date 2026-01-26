@@ -973,4 +973,352 @@ export function register(app: App, fastify: FastifyInstance) {
       return reply.code(500).send({ error: 'Failed to retrieve scheduler diagnostic status' });
     }
   });
+
+  // GET /api/admin/investigate-entry - Investigate a specific sea time entry by user email, vessel name, and timestamp
+  fastify.get<{ Querystring: { email: string; vesselName: string; timestamp: string } }>(
+    '/api/admin/investigate-entry',
+    {
+      schema: {
+        description: 'Investigate a specific sea time entry to determine its origin and related data',
+        tags: ['admin'],
+        querystring: {
+          type: 'object',
+          required: ['email', 'vesselName', 'timestamp'],
+          properties: {
+            email: { type: 'string', format: 'email', description: 'User email (e.g., dan@forelandmarine.com)' },
+            vesselName: { type: 'string', description: 'Vessel name (e.g., Brigit)' },
+            timestamp: { type: 'string', description: 'ISO timestamp or formatted like "25/01/2026, 22:48:16"' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              entry: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  vessel_id: { type: 'string' },
+                  vessel_name: { type: 'string' },
+                  start_time: { type: 'string', format: 'date-time' },
+                  end_time: { type: ['string', 'null'], format: 'date-time' },
+                  duration_hours: { type: ['number', 'null'] },
+                  status: { type: 'string' },
+                  notes: { type: ['string', 'null'] },
+                  created_at: { type: 'string', format: 'date-time' },
+                  start_latitude: { type: ['number', 'null'] },
+                  start_longitude: { type: ['number', 'null'] },
+                  end_latitude: { type: ['number', 'null'] },
+                  end_longitude: { type: ['number', 'null'] },
+                  service_type: { type: 'string' },
+                  mca_compliant: { type: ['boolean', 'null'] },
+                  detection_window_hours: { type: ['number', 'null'] },
+                  is_stationary: { type: ['boolean', 'null'] },
+                },
+              },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  name: { type: ['string', 'null'] },
+                  email: { type: 'string' },
+                },
+              },
+              vessel: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  mmsi: { type: 'string' },
+                  vessel_name: { type: 'string' },
+                  is_active: { type: 'boolean' },
+                },
+              },
+              origin_analysis: {
+                type: 'object',
+                properties: {
+                  entry_source: { type: 'string', enum: ['manual', 'automatic_scheduler', 'unknown'] },
+                  evidence: { type: 'string' },
+                  related_ais_checks: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        check_time: { type: 'string', format: 'date-time' },
+                        is_moving: { type: 'boolean' },
+                        speed_knots: { type: ['number', 'null'] },
+                        latitude: { type: ['number', 'null'] },
+                        longitude: { type: ['number', 'null'] },
+                        created_at: { type: 'string', format: 'date-time' },
+                      },
+                    },
+                  },
+                  related_scheduled_tasks: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        task_type: { type: 'string' },
+                        interval_hours: { type: 'string' },
+                        is_active: { type: 'boolean' },
+                        last_run: { type: ['string', 'null'], format: 'date-time' },
+                        next_run: { type: 'string', format: 'date-time' },
+                      },
+                    },
+                  },
+                  ais_debug_logs: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        id: { type: 'string' },
+                        api_url: { type: 'string' },
+                        request_time: { type: 'string', format: 'date-time' },
+                        response_status: { type: 'string' },
+                        error_message: { type: ['string', 'null'] },
+                        created_at: { type: 'string', format: 'date-time' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { email, vesselName, timestamp } = request.query;
+
+      app.logger.info(
+        { email, vesselName, timestamp },
+        'Investigating sea time entry'
+      );
+
+      try {
+        // Step 1: Find user by email
+        const users = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email.toLowerCase()));
+
+        if (users.length === 0) {
+          app.logger.warn({ email }, 'User not found');
+          return reply.code(404).send({ error: `User with email ${email} not found` });
+        }
+
+        const user = users[0];
+
+        // Step 2: Find vessel by name (case-insensitive) belonging to that user
+        const vessels = await app.db
+          .select()
+          .from(schema.vessels)
+          .where(eq(schema.vessels.user_id, user.id));
+
+        const vessel = vessels.find(v => v.vessel_name.toLowerCase() === vesselName.toLowerCase());
+
+        if (!vessel) {
+          app.logger.warn({ userId: user.id, vesselName }, 'Vessel not found for user');
+          return reply.code(404).send({ error: `Vessel "${vesselName}" not found for user ${email}` });
+        }
+
+        // Step 3: Parse the timestamp query
+        let targetTime: Date;
+        try {
+          // Try parsing as ISO string first
+          if (timestamp.includes('T') || timestamp.includes('Z')) {
+            targetTime = new Date(timestamp);
+          } else {
+            // Try parsing as formatted string like "25/01/2026, 22:48:16"
+            targetTime = new Date(timestamp);
+          }
+
+          if (isNaN(targetTime.getTime())) {
+            throw new Error('Invalid date');
+          }
+        } catch {
+          app.logger.warn({ timestamp }, 'Invalid timestamp format');
+          return reply.code(400).send({ error: `Invalid timestamp format: ${timestamp}. Use ISO format (2026-01-25T22:48:16Z) or "25/01/2026, 22:48:16"` });
+        }
+
+        // Step 4: Find sea time entries matching the timestamp (±1 minute tolerance)
+        const toleranceMs = 60 * 1000; // 1 minute
+        const minTime = new Date(targetTime.getTime() - toleranceMs);
+        const maxTime = new Date(targetTime.getTime() + toleranceMs);
+
+        const allEntries = await app.db
+          .select()
+          .from(schema.sea_time_entries)
+          .where(eq(schema.sea_time_entries.vessel_id, vessel.id));
+
+        const matchingEntries = allEntries.filter(entry => {
+          const entryStartTime = new Date(entry.start_time);
+          return entryStartTime >= minTime && entryStartTime <= maxTime;
+        });
+
+        if (matchingEntries.length === 0) {
+          app.logger.warn({ vesselId: vessel.id, targetTime: targetTime.toISOString() }, 'No matching sea time entry found');
+          return reply.code(404).send({
+            error: `No sea time entry found for vessel "${vesselName}" starting within ±1 minute of ${timestamp}`,
+          });
+        }
+
+        // Use the closest entry if multiple matches
+        const entry = matchingEntries.reduce((closest, current) => {
+          const closestDiff = Math.abs(new Date(closest.start_time).getTime() - targetTime.getTime());
+          const currentDiff = Math.abs(new Date(current.start_time).getTime() - targetTime.getTime());
+          return currentDiff < closestDiff ? current : closest;
+        });
+
+        // Step 5: Determine origin by analyzing the entry
+        let entrySource: 'manual' | 'automatic_scheduler' | 'unknown' = 'unknown';
+        let evidence = '';
+
+        if (entry.notes) {
+          const notesLower = entry.notes.toLowerCase();
+          if (notesLower.includes('movement detected') && notesLower.includes('nm')) {
+            entrySource = 'automatic_scheduler';
+            evidence = 'Notes contain "Movement detected" and distance in nautical miles (scheduler signature)';
+          } else if (notesLower.includes('movement detected')) {
+            entrySource = 'automatic_scheduler';
+            evidence = 'Notes contain "Movement detected" pattern (scheduler signature)';
+          } else {
+            entrySource = 'manual';
+            evidence = 'Notes appear to be user-written (no scheduler signature)';
+          }
+        } else {
+          entrySource = 'unknown';
+          evidence = 'No notes provided - cannot determine source from notes alone';
+        }
+
+        // Step 6: Get related AIS checks around the entry time
+        const timeWindowMs = 4 * 60 * 60 * 1000; // 4 hours before and after
+        const aisWindowStart = new Date(entry.start_time.getTime() - timeWindowMs);
+        const aisWindowEnd = new Date(entry.end_time ? entry.end_time.getTime() + timeWindowMs : entry.start_time.getTime() + timeWindowMs);
+
+        const relatedAisChecks = await app.db
+          .select()
+          .from(schema.ais_checks)
+          .where(eq(schema.ais_checks.vessel_id, vessel.id))
+          .then(checks =>
+            checks.filter(check => {
+              const checkTime = new Date(check.check_time);
+              return checkTime >= aisWindowStart && checkTime <= aisWindowEnd;
+            })
+          );
+
+        // Step 7: Get related scheduled tasks for this vessel
+        const relatedScheduledTasks = await app.db
+          .select()
+          .from(schema.scheduled_tasks)
+          .where(eq(schema.scheduled_tasks.vessel_id, vessel.id));
+
+        // Step 8: Get AIS debug logs around the entry time
+        const debugWindowStart = new Date(entry.start_time.getTime() - timeWindowMs);
+        const debugWindowEnd = new Date(entry.end_time ? entry.end_time.getTime() + timeWindowMs : entry.start_time.getTime() + timeWindowMs);
+
+        const aisDebugLogs = await app.db
+          .select()
+          .from(schema.ais_debug_logs)
+          .where(eq(schema.ais_debug_logs.vessel_id, vessel.id))
+          .then(logs =>
+            logs.filter(log => {
+              const logTime = new Date(log.request_time);
+              return logTime >= debugWindowStart && logTime <= debugWindowEnd;
+            })
+          );
+
+        // Format response
+        const entryResponse = {
+          id: entry.id,
+          vessel_id: entry.vessel_id,
+          vessel_name: vessel.vessel_name,
+          start_time: entry.start_time.toISOString(),
+          end_time: entry.end_time ? entry.end_time.toISOString() : null,
+          duration_hours: entry.duration_hours ? parseFloat(String(entry.duration_hours)) : null,
+          status: entry.status,
+          notes: entry.notes,
+          created_at: entry.created_at.toISOString(),
+          start_latitude: entry.start_latitude ? parseFloat(String(entry.start_latitude)) : null,
+          start_longitude: entry.start_longitude ? parseFloat(String(entry.start_longitude)) : null,
+          end_latitude: entry.end_latitude ? parseFloat(String(entry.end_latitude)) : null,
+          end_longitude: entry.end_longitude ? parseFloat(String(entry.end_longitude)) : null,
+          service_type: entry.service_type,
+          mca_compliant: entry.mca_compliant,
+          detection_window_hours: entry.detection_window_hours ? parseFloat(String(entry.detection_window_hours)) : null,
+          is_stationary: entry.is_stationary,
+        };
+
+        const userResponse = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+        };
+
+        const vesselResponse = {
+          id: vessel.id,
+          mmsi: vessel.mmsi,
+          vessel_name: vessel.vessel_name,
+          is_active: vessel.is_active,
+        };
+
+        const originAnalysisResponse = {
+          entry_source: entrySource,
+          evidence,
+          related_ais_checks: relatedAisChecks.map(check => ({
+            id: check.id,
+            check_time: check.check_time.toISOString(),
+            is_moving: check.is_moving,
+            speed_knots: check.speed_knots ? parseFloat(String(check.speed_knots)) : null,
+            latitude: check.latitude ? parseFloat(String(check.latitude)) : null,
+            longitude: check.longitude ? parseFloat(String(check.longitude)) : null,
+            created_at: check.created_at.toISOString(),
+          })),
+          related_scheduled_tasks: relatedScheduledTasks.map(task => ({
+            id: task.id,
+            task_type: task.task_type,
+            interval_hours: task.interval_hours,
+            is_active: task.is_active,
+            last_run: task.last_run ? task.last_run.toISOString() : null,
+            next_run: task.next_run.toISOString(),
+          })),
+          ais_debug_logs: aisDebugLogs.map(log => ({
+            id: log.id,
+            api_url: log.api_url,
+            request_time: log.request_time.toISOString(),
+            response_status: log.response_status,
+            error_message: log.error_message,
+            created_at: log.created_at.toISOString(),
+          })),
+        };
+
+        app.logger.info(
+          {
+            entryId: entry.id,
+            vesselId: vessel.id,
+            userId: user.id,
+            entrySource,
+            relatedAisChecksCount: relatedAisChecks.length,
+            scheduledTasksCount: relatedScheduledTasks.length,
+            debugLogsCount: aisDebugLogs.length,
+          },
+          'Sea time entry investigation complete'
+        );
+
+        return reply.code(200).send({
+          entry: entryResponse,
+          user: userResponse,
+          vessel: vesselResponse,
+          origin_analysis: originAnalysisResponse,
+        });
+      } catch (error) {
+        app.logger.error({ err: error, email, vesselName, timestamp }, 'Error investigating sea time entry');
+        return reply.code(500).send({ error: 'Failed to investigate sea time entry' });
+      }
+    }
+  );
 }
