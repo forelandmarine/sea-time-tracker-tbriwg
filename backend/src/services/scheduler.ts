@@ -252,7 +252,7 @@ async function processScheduledTask(
       latitude: ais_data.latitude,
       longitude: ais_data.longitude,
     },
-    `About to insert AIS check for vessel ${vessel_name} (MMSI: ${mmsi})`
+    `[2-HOUR OBSERVATION] About to insert AIS check with location data for vessel ${vessel_name} (MMSI: ${mmsi}): lat=${ais_data.latitude}, lng=${ais_data.longitude}, speed=${ais_data.speed_knots}kts, moving=${ais_data.is_moving}`
   );
 
   let ais_check: typeof schema.ais_checks.$inferSelect | null = null;
