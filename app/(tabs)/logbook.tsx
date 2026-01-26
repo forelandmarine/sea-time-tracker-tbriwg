@@ -735,12 +735,25 @@ export default function LogbookScreen() {
     );
   };
 
-  const handleViewMCARequirements = () => {
+  const handleViewMCARequirements = async () => {
     console.log('[LogbookScreen] User tapped View MCA Requirements from modal - closing modal first');
     setShowAddModal(false);
-    setTimeout(() => {
-      router.push('/mca-requirements');
-    }, 100);
+    
+    // Get user's department to show correct pathway
+    try {
+      const userProfile = await seaTimeApi.getUserProfile();
+      const department = userProfile?.department?.toLowerCase() || 'deck';
+      console.log('[LogbookScreen] User department:', department, '- navigating to MCA requirements');
+      
+      setTimeout(() => {
+        router.push(`/mca-requirements?department=${department}`);
+      }, 100);
+    } catch (error) {
+      console.error('[LogbookScreen] Failed to get user profile, defaulting to deck pathway:', error);
+      setTimeout(() => {
+        router.push('/mca-requirements?department=deck');
+      }, 100);
+    }
   };
 
   const parseLatLong = (text: string): { lat: number | null; lon: number | null } => {

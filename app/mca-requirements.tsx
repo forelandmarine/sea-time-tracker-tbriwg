@@ -9,7 +9,7 @@ import {
   useColorScheme,
   Platform,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { MCA_REQUIREMENTS, MCARequirement } from '@/constants/mcaRequirements';
@@ -149,11 +149,21 @@ export default function MCARequirementsScreen() {
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
   const router = useRouter();
+  const { department } = useLocalSearchParams<{ department?: string }>();
 
-  console.log('[MCARequirementsScreen] User viewing MCA requirements reference');
+  const userDepartment = department?.toLowerCase() || 'deck';
+  console.log('[MCARequirementsScreen] User viewing MCA requirements reference for department:', userDepartment);
 
   const textColor = isDark ? colors.text : colors.textLight;
   const backgroundColor = isDark ? colors.background : colors.backgroundLight;
+
+  const pageTitle = userDepartment === 'engineering' 
+    ? 'MCA Engineering Pathway' 
+    : 'MCA Large Yacht Pathway';
+  
+  const pageSubtitle = userDepartment === 'engineering'
+    ? 'Engineering Officers sea service requirements for MCA certification'
+    : 'Deck Officers sea service requirements for MCA certification';
 
   return (
     <>
@@ -173,9 +183,9 @@ export default function MCARequirementsScreen() {
       <View style={styles.container}>
         <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
-            <Text style={styles.title}>MCA Large Yacht Pathway</Text>
+            <Text style={styles.title}>{pageTitle}</Text>
             <Text style={styles.subtitle}>
-              Deck Officers sea service requirements for MCA certification
+              {pageSubtitle}
             </Text>
           </View>
 
