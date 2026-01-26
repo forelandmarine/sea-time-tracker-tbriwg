@@ -8,7 +8,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
+  Modal,
   useColorScheme,
   TextInput,
   ActivityIndicator,
@@ -16,9 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import Constants from 'expo-constants';
-
-const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || 'https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev';
+import { API_BASE_URL, getApiHeaders } from '@/utils/seaTimeApi';
 
 interface GeneratedEntry {
   id: string;
@@ -137,6 +135,46 @@ const createStyles = (isDark: boolean) =>
       fontWeight: '600',
       color: '#FFFFFF',
     },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      borderRadius: 12,
+      padding: 24,
+      width: '100%',
+      maxWidth: 400,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    modalMessage: {
+      fontSize: 16,
+      marginBottom: 20,
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    modalButton: {
+      borderRadius: 8,
+      padding: 12,
+      alignItems: 'center',
+    },
+    modalButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
+    },
   });
 
 export default function AdminGenerateSamplesScreen() {
@@ -151,12 +189,23 @@ export default function AdminGenerateSamplesScreen() {
   const [vesselName, setVesselName] = useState('Lionheart');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GenerateResponse | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalType, setModalType] = useState<'success' | 'error'>('success');
+
+  const showModalMessage = (title: string, message: string, type: 'success' | 'error' = 'success') => {
+    setModalTitle(title);
+    setModalMessage(message);
+    setModalType(type);
+    setShowModal(true);
+  };
 
   const handleGenerate = async () => {
-    console.log('User tapped Generate Samples button', { email, vesselName });
+    console.log('[AdminGenerate] User tapped Generate Samples button', { email, vesselName });
     
     if (!email || !vesselName) {
-      Alert.alert('Error', 'Please enter both email and vessel name');
+      showModalMessage('Error', 'Please enter both email and vessel name', 'error');
       return;
     }
 
@@ -164,12 +213,11 @@ export default function AdminGenerateSamplesScreen() {
     setResult(null);
 
     try {
-      console.log('Calling POST /api/sea-time/generate-sample-entries');
+      console.log('[AdminGenerate] Calling POST /api/sea-time/generate-sample-entries');
+      const headers = await getApiHeaders();
       const response = await fetch(`${API_BASE_URL}/api/sea-time/generate-sample-entries`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           email,
           vesselName,
@@ -177,7 +225,7 @@ export default function AdminGenerateSamplesScreen() {
       });
 
       const data = await response.json();
-      console.log('Generate samples response:', response.status, data);
+      console.log('[AdminGenerate] Response:', response.status, data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Failed to generate samples');
@@ -187,14 +235,14 @@ export default function AdminGenerateSamplesScreen() {
       const entriesCount = data.entries?.length || data.entriesCreated || 0;
       const totalSeaDays = data.entries?.reduce((sum: number, entry: any) => sum + (entry.sea_days || 0), 0) || 0;
       
-      Alert.alert(
+      showModalMessage(
         'Success',
         `Generated ${entriesCount} sample entries for ${data.vessel.vessel_name}\n\nTotal Sea Days: ${totalSeaDays}`,
-        [{ text: 'OK' }]
+        'success'
       );
     } catch (error) {
-      console.error('Error generating samples:', error);
-      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to generate samples');
+      console.error('[AdminGenerate] Error generating samples:', error);
+      showModalMessage('Error', error instanceof Error ? error.message : 'Failed to generate samples', 'error');
     } finally {
       setLoading(false);
     }
@@ -337,6 +385,31 @@ export default function AdminGenerateSamplesScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Modal for messages - replaces Alert.alert for web compatibility */}
+      <Modal
+        visible={showModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalContent, { backgroundColor: isDark ? colors.cardDark : colors.cardLight }]}>
+            <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.textLight }]}>
+              {modalTitle}
+            </Text>
+            <Text style={[styles.modalMessage, { color: isDark ? colors.textDark : colors.textLight }]}>
+              {modalMessage}
+            </Text>
+            <TouchableOpacity
+              style={[styles.modalButton, { backgroundColor: modalType === 'error' ? '#FF3B30' : colors.primary }]}
+              onPress={() => setShowModal(false)}
+            >
+              <Text style={styles.modalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }

@@ -9,13 +9,11 @@ import {
   ScrollView,
   ActivityIndicator,
   useColorScheme,
-  Alert,
+  Modal,
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
-import Constants from 'expo-constants';
-
-const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || 'http://localhost:8082';
+import { API_BASE_URL, getApiHeaders } from '@/utils/seaTimeApi';
 
 interface User {
   id: string;
@@ -186,6 +184,46 @@ const createStyles = (isDark: boolean) =>
       textAlign: 'center',
       marginTop: 20,
     },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      borderRadius: 12,
+      padding: 24,
+      width: '100%',
+      maxWidth: 400,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    modalMessage: {
+      fontSize: 16,
+      marginBottom: 20,
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    modalButton: {
+      borderRadius: 8,
+      padding: 12,
+      alignItems: 'center',
+    },
+    modalButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
+    },
   });
 
 export default function AdminVerifyScreen() {
@@ -200,14 +238,25 @@ export default function AdminVerifyScreen() {
   const [error, setError] = useState<string | null>(null);
   const [verifyTasksLoading, setVerifyTasksLoading] = useState(false);
   const [verifyTasksResult, setVerifyTasksResult] = useState<any>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalType, setModalType] = useState<'success' | 'error'>('success');
 
-  console.log('AdminVerifyScreen rendered');
+  console.log('[AdminVerify] Screen rendered');
+
+  const showModalMessage = (title: string, message: string, type: 'success' | 'error' = 'success') => {
+    setModalTitle(title);
+    setModalMessage(message);
+    setModalType(type);
+    setShowModal(true);
+  };
 
   const handleVerify = async () => {
-    console.log('User tapped Verify button', { email, mmsi });
+    console.log('[AdminVerify] User tapped Verify button', { email, mmsi });
     
     if (!email || !mmsi) {
-      Alert.alert('Error', 'Please enter both email and MMSI');
+      showModalMessage('Error', 'Please enter both email and MMSI', 'error');
       return;
     }
 
@@ -216,13 +265,15 @@ export default function AdminVerifyScreen() {
     setResult(null);
 
     try {
-      console.log('Calling admin verification endpoint:', `${API_BASE_URL}/api/admin/verify-sea-time?email=${email}&mmsi=${mmsi}`);
+      console.log('[AdminVerify] Calling admin verification endpoint');
       
+      const headers = await getApiHeaders();
       const response = await fetch(
-        `${API_BASE_URL}/api/admin/verify-sea-time?email=${encodeURIComponent(email)}&mmsi=${encodeURIComponent(mmsi)}`
+        `${API_BASE_URL}/api/admin/verify-sea-time?email=${encodeURIComponent(email)}&mmsi=${encodeURIComponent(mmsi)}`,
+        { headers }
       );
 
-      console.log('Admin verification response status:', response.status);
+      console.log('[AdminVerify] Response status:', response.status);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -230,38 +281,38 @@ export default function AdminVerifyScreen() {
       }
 
       const data = await response.json();
-      console.log('Admin verification data received:', data);
+      console.log('[AdminVerify] Verification data received');
       setResult(data);
     } catch (err: any) {
-      console.error('Admin verification error:', err);
-      setError(err.message || 'Failed to verify sea time data');
-      Alert.alert('Error', err.message || 'Failed to verify sea time data');
+      console.error('[AdminVerify] Verification error:', err);
+      const message = err.message || 'Failed to verify sea time data';
+      setError(message);
+      showModalMessage('Error', message, 'error');
     } finally {
       setLoading(false);
     }
   };
 
   const handleVerifyVesselTasks = async () => {
-    console.log('User tapped Verify Vessel Tasks button');
+    console.log('[AdminVerify] User tapped Verify Vessel Tasks button');
     
     setVerifyTasksLoading(true);
     setVerifyTasksResult(null);
 
     try {
-      console.log('Calling verify vessel tasks endpoint:', `${API_BASE_URL}/api/admin/verify-vessel-tasks`);
+      console.log('[AdminVerify] Calling verify vessel tasks endpoint');
       
+      const headers = await getApiHeaders();
       const response = await fetch(
         `${API_BASE_URL}/api/admin/verify-vessel-tasks`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers,
           body: JSON.stringify({}),
         }
       );
 
-      console.log('Verify vessel tasks response status:', response.status);
+      console.log('[AdminVerify] Verify vessel tasks response status:', response.status);
 
       if (!response.ok) {
         const errorData = await response.json();
@@ -269,14 +320,14 @@ export default function AdminVerifyScreen() {
       }
 
       const data = await response.json();
-      console.log('Verify vessel tasks data received:', data);
+      console.log('[AdminVerify] Verify vessel tasks data received');
       setVerifyTasksResult(data);
       
-      const message = `Verification complete!\n\nActive vessels: ${data.activeVessels}\nTasks created: ${data.tasksCreated}\nAlready had tasks: ${data.alreadyHadTasks}`;
-      Alert.alert('Success', message);
+      const message = `Verification complete!\n\nActive vessels: ${data.summary?.total_active_vessels || 0}\nTasks created: ${data.summary?.tasks_created || 0}\nTasks reactivated: ${data.summary?.tasks_reactivated || 0}\nAlready active: ${data.summary?.tasks_already_active || 0}`;
+      showModalMessage('Success', message, 'success');
     } catch (err: any) {
-      console.error('Verify vessel tasks error:', err);
-      Alert.alert('Error', err.message || 'Failed to verify vessel tasks');
+      console.error('[AdminVerify] Verify vessel tasks error:', err);
+      showModalMessage('Error', err.message || 'Failed to verify vessel tasks', 'error');
     } finally {
       setVerifyTasksLoading(false);
     }
@@ -553,6 +604,31 @@ export default function AdminVerifyScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Modal for messages - replaces Alert.alert for web compatibility */}
+      <Modal
+        visible={showModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalContent, { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' }]}>
+            <Text style={[styles.modalTitle, { color: isDark ? colors.text : colors.text }]}>
+              {modalTitle}
+            </Text>
+            <Text style={[styles.modalMessage, { color: isDark ? colors.text : colors.text }]}>
+              {modalMessage}
+            </Text>
+            <TouchableOpacity
+              style={[styles.modalButton, { backgroundColor: modalType === 'error' ? '#FF3B30' : colors.primary }]}
+              onPress={() => setShowModal(false)}
+            >
+              <Text style={styles.modalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

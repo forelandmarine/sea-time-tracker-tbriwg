@@ -7,16 +7,14 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
+  Modal,
   useColorScheme,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
 import { IconSymbol } from '@/components/IconSymbol';
-import Constants from 'expo-constants';
 import { colors } from '@/styles/commonStyles';
-
-const API_URL = Constants.expoConfig?.extra?.backendUrl || 'http://localhost:8082';
+import { API_BASE_URL, getApiHeaders } from '@/utils/seaTimeApi';
 
 interface DiagnosticData {
   vessel: {
@@ -70,23 +68,25 @@ export default function VesselDiagnosticScreen() {
   const [data, setData] = useState<DiagnosticData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [forcingCheck, setForcingCheck] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalType, setModalType] = useState<'success' | 'error'>('success');
+
+  const showModalMessage = (title: string, message: string, type: 'success' | 'error' = 'success') => {
+    setModalTitle(title);
+    setModalMessage(message);
+    setModalType(type);
+    setShowModal(true);
+  };
 
   const loadDiagnostics = async () => {
     console.log('[VesselDiagnostic] Loading diagnostics for MMSI:', mmsi);
     
     try {
-      const token = await getAuthToken();
-      if (!token) {
-        setError('Not authenticated');
-        setLoading(false);
-        return;
-      }
-
-      const response = await fetch(`${API_URL}/api/admin/vessel-status/${mmsi}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+      const headers = await getApiHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/admin/vessel-status/${mmsi}`, {
+        headers,
       });
 
       console.log('[VesselDiagnostic] Response status:', response.status);
@@ -125,18 +125,10 @@ export default function VesselDiagnosticScreen() {
     setForcingCheck(true);
 
     try {
-      const token = await getAuthToken();
-      if (!token) {
-        Alert.alert('Error', 'Not authenticated');
-        return;
-      }
-
-      const response = await fetch(`${API_URL}/api/ais/check/${data.vessel.id}?forceRefresh=true`, {
+      const headers = await getApiHeaders();
+      const response = await fetch(`${API_BASE_URL}/api/ais/check/${data.vessel.id}?forceRefresh=true`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({}),
       });
 
@@ -150,14 +142,14 @@ export default function VesselDiagnosticScreen() {
       const result = await response.json();
       console.log('[VesselDiagnostic] Force check result:', result);
 
-      Alert.alert(
-        'AIS Check Complete',
-        `Position recorded:\nLat: ${result.latitude?.toFixed(5) || 'N/A'}\nLon: ${result.longitude?.toFixed(5) || 'N/A'}\nSpeed: ${result.speed_knots || 0} knots\nMoving: ${result.is_moving ? 'Yes' : 'No'}`,
-        [{ text: 'OK', onPress: () => loadDiagnostics() }]
-      );
+      const message = `Position recorded:\nLat: ${result.latitude?.toFixed(5) || 'N/A'}\nLon: ${result.longitude?.toFixed(5) || 'N/A'}\nSpeed: ${result.speed_knots || 0} knots\nMoving: ${result.is_moving ? 'Yes' : 'No'}`;
+      showModalMessage('AIS Check Complete', message, 'success');
+      
+      // Reload diagnostics after modal is closed
+      setTimeout(() => loadDiagnostics(), 500);
     } catch (err) {
       console.error('[VesselDiagnostic] Error forcing check:', err);
-      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to force AIS check');
+      showModalMessage('Error', err instanceof Error ? err.message : 'Failed to force AIS check', 'error');
     } finally {
       setForcingCheck(false);
     }
@@ -362,6 +354,31 @@ export default function VesselDiagnosticScreen() {
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+
+      {/* Modal for messages - replaces Alert.alert for web compatibility */}
+      <Modal
+        visible={showModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalContent, { backgroundColor: isDark ? colors.cardDark : colors.cardLight }]}>
+            <Text style={[styles.modalTitle, { color: isDark ? colors.textDark : colors.textLight }]}>
+              {modalTitle}
+            </Text>
+            <Text style={[styles.modalMessage, { color: isDark ? colors.textDark : colors.textLight }]}>
+              {modalMessage}
+            </Text>
+            <TouchableOpacity
+              style={[styles.modalButton, { backgroundColor: modalType === 'error' ? colors.error : colors.primary }]}
+              onPress={() => setShowModal(false)}
+            >
+              <Text style={styles.modalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -534,6 +551,46 @@ function createStyles(isDark: boolean) {
     },
     bottomSpacer: {
       height: 32,
+    },
+    modalBackdrop: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      borderRadius: 12,
+      padding: 24,
+      width: '100%',
+      maxWidth: 400,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: '600',
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    modalMessage: {
+      fontSize: 16,
+      marginBottom: 20,
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    modalButton: {
+      borderRadius: 8,
+      padding: 12,
+      alignItems: 'center',
+    },
+    modalButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
     },
   });
 }
