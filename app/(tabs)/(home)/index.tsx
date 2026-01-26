@@ -71,7 +71,7 @@ export default function SeaTimeScreen() {
   const historicVessels = vessels.filter(v => !v.is_active);
 
   useEffect(() => {
-    console.log('[Home] Initial data load');
+    console.log('[Home] Initial data load - will auto-refresh if stale');
     loadData();
   }, []);
 
@@ -133,11 +133,11 @@ export default function SeaTimeScreen() {
       setVessels(vesselsData);
       console.log('[Home] Vessels loaded - Active:', vesselsData.filter(v => v.is_active).length, 'Historic:', vesselsData.filter(v => !v.is_active).length);
       
-      // Load location for the active vessel
+      // Load location for the active vessel - auto-refresh if stale
       const newActiveVessel = vesselsData.find(v => v.is_active);
       if (newActiveVessel) {
-        console.log('[Home] Found active vessel, loading location:', newActiveVessel.vessel_name);
-        await loadActiveVesselLocation(newActiveVessel.id);
+        console.log('[Home] Found active vessel, loading location with auto-refresh:', newActiveVessel.vessel_name);
+        await loadActiveVesselLocation(newActiveVessel.id, false);
       } else {
         console.log('[Home] No active vessel found, clearing location');
         setActiveVesselLocation(null);
@@ -151,7 +151,7 @@ export default function SeaTimeScreen() {
   }, [loadActiveVesselLocation]);
 
   const onRefresh = async () => {
-    console.log('[Home] User triggered refresh - will force fresh AIS check if data is stale');
+    console.log('[Home] User triggered manual refresh');
     setRefreshing(true);
     
     // Reload vessels first
@@ -491,7 +491,7 @@ export default function SeaTimeScreen() {
                                   color={colors.warning}
                                 />
                                 <Text style={styles.staleWarningText}>
-                                  Position data is more than 2 hours old. Pull down to refresh.
+                                  Position data is more than 2 hours old. Automatic refresh in progress.
                                 </Text>
                               </View>
                             )}
