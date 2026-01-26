@@ -396,6 +396,12 @@ export default function VesselDetailScreen() {
     router.push(`/debug/${vessel.id}` as any);
   };
 
+  const handleViewDiagnostics = () => {
+    if (!vessel) return;
+    console.log('[VesselDetail] Navigating to vessel diagnostics');
+    router.push(`/vessel-diagnostic?mmsi=${vessel.mmsi}` as any);
+  };
+
   const formatAISValue = (value: any, suffix: string = ''): string => {
     if (value === null || value === undefined) return 'N/A';
     return `${value}${suffix}`;
@@ -582,9 +588,14 @@ export default function VesselDetailScreen() {
                 </Text>
               </View>
 
-              <TouchableOpacity style={styles.debugButton} onPress={handleViewDebugLogs}>
-                <Text style={styles.debugButtonText}>View Debug Logs</Text>
-              </TouchableOpacity>
+              <View style={styles.buttonRow}>
+                <TouchableOpacity style={styles.debugButton} onPress={handleViewDebugLogs}>
+                  <Text style={styles.debugButtonText}>View Debug Logs</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.diagnosticButton} onPress={handleViewDiagnostics}>
+                  <Text style={styles.diagnosticButtonText}>View Diagnostics</Text>
+                </TouchableOpacity>
+              </View>
             </>
           ) : (
             <Text style={styles.noDataText}>No AIS data available. Tap refresh to check.</Text>
@@ -947,8 +958,13 @@ function createStyles(isDark: boolean) {
       textAlign: 'center',
       paddingVertical: 20,
     },
-    debugButton: {
+    buttonRow: {
+      flexDirection: 'row',
+      gap: 8,
       marginTop: 12,
+    },
+    debugButton: {
+      flex: 1,
       padding: 12,
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
       borderRadius: 8,
@@ -957,6 +973,18 @@ function createStyles(isDark: boolean) {
     debugButtonText: {
       fontSize: 14,
       color: colors.primary,
+      fontWeight: '600',
+    },
+    diagnosticButton: {
+      flex: 1,
+      padding: 12,
+      backgroundColor: colors.primary,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    diagnosticButtonText: {
+      fontSize: 14,
+      color: '#fff',
       fontWeight: '600',
     },
     summaryRow: {

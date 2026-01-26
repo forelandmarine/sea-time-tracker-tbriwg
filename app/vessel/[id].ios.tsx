@@ -302,11 +302,23 @@ function createStyles(isDark: boolean) {
       borderRadius: 12,
       padding: 16,
       alignItems: 'center',
-      marginBottom: 24,
+      marginBottom: 12,
       borderWidth: 1,
       borderColor: colors.primary,
     },
     debugButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    diagnosticButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+      marginBottom: 24,
+    },
+    diagnosticButtonText: {
       color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '600',
@@ -1059,6 +1071,12 @@ export default function VesselDetailScreen() {
     router.push(`/debug/${id}` as any);
   };
 
+  const handleViewDiagnostics = () => {
+    if (!vessel) return;
+    console.log('[VesselDetailScreen iOS] Navigating to vessel diagnostics');
+    router.push(`/vessel-diagnostic?mmsi=${vessel.mmsi}` as any);
+  };
+
   const formatAISValue = (value: any, suffix: string = ''): string => {
     if (value === null || value === undefined) return 'Unknown';
     return `${value}${suffix}`;
@@ -1273,6 +1291,10 @@ export default function VesselDetailScreen() {
 
         <TouchableOpacity style={styles.debugButton} onPress={handleViewDebugLogs}>
           <Text style={styles.debugButtonText}>View AIS Debug Logs</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.diagnosticButton} onPress={handleViewDiagnostics}>
+          <Text style={styles.diagnosticButtonText}>View Vessel Diagnostics</Text>
         </TouchableOpacity>
 
         <Text style={styles.sectionTitle}>Sea Time History</Text>
