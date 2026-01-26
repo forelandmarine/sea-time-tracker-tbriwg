@@ -576,14 +576,24 @@ async function handleSeaTimeEntries(
   });
 
   if (existingEntryForDay) {
-    // EXTEND the existing entry
+    // EXTEND the existing entry (amalgamate multiple detections)
     try {
       // Calculate total duration from original start_time to current check_time
       const totalDurationMs = currentCheck.check_time.getTime() - existingEntryForDay.start_time.getTime();
       const totalDurationHours = Math.round((totalDurationMs / (1000 * 60 * 60)) * 100) / 100;
 
+      // Calculate total distance from entry's original start position to current end position
+      let totalDistance = 0;
+      if (existingEntryForDay.start_latitude && existingEntryForDay.start_longitude) {
+        const startLat = parseFloat(String(existingEntryForDay.start_latitude));
+        const startLng = parseFloat(String(existingEntryForDay.start_longitude));
+        // Calculate distance from original start to current end
+        totalDistance = calculateDistanceNauticalMiles(startLat, startLng, currentLat, currentLng);
+      }
+
       // Update the existing entry with the new end position and time
-      const updatedNotes = `Movement detected: vessel moved ${distanceNm} nm (${Math.round(maxDiff * 10000) / 10000}°) over ${durationHours} hours (now ${totalDurationHours} hours total for the day)`;
+      // Notes reflect the complete amalgamated movement across all detections
+      const updatedNotes = `Movement detected: vessel moved ${totalDistance} nm over ${totalDurationHours} hours. Multiple detections amalgamated.`;
 
       const [updated_entry] = await app.db
         .update(schema.sea_time_entries)
@@ -605,13 +615,16 @@ async function handleSeaTimeEntries(
           userId,
           entryId: existingEntryForDay.id,
           originalStartTime: existingEntryForDay.start_time.toISOString(),
+          originalStartPosition: `(${existingEntryForDay.start_latitude}, ${existingEntryForDay.start_longitude})`,
           newEndTime: currentCheck.check_time.toISOString(),
+          newEndPosition: `(${currentLat}, ${currentLng})`,
           previousDurationHours: existingEntryForDay.duration_hours ? parseFloat(String(existingEntryForDay.duration_hours)) : 0,
           newTotalDurationHours: totalDurationHours,
-          distanceNauticalMiles: distanceNm,
+          totalDistanceNauticalMiles: totalDistance,
+          detectionDistanceNm: distanceNm,
           positionChangeDegrees: Math.round(maxDiff * 10000) / 10000,
         },
-        `Extended existing sea time entry [${existingEntryForDay.id}] for vessel ${vessel_name} (user: ${userId}): now ${totalDurationHours} hours total (added ${durationHours} hours from ${distanceNm} nm movement of ${Math.round(maxDiff * 10000) / 10000}°)`
+        `Amalgamated sea time entry [${existingEntryForDay.id}] for vessel ${vessel_name} (user: ${userId}): ${totalDistance} nm over ${totalDurationHours} hours (added ${distanceNm} nm from latest detection)`
       );
     } catch (error) {
       app.logger.error(
