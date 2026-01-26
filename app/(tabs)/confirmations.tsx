@@ -75,21 +75,17 @@ export default function ConfirmationsScreen() {
     const hasEndTime = entry.end_time !== null && entry.end_time !== undefined;
     const durationHours = toNumber(entry.duration_hours);
     const isMCACompliant = durationHours >= 4.0;
-    const hasStartLocation = entry.start_latitude !== null && entry.start_latitude !== undefined && 
-                            entry.start_longitude !== null && entry.start_longitude !== undefined;
-    const hasEndLocation = entry.end_latitude !== null && entry.end_latitude !== undefined && 
-                          entry.end_longitude !== null && entry.end_longitude !== undefined;
     
-    const isValid = hasEndTime && isMCACompliant && hasStartLocation && hasEndLocation;
+    // Location data is optional - don't filter out entries without coordinates
+    const isValid = hasEndTime && isMCACompliant;
     
     if (!isValid) {
       console.log('[Confirmations] Entry filtered out:', {
         id: entry.id,
+        vesselName: entry.vessel?.vessel_name,
         hasEndTime,
         durationHours,
         isMCACompliant,
-        hasStartLocation,
-        hasEndLocation,
       });
     }
     
@@ -103,7 +99,7 @@ export default function ConfirmationsScreen() {
       
       const validEntries = pendingEntries.filter(isValidEntry);
       
-      console.log('[Confirmations] Loaded', pendingEntries.length, 'pending entries,', validEntries.length, 'valid (4+ hours with complete location data)');
+      console.log('[Confirmations] Loaded', pendingEntries.length, 'pending entries,', validEntries.length, 'valid (4+ hours with end time)');
       
       setEntries(validEntries);
     } catch (error: any) {
@@ -133,15 +129,12 @@ export default function ConfirmationsScreen() {
             ? parseFloat(entry.duration_hours) 
             : entry.duration_hours || 0;
           const isMCACompliant = durationHours >= 4.0;
-          const hasStartLocation = entry.start_latitude !== null && entry.start_latitude !== undefined && 
-                                  entry.start_longitude !== null && entry.start_longitude !== undefined;
-          const hasEndLocation = entry.end_latitude !== null && entry.end_latitude !== undefined && 
-                                entry.end_longitude !== null && entry.end_longitude !== undefined;
           
-          return hasEndTime && isMCACompliant && hasStartLocation && hasEndLocation;
+          // Location data is optional - don't filter out entries without coordinates
+          return hasEndTime && isMCACompliant;
         });
         
-        console.log('[Confirmations] Filtered to', validEntries.length, 'valid MCA-compliant sea days (4+ hours with complete voyage data)');
+        console.log('[Confirmations] Filtered to', validEntries.length, 'valid MCA-compliant sea days (4+ hours with end time)');
         
         for (const entry of validEntries) {
           if (notifiedEntriesRef.current.has(entry.id)) {
@@ -181,7 +174,7 @@ export default function ConfirmationsScreen() {
     loadData();
 
     if (Platform.OS !== 'web') {
-      console.log('[Confirmations] Setting up notification polling - will only notify for 4+ hour sea days with complete voyage data');
+      console.log('[Confirmations] Setting up notification polling - will only notify for 4+ hour sea days with end time');
       pollIntervalRef.current = setInterval(checkForNewEntries, 30000);
     } else {
       console.log('[Confirmations] Skipping notification polling on web');
