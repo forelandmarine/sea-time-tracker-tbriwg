@@ -299,16 +299,14 @@ function RootLayoutNav() {
               }} 
             />
 
-            {/* Add Sea Time Entry screen */}
+            {/* Add Sea Time Entry screen - Changed to full screen for better reliability */}
             <Stack.Screen 
               name="add-sea-time" 
               options={{ 
-                presentation: 'formSheet',
+                presentation: 'card',
                 title: 'Add Sea Time Entry',
                 headerShown: true,
-                sheetGrabberVisible: true,
-                sheetAllowedDetents: [0.9, 1.0],
-                sheetCornerRadius: 20,
+                headerBackTitle: 'Back',
               }} 
             />
 
@@ -387,6 +385,36 @@ function RootLayoutNav() {
               options={{ 
                 headerShown: false,
                 presentation: 'card',
+              }} 
+            />
+
+            {/* Vessel diagnostic screen */}
+            <Stack.Screen 
+              name="vessel-diagnostic" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                headerBackTitle: 'Back',
+              }} 
+            />
+
+            {/* Select pathway screen */}
+            <Stack.Screen 
+              name="select-pathway" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                headerBackTitle: 'Back',
+              }} 
+            />
+
+            {/* Admin generate samples screen */}
+            <Stack.Screen 
+              name="admin-generate-samples" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                headerBackTitle: 'Back',
               }} 
             />
 

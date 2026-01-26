@@ -12,6 +12,7 @@ import {
   Platform,
   Modal,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
@@ -35,6 +36,29 @@ const createStyles = (isDark: boolean) =>
     container: {
       flex: 1,
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      paddingTop: Platform.OS === 'ios' ? 60 : 48,
+      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    backButton: {
+      padding: 8,
+      marginLeft: -8,
+    },
+    headerRight: {
+      width: 40,
     },
     scrollView: {
       flex: 1,
@@ -170,6 +194,9 @@ const createStyles = (isDark: boolean) =>
       alignItems: 'center',
       marginTop: 20,
     },
+    saveButtonDisabled: {
+      opacity: 0.5,
+    },
     saveButtonText: {
       fontSize: 16,
       fontWeight: '600',
@@ -246,6 +273,16 @@ const createStyles = (isDark: boolean) =>
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
     },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    loadingText: {
+      marginTop: 12,
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    },
   });
 
 const formatDateTime = (date: Date | null) => {
@@ -265,6 +302,8 @@ export default function AddSeaTimeScreen() {
   const styles = createStyles(isDark);
   const router = useRouter();
 
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -287,12 +326,15 @@ export default function AddSeaTimeScreen() {
   const loadVessels = async () => {
     try {
       console.log('[AddSeaTimeScreen] Loading vessels');
+      setLoading(true);
       const vesselsData = await seaTimeApi.getVessels();
       console.log('[AddSeaTimeScreen] Loaded vessels:', vesselsData.length);
       setVessels(vesselsData);
     } catch (error) {
       console.error('[AddSeaTimeScreen] Error loading vessels:', error);
       Alert.alert('Error', 'Failed to load vessels');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -344,6 +386,7 @@ export default function AddSeaTimeScreen() {
     }
 
     try {
+      setSaving(true);
       const fromCoords = parseLatLong(voyageFrom);
       const toCoords = parseLatLong(voyageTo);
 
@@ -382,6 +425,8 @@ export default function AddSeaTimeScreen() {
     } catch (error: any) {
       console.error('[AddSeaTimeScreen] Error saving entry:', error);
       Alert.alert('Error', error.message || 'Failed to save sea time entry');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -407,25 +452,60 @@ export default function AddSeaTimeScreen() {
   const toPlaceholder = 'Port or coordinates';
   const notesLabel = 'Additional Notes';
   const notesPlaceholder = 'Add any notes about this sea time...';
-  const saveButtonText = 'Save Entry';
+  const saveButtonText = saving ? 'Saving...' : 'Save Entry';
   const noVesselsText = 'No vessels available';
   const noVesselsSubtext = 'Add a vessel first from the Home tab';
   const selectVesselTitle = 'Select Vessel';
   const startDatePickerTitle = 'Select Start Date & Time';
   const endDatePickerTitle = 'Select End Date & Time';
   const doneButtonText = 'Done';
+  const loadingText = 'Loading vessels...';
+  const headerTitleText = 'Add Sea Time Entry';
+
+  if (loading) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.container}>
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <IconSymbol
+                ios_icon_name="chevron.left"
+                android_material_icon_name="arrow-back"
+                size={24}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>{headerTitleText}</Text>
+            <View style={styles.headerRight} />
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>{loadingText}</Text>
+          </View>
+        </View>
+      </>
+    );
+  }
 
   return (
     <>
-      <Stack.Screen
-        options={{
-          title: 'Add Sea Time Entry',
-          headerShown: true,
-          headerBackTitle: 'Back',
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false }} />
       
       <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <IconSymbol
+              ios_icon_name="chevron.left"
+              android_material_icon_name="arrow-back"
+              size={24}
+              color={colors.primary}
+            />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{headerTitleText}</Text>
+          <View style={styles.headerRight} />
+        </View>
+
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
@@ -644,7 +724,11 @@ export default function AddSeaTimeScreen() {
             />
           </View>
 
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+          <TouchableOpacity 
+            style={[styles.saveButton, saving && styles.saveButtonDisabled]} 
+            onPress={handleSave}
+            disabled={saving}
+          >
             <Text style={styles.saveButtonText}>{saveButtonText}</Text>
           </TouchableOpacity>
         </ScrollView>
