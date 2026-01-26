@@ -37,6 +37,7 @@ export default function ScheduledTasksScreen() {
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     loadTasks();
@@ -77,6 +78,38 @@ export default function ScheduledTasksScreen() {
     } catch (error: any) {
       console.error('Failed to toggle task:', error);
       Alert.alert('Error', 'Failed to update task: ' + error.message);
+    }
+  };
+
+  const handleVerifyTasks = async () => {
+    try {
+      console.log('User verifying scheduled tasks deployment');
+      setVerifying(true);
+      const result = await seaTimeApi.verifyVesselTasks();
+      console.log('Verification result:', result);
+      
+      const messageLines = [];
+      messageLines.push(`✓ Total active vessels: ${result.totalActiveVessels || 0}`);
+      messageLines.push(`✓ Vessels with tasks: ${result.vesselsWithTasks || 0}`);
+      
+      if (result.tasksCreated && result.tasksCreated > 0) {
+        messageLines.push(`✓ New tasks created: ${result.tasksCreated}`);
+      }
+      
+      if (result.vesselsWithoutTasks && result.vesselsWithoutTasks.length > 0) {
+        messageLines.push(`\n⚠️ Vessels without tasks: ${result.vesselsWithoutTasks.join(', ')}`);
+      }
+      
+      Alert.alert(
+        'Task Verification Complete',
+        messageLines.join('\n'),
+        [{ text: 'OK', onPress: () => loadTasks() }]
+      );
+    } catch (error: any) {
+      console.error('Failed to verify tasks:', error);
+      Alert.alert('Error', 'Failed to verify tasks: ' + error.message);
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -166,13 +199,28 @@ export default function ScheduledTasksScreen() {
               style={styles.infoIcon}
             />
             <View style={styles.infoTextContainer}>
-              <Text style={styles.infoTitle}>Server-Side Scheduling</Text>
+              <Text style={styles.infoTitle}>2-Hour Position Check Intervals</Text>
               <Text style={styles.infoText}>
                 These tasks run automatically on our servers every 2 hours, even when your app is closed or your phone is off. 
                 The backend continuously monitors vessel positions and creates sea time entries when movement is detected.
               </Text>
             </View>
           </View>
+
+          {/* Verification Button */}
+          <TouchableOpacity
+            style={styles.verifyButton}
+            onPress={handleVerifyTasks}
+          >
+            <IconSymbol
+              ios_icon_name="checkmark.shield.fill"
+              android_material_icon_name="verified"
+              size={20}
+              color="#FFFFFF"
+              style={styles.verifyIcon}
+            />
+            <Text style={styles.verifyButtonText}>Verify Task Deployment</Text>
+          </TouchableOpacity>
 
           {/* How It Works Section */}
           <View style={styles.section}>
@@ -183,7 +231,7 @@ export default function ScheduledTasksScreen() {
                   <Text style={styles.stepNumberText}>1</Text>
                 </View>
                 <View style={styles.stepContent}>
-                  <Text style={styles.stepTitle}>Automatic Checks</Text>
+                  <Text style={styles.stepTitle}>2-Hour Position Checks</Text>
                   <Text style={styles.stepText}>
                     Server checks vessel position every 2 hours via AIS data
                   </Text>
@@ -197,7 +245,7 @@ export default function ScheduledTasksScreen() {
                 <View style={styles.stepContent}>
                   <Text style={styles.stepTitle}>Movement Detection</Text>
                   <Text style={styles.stepText}>
-                    Compares positions to detect if vessel has moved
+                    Compares current position with position from 2 hours ago
                   </Text>
                 </View>
               </View>
@@ -435,6 +483,23 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       lineHeight: 20,
       color: textColor,
+    },
+    verifyButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 24,
+    },
+    verifyIcon: {
+      marginRight: 8,
+    },
+    verifyButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#FFFFFF',
     },
     section: {
       marginBottom: 24,
