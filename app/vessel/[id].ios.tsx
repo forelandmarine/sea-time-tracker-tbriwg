@@ -34,6 +34,8 @@ interface Vessel {
   length_metres?: number;
   gross_tonnes?: number;
   callsign?: string;
+  engine_kilowatts?: number;
+  engine_type?: string;
 }
 
 interface SeaTimeEntry {
@@ -699,6 +701,8 @@ export default function VesselDetailScreen() {
     length_metres: '',
     gross_tonnes: '',
     callsign: '',
+    engine_kilowatts: '',
+    engine_type: '',
   });
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -794,6 +798,8 @@ export default function VesselDetailScreen() {
       length_metres: vessel.length_metres?.toString() || '',
       gross_tonnes: vessel.gross_tonnes?.toString() || '',
       callsign: vessel.callsign || '',
+      engine_kilowatts: vessel.engine_kilowatts?.toString() || '',
+      engine_type: vessel.engine_type || '',
     });
     
     setEditModalVisible(true);
@@ -826,6 +832,13 @@ export default function VesselDetailScreen() {
           updates.gross_tonnes = tonnes;
         }
       }
+      if (editForm.engine_kilowatts.trim()) {
+        const kw = parseFloat(editForm.engine_kilowatts);
+        if (!isNaN(kw) && kw > 0) {
+          updates.engine_kilowatts = kw;
+        }
+      }
+      if (editForm.engine_type.trim()) updates.engine_type = editForm.engine_type.trim();
 
       console.log('[VesselDetailScreen iOS] Updating vessel particulars:', updates);
       
@@ -1226,10 +1239,24 @@ export default function VesselDetailScreen() {
             </Text>
           </View>
           
-          <View style={[styles.particularRow, styles.particularRowLast]}>
+          <View style={styles.particularRow}>
             <Text style={styles.particularLabel}>Gross Tonnes</Text>
             <Text style={vessel.gross_tonnes ? styles.particularValue : styles.particularValueEmpty}>
               {vessel.gross_tonnes ? `${vessel.gross_tonnes} GT` : 'Not specified'}
+            </Text>
+          </View>
+          
+          <View style={styles.particularRow}>
+            <Text style={styles.particularLabel}>Engine Kilowatts (KW)</Text>
+            <Text style={vessel.engine_kilowatts ? styles.particularValue : styles.particularValueEmpty}>
+              {vessel.engine_kilowatts ? `${vessel.engine_kilowatts} KW` : 'Not specified'}
+            </Text>
+          </View>
+          
+          <View style={[styles.particularRow, styles.particularRowLast]}>
+            <Text style={styles.particularLabel}>Engine Type</Text>
+            <Text style={vessel.engine_type ? styles.particularValue : styles.particularValueEmpty}>
+              {vessel.engine_type || 'Not specified'}
             </Text>
           </View>
         </View>
@@ -1518,6 +1545,29 @@ export default function VesselDetailScreen() {
                       onChangeText={(text) => setEditForm({ ...editForm, gross_tonnes: text })}
                       placeholder="e.g., 500"
                       keyboardType="decimal-pad"
+                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Engine Kilowatts (KW)</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.engine_kilowatts}
+                      onChangeText={(text) => setEditForm({ ...editForm, engine_kilowatts: text })}
+                      placeholder="e.g., 250"
+                      keyboardType="decimal-pad"
+                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    />
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Engine Type</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={editForm.engine_type}
+                      onChangeText={(text) => setEditForm({ ...editForm, engine_type: text })}
+                      placeholder="e.g., Diesel, Petrol, Electric"
                       placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
                     />
                   </View>

@@ -34,6 +34,8 @@ interface Vessel {
   length_metres?: number;
   gross_tonnes?: number;
   callsign?: string;
+  engine_kilowatts?: number;
+  engine_type?: string;
 }
 
 interface SeaTimeEntry {
@@ -90,6 +92,8 @@ export default function VesselDetailScreen() {
   const [editedLengthMetres, setEditedLengthMetres] = useState('');
   const [editedGrossTonnes, setEditedGrossTonnes] = useState('');
   const [editedCallSign, setEditedCallSign] = useState('');
+  const [editedEngineKilowatts, setEditedEngineKilowatts] = useState('');
+  const [editedEngineType, setEditedEngineType] = useState('');
   const [checkingAIS, setCheckingAIS] = useState(false);
 
   const vesselId = Array.isArray(id) ? id[0] : id;
@@ -176,6 +180,8 @@ export default function VesselDetailScreen() {
     setEditedLengthMetres(vessel.length_metres?.toString() || '');
     setEditedGrossTonnes(vessel.gross_tonnes?.toString() || '');
     setEditedCallSign(vessel.callsign || '');
+    setEditedEngineKilowatts(vessel.engine_kilowatts?.toString() || '');
+    setEditedEngineType(vessel.engine_type || '');
     setEditModalVisible(true);
   };
 
@@ -192,6 +198,8 @@ export default function VesselDetailScreen() {
         length_metres: editedLengthMetres ? parseFloat(editedLengthMetres) : undefined,
         gross_tonnes: editedGrossTonnes ? parseFloat(editedGrossTonnes) : undefined,
         callsign: editedCallSign.trim() || undefined,
+        engine_kilowatts: editedEngineKilowatts ? parseFloat(editedEngineKilowatts) : undefined,
+        engine_type: editedEngineType.trim() || undefined,
       });
 
       setEditModalVisible(false);
@@ -514,6 +522,20 @@ export default function VesselDetailScreen() {
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Gross Tonnes</Text>
               <Text style={styles.detailValue}>{vessel.gross_tonnes}</Text>
+            </View>
+          )}
+
+          {vessel.engine_kilowatts && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Engine Kilowatts (KW)</Text>
+              <Text style={styles.detailValue}>{vessel.engine_kilowatts} KW</Text>
+            </View>
+          )}
+
+          {vessel.engine_type && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Engine Type</Text>
+              <Text style={styles.detailValue}>{vessel.engine_type}</Text>
             </View>
           )}
 
@@ -843,6 +865,29 @@ export default function VesselDetailScreen() {
                   placeholder="Gross Tonnes"
                   placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
                   keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Engine Kilowatts (KW)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editedEngineKilowatts}
+                  onChangeText={setEditedEngineKilowatts}
+                  placeholder="Engine Kilowatts"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Engine Type</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editedEngineType}
+                  onChangeText={setEditedEngineType}
+                  placeholder="e.g., Diesel, Petrol, Electric"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
                 />
               </View>
 
