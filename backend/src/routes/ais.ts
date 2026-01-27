@@ -7,6 +7,8 @@ import { extractUserIdFromRequest } from "../middleware/auth.js";
 const MOVING_SPEED_THRESHOLD = 2; // knots
 const MYSHIPTRACKING_API_URL = 'https://api.myshiptracking.com/api/v2/vessel';
 const MYSHIPTRACKING_API_KEY = process.env.MYSHIPTRACKING_API_KEY || '';
+const DATALASTIC_API_URL = 'https://api.datalastic.com/api/v0/vessel';
+const DATALASTIC_API_KEY = process.env.DATALASTIC_API_KEY || '';
 
 // Helper to mask API key for logging
 function maskAPIKey(key: string): string {
@@ -133,6 +135,215 @@ interface AISVesselData {
   error: string | null;
 }
 
+// Datalastic API response interface (may use different field names)
+interface DatalasticVesselResponse {
+  // Common field variations
+  mmsi?: number | string;
+  imo?: number | string;
+  vessel_name?: string;
+  name?: string;
+  callsign?: string;
+  ship_type?: string;
+  vessel_type?: string;
+  status?: string;
+  nav_status?: string;
+  flag?: string;
+  built?: number | string;
+  length?: number;
+  width?: number;
+  latitude?: number;
+  longitude?: number;
+  lat?: number;
+  lon?: number;
+  lng?: number;
+  speed?: number;
+  speed_knots?: number;
+  course?: number;
+  heading?: number;
+  destination?: string;
+  eta?: string;
+  timestamp?: number | string;
+  last_position_time?: number | string;
+  received?: string; // ISO 8601 timestamp string
+  position_updated?: string;
+  [key: string]: any;
+}
+
+async function fetchVesselAISDataFromDatalastic(
+  mmsi: string,
+  apiKey: string,
+  logger: any
+): Promise<{ data: AISVesselData; rawResponse: any } | null> {
+  try {
+    if (!apiKey) {
+      logger.debug(`Datalastic API key not configured, skipping Datalastic fallback`);
+      return null;
+    }
+
+    // Build request URL with MMSI parameter
+    const urlObj = new URL(DATALASTIC_API_URL);
+    urlObj.searchParams.append('api-key', apiKey);
+    urlObj.searchParams.append('mmsi', mmsi);
+    const url = urlObj.toString();
+
+    // Log request details (mask API key for security)
+    const maskedKey = maskAPIKey(apiKey);
+    logger.info(`Calling Datalastic API - MMSI: ${mmsi}, API Key: ${maskedKey}`);
+
+    let response;
+    try {
+      response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+    } catch (fetchError) {
+      logger.error(`Connection error calling Datalastic API for MMSI ${mmsi}: ${fetchError}`);
+      return null;
+    }
+
+    logger.info(`Datalastic API response status: ${response.status} ${response.statusText}`);
+
+    // Handle error status codes
+    if (!response.ok) {
+      if (response.status === 404) {
+        logger.warn(`Datalastic API returned 404 - vessel with MMSI ${mmsi} not found`);
+      } else if (response.status === 401) {
+        logger.error(`Datalastic API authentication failed (401) - invalid API key`);
+      } else {
+        logger.error(`Datalastic API error: ${response.status} ${response.statusText}`);
+      }
+      return null;
+    }
+
+    const rawResponse = await response.json() as any;
+    logger.info(`Received Datalastic AIS response for MMSI ${mmsi}`);
+    logger.debug(`Raw Datalastic Response: ${JSON.stringify(rawResponse, null, 2)}`);
+
+    // Extract the vessel data - may be wrapped in a 'data' property or be a direct response
+    const data: DatalasticVesselResponse = (rawResponse.data && typeof rawResponse.data === 'object')
+      ? rawResponse.data
+      : rawResponse;
+
+    // Helper to safely extract values with fallback field names
+    const getValue = (field: string): any => {
+      // Try direct field
+      if (field in data) return (data as any)[field];
+
+      // Try alternative field names
+      if (field === 'name') {
+        return (data as any).vessel_name || (data as any).name;
+      }
+      if (field === 'latitude') {
+        return (data as any).latitude || (data as any).lat;
+      }
+      if (field === 'longitude') {
+        return (data as any).longitude || (data as any).lon || (data as any).lng;
+      }
+      if (field === 'speed') {
+        return (data as any).speed || (data as any).speed_knots;
+      }
+      if (field === 'ship_type') {
+        return (data as any).ship_type || (data as any).vessel_type;
+      }
+      if (field === 'status') {
+        return (data as any).status || (data as any).nav_status;
+      }
+      if (field === 'timestamp') {
+        return (data as any).timestamp || (data as any).last_position_time || (data as any).received || (data as any).position_updated;
+      }
+
+      return undefined;
+    };
+
+    // Extract vessel data
+    const vesselMmsi = getValue('mmsi') ? String(getValue('mmsi')) : null;
+    const imo = getValue('imo') ? String(getValue('imo')) : null;
+    const latitude = getValue('latitude') ? parseFloat(String(getValue('latitude'))) : null;
+    const longitude = getValue('longitude') ? parseFloat(String(getValue('longitude'))) : null;
+    const name = getValue('name') ? String(getValue('name')) : null;
+    const speed = getValue('speed') ? parseFloat(String(getValue('speed'))) : null;
+    const course = getValue('course') ? parseFloat(String(getValue('course'))) : null;
+    const heading = getValue('heading') ? parseFloat(String(getValue('heading'))) : null;
+    const status = getValue('status') ? String(getValue('status')) : null;
+    const destination = getValue('destination') ? String(getValue('destination')) : null;
+    const eta = getValue('eta') ? String(getValue('eta')) : null;
+    const callsign = getValue('callsign') ? String(getValue('callsign')) : null;
+    const ship_type = getValue('ship_type') ? String(getValue('ship_type')) : null;
+    const flag = getValue('flag') ? String(getValue('flag')) : null;
+
+    // Parse timestamp - handle ISO strings and numeric timestamps
+    let timestamp: Date;
+    const receivedValue = getValue('timestamp');
+
+    if (receivedValue) {
+      if (typeof receivedValue === 'string') {
+        // Try parsing as ISO 8601
+        try {
+          timestamp = new Date(receivedValue);
+          if (isNaN(timestamp.getTime())) {
+            logger.warn(`Invalid timestamp from Datalastic for MMSI ${mmsi}: ${receivedValue}`);
+            timestamp = new Date();
+          }
+        } catch (e) {
+          logger.warn(`Failed to parse Datalastic timestamp: ${receivedValue}`);
+          timestamp = new Date();
+        }
+      } else {
+        // Parse numeric timestamp
+        const parsedTimestamp = parseFloat(String(receivedValue));
+        if (parsedTimestamp > 0) {
+          // Check if in seconds (before year 3000)
+          if (parsedTimestamp < 100000000000) {
+            timestamp = new Date(parsedTimestamp * 1000);
+          } else {
+            timestamp = new Date(parsedTimestamp);
+          }
+        } else {
+          logger.warn(`Invalid numeric timestamp from Datalastic for MMSI ${mmsi}: ${receivedValue}`);
+          timestamp = new Date();
+        }
+      }
+    } else {
+      logger.debug(`No timestamp in Datalastic response for MMSI ${mmsi}, using current time`);
+      timestamp = new Date();
+    }
+
+    const is_moving = speed !== null && speed > MOVING_SPEED_THRESHOLD;
+
+    logger.info(
+      `Successfully extracted Datalastic data for MMSI ${mmsi}: name=${name}, speed=${speed} knots, is_moving=${is_moving}, lat=${latitude}, lon=${longitude}`
+    );
+
+    return {
+      data: {
+        name,
+        mmsi: vesselMmsi,
+        imo,
+        speed_knots: speed,
+        latitude,
+        longitude,
+        course,
+        heading,
+        timestamp,
+        status,
+        destination,
+        eta,
+        callsign,
+        ship_type,
+        flag,
+        is_moving,
+        error: null,
+      },
+      rawResponse,
+    };
+  } catch (error) {
+    logger.error(`Error fetching vessel data from Datalastic for MMSI ${mmsi}: ${error}`);
+    return null;
+  }
+}
+
 export async function fetchVesselAISData(
   mmsi: string,
   apiKey: string,
@@ -208,10 +419,20 @@ export async function fetchVesselAISData(
     if (response.status === 401) {
       authStatus = 'authentication_failed';
       errorMessage = 'Invalid API key';
-      logger.error(`MyShipTracking API authentication failed (401) for MMSI ${mmsi} - invalid API key`);
+      logger.warn(`MyShipTracking API authentication failed (401) for MMSI ${mmsi} - invalid API key, trying Datalastic fallback`);
       if (vesselId && app && userId) {
         const responseBody = await response.text();
         await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '401', responseBody, authStatus, errorMessage, 'myshiptracking');
+      }
+      // Try Datalastic fallback for 401 errors
+      logger.info(`MyShipTracking failed with 401, attempting Datalastic fallback for MMSI ${mmsi}`);
+      const datalasticResult = await fetchVesselAISDataFromDatalastic(mmsi, DATALASTIC_API_KEY, logger);
+      if (datalasticResult) {
+        logger.info(`Successfully retrieved data from Datalastic fallback for MMSI ${mmsi}`);
+        if (vesselId && app && userId) {
+          await logAPICall(app, vesselId, userId, mmsi, DATALASTIC_API_URL, new Date(), '200', JSON.stringify(datalasticResult.rawResponse), 'success', null, 'datalastic');
+        }
+        return datalasticResult.data;
       }
       return {
         name: null,
@@ -237,10 +458,20 @@ export async function fetchVesselAISData(
     if (response.status === 429) {
       authStatus = 'rate_limited';
       errorMessage = 'Rate limit exceeded';
-      logger.warn(`MyShipTracking API rate limit exceeded (429) for MMSI ${mmsi}`);
+      logger.warn(`MyShipTracking API rate limit exceeded (429) for MMSI ${mmsi}, trying Datalastic fallback`);
       if (vesselId && app && userId) {
         const responseBody = await response.text();
         await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '429', responseBody, authStatus, errorMessage, 'myshiptracking');
+      }
+      // Try Datalastic fallback for rate limit errors
+      logger.info(`MyShipTracking rate limited, attempting Datalastic fallback for MMSI ${mmsi}`);
+      const datalasticResult = await fetchVesselAISDataFromDatalastic(mmsi, DATALASTIC_API_KEY, logger);
+      if (datalasticResult) {
+        logger.info(`Successfully retrieved data from Datalastic fallback for MMSI ${mmsi}`);
+        if (vesselId && app && userId) {
+          await logAPICall(app, vesselId, userId, mmsi, DATALASTIC_API_URL, new Date(), '200', JSON.stringify(datalasticResult.rawResponse), 'success', null, 'datalastic');
+        }
+        return datalasticResult.data;
       }
       return {
         name: null,
@@ -265,11 +496,21 @@ export async function fetchVesselAISData(
 
     if (response.status === 404) {
       authStatus = 'success';
-      errorMessage = 'Vessel not found in AIS system';
-      logger.warn(`MyShipTracking API returned 404 - vessel with MMSI ${mmsi} not found in AIS system`);
+      errorMessage = 'Vessel not found in MyShipTracking AIS system';
+      logger.warn(`MyShipTracking API returned 404 - vessel with MMSI ${mmsi} not found, trying Datalastic fallback`);
       if (vesselId && app && userId) {
         const responseBody = await response.text();
         await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '404', responseBody, authStatus, errorMessage, 'myshiptracking');
+      }
+      // Try Datalastic fallback for 404 errors
+      logger.info(`MyShipTracking returned 404, attempting Datalastic fallback for MMSI ${mmsi}`);
+      const datalasticResult = await fetchVesselAISDataFromDatalastic(mmsi, DATALASTIC_API_KEY, logger);
+      if (datalasticResult) {
+        logger.info(`Successfully retrieved data from Datalastic fallback for MMSI ${mmsi}`);
+        if (vesselId && app && userId) {
+          await logAPICall(app, vesselId, userId, mmsi, DATALASTIC_API_URL, new Date(), '200', JSON.stringify(datalasticResult.rawResponse), 'success', null, 'datalastic');
+        }
+        return datalasticResult.data;
       }
       return {
         name: null,
@@ -295,10 +536,20 @@ export async function fetchVesselAISData(
     if (!response.ok) {
       authStatus = 'success';
       errorMessage = `HTTP ${response.status} ${response.statusText}`;
-      logger.error(`MyShipTracking API error for MMSI ${mmsi}: ${response.status} ${response.statusText}`);
+      logger.warn(`MyShipTracking API error for MMSI ${mmsi}: ${response.status} ${response.statusText}, trying Datalastic fallback`);
       if (vesselId && app && userId) {
         const responseBody = await response.text();
         await logAPICall(app, vesselId, userId, mmsi, url, requestTime, String(response.status), responseBody, authStatus, errorMessage, 'myshiptracking');
+      }
+      // Try Datalastic fallback for other errors
+      logger.info(`MyShipTracking failed with ${response.status}, attempting Datalastic fallback for MMSI ${mmsi}`);
+      const datalasticResult = await fetchVesselAISDataFromDatalastic(mmsi, DATALASTIC_API_KEY, logger);
+      if (datalasticResult) {
+        logger.info(`Successfully retrieved data from Datalastic fallback for MMSI ${mmsi}`);
+        if (vesselId && app && userId) {
+          await logAPICall(app, vesselId, userId, mmsi, DATALASTIC_API_URL, new Date(), '200', JSON.stringify(datalasticResult.rawResponse), 'success', null, 'datalastic');
+        }
+        return datalasticResult.data;
       }
       return {
         name: null,
@@ -662,11 +913,12 @@ export function register(app: App, fastify: FastifyInstance) {
         speed_knots: ais_data.speed_knots !== null ? String(ais_data.speed_knots) : null,
         latitude: ais_data.latitude !== null ? String(ais_data.latitude) : null,
         longitude: ais_data.longitude !== null ? String(ais_data.longitude) : null,
+        api_source: 'myshiptracking',
       })
       .returning();
 
     app.logger.info(
-      `Stored AIS check: ${ais_check.id} for vessel ${vesselId} - is_moving: ${ais_data.is_moving}, speed: ${ais_data.speed_knots}`
+      `Stored AIS check: ${ais_check.id} for vessel ${vesselId} - is_moving: ${ais_data.is_moving}, speed: ${ais_data.speed_knots}, api_source: myshiptracking`
     );
 
     // Update or insert the last query timestamp for rate limiting
