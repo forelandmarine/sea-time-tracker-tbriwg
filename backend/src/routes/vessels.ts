@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, desc } from "drizzle-orm";
 import * as schema from "../db/schema.js";
 import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
@@ -45,6 +45,135 @@ async function ensureScheduledTask(app: App, vesselId: string, userId: string): 
       { err: error, vesselId, userId },
       `Failed to create scheduled task for vessel (user: ${userId})`
     );
+  }
+}
+
+// Helper function to auto-fill vessel particulars from recent AIS data
+async function autoFillVesselParticularsFromAIS(
+  app: App,
+  vesselId: string,
+  currentData: Record<string, any>
+): Promise<Record<string, any>> {
+  try {
+    // Get the most recent successful AIS check for this vessel
+    const recentAIS = await app.db
+      .select()
+      .from(schema.ais_debug_logs)
+      .where(eq(schema.ais_debug_logs.vessel_id, vesselId))
+      .orderBy(desc(schema.ais_debug_logs.request_time))
+      .limit(1);
+
+    if (recentAIS.length === 0) {
+      app.logger.debug({ vesselId }, 'No recent AIS data found for auto-fill');
+      return currentData;
+    }
+
+    const aisLog = recentAIS[0];
+
+    // Only process successful responses
+    if (aisLog.response_status !== '200' || !aisLog.response_body) {
+      app.logger.debug({ vesselId }, 'Most recent AIS response was not successful, skipping auto-fill');
+      return currentData;
+    }
+
+    // Parse the AIS response
+    let aisData: any = null;
+    try {
+      aisData = JSON.parse(aisLog.response_body);
+    } catch (parseError) {
+      app.logger.warn({ vesselId, err: parseError }, 'Failed to parse AIS response body');
+      return currentData;
+    }
+
+    // Handle nested response structures (e.g., data.vessel.field or data.field)
+    const extractAISField = (fieldName: string): any => {
+      // Try direct access first
+      if (fieldName in aisData) return (aisData as any)[fieldName];
+
+      // Try data.fieldName
+      if (aisData.data && fieldName in aisData.data) return (aisData as any).data[fieldName];
+
+      // Try data.vessel.fieldName
+      if (aisData.data?.vessel && fieldName in aisData.data.vessel) {
+        return (aisData as any).data.vessel[fieldName];
+      }
+
+      // Try alternative field names for ship type
+      if (fieldName === 'ship_type') {
+        return (aisData as any).ship_type ||
+               (aisData as any).vessel_type ||
+               aisData.data?.ship_type ||
+               aisData.data?.vessel_type ||
+               aisData.data?.vessel?.ship_type ||
+               aisData.data?.vessel?.vessel_type;
+      }
+
+      return undefined;
+    };
+
+    const autoFilledFields: string[] = [];
+    const result = { ...currentData };
+
+    // Auto-fill callsign if not provided by user
+    if (!currentData.callsign) {
+      const aisCallsign = extractAISField('callsign');
+      if (aisCallsign) {
+        result.callsign = aisCallsign;
+        autoFilledFields.push('callsign');
+      }
+    }
+
+    // Auto-fill flag if not provided by user
+    if (!currentData.flag) {
+      const aisFlag = extractAISField('flag');
+      if (aisFlag) {
+        result.flag = aisFlag;
+        autoFilledFields.push('flag');
+      }
+    }
+
+    // Auto-fill vessel type if not provided by user
+    if (!currentData.type) {
+      const aisShipType = extractAISField('ship_type');
+      if (aisShipType) {
+        result.type = aisShipType;
+        autoFilledFields.push('vessel_type');
+      }
+    }
+
+    // Auto-fill length if not provided by user
+    if (!currentData.length_metres) {
+      const aisLength = extractAISField('length');
+      if (aisLength) {
+        result.length_metres = aisLength;
+        autoFilledFields.push('length_metres');
+      }
+    }
+
+    // Auto-fill IMO if not provided by user (though IMO is typically in vessel table directly)
+    if (!currentData.official_number) {
+      const aisIMO = extractAISField('imo');
+      if (aisIMO) {
+        result.official_number = aisIMO;
+        autoFilledFields.push('imo');
+      }
+    }
+
+    if (autoFilledFields.length > 0) {
+      app.logger.info(
+        { vesselId, autoFilledFields },
+        `Auto-filled vessel particulars from AIS: ${autoFilledFields.join(', ')}`
+      );
+    }
+
+    return result;
+  } catch (error) {
+    app.logger.error(
+      { err: error, vesselId },
+      'Error auto-filling vessel particulars from AIS data'
+    );
+    // Return original data if something goes wrong
+    return currentData;
   }
 }
 
@@ -691,15 +820,18 @@ export function register(app: App, fastify: FastifyInstance) {
       if (engine_kilowatts !== undefined) updateData.engine_kilowatts = engine_kilowatts ? String(engine_kilowatts) : null;
       if (engine_type !== undefined) updateData.engine_type = engine_type;
 
+      // Auto-fill blank fields from recent AIS data
+      const autoFilledData = await autoFillVesselParticularsFromAIS(app, id, updateData);
+
       // Update vessel
       const [updated] = await app.db
         .update(schema.vessels)
-        .set(updateData)
+        .set(autoFilledData)
         .where(eq(schema.vessels.id, id))
         .returning();
 
       app.logger.info(
-        { vesselId: updated.id, vesselName: updated.vessel_name, updatedFields: Object.keys(updateData).filter(k => k !== 'updated_at') },
+        { vesselId: updated.id, vesselName: updated.vessel_name, updatedFields: Object.keys(autoFilledData).filter(k => k !== 'updated_at') },
         'Vessel particulars updated successfully'
       );
 
