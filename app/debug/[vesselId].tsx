@@ -27,6 +27,34 @@ interface AISDebugLog {
   created_at: string;
 }
 
+// Haversine formula to calculate distance between two coordinates in nautical miles
+function calculateDistance(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 3440.065; // Earth's radius in nautical miles
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  const distance = R * c;
+  
+  return distance;
+}
+
+function toRadians(degrees: number): number {
+  return degrees * (Math.PI / 180);
+}
+
 function createStyles(isDark: boolean) {
   const textColor = isDark ? colors.text : colors.textLight;
   const secondaryTextColor = isDark ? colors.textSecondary : colors.textSecondaryLight;
@@ -166,6 +194,31 @@ function createStyles(isDark: boolean) {
       marginBottom: 4,
       fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     },
+    distanceContainer: {
+      marginTop: 12,
+      padding: 12,
+      backgroundColor: isDark ? 'rgba(33, 150, 243, 0.15)' : 'rgba(33, 150, 243, 0.1)',
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(33, 150, 243, 0.3)' : 'rgba(33, 150, 243, 0.2)',
+    },
+    distanceTitle: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: isDark ? '#64b5f6' : '#1976d2',
+      marginBottom: 8,
+    },
+    distanceText: {
+      fontSize: 14,
+      color: isDark ? '#90caf9' : '#1565c0',
+      fontWeight: '700',
+      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    },
+    distanceSubtext: {
+      fontSize: 11,
+      color: isDark ? '#90caf9' : '#1565c0',
+      marginTop: 4,
+    },
   });
 }
 
@@ -182,14 +235,14 @@ export default function DebugScreen() {
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
 
   const loadLogs = useCallback(async () => {
-    console.log('Loading AIS debug logs for vessel:', vesselId);
+    console.log('[Debug] Loading AIS debug logs for vessel:', vesselId);
     try {
       setLoading(true);
       const data = await seaTimeApi.getAISDebugLogs(vesselId);
-      console.log('Loaded', data.length, 'debug logs');
+      console.log('[Debug] Loaded', data.length, 'debug logs');
       setLogs(data);
     } catch (error) {
-      console.error('Failed to load debug logs:', error);
+      console.error('[Debug] Failed to load debug logs:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -201,13 +254,13 @@ export default function DebugScreen() {
   }, [loadLogs]);
 
   const onRefresh = () => {
-    console.log('User pulled to refresh debug logs');
+    console.log('[Debug] User pulled to refresh debug logs');
     setRefreshing(true);
     loadLogs();
   };
 
   const toggleExpanded = (logId: string) => {
-    console.log('User toggled log expansion:', logId);
+    console.log('[Debug] User toggled log expansion:', logId);
     setExpandedLogs(prev => {
       const newSet = new Set(prev);
       if (newSet.has(logId)) {
@@ -272,12 +325,12 @@ export default function DebugScreen() {
     try {
       const data = JSON.parse(body);
       const lat = data.latitude || data.lat || data.position?.latitude;
-      const lon = data.longitude || data.lng || data.position?.longitude;
-      if (lat && lon) {
-        return { lat, lon };
+      const lon = data.longitude || data.lng || data.lon || data.position?.longitude;
+      if (lat !== null && lat !== undefined && lon !== null && lon !== undefined) {
+        return { lat: Number(lat), lon: Number(lon) };
       }
     } catch {
-      // Ignore parse errors
+      console.log('[Debug] Failed to parse coordinates from response body');
     }
     return null;
   };
@@ -311,7 +364,7 @@ export default function DebugScreen() {
           <View style={styles.header}>
             <Text style={styles.title}>AIS Debug Logs</Text>
             <Text style={styles.subtitle}>
-              Detailed call history and responses for vessel monitoring
+              Detailed call history and responses for vessel monitoring. Distances calculated between consecutive observations.
             </Text>
           </View>
 
@@ -329,9 +382,38 @@ export default function DebugScreen() {
               </Text>
             </View>
           ) : (
-            logs.map((log) => {
+            logs.map((log, index) => {
               const isExpanded = expandedLogs.has(log.id);
               const coordinates = extractCoordinates(log.response_body);
+              
+              // Calculate distance from previous observation
+              let distance: number | null = null;
+              let timeDiff: number | null = null;
+              if (coordinates && index < logs.length - 1) {
+                const prevLog = logs[index + 1]; // Logs are in reverse chronological order
+                const prevCoordinates = extractCoordinates(prevLog.response_body);
+                
+                if (prevCoordinates) {
+                  distance = calculateDistance(
+                    prevCoordinates.lat,
+                    prevCoordinates.lon,
+                    coordinates.lat,
+                    coordinates.lon
+                  );
+                  
+                  // Calculate time difference in hours
+                  const currentTime = new Date(log.request_time).getTime();
+                  const prevTime = new Date(prevLog.request_time).getTime();
+                  timeDiff = (currentTime - prevTime) / (1000 * 60 * 60); // Convert to hours
+                  
+                  console.log('[Debug] Distance calculation:', {
+                    from: prevCoordinates,
+                    to: coordinates,
+                    distance: distance.toFixed(2) + ' nm',
+                    timeDiff: timeDiff.toFixed(2) + ' hours'
+                  });
+                }
+              }
 
               return (
                 <View key={log.id} style={styles.logCard}>
@@ -375,6 +457,23 @@ export default function DebugScreen() {
                       <Text style={styles.coordinatesText}>
                         Longitude: {coordinates.lon.toFixed(6)}°
                       </Text>
+                    </View>
+                  )}
+
+                  {distance !== null && timeDiff !== null && (
+                    <View style={styles.distanceContainer}>
+                      <Text style={styles.distanceTitle}>📏 Distance from Previous Observation</Text>
+                      <Text style={styles.distanceText}>
+                        {distance.toFixed(2)} nautical miles
+                      </Text>
+                      <Text style={styles.distanceSubtext}>
+                        Time elapsed: {timeDiff.toFixed(2)} hours
+                      </Text>
+                      {timeDiff > 0 && (
+                        <Text style={styles.distanceSubtext}>
+                          Average speed: {(distance / timeDiff).toFixed(2)} knots
+                        </Text>
+                      )}
                     </View>
                   )}
 
