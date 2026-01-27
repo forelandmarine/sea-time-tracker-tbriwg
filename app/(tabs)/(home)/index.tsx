@@ -650,6 +650,19 @@ export default function SeaTimeScreen() {
                 showsVerticalScrollIndicator={true}
                 bounces={false}
               >
+                {/* Auto-fill info banner */}
+                <View style={styles.autoFillBanner}>
+                  <IconSymbol
+                    ios_icon_name="info.circle.fill"
+                    android_material_icon_name="info"
+                    size={20}
+                    color={colors.primary}
+                  />
+                  <Text style={styles.autoFillText}>
+                    Optional fields will be auto-filled from AIS data when available
+                  </Text>
+                </View>
+
                 <View style={styles.inputGroup}>
                   <Text style={styles.inputLabel}>Vessel Name *</Text>
                   <TextInput
@@ -1199,6 +1212,23 @@ function createStyles(isDark: boolean) {
       fontSize: 12,
       color: isDark ? colors.text : colors.textLight,
       fontWeight: '600',
+    },
+    autoFillBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primary + '15',
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: 20,
+      gap: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.primary,
+    },
+    autoFillText: {
+      flex: 1,
+      fontSize: 13,
+      color: isDark ? colors.text : colors.textLight,
+      fontWeight: '500',
     },
   });
 }

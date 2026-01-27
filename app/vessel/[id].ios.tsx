@@ -658,6 +658,23 @@ function createStyles(isDark: boolean) {
       fontSize: 16,
       fontWeight: '600',
     },
+    autoFillBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primary + '15',
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: 20,
+      gap: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.primary,
+    },
+    autoFillText: {
+      flex: 1,
+      fontSize: 13,
+      color: isDark ? colors.text : colors.textLight,
+      fontWeight: '500',
+    },
   });
 }
 
@@ -1386,6 +1403,19 @@ export default function VesselDetailScreen() {
                   contentContainerStyle={styles.modalScrollContent}
                   keyboardShouldPersistTaps="handled"
                 >
+                  {/* Auto-fill info banner */}
+                  <View style={styles.autoFillBanner}>
+                    <IconSymbol
+                      ios_icon_name="info.circle.fill"
+                      android_material_icon_name="info"
+                      size={20}
+                      color={colors.primary}
+                    />
+                    <Text style={styles.autoFillText}>
+                      Leave fields blank to auto-fill from AIS data
+                    </Text>
+                  </View>
+
                   <View style={styles.inputGroup}>
                     <Text style={styles.inputLabel}>Vessel Name</Text>
                     <TextInput

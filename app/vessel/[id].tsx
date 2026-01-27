@@ -448,7 +448,7 @@ export default function VesselDetailScreen() {
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
-        {/* Vessel Status Badge */}
+        {/* Header - matching Logbook light header color */}
         {vessel.is_active && (
           <View style={styles.activeVesselBadge}>
             <View style={styles.activeIndicator} />
@@ -726,6 +726,19 @@ export default function VesselDetailScreen() {
             </View>
 
             <ScrollView style={styles.modalScrollView}>
+              {/* Auto-fill info banner */}
+              <View style={styles.autoFillBanner}>
+                <IconSymbol
+                  ios_icon_name="info.circle.fill"
+                  android_material_icon_name="info"
+                  size={20}
+                  color={colors.primary}
+                />
+                <Text style={styles.autoFillText}>
+                  Leave fields blank to auto-fill from AIS data
+                </Text>
+              </View>
+
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Vessel Name</Text>
                 <TextInput
@@ -1098,6 +1111,23 @@ function createStyles(isDark: boolean) {
     },
     modalScrollView: {
       padding: 20,
+    },
+    autoFillBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primary + '15',
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: 20,
+      gap: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.primary,
+    },
+    autoFillText: {
+      flex: 1,
+      fontSize: 13,
+      color: isDark ? colors.text : colors.textLight,
+      fontWeight: '500',
     },
     inputGroup: {
       marginBottom: 20,
