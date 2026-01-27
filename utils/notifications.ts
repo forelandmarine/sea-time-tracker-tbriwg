@@ -17,6 +17,8 @@ if (Platform.OS !== 'web' && Notifications) {
       shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
     }),
   });
 }
@@ -48,7 +50,18 @@ export async function registerForPushNotificationsAsync(): Promise<boolean> {
 
   // Request permissions if not already granted
   if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync();
+    const { status } = await Notifications.requestPermissionsAsync({
+      ios: {
+        allowAlert: true,
+        allowBadge: true,
+        allowSound: true,
+        allowDisplayInCarPlay: false,
+        allowCriticalAlerts: false,
+        provideAppNotificationSettings: false,
+        allowProvisional: false,
+        allowAnnouncements: false,
+      },
+    });
     finalStatus = status;
     console.log('[Notifications] Permission request result:', status);
   }
@@ -67,6 +80,9 @@ export async function registerForPushNotificationsAsync(): Promise<boolean> {
       lightColor: '#007AFF',
       sound: 'default',
       description: 'Notifications for sea time entries that need review',
+      enableVibrate: true,
+      enableLights: true,
+      showBadge: true,
     });
     console.log('[Notifications] Android notification channel created');
   }
@@ -114,7 +130,6 @@ export async function scheduleSeaTimeNotification(
           entryId,
           vesselName,
           durationHours,
-          displayDuration,
           mcaCompliant,
           screen: 'confirmations',
           url: '/(tabs)/confirmations',
@@ -124,6 +139,10 @@ export async function scheduleSeaTimeNotification(
         ...(Platform.OS === 'android' && {
           channelId: 'sea-time-entries',
           priority: Notifications.AndroidNotificationPriority.HIGH,
+        }),
+        ...(Platform.OS === 'ios' && {
+          subtitle: vesselName,
+          interruptionLevel: 'active',
         }),
       },
       trigger: null, // Deliver immediately
@@ -186,6 +205,9 @@ export async function scheduleDailySeaTimeReviewNotification(scheduledTime: stri
         ...(Platform.OS === 'android' && {
           channelId: 'sea-time-entries',
           priority: Notifications.AndroidNotificationPriority.DEFAULT,
+        }),
+        ...(Platform.OS === 'ios' && {
+          interruptionLevel: 'timeSensitive',
         }),
       },
       trigger: {
