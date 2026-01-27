@@ -51,6 +51,7 @@ interface SeaTimeEntry {
   start_longitude?: number | null;
   end_latitude?: number | null;
   end_longitude?: number | null;
+  mca_compliant?: boolean | null;
 }
 
 interface AISData {
@@ -95,6 +96,7 @@ export default function VesselDetailScreen() {
   const [editedEngineKilowatts, setEditedEngineKilowatts] = useState('');
   const [editedEngineType, setEditedEngineType] = useState('');
   const [checkingAIS, setCheckingAIS] = useState(false);
+  const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
 
   const vesselId = Array.isArray(id) ? id[0] : id;
 
@@ -348,6 +350,19 @@ export default function VesselDetailScreen() {
     console.log('[VesselDetail] User cancelled vessel deletion');
   };
 
+  const toggleExpanded = (entryId: string) => {
+    console.log('[VesselDetail] Toggling expanded state for entry:', entryId);
+    setExpandedEntries(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(entryId)) {
+        newSet.delete(entryId);
+      } else {
+        newSet.add(entryId);
+      }
+      return newSet;
+    });
+  };
+
   const formatDate = (dateString: string): string => {
     try {
       const date = new Date(dateString);
@@ -412,6 +427,55 @@ export default function VesselDetailScreen() {
   const formatCoordinates = (lat: number | null, lon: number | null): string => {
     if (lat === null || lon === null) return 'N/A';
     return `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
+  };
+
+  const convertToDMS = (decimal: number, isLatitude: boolean): string => {
+    const absolute = Math.abs(decimal);
+    const degrees = Math.floor(absolute);
+    const minutesDecimal = (absolute - degrees) * 60;
+    const minutes = Math.floor(minutesDecimal);
+    const seconds = ((minutesDecimal - minutes) * 60).toFixed(1);
+    
+    let direction = '';
+    if (isLatitude) {
+      direction = decimal >= 0 ? 'N' : 'S';
+    } else {
+      direction = decimal >= 0 ? 'E' : 'W';
+    }
+    
+    return `${degrees}° ${minutes}' ${seconds}" ${direction}`;
+  };
+
+  const formatCoordinateDMS = (lat: number | null, lon: number | null): string => {
+    if (lat === null || lon === null || (lat === 0 && lon === 0)) return 'No coordinates';
+    return `${convertToDMS(lat, true)}, ${convertToDMS(lon, false)}`;
+  };
+
+  const formatDuration = (hours: number | null): string => {
+    if (hours === null) return 'In progress';
+    
+    if (hours >= 24) {
+      const days = Math.floor(hours / 24);
+      const remainingHours = Math.round(hours % 24);
+      if (remainingHours === 0) {
+        return `${days} ${days === 1 ? 'day' : 'days'}`;
+      }
+      return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours}h`;
+    }
+    
+    const wholeHours = Math.floor(hours);
+    const minutes = Math.round((hours - wholeHours) * 60);
+    if (minutes === 0) return `${wholeHours}h`;
+    return `${wholeHours}h ${minutes}m`;
+  };
+
+  const isMCACompliant = (entry: SeaTimeEntry): boolean => {
+    if (entry.mca_compliant !== null && entry.mca_compliant !== undefined) {
+      return entry.mca_compliant;
+    }
+    
+    const hours = entry.duration_hours || 0;
+    return hours >= 4.0;
   };
 
   if (loading) {
@@ -641,57 +705,116 @@ export default function VesselDetailScreen() {
             Object.entries(groupedEntries).map(([date, entries]) => (
               <View key={date} style={styles.dateGroup}>
                 <Text style={styles.dateHeader}>{date}</Text>
-                {entries.map((entry) => (
-                  <View key={entry.id} style={styles.entryCard}>
-                    <View style={styles.entryHeader}>
-                      <Text style={styles.entryTime}>
-                        {new Date(entry.start_time).toLocaleTimeString([], {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                        {entry.end_time &&
-                          ` - ${new Date(entry.end_time).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}`}
-                      </Text>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: getStatusColor(entry.status) + '20' },
-                        ]}
+                {entries.map((entry) => {
+                  const isExpanded = expandedEntries.has(entry.id);
+                  const mcaCompliant = isMCACompliant(entry);
+                  const durationHours = entry.duration_hours || 0;
+                  
+                  return (
+                    <View key={entry.id} style={styles.entryCard}>
+                      {!mcaCompliant && entry.status === 'pending' && (
+                        <View style={styles.mcaWarningBanner}>
+                          <IconSymbol
+                            ios_icon_name="exclamationmark.triangle"
+                            android_material_icon_name="warning"
+                            size={16}
+                            color={colors.warning}
+                          />
+                          <Text style={styles.mcaWarningText}>
+                            Does not meet MCA 4hr requirement
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {mcaCompliant && entry.status === 'pending' && (
+                        <View style={styles.mcaComplianceBanner}>
+                          <IconSymbol
+                            ios_icon_name="checkmark.circle"
+                            android_material_icon_name="check-circle"
+                            size={16}
+                            color={colors.success}
+                          />
+                          <Text style={styles.mcaComplianceText}>
+                            Meets MCA 4hr requirement
+                          </Text>
+                        </View>
+                      )}
+
+                      <TouchableOpacity
+                        style={styles.entryHeader}
+                        onPress={() => toggleExpanded(entry.id)}
                       >
-                        <Text
-                          style={[styles.statusText, { color: getStatusColor(entry.status) }]}
-                        >
-                          {entry.status.toUpperCase()}
-                        </Text>
-                      </View>
+                        <View style={styles.entryHeaderLeft}>
+                          <Text style={styles.entryTime}>
+                            {new Date(entry.start_time).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                            {entry.end_time &&
+                              ` - ${new Date(entry.end_time).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}`}
+                          </Text>
+                          <View style={styles.entryMetaRow}>
+                            <View
+                              style={[
+                                styles.statusBadge,
+                                { backgroundColor: getStatusColor(entry.status) + '20' },
+                              ]}
+                            >
+                              <Text
+                                style={[styles.statusText, { color: getStatusColor(entry.status) }]}
+                              >
+                                {entry.status.toUpperCase()}
+                              </Text>
+                            </View>
+                            {entry.duration_hours !== null && (
+                              <Text style={styles.entryDuration}>
+                                {formatDuration(entry.duration_hours)}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                        <IconSymbol
+                          ios_icon_name={isExpanded ? 'chevron.up' : 'chevron.down'}
+                          android_material_icon_name={isExpanded ? 'expand-less' : 'expand-more'}
+                          size={24}
+                          color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                        />
+                      </TouchableOpacity>
+
+                      {isExpanded && (
+                        <View style={styles.entryExpandedDetails}>
+                          {(entry.start_latitude !== null && entry.start_latitude !== undefined) && (
+                            <View style={styles.expandedDetailRow}>
+                              <Text style={styles.expandedDetailLabel}>Start Position:</Text>
+                              <Text style={styles.expandedDetailValue}>
+                                {formatCoordinateDMS(entry.start_latitude, entry.start_longitude)}
+                              </Text>
+                            </View>
+                          )}
+                          
+                          {(entry.end_latitude !== null && entry.end_latitude !== undefined) && (
+                            <View style={styles.expandedDetailRow}>
+                              <Text style={styles.expandedDetailLabel}>End Position:</Text>
+                              <Text style={styles.expandedDetailValue}>
+                                {formatCoordinateDMS(entry.end_latitude, entry.end_longitude)}
+                              </Text>
+                            </View>
+                          )}
+
+                          {entry.notes && (
+                            <View style={styles.expandedDetailRow}>
+                              <Text style={styles.expandedDetailLabel}>Notes:</Text>
+                              <Text style={styles.expandedDetailValue}>{entry.notes}</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
                     </View>
-
-                    {entry.duration_hours !== null && (
-                      <Text style={styles.entryDuration}>
-                        {(() => {
-                          const hours = entry.duration_hours;
-                          if (hours >= 24) {
-                            const days = Math.floor(hours / 24);
-                            const remainingHours = Math.round(hours % 24);
-                            if (remainingHours === 0) {
-                              return `${days} ${days === 1 ? 'day' : 'days'}`;
-                            }
-                            return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours}h`;
-                          }
-                          const wholeHours = Math.floor(hours);
-                          const minutes = Math.round((hours - wholeHours) * 60);
-                          if (minutes === 0) return `${wholeHours}h`;
-                          return `${wholeHours}h ${minutes}m`;
-                        })()}
-                      </Text>
-                    )}
-
-                    {entry.notes && <Text style={styles.entryNotes}>{entry.notes}</Text>}
-                  </View>
-                ))}
+                  );
+                })}
               </View>
             ))
           )}
@@ -1054,21 +1177,58 @@ function createStyles(isDark: boolean) {
     entryCard: {
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
       borderRadius: 8,
-      padding: 12,
       marginBottom: 8,
       borderWidth: 1,
       borderColor: isDark ? colors.border : colors.borderLight,
+      overflow: 'hidden',
+    },
+    mcaWarningBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.warning + '20',
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      gap: 6,
+    },
+    mcaWarningText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.warning,
+      flex: 1,
+    },
+    mcaComplianceBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.success + '20',
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      gap: 6,
+    },
+    mcaComplianceText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.success,
+      flex: 1,
     },
     entryHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 4,
+      padding: 12,
+    },
+    entryHeaderLeft: {
+      flex: 1,
     },
     entryTime: {
       fontSize: 14,
       fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
+      marginBottom: 6,
+    },
+    entryMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
     statusBadge: {
       paddingHorizontal: 8,
@@ -1083,13 +1243,32 @@ function createStyles(isDark: boolean) {
     entryDuration: {
       fontSize: 13,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 4,
     },
     entryNotes: {
       fontSize: 13,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginTop: 4,
       fontStyle: 'italic',
+    },
+    entryExpandedDetails: {
+      paddingHorizontal: 12,
+      paddingBottom: 12,
+      borderTopWidth: 1,
+      borderTopColor: isDark ? colors.border : colors.borderLight,
+    },
+    expandedDetailRow: {
+      marginTop: 8,
+    },
+    expandedDetailLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 4,
+    },
+    expandedDetailValue: {
+      fontSize: 13,
+      color: isDark ? colors.text : colors.textLight,
+      lineHeight: 18,
     },
     actionsCard: {
       margin: 16,

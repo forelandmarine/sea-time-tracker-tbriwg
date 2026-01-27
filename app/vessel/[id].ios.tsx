@@ -1,6 +1,9 @@
 
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState, useEffect, useCallback } from 'react';
+import { IconSymbol } from '@/components/IconSymbol';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   View,
   Text,
@@ -16,11 +19,8 @@ import {
   KeyboardAvoidingView,
   ActivityIndicator,
 } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
-import { IconSymbol } from '@/components/IconSymbol';
 import * as seaTimeApi from '@/utils/seaTimeApi';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Vessel {
   id: string;
@@ -47,6 +47,11 @@ interface SeaTimeEntry {
   status: 'pending' | 'confirmed' | 'rejected';
   notes: string | null;
   created_at: string;
+  start_latitude?: number | null;
+  start_longitude?: number | null;
+  end_latitude?: number | null;
+  end_longitude?: number | null;
+  mca_compliant?: boolean | null;
 }
 
 interface AISData {
@@ -68,320 +73,1294 @@ interface AISData {
   is_moving: boolean;
 }
 
-function createStyles(isDark: boolean) {
+export default function VesselDetailScreen() {
+  const { id } = useLocalSearchParams();
+  const router = useRouter();
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
+  const insets = useSafeAreaInsets();
+  const styles = createStyles(isDark, insets.top);
+
+  const [vessel, setVessel] = useState<Vessel | null>(null);
+  const [seaTimeEntries, setSeaTimeEntries] = useState<SeaTimeEntry[]>([]);
+  const [aisData, setAisData] = useState<AISData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editedVesselName, setEditedVesselName] = useState('');
+  const [editedFlag, setEditedFlag] = useState('');
+  const [editedOfficialNumber, setEditedOfficialNumber] = useState('');
+  const [editedVesselType, setEditedVesselType] = useState('');
+  const [editedLengthMetres, setEditedLengthMetres] = useState('');
+  const [editedGrossTonnes, setEditedGrossTonnes] = useState('');
+  const [editedCallSign, setEditedCallSign] = useState('');
+  const [editedEngineKilowatts, setEditedEngineKilowatts] = useState('');
+  const [editedEngineType, setEditedEngineType] = useState('');
+  const [checkingAIS, setCheckingAIS] = useState(false);
+  const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
+
+  const vesselId = Array.isArray(id) ? id[0] : id;
+
+  const loadData = useCallback(async () => {
+    if (!vesselId) return;
+
+    try {
+      console.log('[VesselDetail iOS] Loading data for vessel:', vesselId);
+      const [vesselsData, seaTimeData] = await Promise.all([
+        seaTimeApi.getVessels(),
+        seaTimeApi.getVesselSeaTime(vesselId),
+      ]);
+
+      const currentVessel = vesselsData.find((v: Vessel) => v.id === vesselId);
+      if (currentVessel) {
+        setVessel(currentVessel);
+        
+        // Only fetch AIS location if vessel is active
+        if (currentVessel.is_active) {
+          try {
+            console.log('[VesselDetail iOS] Fetching AIS location for active vessel');
+            const aisLocation = await seaTimeApi.getVesselAISLocation(vesselId, true);
+            console.log('[VesselDetail iOS] AIS location data:', aisLocation);
+            
+            // Transform the response to match AISData interface
+            const transformedAisData: AISData = {
+              name: aisLocation.name || null,
+              mmsi: aisLocation.mmsi || null,
+              imo: aisLocation.imo || null,
+              speed_knots: aisLocation.speed !== undefined ? aisLocation.speed : null,
+              latitude: aisLocation.latitude !== undefined ? aisLocation.latitude : null,
+              longitude: aisLocation.longitude !== undefined ? aisLocation.longitude : null,
+              course: aisLocation.course !== undefined ? aisLocation.course : null,
+              heading: aisLocation.heading !== undefined ? aisLocation.heading : null,
+              timestamp: aisLocation.timestamp || null,
+              status: aisLocation.status || null,
+              destination: aisLocation.destination || null,
+              eta: aisLocation.eta || null,
+              callsign: aisLocation.callsign || null,
+              ship_type: aisLocation.vessel_type || null,
+              flag: aisLocation.flag || null,
+              is_moving: (aisLocation.speed !== undefined && aisLocation.speed !== null && aisLocation.speed > 2) || false,
+            };
+            
+            setAisData(transformedAisData);
+            console.log('[VesselDetail iOS] AIS data set successfully');
+          } catch (aisError) {
+            console.error('[VesselDetail iOS] Failed to fetch AIS location:', aisError);
+            // Don't fail the whole load if AIS fetch fails
+          }
+        }
+      }
+
+      setSeaTimeEntries(seaTimeData);
+      console.log('[VesselDetail iOS] Data loaded successfully');
+    } catch (error: any) {
+      console.error('[VesselDetail iOS] Failed to load data:', error);
+      Alert.alert('Error', 'Failed to load vessel data: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [vesselId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
+  const handleEditParticulars = () => {
+    if (!vessel) return;
+    setEditedVesselName(vessel.vessel_name);
+    setEditedFlag(vessel.flag || '');
+    setEditedOfficialNumber(vessel.official_number || '');
+    setEditedVesselType(vessel.vessel_type || '');
+    setEditedLengthMetres(vessel.length_metres?.toString() || '');
+    setEditedGrossTonnes(vessel.gross_tonnes?.toString() || '');
+    setEditedCallSign(vessel.callsign || '');
+    setEditedEngineKilowatts(vessel.engine_kilowatts?.toString() || '');
+    setEditedEngineType(vessel.engine_type || '');
+    setEditModalVisible(true);
+  };
+
+  const handleSaveParticulars = async () => {
+    if (!vessel) return;
+
+    try {
+      console.log('[VesselDetail iOS] User action: Saving vessel particulars');
+      await seaTimeApi.updateVesselParticulars(vessel.id, {
+        vessel_name: editedVesselName.trim() || undefined,
+        flag: editedFlag.trim() || undefined,
+        official_number: editedOfficialNumber.trim() || undefined,
+        type: editedVesselType || undefined,
+        length_metres: editedLengthMetres ? parseFloat(editedLengthMetres) : undefined,
+        gross_tonnes: editedGrossTonnes ? parseFloat(editedGrossTonnes) : undefined,
+        callsign: editedCallSign.trim() || undefined,
+        engine_kilowatts: editedEngineKilowatts ? parseFloat(editedEngineKilowatts) : undefined,
+        engine_type: editedEngineType.trim() || undefined,
+      });
+
+      setEditModalVisible(false);
+      await loadData();
+      Alert.alert('Success', 'Vessel particulars updated');
+    } catch (error: any) {
+      console.error('[VesselDetail iOS] Failed to update vessel particulars:', error);
+      Alert.alert('Error', 'Failed to update vessel particulars: ' + error.message);
+    }
+  };
+
+  const handleActivateVessel = () => {
+    if (!vessel) return;
+
+    Alert.alert(
+      'Activate Vessel',
+      `Start tracking ${vessel.vessel_name}? This will deactivate any other active vessel.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Activate',
+          onPress: confirmActivateVessel,
+        },
+      ]
+    );
+  };
+
+  const confirmActivateVessel = async () => {
+    if (!vessel) return;
+
+    try {
+      console.log('[VesselDetail iOS] User action: Activating vessel');
+      await seaTimeApi.activateVessel(vessel.id);
+      await loadData();
+      Alert.alert('Success', `${vessel.vessel_name} is now being tracked`);
+    } catch (error: any) {
+      console.error('[VesselDetail iOS] Failed to activate vessel:', error);
+      Alert.alert('Error', 'Failed to activate vessel: ' + error.message);
+    }
+  };
+
+  const cancelActivateVessel = () => {
+    console.log('[VesselDetail iOS] User cancelled vessel activation');
+  };
+
+  const handleCheckAIS = async () => {
+    if (!vessel) return;
+
+    try {
+      setCheckingAIS(true);
+      console.log('[VesselDetail iOS] User action: Manual AIS check requested');
+      
+      // First trigger the AIS check (POST) with forceRefresh=true to bypass rate limiting
+      await seaTimeApi.checkVesselAIS(vessel.id, true);
+      
+      // Then fetch the detailed AIS location data (GET)
+      const aisLocation = await seaTimeApi.getVesselAISLocation(vessel.id, true);
+      console.log('[VesselDetail iOS] AIS location data:', aisLocation);
+      
+      // Transform the response to match AISData interface
+      const transformedAisData: AISData = {
+        name: aisLocation.name || null,
+        mmsi: aisLocation.mmsi || null,
+        imo: aisLocation.imo || null,
+        speed_knots: aisLocation.speed !== undefined ? aisLocation.speed : null,
+        latitude: aisLocation.latitude !== undefined ? aisLocation.latitude : null,
+        longitude: aisLocation.longitude !== undefined ? aisLocation.longitude : null,
+        course: aisLocation.course !== undefined ? aisLocation.course : null,
+        heading: aisLocation.heading !== undefined ? aisLocation.heading : null,
+        timestamp: aisLocation.timestamp || null,
+        status: aisLocation.status || null,
+        destination: aisLocation.destination || null,
+        eta: aisLocation.eta || null,
+        callsign: aisLocation.callsign || null,
+        ship_type: aisLocation.vessel_type || null,
+        flag: aisLocation.flag || null,
+        is_moving: (aisLocation.speed !== undefined && aisLocation.speed !== null && aisLocation.speed > 2) || false,
+      };
+      
+      setAisData(transformedAisData);
+      Alert.alert('Success', 'AIS data updated');
+    } catch (error: any) {
+      console.error('[VesselDetail iOS] Failed to check AIS:', error);
+      
+      // Parse error message to provide user-friendly feedback
+      let userMessage = 'Failed to check vessel location. Please try again.';
+      
+      if (error.message) {
+        if (error.message.includes('Rate limit')) {
+          // Show the rate limit message directly to the user
+          userMessage = error.message;
+        } else if (error.message.includes('502') || error.message.includes('temporarily unavailable')) {
+          userMessage = 'Location service is temporarily unavailable. Please try again later.';
+        } else if (error.message.includes('404') || error.message.includes('not found')) {
+          userMessage = 'Vessel not found in tracking system. Please verify the MMSI number.';
+        } else if (error.message.includes('401') || error.message.includes('authentication')) {
+          userMessage = 'Authentication error. Please contact support.';
+        }
+      }
+      
+      Alert.alert('Error', userMessage);
+    } finally {
+      setCheckingAIS(false);
+    }
+  };
+
+  const handleDeleteVessel = () => {
+    if (!vessel) return;
+
+    Alert.alert(
+      'Delete Vessel',
+      `Are you sure you want to delete ${vessel.vessel_name}? This will also delete all associated sea time entries.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: confirmDeleteVessel,
+        },
+      ]
+    );
+  };
+
+  const confirmDeleteVessel = async () => {
+    if (!vessel) return;
+
+    try {
+      console.log('[VesselDetail iOS] User action: Deleting vessel');
+      await seaTimeApi.deleteVessel(vessel.id);
+      Alert.alert('Success', 'Vessel deleted', [
+        {
+          text: 'OK',
+          onPress: () => router.back(),
+        },
+      ]);
+    } catch (error: any) {
+      console.error('[VesselDetail iOS] Failed to delete vessel:', error);
+      Alert.alert('Error', 'Failed to delete vessel: ' + error.message);
+    }
+  };
+
+  const cancelDeleteVessel = () => {
+    console.log('[VesselDetail iOS] User cancelled vessel deletion');
+  };
+
+  const toggleExpanded = (entryId: string) => {
+    console.log('[VesselDetail iOS] Toggling expanded state for entry:', entryId);
+    setExpandedEntries(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(entryId)) {
+        newSet.delete(entryId);
+      } else {
+        newSet.add(entryId);
+      }
+      return newSet;
+    });
+  };
+
+  const formatDate = (dateString: string): string => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString();
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  const formatDateTime = (dateString: string): string => {
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleString();
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  const getStatusColor = (status: string): string => {
+    switch (status) {
+      case 'confirmed':
+        return colors.success;
+      case 'pending':
+        return colors.warning;
+      case 'rejected':
+        return colors.error;
+      default:
+        return isDark ? colors.textSecondary : colors.textSecondaryLight;
+    }
+  };
+
+  const calculateTotalDays = (): number => {
+    const totalHours = seaTimeEntries
+      .filter(entry => entry.status === 'confirmed')
+      .reduce((total, entry) => total + (entry.duration_hours || 0), 0);
+    return Math.floor(totalHours / 24);
+  };
+
+  const groupEntriesByDate = () => {
+    const grouped: { [key: string]: SeaTimeEntry[] } = {};
+    seaTimeEntries.forEach(entry => {
+      const date = formatDate(entry.start_time);
+      if (!grouped[date]) {
+        grouped[date] = [];
+      }
+      grouped[date].push(entry);
+    });
+    return grouped;
+  };
+
+  const handleViewDebugLogs = () => {
+    if (!vessel) return;
+    console.log('[VesselDetail iOS] Navigating to debug logs');
+    router.push(`/debug/${vessel.id}` as any);
+  };
+
+  const formatAISValue = (value: any, suffix: string = ''): string => {
+    if (value === null || value === undefined) return 'N/A';
+    return `${value}${suffix}`;
+  };
+
+  const formatCoordinates = (lat: number | null, lon: number | null): string => {
+    if (lat === null || lon === null) return 'N/A';
+    return `${lat.toFixed(4)}°, ${lon.toFixed(4)}°`;
+  };
+
+  const convertToDMS = (decimal: number, isLatitude: boolean): string => {
+    const absolute = Math.abs(decimal);
+    const degrees = Math.floor(absolute);
+    const minutesDecimal = (absolute - degrees) * 60;
+    const minutes = Math.floor(minutesDecimal);
+    const seconds = ((minutesDecimal - minutes) * 60).toFixed(1);
+    
+    let direction = '';
+    if (isLatitude) {
+      direction = decimal >= 0 ? 'N' : 'S';
+    } else {
+      direction = decimal >= 0 ? 'E' : 'W';
+    }
+    
+    return `${degrees}° ${minutes}' ${seconds}" ${direction}`;
+  };
+
+  const formatCoordinateDMS = (lat: number | null, lon: number | null): string => {
+    if (lat === null || lon === null || (lat === 0 && lon === 0)) return 'No coordinates';
+    return `${convertToDMS(lat, true)}, ${convertToDMS(lon, false)}`;
+  };
+
+  const formatDuration = (hours: number | null): string => {
+    if (hours === null) return 'In progress';
+    
+    if (hours >= 24) {
+      const days = Math.floor(hours / 24);
+      const remainingHours = Math.round(hours % 24);
+      if (remainingHours === 0) {
+        return `${days} ${days === 1 ? 'day' : 'days'}`;
+      }
+      return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours}h`;
+    }
+    
+    const wholeHours = Math.floor(hours);
+    const minutes = Math.round((hours - wholeHours) * 60);
+    if (minutes === 0) return `${wholeHours}h`;
+    return `${wholeHours}h ${minutes}m`;
+  };
+
+  const isMCACompliant = (entry: SeaTimeEntry): boolean => {
+    if (entry.mca_compliant !== null && entry.mca_compliant !== undefined) {
+      return entry.mca_compliant;
+    }
+    
+    const hours = entry.duration_hours || 0;
+    return hours >= 4.0;
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Loading vessel details...</Text>
+      </View>
+    );
+  }
+
+  if (!vessel) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Vessel not found</Text>
+        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  const groupedEntries = groupEntriesByDate();
+  const totalDays = calculateTotalDays();
+
+  return (
+    <View style={styles.container}>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: vessel.vessel_name,
+          headerBackTitle: 'Back',
+          headerStyle: {
+            backgroundColor: isDark ? colors.cardBackground : colors.card,
+          },
+          headerTintColor: isDark ? colors.text : colors.textLight,
+          headerBackTitleVisible: true,
+        }}
+      />
+
+      <ScrollView
+        style={styles.scrollView}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* Header - matching Logbook light header color */}
+        {vessel.is_active && (
+          <View style={styles.activeVesselBadge}>
+            <View style={styles.activeIndicator} />
+            <Text style={styles.activeVesselBadgeText}>ACTIVE - TRACKING</Text>
+          </View>
+        )}
+
+        {/* Vessel Particulars Card */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Vessel Particulars</Text>
+            <TouchableOpacity onPress={handleEditParticulars}>
+              <IconSymbol
+                ios_icon_name="pencil.circle.fill"
+                android_material_icon_name="edit"
+                size={24}
+                color={colors.primary}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>MMSI</Text>
+            <Text style={styles.detailValue}>{vessel.mmsi}</Text>
+          </View>
+
+          {vessel.callsign && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Call Sign</Text>
+              <Text style={styles.detailValue}>{vessel.callsign}</Text>
+            </View>
+          )}
+
+          {vessel.flag && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Flag</Text>
+              <Text style={styles.detailValue}>{vessel.flag}</Text>
+            </View>
+          )}
+
+          {vessel.official_number && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Official Number</Text>
+              <Text style={styles.detailValue}>{vessel.official_number}</Text>
+            </View>
+          )}
+
+          {vessel.vessel_type && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Type</Text>
+              <Text style={styles.detailValue}>{vessel.vessel_type}</Text>
+            </View>
+          )}
+
+          {vessel.length_metres && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Length</Text>
+              <Text style={styles.detailValue}>{vessel.length_metres}m</Text>
+            </View>
+          )}
+
+          {vessel.gross_tonnes && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Gross Tonnes</Text>
+              <Text style={styles.detailValue}>{vessel.gross_tonnes}</Text>
+            </View>
+          )}
+
+          {vessel.engine_kilowatts && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Engine Kilowatts (KW)</Text>
+              <Text style={styles.detailValue}>{vessel.engine_kilowatts} KW</Text>
+            </View>
+          )}
+
+          {vessel.engine_type && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Engine Type</Text>
+              <Text style={styles.detailValue}>{vessel.engine_type}</Text>
+            </View>
+          )}
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Added</Text>
+            <Text style={styles.detailValue}>{formatDate(vessel.created_at)}</Text>
+          </View>
+        </View>
+
+        {/* AIS Data Card */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>AIS Data</Text>
+            <TouchableOpacity onPress={handleCheckAIS} disabled={checkingAIS}>
+              {checkingAIS ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <IconSymbol
+                  ios_icon_name="arrow.clockwise.circle.fill"
+                  android_material_icon_name="refresh"
+                  size={24}
+                  color={colors.primary}
+                />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {aisData ? (
+            <>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Position</Text>
+                <Text style={styles.detailValue}>
+                  {formatCoordinates(aisData.latitude, aisData.longitude)}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Speed</Text>
+                <Text style={styles.detailValue}>{formatAISValue(aisData.speed_knots, ' knots')}</Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Course</Text>
+                <Text style={styles.detailValue}>{formatAISValue(aisData.course, '°')}</Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Heading</Text>
+                <Text style={styles.detailValue}>{formatAISValue(aisData.heading, '°')}</Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Status</Text>
+                <Text style={styles.detailValue}>{aisData.status || 'N/A'}</Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Destination</Text>
+                <Text style={styles.detailValue}>{aisData.destination || 'N/A'}</Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Last Update</Text>
+                <Text style={styles.detailValue}>
+                  {aisData.timestamp ? formatDateTime(aisData.timestamp) : 'N/A'}
+                </Text>
+              </View>
+
+              <View style={styles.buttonRow}>
+                <TouchableOpacity style={styles.debugButton} onPress={handleViewDebugLogs}>
+                  <Text style={styles.debugButtonText}>View Debug Logs</Text>
+                </TouchableOpacity>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.noDataText}>No AIS data available. Tap refresh to check.</Text>
+          )}
+        </View>
+
+        {/* Sea Time Summary Card */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Sea Time Summary</Text>
+
+          <View style={styles.summaryRow}>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryValue}>{totalDays}</Text>
+              <Text style={styles.summaryLabel}>Days</Text>
+            </View>
+            <View style={styles.summaryItem}>
+              <Text style={styles.summaryValue}>{seaTimeEntries.length}</Text>
+              <Text style={styles.summaryLabel}>Entries</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Sea Time Entries */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Sea Time Entries</Text>
+
+          {seaTimeEntries.length === 0 ? (
+            <Text style={styles.noDataText}>No sea time entries for this vessel</Text>
+          ) : (
+            Object.entries(groupedEntries).map(([date, entries]) => (
+              <View key={date} style={styles.dateGroup}>
+                <Text style={styles.dateHeader}>{date}</Text>
+                {entries.map((entry) => {
+                  const isExpanded = expandedEntries.has(entry.id);
+                  const mcaCompliant = isMCACompliant(entry);
+                  const durationHours = entry.duration_hours || 0;
+                  
+                  return (
+                    <View key={entry.id} style={styles.entryCard}>
+                      {!mcaCompliant && entry.status === 'pending' && (
+                        <View style={styles.mcaWarningBanner}>
+                          <IconSymbol
+                            ios_icon_name="exclamationmark.triangle"
+                            android_material_icon_name="warning"
+                            size={16}
+                            color={colors.warning}
+                          />
+                          <Text style={styles.mcaWarningText}>
+                            Does not meet MCA 4hr requirement
+                          </Text>
+                        </View>
+                      )}
+                      
+                      {mcaCompliant && entry.status === 'pending' && (
+                        <View style={styles.mcaComplianceBanner}>
+                          <IconSymbol
+                            ios_icon_name="checkmark.circle"
+                            android_material_icon_name="check-circle"
+                            size={16}
+                            color={colors.success}
+                          />
+                          <Text style={styles.mcaComplianceText}>
+                            Meets MCA 4hr requirement
+                          </Text>
+                        </View>
+                      )}
+
+                      <TouchableOpacity
+                        style={styles.entryHeader}
+                        onPress={() => toggleExpanded(entry.id)}
+                      >
+                        <View style={styles.entryHeaderLeft}>
+                          <Text style={styles.entryTime}>
+                            {new Date(entry.start_time).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                            {entry.end_time &&
+                              ` - ${new Date(entry.end_time).toLocaleTimeString([], {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}`}
+                          </Text>
+                          <View style={styles.entryMetaRow}>
+                            <View
+                              style={[
+                                styles.statusBadge,
+                                { backgroundColor: getStatusColor(entry.status) + '20' },
+                              ]}
+                            >
+                              <Text
+                                style={[styles.statusText, { color: getStatusColor(entry.status) }]}
+                              >
+                                {entry.status.toUpperCase()}
+                              </Text>
+                            </View>
+                            {entry.duration_hours !== null && (
+                              <Text style={styles.entryDuration}>
+                                {formatDuration(entry.duration_hours)}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                        <IconSymbol
+                          ios_icon_name={isExpanded ? 'chevron.up' : 'chevron.down'}
+                          android_material_icon_name={isExpanded ? 'expand-less' : 'expand-more'}
+                          size={24}
+                          color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                        />
+                      </TouchableOpacity>
+
+                      {isExpanded && (
+                        <View style={styles.entryExpandedDetails}>
+                          {(entry.start_latitude !== null && entry.start_latitude !== undefined) && (
+                            <View style={styles.expandedDetailRow}>
+                              <Text style={styles.expandedDetailLabel}>Start Position:</Text>
+                              <Text style={styles.expandedDetailValue}>
+                                {formatCoordinateDMS(entry.start_latitude, entry.start_longitude)}
+                              </Text>
+                            </View>
+                          )}
+                          
+                          {(entry.end_latitude !== null && entry.end_latitude !== undefined) && (
+                            <View style={styles.expandedDetailRow}>
+                              <Text style={styles.expandedDetailLabel}>End Position:</Text>
+                              <Text style={styles.expandedDetailValue}>
+                                {formatCoordinateDMS(entry.end_latitude, entry.end_longitude)}
+                              </Text>
+                            </View>
+                          )}
+
+                          {entry.notes && (
+                            <View style={styles.expandedDetailRow}>
+                              <Text style={styles.expandedDetailLabel}>Notes:</Text>
+                              <Text style={styles.expandedDetailValue}>{entry.notes}</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            ))
+          )}
+        </View>
+
+        {/* Action Buttons */}
+        <View style={styles.actionsCard}>
+          {!vessel.is_active && (
+            <TouchableOpacity style={styles.activateButton} onPress={handleActivateVessel}>
+              <IconSymbol
+                ios_icon_name="play.circle.fill"
+                android_material_icon_name="play-circle-filled"
+                size={20}
+                color="#fff"
+              />
+              <Text style={styles.activateButtonText}>Activate Vessel</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity style={styles.deleteButton} onPress={handleDeleteVessel}>
+            <IconSymbol
+              ios_icon_name="trash.circle.fill"
+              android_material_icon_name="delete"
+              size={20}
+              color="#fff"
+            />
+            <Text style={styles.deleteButtonText}>Delete Vessel</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      {/* Edit Particulars Modal */}
+      <Modal visible={editModalVisible} animationType="slide" transparent={true}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setEditModalVisible(false)}
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Vessel Particulars</Text>
+              <TouchableOpacity onPress={() => setEditModalVisible(false)}>
+                <IconSymbol
+                  ios_icon_name="xmark.circle.fill"
+                  android_material_icon_name="cancel"
+                  size={28}
+                  color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalScrollView}>
+              {/* Auto-fill info banner */}
+              <View style={styles.autoFillBanner}>
+                <IconSymbol
+                  ios_icon_name="info.circle.fill"
+                  android_material_icon_name="info"
+                  size={20}
+                  color={colors.primary}
+                />
+                <Text style={styles.autoFillText}>
+                  Leave fields blank to auto-fill from AIS data
+                </Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Vessel Name</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editedVesselName}
+                  onChangeText={setEditedVesselName}
+                  placeholder="Vessel Name"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Call Sign</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editedCallSign}
+                  onChangeText={setEditedCallSign}
+                  placeholder="Call Sign"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  autoCapitalize="characters"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Flag</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editedFlag}
+                  onChangeText={setEditedFlag}
+                  placeholder="Flag"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Official Number</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editedOfficialNumber}
+                  onChangeText={setEditedOfficialNumber}
+                  placeholder="Official Number"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Type (Motor/Sail)</Text>
+                <View style={styles.typeButtonContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.typeButton,
+                      editedVesselType === 'Motor' && styles.typeButtonActive,
+                    ]}
+                    onPress={() => setEditedVesselType('Motor')}
+                  >
+                    <Text
+                      style={[
+                        styles.typeButtonText,
+                        editedVesselType === 'Motor' && styles.typeButtonTextActive,
+                      ]}
+                    >
+                      Motor
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.typeButton,
+                      editedVesselType === 'Sail' && styles.typeButtonActive,
+                    ]}
+                    onPress={() => setEditedVesselType('Sail')}
+                  >
+                    <Text
+                      style={[
+                        styles.typeButtonText,
+                        editedVesselType === 'Sail' && styles.typeButtonTextActive,
+                      ]}
+                    >
+                      Sail
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Length (metres)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editedLengthMetres}
+                  onChangeText={setEditedLengthMetres}
+                  placeholder="Length"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Gross Tonnes</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editedGrossTonnes}
+                  onChangeText={setEditedGrossTonnes}
+                  placeholder="Gross Tonnes"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Engine Kilowatts (KW)</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editedEngineKilowatts}
+                  onChangeText={setEditedEngineKilowatts}
+                  placeholder="Engine Kilowatts"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                  keyboardType="decimal-pad"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Engine Type</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editedEngineType}
+                  onChangeText={setEditedEngineType}
+                  placeholder="e.g., Diesel, Petrol, Electric"
+                  placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                />
+              </View>
+
+              <TouchableOpacity style={styles.saveButton} onPress={handleSaveParticulars}>
+                <Text style={styles.saveButtonText}>Save Changes</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
+  );
+}
+
+function createStyles(isDark: boolean, topInset: number) {
   return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
-    scrollContent: {
+    scrollView: {
+      flex: 1,
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
       padding: 20,
-      paddingBottom: 100,
     },
-    header: {
-      fontSize: 28,
-      fontWeight: 'bold',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 8,
-    },
-    mmsi: {
+    loadingText: {
       fontSize: 16,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 24,
+      marginTop: 12,
     },
-    particularsCard: {
+    errorText: {
+      fontSize: 18,
+      color: colors.error,
+      marginBottom: 20,
+    },
+    backButton: {
+      backgroundColor: colors.primary,
+      paddingHorizontal: 24,
+      paddingVertical: 12,
+      borderRadius: 8,
+    },
+    backButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    activeVesselBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.success + '20',
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      marginHorizontal: 16,
+      marginTop: 16,
+      borderRadius: 8,
+      gap: 8,
+    },
+    activeIndicator: {
+      width: 10,
+      height: 10,
+      borderRadius: 5,
+      backgroundColor: colors.success,
+    },
+    activeVesselBadgeText: {
+      fontSize: 13,
+      fontWeight: 'bold',
+      color: colors.success,
+      letterSpacing: 0.5,
+    },
+    card: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 16,
+      borderRadius: 12,
       padding: 16,
-      marginBottom: 16,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
+      margin: 16,
+      marginBottom: 0,
       borderWidth: 1,
       borderColor: isDark ? colors.border : colors.borderLight,
     },
-    particularsHeader: {
+    cardHeader: {
       flexDirection: 'row',
-      alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 12,
-    },
-    particularsHeaderLeft: {
-      flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      flex: 1,
+      marginBottom: 16,
     },
-    particularsTitle: {
+    cardTitle: {
       fontSize: 18,
-      fontWeight: '600',
+      fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
+      marginBottom: 16,
     },
-    editButton: {
-      backgroundColor: colors.primary,
-      borderRadius: 8,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4,
-    },
-    editButtonText: {
-      color: '#FFFFFF',
-      fontSize: 12,
-      fontWeight: '600',
-    },
-    particularRow: {
+    detailRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
+      alignItems: 'center',
       paddingVertical: 8,
       borderBottomWidth: 1,
-      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)',
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
-    particularRowLast: {
-      borderBottomWidth: 0,
-    },
-    particularLabel: {
+    detailLabel: {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       fontWeight: '500',
     },
-    particularValue: {
+    detailValue: {
       fontSize: 14,
       color: isDark ? colors.text : colors.textLight,
       fontWeight: '600',
     },
-    particularValueEmpty: {
+    noDataText: {
       fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      fontStyle: 'italic',
-    },
-    activateButton: {
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      padding: 16,
-      alignItems: 'center',
-      marginBottom: 16,
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: 8,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    activateButtonText: {
-      color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    checkAISButton: {
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      padding: 16,
-      alignItems: 'center',
-      marginBottom: 16,
-      flexDirection: 'row',
-      justifyContent: 'center',
-      gap: 8,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-    },
-    checkAISButtonDisabled: {
-      backgroundColor: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      opacity: 0.6,
-    },
-    checkAISButtonText: {
-      color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    statsContainer: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      marginBottom: 24,
-    },
-    statCard: {
-      flex: 1,
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 16,
-      padding: 16,
-      marginHorizontal: 4,
-      alignItems: 'center',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
-      borderWidth: 1,
-      borderColor: isDark ? colors.border : colors.borderLight,
-    },
-    statValue: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: colors.primary,
-      marginBottom: 4,
-    },
-    statLabel: {
-      fontSize: 12,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
+      paddingVertical: 20,
     },
-    sectionTitle: {
-      fontSize: 20,
+    buttonRow: {
+      flexDirection: 'row',
+      gap: 8,
+      marginTop: 12,
+    },
+    debugButton: {
+      flex: 1,
+      padding: 12,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    debugButtonText: {
+      fontSize: 14,
+      color: colors.primary,
       fontWeight: '600',
+    },
+    summaryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+      paddingVertical: 8,
+    },
+    summaryItem: {
+      alignItems: 'center',
+    },
+    summaryValue: {
+      fontSize: 28,
+      fontWeight: 'bold',
+      color: colors.primary,
+    },
+    summaryLabel: {
+      fontSize: 12,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 4,
+    },
+    dateGroup: {
+      marginBottom: 16,
+    },
+    dateHeader: {
+      fontSize: 14,
+      fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
-      marginBottom: 12,
-      marginTop: 8,
+      marginBottom: 8,
     },
     entryCard: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 12,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 8,
+      marginBottom: 8,
       borderWidth: 1,
       borderColor: isDark ? colors.border : colors.borderLight,
+      overflow: 'hidden',
+    },
+    mcaWarningBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.warning + '20',
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      gap: 6,
+    },
+    mcaWarningText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.warning,
+      flex: 1,
+    },
+    mcaComplianceBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.success + '20',
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      gap: 6,
+    },
+    mcaComplianceText: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: colors.success,
+      flex: 1,
     },
     entryHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 8,
+      padding: 12,
     },
-    entryDate: {
-      fontSize: 16,
+    entryHeaderLeft: {
+      flex: 1,
+    },
+    entryTime: {
+      fontSize: 14,
       fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
+      marginBottom: 6,
+    },
+    entryMetaRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
     },
     statusBadge: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 12,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 4,
     },
     statusText: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: '#FFFFFF',
+      fontSize: 11,
+      fontWeight: 'bold',
+      letterSpacing: 0.5,
     },
-    entryDetails: {
+    entryDuration: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    },
+    entryNotes: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 4,
+      fontStyle: 'italic',
+    },
+    entryExpandedDetails: {
+      paddingHorizontal: 12,
+      paddingBottom: 12,
+      borderTopWidth: 1,
+      borderTopColor: isDark ? colors.border : colors.borderLight,
+    },
+    expandedDetailRow: {
       marginTop: 8,
     },
-    entryDetailText: {
-      fontSize: 14,
+    expandedDetailLabel: {
+      fontSize: 12,
+      fontWeight: '600',
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginBottom: 4,
     },
-    emptyState: {
-      alignItems: 'center',
-      padding: 32,
-    },
-    emptyText: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      textAlign: 'center',
-      marginTop: 12,
-    },
-    dateHeader: {
-      fontSize: 18,
-      fontWeight: '600',
+    expandedDetailValue: {
+      fontSize: 13,
       color: isDark ? colors.text : colors.textLight,
-      marginTop: 16,
-      marginBottom: 8,
+      lineHeight: 18,
     },
-    debugButton: {
-      backgroundColor: isDark ? colors.secondary : colors.accent,
-      borderRadius: 12,
-      padding: 16,
+    actionsCard: {
+      margin: 16,
+      gap: 12,
+    },
+    activateButton: {
+      flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: 24,
-      borderWidth: 1,
-      borderColor: colors.primary,
+      justifyContent: 'center',
+      backgroundColor: colors.primary,
+      padding: 16,
+      borderRadius: 8,
+      gap: 8,
     },
-    debugButtonText: {
-      color: '#FFFFFF',
+    activateButtonText: {
+      color: '#fff',
       fontSize: 16,
-      fontWeight: '600',
+      fontWeight: 'bold',
     },
     deleteButton: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 12,
-      padding: 16,
+      flexDirection: 'row',
       alignItems: 'center',
-      marginTop: 24,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: colors.error,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.1,
-      shadowRadius: 4,
-      elevation: 3,
+      justifyContent: 'center',
+      backgroundColor: colors.error,
+      padding: 16,
+      borderRadius: 8,
+      gap: 8,
     },
     deleteButtonText: {
-      color: colors.error,
+      color: '#fff',
       fontSize: 16,
-      fontWeight: '600',
+      fontWeight: 'bold',
     },
-    // Modal styles
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'flex-end',
     },
+    modalBackdrop: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+    },
     modalContent: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
-      padding: 24,
-      paddingBottom: 40,
-      maxHeight: '90%',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: -4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 8,
+      maxHeight: '80%',
     },
     modalHeader: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      marginBottom: 20,
+      padding: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
     modalTitle: {
       fontSize: 20,
-      fontWeight: '600',
+      fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
     },
-    closeButton: {
-      padding: 4,
+    modalScrollView: {
+      padding: 20,
     },
-    modalScrollContent: {
-      paddingBottom: 16,
+    autoFillBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.primary + '15',
+      padding: 12,
+      borderRadius: 8,
+      marginBottom: 20,
+      gap: 8,
+      borderLeftWidth: 3,
+      borderLeftColor: colors.primary,
+    },
+    autoFillText: {
+      flex: 1,
+      fontSize: 13,
+      color: isDark ? colors.text : colors.textLight,
+      fontWeight: '500',
     },
     inputGroup: {
-      marginBottom: 16,
+      marginBottom: 20,
     },
     inputLabel: {
       fontSize: 14,
-      fontWeight: '500',
+      fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
       marginBottom: 8,
     },
     input: {
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
       borderRadius: 8,
-      padding: 12,
+      padding: 14,
       fontSize: 16,
       color: isDark ? colors.text : colors.textLight,
       borderWidth: 1,
@@ -412,1391 +1391,17 @@ function createStyles(isDark: boolean) {
     typeButtonTextActive: {
       color: '#fff',
     },
-    modalButtons: {
-      flexDirection: 'row',
-      gap: 12,
-      marginTop: 8,
-    },
-    modalButton: {
-      flex: 1,
-      borderRadius: 12,
-      padding: 16,
-      alignItems: 'center',
-    },
-    cancelButton: {
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
-      borderWidth: 1,
-      borderColor: isDark ? colors.border : colors.borderLight,
-    },
     saveButton: {
       backgroundColor: colors.primary,
-    },
-    modalButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    cancelButtonText: {
-      color: isDark ? colors.text : colors.textLight,
+      padding: 16,
+      borderRadius: 8,
+      alignItems: 'center',
+      marginTop: 12,
     },
     saveButtonText: {
-      color: '#FFFFFF',
-    },
-    // Delete confirmation modal styles
-    deleteModalContent: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 16,
-      padding: 24,
-      width: '90%',
-      maxWidth: 400,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 8,
-    },
-    deleteModalTitle: {
-      fontSize: 20,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 12,
-      textAlign: 'center',
-    },
-    deleteModalMessage: {
+      color: '#fff',
       fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 24,
-      textAlign: 'center',
-      lineHeight: 22,
-    },
-    deleteModalButtons: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    deleteModalButton: {
-      flex: 1,
-      borderRadius: 12,
-      padding: 16,
-      alignItems: 'center',
-    },
-    deleteCancelButton: {
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
-      borderWidth: 1,
-      borderColor: isDark ? colors.border : colors.borderLight,
-    },
-    deleteConfirmButton: {
-      backgroundColor: colors.error,
-    },
-    deleteModalButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    deleteCancelButtonText: {
-      color: isDark ? colors.text : colors.textLight,
-    },
-    deleteConfirmButtonText: {
-      color: '#FFFFFF',
-    },
-    // Activate confirmation modal styles
-    activateModalContent: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 16,
-      padding: 24,
-      width: '90%',
-      maxWidth: 400,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 8,
-    },
-    activateModalTitle: {
-      fontSize: 20,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 12,
-      textAlign: 'center',
-    },
-    activateModalMessage: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 24,
-      textAlign: 'center',
-      lineHeight: 22,
-    },
-    activateModalButtons: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    activateModalButton: {
-      flex: 1,
-      borderRadius: 12,
-      padding: 16,
-      alignItems: 'center',
-    },
-    activateCancelButton: {
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
-      borderWidth: 1,
-      borderColor: isDark ? colors.border : colors.borderLight,
-    },
-    activateConfirmButton: {
-      backgroundColor: colors.primary,
-    },
-    activateModalButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    activateCancelButtonText: {
-      color: isDark ? colors.text : colors.textLight,
-    },
-    activateConfirmButtonText: {
-      color: '#FFFFFF',
-    },
-    // AIS Data Modal styles - Updated to match debug logs formatting
-    aisModalContent: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 16,
-      padding: 24,
-      width: '90%',
-      maxWidth: 500,
-      maxHeight: '80%',
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
-      shadowRadius: 8,
-      elevation: 8,
-    },
-    aisModalHeader: {
-      marginBottom: 16,
-    },
-    aisModalTitle: {
-      fontSize: 24,
       fontWeight: 'bold',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 8,
-    },
-    aisModalSubtitle: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      lineHeight: 20,
-    },
-    aisDataCard: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 12,
-      borderWidth: 1,
-      borderColor: isDark ? colors.border : colors.borderLight,
-    },
-    aisCardHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      marginBottom: 12,
-      paddingBottom: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.border : colors.borderLight,
-    },
-    aisCardTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-    },
-    aisStatusBadge: {
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 6,
-    },
-    aisStatusText: {
-      fontSize: 12,
-      fontWeight: '600',
-      color: '#FFFFFF',
-    },
-    aisDataRow: {
-      flexDirection: 'row',
-      marginBottom: 10,
-      alignItems: 'flex-start',
-    },
-    aisDataLabel: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      width: 110,
-      flexShrink: 0,
-    },
-    aisDataValue: {
-      fontSize: 13,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      flex: 1,
-    },
-    aisCoordinatesContainer: {
-      marginTop: 12,
-      padding: 12,
-      backgroundColor: isDark ? 'rgba(76, 175, 80, 0.15)' : 'rgba(76, 175, 80, 0.1)',
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: isDark ? 'rgba(76, 175, 80, 0.3)' : 'rgba(76, 175, 80, 0.2)',
-    },
-    aisCoordinatesTitle: {
-      fontSize: 13,
-      fontWeight: '600',
-      color: isDark ? '#81c784' : '#2e7d32',
-      marginBottom: 8,
-    },
-    aisCoordinatesText: {
-      fontSize: 12,
-      color: isDark ? '#a5d6a7' : '#388e3c',
-      marginBottom: 4,
-      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    },
-    aisCloseButton: {
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      padding: 16,
-      alignItems: 'center',
-      marginTop: 8,
-    },
-    aisCloseButtonText: {
-      color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    autoFillBanner: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      backgroundColor: colors.primary + '15',
-      padding: 12,
-      borderRadius: 8,
-      marginBottom: 20,
-      gap: 8,
-      borderLeftWidth: 3,
-      borderLeftColor: colors.primary,
-    },
-    autoFillText: {
-      flex: 1,
-      fontSize: 13,
-      color: isDark ? colors.text : colors.textLight,
-      fontWeight: '500',
     },
   });
-}
-
-export default function VesselDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const [vessel, setVessel] = useState<Vessel | null>(null);
-  const [entries, setEntries] = useState<SeaTimeEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [checkingAIS, setCheckingAIS] = useState(false);
-  const [editModalVisible, setEditModalVisible] = useState(false);
-  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-  const [activateModalVisible, setActivateModalVisible] = useState(false);
-  const [aisModalVisible, setAisModalVisible] = useState(false);
-  const [aisData, setAisData] = useState<AISData | null>(null);
-  const [activateModalMessage, setActivateModalMessage] = useState('');
-  const [editForm, setEditForm] = useState({
-    vessel_name: '',
-    flag: '',
-    official_number: '',
-    vessel_type: '',
-    length_metres: '',
-    gross_tonnes: '',
-    callsign: '',
-    engine_kilowatts: '',
-    engine_type: '',
-  });
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
-  const styles = createStyles(isDark);
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-
-  const loadData = useCallback(async () => {
-    console.log('[VesselDetailScreen iOS] Loading data for vessel:', id);
-    try {
-      const vessels = await seaTimeApi.getVessels();
-      const currentVessel = vessels.find((v) => v.id === id);
-      
-      if (!currentVessel) {
-        console.error('[VesselDetailScreen iOS] Vessel not found:', id);
-        Alert.alert('Error', 'Vessel not found');
-        router.back();
-        return;
-      }
-
-      setVessel(currentVessel);
-      console.log('[VesselDetailScreen iOS] Vessel loaded:', currentVessel.vessel_name, 'MMSI:', currentVessel.mmsi);
-
-      // Only fetch AIS location if vessel is active
-      if (currentVessel.is_active) {
-        try {
-          console.log('[VesselDetailScreen iOS] Fetching AIS location for active vessel');
-          const aisLocation = await seaTimeApi.getVesselAISLocation(id, true);
-          console.log('[VesselDetailScreen iOS] AIS location data:', aisLocation);
-          
-          // Transform the response to match AISData interface
-          const transformedAisData: AISData = {
-            name: aisLocation.name || null,
-            mmsi: aisLocation.mmsi || null,
-            imo: aisLocation.imo || null,
-            speed_knots: aisLocation.speed !== undefined ? aisLocation.speed : null,
-            latitude: aisLocation.latitude !== undefined ? aisLocation.latitude : null,
-            longitude: aisLocation.longitude !== undefined ? aisLocation.longitude : null,
-            course: aisLocation.course !== undefined ? aisLocation.course : null,
-            heading: aisLocation.heading !== undefined ? aisLocation.heading : null,
-            timestamp: aisLocation.timestamp || null,
-            status: aisLocation.status || null,
-            destination: aisLocation.destination || null,
-            eta: aisLocation.eta || null,
-            callsign: aisLocation.callsign || null,
-            ship_type: aisLocation.vessel_type || null,
-            flag: aisLocation.flag || null,
-            is_moving: (aisLocation.speed !== undefined && aisLocation.speed !== null && aisLocation.speed > 2) || false,
-          };
-          
-          setAisData(transformedAisData);
-          console.log('[VesselDetailScreen iOS] AIS data set successfully');
-        } catch (aisError) {
-          console.error('[VesselDetailScreen iOS] Failed to fetch AIS location:', aisError);
-          // Don't fail the whole load if AIS fetch fails
-        }
-      }
-
-      const seaTimeEntries = await seaTimeApi.getVesselSeaTime(id);
-      console.log('[VesselDetailScreen iOS] Sea time entries loaded:', seaTimeEntries.length);
-      setEntries(seaTimeEntries);
-    } catch (error) {
-      console.error('[VesselDetailScreen iOS] Error loading data:', error);
-      Alert.alert('Error', 'Failed to load vessel data. Please try again.');
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [id, router]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
-  const onRefresh = () => {
-    console.log('[VesselDetailScreen iOS] User initiated refresh');
-    setRefreshing(true);
-    loadData();
-  };
-
-  const handleEditParticulars = () => {
-    console.log('[VesselDetailScreen iOS] User tapped Edit Particulars button');
-    if (!vessel) {
-      console.error('[VesselDetailScreen iOS] No vessel data available');
-      return;
-    }
-    
-    setEditForm({
-      vessel_name: vessel.vessel_name || '',
-      flag: vessel.flag || '',
-      official_number: vessel.official_number || '',
-      vessel_type: vessel.vessel_type || '',
-      length_metres: vessel.length_metres?.toString() || '',
-      gross_tonnes: vessel.gross_tonnes?.toString() || '',
-      callsign: vessel.callsign || '',
-      engine_kilowatts: vessel.engine_kilowatts?.toString() || '',
-      engine_type: vessel.engine_type || '',
-    });
-    
-    setEditModalVisible(true);
-  };
-
-  const handleSaveParticulars = async () => {
-    console.log('[VesselDetailScreen iOS] User tapped Save button in edit modal');
-    if (!vessel) {
-      console.error('[VesselDetailScreen iOS] No vessel data available');
-      return;
-    }
-
-    try {
-      const updates: any = {};
-      
-      if (editForm.vessel_name.trim()) updates.vessel_name = editForm.vessel_name.trim();
-      if (editForm.flag.trim()) updates.flag = editForm.flag.trim();
-      if (editForm.official_number.trim()) updates.official_number = editForm.official_number.trim();
-      if (editForm.vessel_type.trim()) updates.type = editForm.vessel_type.trim();
-      if (editForm.callsign.trim()) updates.callsign = editForm.callsign.trim();
-      if (editForm.length_metres.trim()) {
-        const length = parseFloat(editForm.length_metres);
-        if (!isNaN(length) && length > 0) {
-          updates.length_metres = length;
-        }
-      }
-      if (editForm.gross_tonnes.trim()) {
-        const tonnes = parseFloat(editForm.gross_tonnes);
-        if (!isNaN(tonnes) && tonnes > 0) {
-          updates.gross_tonnes = tonnes;
-        }
-      }
-      if (editForm.engine_kilowatts.trim()) {
-        const kw = parseFloat(editForm.engine_kilowatts);
-        if (!isNaN(kw) && kw > 0) {
-          updates.engine_kilowatts = kw;
-        }
-      }
-      if (editForm.engine_type.trim()) updates.engine_type = editForm.engine_type.trim();
-
-      console.log('[VesselDetailScreen iOS] Updating vessel particulars:', updates);
-      
-      await seaTimeApi.updateVesselParticulars(vessel.id, updates);
-      
-      setEditModalVisible(false);
-      Alert.alert('Success', 'Vessel particulars updated successfully');
-      await loadData();
-    } catch (error: any) {
-      console.error('[VesselDetailScreen iOS] Failed to update vessel particulars:', error);
-      
-      if (error.message && (error.message.includes('401') || error.message.includes('Unauthorized') || error.message.includes('authentication'))) {
-        Alert.alert(
-          'Authentication Required',
-          'You need to sign in to edit vessel particulars. Please go to the Profile tab and sign in.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Go to Profile',
-              onPress: () => {
-                setEditModalVisible(false);
-                router.push('/(tabs)/profile');
-              },
-            },
-          ]
-        );
-      } else {
-        Alert.alert('Error', 'Failed to update vessel particulars. Please try again.');
-      }
-    }
-  };
-
-  const handleActivateVessel = async () => {
-    console.log('[VesselDetailScreen iOS] User tapped Activate Vessel button');
-    
-    if (!vessel) {
-      console.error('[VesselDetailScreen iOS] No vessel data available');
-      return;
-    }
-
-    try {
-      const vessels = await seaTimeApi.getVessels();
-      const activeVessel = vessels.find(v => v.is_active);
-      
-      const message = activeVessel 
-        ? `Start tracking ${vessel.vessel_name}? This will deactivate ${activeVessel.vessel_name}.`
-        : `Start tracking ${vessel.vessel_name}? The app will monitor this vessel's AIS data.`;
-
-      console.log('[VesselDetailScreen iOS] Opening activate confirmation modal');
-      setActivateModalMessage(message);
-      setActivateModalVisible(true);
-    } catch (error: any) {
-      console.error('[VesselDetailScreen iOS] Error checking active vessels:', error);
-      Alert.alert('Error', 'Failed to check active vessels: ' + error.message);
-    }
-  };
-
-  const confirmActivateVessel = async () => {
-    console.log('[VesselDetailScreen iOS] User confirmed vessel activation');
-    
-    if (!vessel) {
-      console.error('[VesselDetailScreen iOS] No vessel data available');
-      return;
-    }
-
-    try {
-      console.log('[VesselDetailScreen iOS] Activating vessel:', vessel.id);
-      setActivateModalVisible(false);
-      await seaTimeApi.activateVessel(vessel.id);
-      await loadData();
-      Alert.alert('Success', `${vessel.vessel_name} is now being tracked`);
-    } catch (error: any) {
-      console.error('[VesselDetailScreen iOS] Failed to activate vessel:', error);
-      Alert.alert('Error', 'Failed to activate vessel: ' + error.message);
-    }
-  };
-
-  const cancelActivateVessel = () => {
-    console.log('[VesselDetailScreen iOS] User cancelled vessel activation');
-    setActivateModalVisible(false);
-  };
-
-  const handleCheckAIS = async () => {
-    if (!vessel) {
-      console.error('[VesselDetailScreen iOS] No vessel data available');
-      return;
-    }
-
-    if (!vessel.is_active) {
-      Alert.alert('Vessel Not Active', 'Please activate the vessel first before checking AIS data.');
-      return;
-    }
-
-    if (checkingAIS) {
-      console.log('[VesselDetailScreen iOS] AIS check already in progress, ignoring duplicate tap');
-      return;
-    }
-
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      console.log('[VesselDetailScreen iOS] 🔍 CHECK AIS BUTTON CLICKED - Manual check requested');
-      console.log('[VesselDetailScreen iOS] Using vessel from particulars:');
-      console.log('[VesselDetailScreen iOS] - Vessel ID:', vessel.id);
-      console.log('[VesselDetailScreen iOS] - Vessel Name:', vessel.vessel_name);
-      console.log('[VesselDetailScreen iOS] - MMSI:', vessel.mmsi);
-      console.log('[VesselDetailScreen iOS] - Call Sign:', vessel.callsign || 'Not set');
-      console.log('[VesselDetailScreen iOS] Calling checkVesselAIS with vessel ID:', vessel.id, 'forceRefresh: true');
-      console.log('[VesselDetailScreen iOS] Backend will look up MMSI from database for this vessel ID');
-      
-      setCheckingAIS(true);
-      
-      // First trigger the AIS check (POST) with forceRefresh=true to bypass rate limiting
-      await seaTimeApi.checkVesselAIS(vessel.id, true);
-      
-      // Then fetch the detailed AIS location data (GET)
-      const aisLocation = await seaTimeApi.getVesselAISLocation(vessel.id, true);
-      console.log('[VesselDetailScreen iOS] ✅ AIS check completed successfully');
-      console.log('[VesselDetailScreen iOS] AIS location data:', aisLocation);
-      
-      // Transform the response to match AISData interface
-      const transformedAisData: AISData = {
-        name: aisLocation.name || null,
-        mmsi: aisLocation.mmsi || null,
-        imo: aisLocation.imo || null,
-        speed_knots: aisLocation.speed !== undefined ? aisLocation.speed : null,
-        latitude: aisLocation.latitude !== undefined ? aisLocation.latitude : null,
-        longitude: aisLocation.longitude !== undefined ? aisLocation.longitude : null,
-        course: aisLocation.course !== undefined ? aisLocation.course : null,
-        heading: aisLocation.heading !== undefined ? aisLocation.heading : null,
-        timestamp: aisLocation.timestamp || null,
-        status: aisLocation.status || null,
-        destination: aisLocation.destination || null,
-        eta: aisLocation.eta || null,
-        callsign: aisLocation.callsign || null,
-        ship_type: aisLocation.vessel_type || null,
-        flag: aisLocation.flag || null,
-        is_moving: (aisLocation.speed !== undefined && aisLocation.speed !== null && aisLocation.speed > 2) || false,
-      };
-      
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      setAisData(transformedAisData);
-      setAisModalVisible(true);
-      
-      console.log('[VesselDetailScreen iOS] Reloading vessel data to get any AIS updates...');
-      await loadData();
-    } catch (error: any) {
-      console.error('[VesselDetailScreen iOS] ❌ AIS check failed:', error);
-      
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-
-      // Show the error message directly - it will include rate limit info if applicable
-      Alert.alert('AIS Check Failed', error.message);
-    } finally {
-      setCheckingAIS(false);
-    }
-  };
-
-  const handleDeleteVessel = () => {
-    console.log('[VesselDetailScreen iOS] 🔴 DELETE BUTTON CLICKED - handleDeleteVessel called');
-    
-    if (!vessel) {
-      console.error('[VesselDetailScreen iOS] No vessel data available for deletion');
-      return;
-    }
-
-    console.log('[VesselDetailScreen iOS] Vessel to delete:', vessel.id, vessel.vessel_name);
-    console.log('[VesselDetailScreen iOS] Opening delete confirmation modal...');
-    
-    setDeleteModalVisible(true);
-  };
-
-  const confirmDeleteVessel = async () => {
-    console.log('[VesselDetailScreen iOS] 🔴 User confirmed deletion - calling deleteVessel API');
-    
-    if (!vessel) {
-      console.error('[VesselDetailScreen iOS] No vessel data available for deletion');
-      return;
-    }
-
-    try {
-      console.log('[VesselDetailScreen iOS] Calling seaTimeApi.deleteVessel with ID:', vessel.id);
-      setDeleteModalVisible(false);
-      await seaTimeApi.deleteVessel(vessel.id);
-      console.log('[VesselDetailScreen iOS] ✅ Delete API call successful');
-      Alert.alert('Success', 'Vessel deleted successfully');
-      router.back();
-    } catch (error: any) {
-      console.error('[VesselDetailScreen iOS] ❌ Failed to delete vessel:', error);
-      console.error('[VesselDetailScreen iOS] Error message:', error.message);
-      console.error('[VesselDetailScreen iOS] Error stack:', error.stack);
-      Alert.alert('Error', 'Failed to delete vessel: ' + error.message);
-    }
-  };
-
-  const cancelDeleteVessel = () => {
-    console.log('[VesselDetailScreen iOS] User cancelled deletion');
-    setDeleteModalVisible(false);
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  };
-
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString();
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'confirmed':
-        return colors.success;
-      case 'pending':
-        return colors.warning;
-      case 'rejected':
-        return colors.error;
-      default:
-        return colors.primary;
-    }
-  };
-
-  const calculateTotalDays = (): number => {
-    const total = entries
-      .filter((e) => e.status === 'confirmed' && e.duration_hours !== null && e.duration_hours !== undefined)
-      .reduce((sum, e) => sum + (Number(e.duration_hours) || 0), 0);
-    
-    console.log('[VesselDetailScreen iOS] calculateTotalDays - total hours:', total);
-    return Math.floor(total / 24);
-  };
-
-  const groupEntriesByDate = () => {
-    const grouped: { [key: string]: SeaTimeEntry[] } = {};
-    entries.forEach((entry) => {
-      const date = formatDate(entry.start_time);
-      if (!grouped[date]) {
-        grouped[date] = [];
-      }
-      grouped[date].push(entry);
-    });
-    return grouped;
-  };
-
-  const handleViewDebugLogs = () => {
-    console.log('[VesselDetailScreen iOS] User tapped View Debug Logs button');
-    router.push(`/debug/${id}` as any);
-  };
-
-  const formatAISValue = (value: any, suffix: string = ''): string => {
-    if (value === null || value === undefined) return 'Unknown';
-    return `${value}${suffix}`;
-  };
-
-  const formatCoordinates = (lat: number | null, lon: number | null): string => {
-    if (lat === null || lon === null) return 'Unknown';
-    return `${lat.toFixed(6)}°, ${lon.toFixed(6)}°`;
-  };
-
-  const formatDuration = (hours: number | null): string => {
-    if (hours === null || hours === 0) return 'In progress';
-    
-    // If duration is >= 24 hours, express as days
-    if (hours >= 24) {
-      const days = Math.floor(hours / 24);
-      const remainingHours = Math.round(hours % 24);
-      if (remainingHours === 0) {
-        return `${days} ${days === 1 ? 'day' : 'days'}`;
-      }
-      return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours}h`;
-    }
-    
-    // If < 24 hours, express as hours
-    const wholeHours = Math.floor(hours);
-    const minutes = Math.round((hours - wholeHours) * 60);
-    if (minutes === 0) return `${wholeHours}h`;
-    return `${wholeHours}h ${minutes}m`;
-  };
-
-  if (loading || !vessel) {
-    return (
-      <View style={styles.container}>
-        <Stack.Screen
-          options={{
-            headerShown: true,
-            title: 'Loading...',
-            headerBackTitle: 'Back',
-            headerBackTitleVisible: true,
-          }}
-        />
-        <View style={styles.scrollContent}>
-          <Text style={styles.emptyText}>Loading vessel data...</Text>
-        </View>
-      </View>
-    );
-  }
-
-  const groupedEntries = groupEntriesByDate();
-  const totalDays = calculateTotalDays();
-
-  const aisName = formatAISValue(aisData?.name);
-  const aisMMSI = formatAISValue(aisData?.mmsi);
-  const aisIMO = formatAISValue(aisData?.imo);
-  const aisCallsign = formatAISValue(aisData?.callsign);
-  const aisFlag = formatAISValue(aisData?.flag);
-  const aisShipType = formatAISValue(aisData?.ship_type);
-  const aisSpeed = formatAISValue(aisData?.speed_knots, ' knots');
-  const aisCourse = formatAISValue(aisData?.course, '°');
-  const aisHeading = formatAISValue(aisData?.heading, '°');
-  const aisStatus = formatAISValue(aisData?.status);
-  const aisDestination = formatAISValue(aisData?.destination);
-  const aisETA = formatAISValue(aisData?.eta);
-  const aisIsMoving = aisData?.is_moving ?? false;
-  const aisHasCoordinates = aisData && aisData.latitude !== null && aisData.longitude !== null;
-  const aisLatitude = aisData?.latitude ?? 0;
-  const aisLongitude = aisData?.longitude ?? 0;
-  const aisTimestamp = aisData?.timestamp;
-
-  return (
-    <View style={styles.container}>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: vessel.vessel_name,
-          headerBackTitle: 'Back',
-          headerBackTitleVisible: true,
-        }}
-      />
-      
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <Text style={styles.header}>{vessel.vessel_name}</Text>
-        <Text style={styles.mmsi}>MMSI: {vessel.mmsi}</Text>
-
-        <View style={styles.particularsCard}>
-          <View style={styles.particularsHeader}>
-            <View style={styles.particularsHeaderLeft}>
-              <IconSymbol
-                ios_icon_name="info.circle.fill"
-                android_material_icon_name="info"
-                size={20}
-                color={colors.primary}
-              />
-              <Text style={styles.particularsTitle}>Vessel Particulars</Text>
-            </View>
-            <TouchableOpacity 
-              style={styles.editButton}
-              onPress={handleEditParticulars}
-            >
-              <IconSymbol
-                ios_icon_name="pencil"
-                android_material_icon_name="edit"
-                size={14}
-                color="#FFFFFF"
-              />
-              <Text style={styles.editButtonText}>Edit</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={styles.particularRow}>
-            <Text style={styles.particularLabel}>Call Sign</Text>
-            <Text style={vessel.callsign ? styles.particularValue : styles.particularValueEmpty}>
-              {vessel.callsign || 'Not specified'}
-            </Text>
-          </View>
-          
-          <View style={styles.particularRow}>
-            <Text style={styles.particularLabel}>Flag</Text>
-            <Text style={vessel.flag ? styles.particularValue : styles.particularValueEmpty}>
-              {vessel.flag || 'Not specified'}
-            </Text>
-          </View>
-          
-          <View style={styles.particularRow}>
-            <Text style={styles.particularLabel}>Official No.</Text>
-            <Text style={vessel.official_number ? styles.particularValue : styles.particularValueEmpty}>
-              {vessel.official_number || 'Not specified'}
-            </Text>
-          </View>
-          
-          <View style={styles.particularRow}>
-            <Text style={styles.particularLabel}>Type</Text>
-            <Text style={vessel.vessel_type ? styles.particularValue : styles.particularValueEmpty}>
-              {vessel.vessel_type || 'Not specified'}
-            </Text>
-          </View>
-          
-          <View style={styles.particularRow}>
-            <Text style={styles.particularLabel}>Length</Text>
-            <Text style={vessel.length_metres ? styles.particularValue : styles.particularValueEmpty}>
-              {vessel.length_metres ? `${vessel.length_metres} m` : 'Not specified'}
-            </Text>
-          </View>
-          
-          <View style={styles.particularRow}>
-            <Text style={styles.particularLabel}>Gross Tonnes</Text>
-            <Text style={vessel.gross_tonnes ? styles.particularValue : styles.particularValueEmpty}>
-              {vessel.gross_tonnes ? `${vessel.gross_tonnes} GT` : 'Not specified'}
-            </Text>
-          </View>
-          
-          <View style={styles.particularRow}>
-            <Text style={styles.particularLabel}>Engine Kilowatts (KW)</Text>
-            <Text style={vessel.engine_kilowatts ? styles.particularValue : styles.particularValueEmpty}>
-              {vessel.engine_kilowatts ? `${vessel.engine_kilowatts} KW` : 'Not specified'}
-            </Text>
-          </View>
-          
-          <View style={[styles.particularRow, styles.particularRowLast]}>
-            <Text style={styles.particularLabel}>Engine Type</Text>
-            <Text style={vessel.engine_type ? styles.particularValue : styles.particularValueEmpty}>
-              {vessel.engine_type || 'Not specified'}
-            </Text>
-          </View>
-        </View>
-
-        {!vessel.is_active && (
-          <TouchableOpacity
-            style={styles.activateButton}
-            onPress={handleActivateVessel}
-          >
-            <IconSymbol
-              ios_icon_name="play.circle"
-              android_material_icon_name="play-circle-filled"
-              size={20}
-              color="#fff"
-            />
-            <Text style={styles.activateButtonText}>Activate Vessel</Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity
-          style={[
-            styles.checkAISButton,
-            (!vessel.is_active || checkingAIS) && styles.checkAISButtonDisabled
-          ]}
-          onPress={handleCheckAIS}
-          disabled={!vessel.is_active || checkingAIS}
-        >
-          {checkingAIS ? (
-            <>
-              <ActivityIndicator size="small" color="#fff" />
-              <Text style={styles.checkAISButtonText}>Checking AIS...</Text>
-            </>
-          ) : (
-            <>
-              <IconSymbol
-                ios_icon_name="location.circle"
-                android_material_icon_name="my-location"
-                size={20}
-                color="#fff"
-              />
-              <Text style={styles.checkAISButtonText}>
-                {vessel.is_active ? 'Check AIS' : 'Activate Vessel to Check AIS'}
-              </Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{totalDays}</Text>
-            <Text style={styles.statLabel}>Total Days</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{entries.length}</Text>
-            <Text style={styles.statLabel}>Total Entries</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.debugButton} onPress={handleViewDebugLogs}>
-          <Text style={styles.debugButtonText}>View AIS Debug Logs</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.sectionTitle}>Sea Time History</Text>
-
-        {entries.length === 0 ? (
-          <View style={styles.emptyState}>
-            <IconSymbol
-              ios_icon_name="clock"
-              android_material_icon_name="schedule"
-              size={48}
-              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-            />
-            <Text style={styles.emptyText}>
-              No sea time entries yet.
-              {'\n\n'}
-              {vessel.is_active 
-                ? 'Check AIS data to start tracking.'
-                : 'Activate this vessel and check AIS data to start tracking.'}
-            </Text>
-          </View>
-        ) : (
-          Object.keys(groupedEntries)
-            .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-            .map((date) => (
-              <React.Fragment key={date}>
-                <Text style={styles.dateHeader}>{date}</Text>
-                {groupedEntries[date].map((entry) => (
-                  <View key={entry.id} style={styles.entryCard}>
-                    <View style={styles.entryHeader}>
-                      <Text style={styles.entryDate}>
-                        {formatDateTime(entry.start_time)}
-                      </Text>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          { backgroundColor: getStatusColor(entry.status) },
-                        ]}
-                      >
-                        <Text style={styles.statusText}>
-                          {entry.status.toUpperCase()}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.entryDetails}>
-                      {entry.end_time && (
-                        <Text style={styles.entryDetailText}>
-                          End: {formatDateTime(entry.end_time)}
-                        </Text>
-                      )}
-                      {entry.duration_hours !== null && entry.duration_hours !== undefined && (
-                        <Text style={styles.entryDetailText}>
-                          Duration: {formatDuration(Number(entry.duration_hours))}
-                        </Text>
-                      )}
-                      {entry.notes && (
-                        <Text style={styles.entryDetailText}>
-                          Notes: {entry.notes}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                ))}
-              </React.Fragment>
-            ))
-        )}
-
-        <TouchableOpacity 
-          style={styles.deleteButton} 
-          onPress={handleDeleteVessel}
-        >
-          <Text style={styles.deleteButtonText}>Delete Vessel</Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      {/* Edit Particulars Modal */}
-      <Modal
-        visible={editModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setEditModalVisible(false)}
-      >
-        <TouchableOpacity 
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setEditModalVisible(false)}
-        >
-          <KeyboardAvoidingView 
-            behavior="padding"
-            style={{ width: '100%', justifyContent: 'flex-end' }}
-            keyboardVerticalOffset={insets.bottom}
-          >
-            <TouchableOpacity activeOpacity={1}>
-              <View style={styles.modalContent}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Edit Vessel Particulars</Text>
-                  <TouchableOpacity 
-                    style={styles.closeButton}
-                    onPress={() => setEditModalVisible(false)}
-                  >
-                    <IconSymbol
-                      ios_icon_name="xmark"
-                      android_material_icon_name="close"
-                      size={24}
-                      color={isDark ? colors.text : colors.textLight}
-                    />
-                  </TouchableOpacity>
-                </View>
-
-                <ScrollView 
-                  style={{ maxHeight: 400 }}
-                  contentContainerStyle={styles.modalScrollContent}
-                  keyboardShouldPersistTaps="handled"
-                >
-                  {/* Auto-fill info banner */}
-                  <View style={styles.autoFillBanner}>
-                    <IconSymbol
-                      ios_icon_name="info.circle.fill"
-                      android_material_icon_name="info"
-                      size={20}
-                      color={colors.primary}
-                    />
-                    <Text style={styles.autoFillText}>
-                      Leave fields blank to auto-fill from AIS data
-                    </Text>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Vessel Name</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={editForm.vessel_name}
-                      onChangeText={(text) => setEditForm({ ...editForm, vessel_name: text })}
-                      placeholder="Enter vessel name"
-                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Call Sign</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={editForm.callsign}
-                      onChangeText={(text) => setEditForm({ ...editForm, callsign: text })}
-                      placeholder="e.g., GBAA"
-                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Flag</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={editForm.flag}
-                      onChangeText={(text) => setEditForm({ ...editForm, flag: text })}
-                      placeholder="e.g., United Kingdom"
-                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Official Number</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={editForm.official_number}
-                      onChangeText={(text) => setEditForm({ ...editForm, official_number: text })}
-                      placeholder="e.g., 123456"
-                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Type (Motor/Sail)</Text>
-                    <View style={styles.typeButtonContainer}>
-                      <TouchableOpacity
-                        style={[
-                          styles.typeButton,
-                          editForm.vessel_type === 'Motor' && styles.typeButtonActive,
-                        ]}
-                        onPress={() => setEditForm({ ...editForm, vessel_type: 'Motor' })}
-                      >
-                        <Text
-                          style={[
-                            styles.typeButtonText,
-                            editForm.vessel_type === 'Motor' && styles.typeButtonTextActive,
-                          ]}
-                        >
-                          Motor
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[
-                          styles.typeButton,
-                          editForm.vessel_type === 'Sail' && styles.typeButtonActive,
-                        ]}
-                        onPress={() => setEditForm({ ...editForm, vessel_type: 'Sail' })}
-                      >
-                        <Text
-                          style={[
-                            styles.typeButtonText,
-                            editForm.vessel_type === 'Sail' && styles.typeButtonTextActive,
-                          ]}
-                        >
-                          Sail
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Length (metres)</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={editForm.length_metres}
-                      onChangeText={(text) => setEditForm({ ...editForm, length_metres: text })}
-                      placeholder="e.g., 45.5"
-                      keyboardType="decimal-pad"
-                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Gross Tonnes</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={editForm.gross_tonnes}
-                      onChangeText={(text) => setEditForm({ ...editForm, gross_tonnes: text })}
-                      placeholder="e.g., 500"
-                      keyboardType="decimal-pad"
-                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Engine Kilowatts (KW)</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={editForm.engine_kilowatts}
-                      onChangeText={(text) => setEditForm({ ...editForm, engine_kilowatts: text })}
-                      placeholder="e.g., 250"
-                      keyboardType="decimal-pad"
-                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                    />
-                  </View>
-
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Engine Type</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={editForm.engine_type}
-                      onChangeText={(text) => setEditForm({ ...editForm, engine_type: text })}
-                      placeholder="e.g., Diesel, Petrol, Electric"
-                      placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                    />
-                  </View>
-                </ScrollView>
-
-                <View style={styles.modalButtons}>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.cancelButton]}
-                    onPress={() => setEditModalVisible(false)}
-                  >
-                    <Text style={[styles.modalButtonText, styles.cancelButtonText]}>
-                      Cancel
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.modalButton, styles.saveButton]}
-                    onPress={handleSaveParticulars}
-                  >
-                    <Text style={[styles.modalButtonText, styles.saveButtonText]}>
-                      Save
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </TouchableOpacity>
-          </KeyboardAvoidingView>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Delete Confirmation Modal */}
-      <Modal
-        visible={deleteModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={cancelDeleteVessel}
-      >
-        <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
-          <View style={styles.deleteModalContent}>
-            <Text style={styles.deleteModalTitle}>Delete Vessel?</Text>
-            <Text style={styles.deleteModalMessage}>
-              Are you sure you want to delete {vessel?.vessel_name}? This action cannot be undone.
-            </Text>
-            <View style={styles.deleteModalButtons}>
-              <TouchableOpacity
-                style={[styles.deleteModalButton, styles.deleteCancelButton]}
-                onPress={cancelDeleteVessel}
-              >
-                <Text style={[styles.deleteModalButtonText, styles.deleteCancelButtonText]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.deleteModalButton, styles.deleteConfirmButton]}
-                onPress={confirmDeleteVessel}
-              >
-                <Text style={[styles.deleteModalButtonText, styles.deleteConfirmButtonText]}>
-                  Delete
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Activate Confirmation Modal */}
-      <Modal
-        visible={activateModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={cancelActivateVessel}
-      >
-        <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
-          <View style={styles.activateModalContent}>
-            <Text style={styles.activateModalTitle}>Activate Vessel?</Text>
-            <Text style={styles.activateModalMessage}>{activateModalMessage}</Text>
-            <View style={styles.activateModalButtons}>
-              <TouchableOpacity
-                style={[styles.activateModalButton, styles.activateCancelButton]}
-                onPress={cancelActivateVessel}
-              >
-                <Text style={[styles.activateModalButtonText, styles.activateCancelButtonText]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.activateModalButton, styles.activateConfirmButton]}
-                onPress={confirmActivateVessel}
-              >
-                <Text style={[styles.activateModalButtonText, styles.activateConfirmButtonText]}>
-                  Activate
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* AIS Data Modal */}
-      <Modal
-        visible={aisModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setAisModalVisible(false)}
-      >
-        <View style={[styles.modalOverlay, { justifyContent: 'center', alignItems: 'center' }]}>
-          <View style={styles.aisModalContent}>
-            <View style={styles.aisModalHeader}>
-              <Text style={styles.aisModalTitle}>AIS Data</Text>
-              <Text style={styles.aisModalSubtitle}>
-                Real-time vessel information from AIS tracking
-              </Text>
-            </View>
-
-            <ScrollView style={{ maxHeight: 400 }}>
-              <View style={styles.aisDataCard}>
-                <View style={styles.aisCardHeader}>
-                  <Text style={styles.aisCardTitle}>Vessel Information</Text>
-                  <View
-                    style={[
-                      styles.aisStatusBadge,
-                      { backgroundColor: aisIsMoving ? colors.success : colors.warning },
-                    ]}
-                  >
-                    <Text style={styles.aisStatusText}>
-                      {aisIsMoving ? 'MOVING' : 'STATIONARY'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.aisDataRow}>
-                  <Text style={styles.aisDataLabel}>Name:</Text>
-                  <Text style={styles.aisDataValue}>{aisName}</Text>
-                </View>
-
-                <View style={styles.aisDataRow}>
-                  <Text style={styles.aisDataLabel}>MMSI:</Text>
-                  <Text style={styles.aisDataValue}>{aisMMSI}</Text>
-                </View>
-
-                <View style={styles.aisDataRow}>
-                  <Text style={styles.aisDataLabel}>IMO:</Text>
-                  <Text style={styles.aisDataValue}>{aisIMO}</Text>
-                </View>
-
-                <View style={styles.aisDataRow}>
-                  <Text style={styles.aisDataLabel}>Call Sign:</Text>
-                  <Text style={styles.aisDataValue}>{aisCallsign}</Text>
-                </View>
-
-                <View style={styles.aisDataRow}>
-                  <Text style={styles.aisDataLabel}>Flag:</Text>
-                  <Text style={styles.aisDataValue}>{aisFlag}</Text>
-                </View>
-
-                <View style={styles.aisDataRow}>
-                  <Text style={styles.aisDataLabel}>Ship Type:</Text>
-                  <Text style={styles.aisDataValue}>{aisShipType}</Text>
-                </View>
-              </View>
-
-              <View style={styles.aisDataCard}>
-                <View style={styles.aisCardHeader}>
-                  <Text style={styles.aisCardTitle}>Navigation</Text>
-                </View>
-
-                <View style={styles.aisDataRow}>
-                  <Text style={styles.aisDataLabel}>Speed:</Text>
-                  <Text style={styles.aisDataValue}>{aisSpeed}</Text>
-                </View>
-
-                <View style={styles.aisDataRow}>
-                  <Text style={styles.aisDataLabel}>Course:</Text>
-                  <Text style={styles.aisDataValue}>{aisCourse}</Text>
-                </View>
-
-                <View style={styles.aisDataRow}>
-                  <Text style={styles.aisDataLabel}>Heading:</Text>
-                  <Text style={styles.aisDataValue}>{aisHeading}</Text>
-                </View>
-
-                <View style={styles.aisDataRow}>
-                  <Text style={styles.aisDataLabel}>Status:</Text>
-                  <Text style={styles.aisDataValue}>{aisStatus}</Text>
-                </View>
-
-                <View style={styles.aisDataRow}>
-                  <Text style={styles.aisDataLabel}>Destination:</Text>
-                  <Text style={styles.aisDataValue}>{aisDestination}</Text>
-                </View>
-
-                <View style={styles.aisDataRow}>
-                  <Text style={styles.aisDataLabel}>ETA:</Text>
-                  <Text style={styles.aisDataValue}>{aisETA}</Text>
-                </View>
-
-                {aisHasCoordinates && (
-                  <View style={styles.aisCoordinatesContainer}>
-                    <Text style={styles.aisCoordinatesTitle}>Current Position</Text>
-                    <Text style={styles.aisCoordinatesText}>
-                      Latitude: {aisLatitude.toFixed(6)}°
-                    </Text>
-                    <Text style={styles.aisCoordinatesText}>
-                      Longitude: {aisLongitude.toFixed(6)}°
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {aisTimestamp && (
-                <View style={styles.aisDataCard}>
-                  <View style={styles.aisDataRow}>
-                    <Text style={styles.aisDataLabel}>Last Update:</Text>
-                    <Text style={styles.aisDataValue}>
-                      {new Date(aisTimestamp).toLocaleString()}
-                    </Text>
-                  </View>
-                </View>
-              )}
-            </ScrollView>
-
-            <TouchableOpacity
-              style={styles.aisCloseButton}
-              onPress={() => setAisModalVisible(false)}
-            >
-              <Text style={styles.aisCloseButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </View>
-  );
 }
