@@ -37,6 +37,8 @@ interface Vessel {
   length_metres?: number;
   gross_tonnes?: number;
   callsign?: string;
+  engine_kilowatts?: number;
+  engine_type?: string;
 }
 
 interface VesselLocation {
@@ -60,6 +62,8 @@ export default function SeaTimeScreen() {
   const [newVesselType, setNewVesselType] = useState('');
   const [newLengthMetres, setNewLengthMetres] = useState('');
   const [newGrossTonnes, setNewGrossTonnes] = useState('');
+  const [newEngineKilowatts, setNewEngineKilowatts] = useState('');
+  const [newEngineType, setNewEngineType] = useState('');
   const [activeVesselLocation, setActiveVesselLocation] = useState<VesselLocation | null>(null);
   const [locationLoading, setLocationLoading] = useState(false);
   const colorScheme = useColorScheme();
@@ -187,7 +191,9 @@ export default function SeaTimeScreen() {
         official_number: newOfficialNumber,
         vessel_type: newVesselType,
         length_metres: newLengthMetres,
-        gross_tonnes: newGrossTonnes
+        gross_tonnes: newGrossTonnes,
+        engine_kilowatts: newEngineKilowatts,
+        engine_type: newEngineType
       });
       
       // ALWAYS activate new vessels - this ensures they become the active tracked vessel
@@ -205,7 +211,9 @@ export default function SeaTimeScreen() {
         newVesselType || undefined,
         newLengthMetres ? parseFloat(newLengthMetres) : undefined,
         newGrossTonnes ? parseFloat(newGrossTonnes) : undefined,
-        newCallSign.trim() || undefined
+        newCallSign.trim() || undefined,
+        newEngineKilowatts ? parseFloat(newEngineKilowatts) : undefined,
+        newEngineType.trim() || undefined
       );
       
       console.log('[Home] Vessel created successfully:', createdVessel.id);
@@ -230,6 +238,8 @@ export default function SeaTimeScreen() {
       setNewVesselType('');
       setNewLengthMetres('');
       setNewGrossTonnes('');
+      setNewEngineKilowatts('');
+      setNewEngineType('');
       await loadData();
       
       Alert.alert('Success', `${vesselNameTrimmed} has been added and is now being tracked`);
@@ -781,6 +791,31 @@ export default function SeaTimeScreen() {
                     value={newGrossTonnes}
                     onChangeText={setNewGrossTonnes}
                     keyboardType="decimal-pad"
+                    returnKeyType="next"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Engine Kilowatts (KW)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., 1200"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newEngineKilowatts}
+                    onChangeText={setNewEngineKilowatts}
+                    keyboardType="decimal-pad"
+                    returnKeyType="next"
+                  />
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Engine Type</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g., Caterpillar C32"
+                    placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                    value={newEngineType}
+                    onChangeText={setNewEngineType}
                     returnKeyType="done"
                     onSubmitEditing={handleAddVessel}
                   />

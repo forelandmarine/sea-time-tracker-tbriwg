@@ -217,7 +217,9 @@ export const createVessel = async (
   type?: string,
   length_metres?: number,
   gross_tonnes?: number,
-  callsign?: string
+  callsign?: string,
+  engine_kilowatts?: number,
+  engine_type?: string
 ) => {
   console.log('[seaTimeApi] Creating vessel:', { 
     mmsi, 
@@ -228,7 +230,9 @@ export const createVessel = async (
     type,
     length_metres,
     gross_tonnes,
-    callsign
+    callsign,
+    engine_kilowatts,
+    engine_type
   });
   
   const body: any = { mmsi, vessel_name, is_active };
@@ -238,6 +242,8 @@ export const createVessel = async (
   if (length_metres !== undefined) body.length_metres = length_metres;
   if (gross_tonnes !== undefined) body.gross_tonnes = gross_tonnes;
   if (callsign) body.callsign = callsign;
+  if (engine_kilowatts !== undefined) body.engine_kilowatts = engine_kilowatts;
+  if (engine_type) body.engine_type = engine_type;
   
   const headers = await getApiHeaders();
   const response = await fetch(`${API_BASE_URL}/api/vessels`, {
