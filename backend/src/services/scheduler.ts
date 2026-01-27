@@ -1,7 +1,7 @@
 import { eq, and, desc, isNotNull, lte } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
 import type { App } from '../index.js';
-import { fetchVesselAISData } from '../routes/ais.js';
+import { fetchVesselAISDataWithFallback } from '../routes/ais.js';
 import { processNotificationSchedules } from '../routes/notifications.js';
 
 const SCHEDULER_CHECK_INTERVAL_MS = 60 * 1000; // Check every minute
@@ -229,14 +229,15 @@ async function processScheduledTask(
     `Processing scheduled AIS check for active vessel ${vessel_name} (MMSI: ${mmsi}) for user ${user_id}: checking 2-hour position window`
   );
 
-  const apiKey = process.env.MYSHIPTRACKING_API_KEY;
-  if (!apiKey) {
-    app.logger.warn('MyShipTracking API key not configured, skipping task execution');
+  // Check if at least one API key is configured
+  const hasApiKeys = process.env.DATALASTIC_API_KEY || process.env.MYSHIPTRACKING_API_KEY || process.env.BASE44_API_KEY;
+  if (!hasApiKeys) {
+    app.logger.warn('No AIS API keys configured, skipping task execution');
     return;
   }
 
-  // Fetch current vessel AIS data with userId for proper logging
-  const ais_data = await fetchVesselAISData(mmsi, apiKey, app.logger, vesselId, app, true, user_id);
+  // Fetch current vessel AIS data using fallback chain: Datalastic → MyShipTracking → Base44
+  const { data: ais_data, apiSource } = await fetchVesselAISDataWithFallback(mmsi, app.logger, vesselId, app, user_id, true);
 
   if (ais_data.error) {
     app.logger.warn(
@@ -280,6 +281,7 @@ async function processScheduledTask(
         speed_knots: ais_data.speed_knots !== null ? String(ais_data.speed_knots) : null,
         latitude: ais_data.latitude !== null ? String(ais_data.latitude) : null,
         longitude: ais_data.longitude !== null ? String(ais_data.longitude) : null,
+        api_source: apiSource,
       })
       .returning();
 
@@ -303,8 +305,9 @@ async function processScheduledTask(
           latitude: ais_data.latitude,
           longitude: ais_data.longitude,
           checkTime: ais_check.check_time.toISOString(),
+          apiSource,
         },
-        `AIS check inserted successfully for vessel ${vessel_name} (MMSI: ${mmsi}): checkId=${ais_check.id}, is_moving=${ais_data.is_moving}, speed=${ais_data.speed_knots} knots, lat=${ais_data.latitude}, lng=${ais_data.longitude}, time=${ais_check.check_time.toISOString()}`
+        `AIS check inserted successfully for vessel ${vessel_name} (MMSI: ${mmsi}): checkId=${ais_check.id}, is_moving=${ais_data.is_moving}, speed=${ais_data.speed_knots} knots, lat=${ais_data.latitude}, lng=${ais_data.longitude}, api_source=${apiSource}, time=${ais_check.check_time.toISOString()}`
       );
     }
   } catch (err) {

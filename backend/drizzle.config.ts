@@ -1,17 +1,21 @@
 import { defineConfig } from 'drizzle-kit';
 
-export default defineConfig({
+// Build config conditionally based on DATABASE_URL
+const config = {
   schema: ['./src/db/schema.ts', './src/db/auth-schema.ts'],
   out: './drizzle',
   dialect: 'postgresql',
-  ...(process.env.DATABASE_URL && {
-    dbCredentials: {
-      url: process.env.DATABASE_URL,
-    },
-  }),
-  // PGlite doesn't need connection details - migrations are applied in code
-  // In production with DATABASE_URL, drizzle-kit can connect to Neon
   migrations: {
     prefix: 'timestamp', // Ensures unique migration filenames across branches
   },
-});
+} as any;
+
+// Only add database credentials if DATABASE_URL is provided
+// This prevents drizzle-kit from trying to connect when using PGlite locally
+if (process.env.DATABASE_URL) {
+  config.dbCredentials = {
+    url: process.env.DATABASE_URL,
+  };
+}
+
+export default defineConfig(config);
