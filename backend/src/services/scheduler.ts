@@ -594,6 +594,9 @@ async function handleSeaTimeEntries(
         totalDistance = calculateDistanceNauticalMiles(startLat, startLng, currentLat, currentLng);
       }
 
+      // Determine MCA compliance based on total duration
+      const isMCACompliant = totalDurationHours >= 4.0;
+
       // Update the existing entry with the new end position and time
       // Notes reflect the complete amalgamated movement across all detections
       const updatedNotes = `Movement detected: vessel moved ${totalDistance} nm over ${totalDurationHours} hours. Multiple detections amalgamated.`;
@@ -605,6 +608,7 @@ async function handleSeaTimeEntries(
           end_latitude: String(currentLat),
           end_longitude: String(currentLng),
           duration_hours: String(totalDurationHours),
+          mca_compliant: isMCACompliant,
           notes: updatedNotes,
         })
         .where(eq(schema.sea_time_entries.id, existingEntryForDay.id))
@@ -623,11 +627,12 @@ async function handleSeaTimeEntries(
           newEndPosition: `(${currentLat}, ${currentLng})`,
           previousDurationHours: existingEntryForDay.duration_hours ? parseFloat(String(existingEntryForDay.duration_hours)) : 0,
           newTotalDurationHours: totalDurationHours,
+          mcaCompliant: isMCACompliant,
           totalDistanceNauticalMiles: totalDistance,
           detectionDistanceNm: distanceNm,
           positionChangeDegrees: Math.round(maxDiff * 10000) / 10000,
         },
-        `Amalgamated sea time entry [${existingEntryForDay.id}] for vessel ${vessel_name} (user: ${userId}): ${totalDistance} nm over ${totalDurationHours} hours (added ${distanceNm} nm from latest detection)`
+        `Extended entry [${existingEntryForDay.id}] for vessel ${vessel_name}: now ${totalDurationHours} hours total (MCA compliant: ${isMCACompliant}). Start position: (${existingEntryForDay.start_latitude}, ${existingEntryForDay.start_longitude}) from ${existingEntryForDay.start_time.toISOString()}`
       );
     } catch (error) {
       app.logger.error(
@@ -638,6 +643,9 @@ async function handleSeaTimeEntries(
   } else {
     // CREATE a new pending sea time entry
     const notes = `Movement detected: vessel moved ${distanceNm} nm (${Math.round(maxDiff * 10000) / 10000}°) over ${durationHours} hours`;
+
+    // Determine MCA compliance based on duration
+    const isMCACompliant = durationHours >= 4.0;
 
     try {
       const [new_entry] = await app.db
@@ -654,6 +662,7 @@ async function handleSeaTimeEntries(
           end_longitude: String(currentLng),
           status: 'pending',
           service_type: 'actual_sea_service',
+          mca_compliant: isMCACompliant,
           notes: notes,
         })
         .returning();
@@ -666,13 +675,16 @@ async function handleSeaTimeEntries(
           userId,
           entryId: new_entry.id,
           startTime: oldCheck.check_time.toISOString(),
+          startPosition: `(${oldLat}, ${oldLng})`,
           endTime: currentCheck.check_time.toISOString(),
+          endPosition: `(${currentLat}, ${currentLng})`,
           durationHours,
+          mcaCompliant: isMCACompliant,
           distanceNauticalMiles: distanceNm,
           positionChangeDegrees: Math.round(maxDiff * 10000) / 10000,
           calendarDay,
         },
-        `Created new pending sea time entry for vessel ${vessel_name} (user: ${userId}): ${distanceNm} nm (${Math.round(maxDiff * 10000) / 10000}°) over ${durationHours} hours`
+        `Created entry [${new_entry.id}] for vessel ${vessel_name}: ${durationHours} hours (MCA compliant: ${isMCACompliant}). Start position: (${oldLat}, ${oldLng}) from ${oldCheck.check_time.toISOString()}`
       );
     } catch (error) {
       app.logger.error(
