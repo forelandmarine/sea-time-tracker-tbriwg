@@ -61,6 +61,7 @@ export const ais_checks = pgTable('ais_checks', {
   speed_knots: decimal('speed_knots', { precision: 8, scale: 2 }),
   latitude: decimal('latitude', { precision: 9, scale: 6 }),
   longitude: decimal('longitude', { precision: 10, scale: 6 }),
+  api_source: text('api_source').default('myshiptracking'), // Track which API provided the data
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('ais_checks_user_id_idx').on(table.user_id),
@@ -97,6 +98,7 @@ export const ais_debug_logs = pgTable('ais_debug_logs', {
   response_body: text('response_body'),
   authentication_status: text('authentication_status').notNull(),
   error_message: text('error_message'),
+  api_source: text('api_source'), // Track which API provided the data (myshiptracking, base44, failed)
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('ais_debug_logs_user_id_idx').on(table.user_id),

@@ -25,7 +25,8 @@ async function logAPICall(
   responseStatus: string,
   responseBody: string | null,
   authStatus: string,
-  errorMessage: string | null
+  errorMessage: string | null,
+  apiSource?: string
 ) {
   try {
     await app.db
@@ -40,6 +41,7 @@ async function logAPICall(
         response_body: responseBody,
         authentication_status: authStatus,
         error_message: errorMessage,
+        api_source: apiSource,
       })
       .execute();
   } catch (logError) {
@@ -172,7 +174,7 @@ export async function fetchVesselAISData(
       errorMessage = String(fetchError);
       logger.error(`Connection error calling MyShipTracking API for MMSI ${mmsi}: ${fetchError}`);
       if (vesselId && app && userId) {
-        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, 'connection_error', null, authStatus, errorMessage);
+        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, 'connection_error', null, authStatus, errorMessage, 'myshiptracking');
       }
       return {
         name: null,
@@ -209,7 +211,7 @@ export async function fetchVesselAISData(
       logger.error(`MyShipTracking API authentication failed (401) for MMSI ${mmsi} - invalid API key`);
       if (vesselId && app && userId) {
         const responseBody = await response.text();
-        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '401', responseBody, authStatus, errorMessage);
+        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '401', responseBody, authStatus, errorMessage, 'myshiptracking');
       }
       return {
         name: null,
@@ -238,7 +240,7 @@ export async function fetchVesselAISData(
       logger.warn(`MyShipTracking API rate limit exceeded (429) for MMSI ${mmsi}`);
       if (vesselId && app && userId) {
         const responseBody = await response.text();
-        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '429', responseBody, authStatus, errorMessage);
+        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '429', responseBody, authStatus, errorMessage, 'myshiptracking');
       }
       return {
         name: null,
@@ -267,7 +269,7 @@ export async function fetchVesselAISData(
       logger.warn(`MyShipTracking API returned 404 - vessel with MMSI ${mmsi} not found in AIS system`);
       if (vesselId && app && userId) {
         const responseBody = await response.text();
-        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '404', responseBody, authStatus, errorMessage);
+        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '404', responseBody, authStatus, errorMessage, 'myshiptracking');
       }
       return {
         name: null,
@@ -296,7 +298,7 @@ export async function fetchVesselAISData(
       logger.error(`MyShipTracking API error for MMSI ${mmsi}: ${response.status} ${response.statusText}`);
       if (vesselId && app && userId) {
         const responseBody = await response.text();
-        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, String(response.status), responseBody, authStatus, errorMessage);
+        await logAPICall(app, vesselId, userId, mmsi, url, requestTime, String(response.status), responseBody, authStatus, errorMessage, 'myshiptracking');
       }
       return {
         name: null,
@@ -339,7 +341,7 @@ export async function fetchVesselAISData(
     if (vesselId && app && userId) {
       // Store full response without truncation
       const responseBody = JSON.stringify(rawResponse);
-      await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '200', responseBody, authStatus, null);
+      await logAPICall(app, vesselId, userId, mmsi, url, requestTime, '200', responseBody, authStatus, null, 'myshiptracking');
     }
 
     // Helper function to extract value from either top-level or nested object
