@@ -1,3 +1,4 @@
+
 {
   "cli": {
     "version": ">= 5.0.0",
@@ -10,8 +11,12 @@
       "distribution": "internal",
       "ios": {
         "simulator": true,
-        "bundleIdentifier": "com.forelandmarine.seatimetracker.dev",
+        "bundleIdentifier": "com.forelandmarine.ais-seatime-tracker.dev",
         "appleTeamId": "43GZCFFPR9"
+      },
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleDebug"
       },
       "env": {
         "APP_VARIANT": "development"
@@ -22,8 +27,11 @@
       "ios": {
         "simulator": false,
         "resourceClass": "m-medium",
-        "bundleIdentifier": "com.forelandmarine.seatimetracker.preview",
+        "bundleIdentifier": "com.forelandmarine.ais-seatime-tracker.preview",
         "appleTeamId": "43GZCFFPR9"
+      },
+      "android": {
+        "buildType": "apk"
       },
       "channel": "preview",
       "env": {
@@ -35,8 +43,11 @@
         "simulator": false,
         "resourceClass": "m-medium",
         "autoIncrement": true,
-        "bundleIdentifier": "com.forelandmarine.seatimetracker",
+        "bundleIdentifier": "com.forelandmarine.ais-seatime-tracker",
         "appleTeamId": "43GZCFFPR9"
+      },
+      "android": {
+        "buildType": "aab"
       },
       "channel": "production",
       "env": {
