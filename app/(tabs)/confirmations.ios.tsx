@@ -20,6 +20,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/IconSymbol';
 import * as seaTimeApi from '@/utils/seaTimeApi';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Vessel {
   id: string;
@@ -65,6 +66,7 @@ export default function ConfirmationsScreen() {
   const styles = createStyles(isDark, insets.top);
   const notifiedEntriesRef = useRef<Set<string>>(new Set());
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const { triggerRefresh } = useAuth();
 
   const toNumber = (value: number | string | null | undefined): number => {
     if (value === null || value === undefined) return 0;
@@ -184,6 +186,11 @@ export default function ConfirmationsScreen() {
       setSelectedEntry(null);
       setProcessingEntryId(null);
       await loadData();
+      
+      // Trigger global refresh to update profile screen's "Sea Time by Service Type" section
+      console.log('[Confirmations iOS] Triggering global refresh after confirming entry');
+      triggerRefresh();
+      
       Alert.alert('Success', 'Sea time entry confirmed');
     } catch (error: any) {
       console.error('[Confirmations iOS] Failed to confirm entry:', error);
