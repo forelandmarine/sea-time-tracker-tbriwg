@@ -77,7 +77,7 @@ export default function SeaTimeScreen() {
   useEffect(() => {
     console.log('[Home] Initial data load - will auto-refresh if stale');
     loadData();
-  }, []);
+  }, [loadData]);
 
   // Listen for global refresh trigger
   useEffect(() => {
@@ -85,7 +85,7 @@ export default function SeaTimeScreen() {
       console.log('[Home] Global refresh triggered, reloading data');
       loadData();
     }
-  }, [refreshTrigger]);
+  }, [refreshTrigger, loadData]);
 
   const loadActiveVesselLocation = useCallback(async (vesselId: string, forceRefresh: boolean = false) => {
     try {

@@ -77,7 +77,7 @@ export default function SeaTimeScreen() {
   useEffect(() => {
     console.log('[Home iOS] Initial data load - will auto-refresh if stale');
     loadData();
-  }, []);
+  }, [loadData]);
 
   const loadActiveVesselLocation = useCallback(async (vesselId: string, forceRefresh: boolean = false) => {
     try {

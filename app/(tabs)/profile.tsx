@@ -472,7 +472,7 @@ export default function ProfileScreen() {
     loadSummary();
     loadVessels();
     checkBiometricStatus();
-  }, []);
+  }, [loadProfile, loadSummary, loadVessels]);
 
   // Listen to refreshTrigger and reload data when it changes (but not on initial mount)
   useEffect(() => {
@@ -482,7 +482,7 @@ export default function ProfileScreen() {
       loadSummary();
       loadVessels();
     }
-  }, [refreshTrigger]);
+  }, [refreshTrigger, loadProfile, loadSummary, loadVessels]);
 
   const checkBiometricStatus = async () => {
     const available = await isBiometricAvailable();

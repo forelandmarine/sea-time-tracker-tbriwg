@@ -466,7 +466,7 @@ export default function ProfileScreen() {
     loadProfile();
     loadSummary();
     loadVessels();
-  }, []);
+  }, [loadProfile, loadSummary, loadVessels]);
 
   // Listen to refreshTrigger and reload data when it changes (but not on initial mount)
   useEffect(() => {
@@ -476,7 +476,7 @@ export default function ProfileScreen() {
       loadSummary();
       loadVessels();
     }
-  }, [refreshTrigger]);
+  }, [refreshTrigger, loadProfile, loadSummary, loadVessels]);
 
   const loadProfile = async (retryCount = 0) => {
     const maxRetries = 2;

@@ -336,7 +336,7 @@ export default function EditSeaTimeScreen() {
   useEffect(() => {
     console.log('[EditSeaTimeScreen] Component mounted, loading entry:', entryId);
     loadEntry();
-  }, [entryId]);
+  }, [entryId, loadEntry]);
 
   const loadEntry = async () => {
     try {

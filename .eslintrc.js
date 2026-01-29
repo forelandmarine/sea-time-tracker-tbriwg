@@ -47,6 +47,19 @@ module.exports = {
       rules: {
         '@typescript-eslint/no-var-requires': 'off'
       }
+    },
+    {
+      files: ['components/Map.web.tsx'],
+      rules: {
+        'import/no-unresolved': 'off'
+      }
+    },
+    {
+      files: ['utils/errorLogger.ts'],
+      rules: {
+        'import/first': 'off',
+        '@typescript-eslint/array-type': 'off'
+      }
     }
   ]
 };

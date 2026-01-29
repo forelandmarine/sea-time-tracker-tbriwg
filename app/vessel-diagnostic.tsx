@@ -31,20 +31,20 @@ interface DiagnosticData {
     next_run: string;
     interval_hours: string;
   } | null;
-  ais_checks_last_24h: Array<{
+  ais_checks_last_24h: {
     check_time: string;
     is_moving: boolean;
     speed_knots: number | null;
     latitude: number | null;
     longitude: number | null;
-  }>;
-  sea_time_entries: Array<{
+  }[];
+  sea_time_entries: {
     id: string;
     start_time: string;
     end_time: string | null;
     status: string;
     duration_hours: number | null;
-  }>;
+  }[];
 }
 
 async function getAuthToken(): Promise<string | null> {
@@ -112,7 +112,7 @@ export default function VesselDiagnosticScreen() {
 
   useEffect(() => {
     loadDiagnostics();
-  }, [mmsi]);
+  }, [mmsi, loadDiagnostics]);
 
   const handleRefresh = () => {
     setRefreshing(true);
