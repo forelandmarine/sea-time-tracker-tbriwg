@@ -299,6 +299,11 @@ export default function SeaTimeScreen() {
     router.push(`/vessel/${vesselId}` as any);
   };
 
+  const handleUserAccountPress = () => {
+    console.log('[Home iOS] User tapped account button, navigating to user profile');
+    router.push('/user-profile');
+  };
+
   const convertToDMS = (decimal: number, isLatitude: boolean): string => {
     const absolute = Math.abs(decimal);
     const degrees = Math.floor(absolute);
@@ -384,6 +389,17 @@ export default function SeaTimeScreen() {
               </Text>
               <Text style={styles.headerSubtitle}>{headerSubtitleText}</Text>
             </View>
+            <TouchableOpacity 
+              style={styles.userAccountButton}
+              onPress={handleUserAccountPress}
+            >
+              <IconSymbol
+                ios_icon_name="person.circle.fill"
+                android_material_icon_name="account-circle"
+                size={40}
+                color={isDark ? colors.text : colors.textLight}
+              />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -874,6 +890,9 @@ function createStyles(isDark: boolean, topInset: number) {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginTop: 4,
+    },
+    userAccountButton: {
+      padding: 4,
     },
     section: {
       padding: 16,
