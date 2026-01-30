@@ -22,7 +22,7 @@ import Constants from "expo-constants";
 
 // Backend URL is automatically configured in app.json under expo.extra.backendUrl
 const API_URL = Constants.expoConfig?.extra?.backendUrl || "";
-const BEARER_TOKEN_KEY = "seatime-tracker_bearer_token";
+const BEARER_TOKEN_KEY = "seatimetracker_bearer_token";
 
 // Platform-specific storage adapter
 const storage = Platform.OS === "web"
@@ -38,8 +38,8 @@ export const authClient = createAuthClient({
   baseURL: API_URL,
   plugins: [
     expoClient({
-      scheme: "seatime-tracker",
-      storagePrefix: "seatime-tracker",
+      scheme: "seatimetracker",
+      storagePrefix: "seatimetracker",
       storage,
     }),
   ],
