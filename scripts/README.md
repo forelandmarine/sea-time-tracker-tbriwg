@@ -226,10 +226,154 @@ eas build --platform ios --profile production
 - `.eslintignore` - Excludes scripts from linting
 - `package.json` - Contains npm scripts for validation
 
+### 3. `verify-built-scheme.js` - Pre-Build Verification (NEW)
+
+**Purpose**: Shows exactly what will be in the built Info.plist BEFORE you build.
+
+**Usage**:
+```bash
+node scripts/verify-built-scheme.js
+```
+
+**What it does**:
+- Reads your `app.json` configuration
+- Validates the URL scheme against RFC1738
+- **Simulates the CFBundleURLTypes section** that will appear in Info.plist
+- Confirms "SeaTime Tracker" has been replaced with valid scheme
+- Shows final verdict: ready to build or needs fixes
+
+**Use this to**:
+- Verify the fix worked BEFORE building (saves 15-30 min build time)
+- See exactly what will be in the built app
+- Confirm old invalid schemes are gone
+
+**Example Output**:
+```
+═══════════════════════════════════════════════════════
+📋 BUILT INFO.PLIST VERIFICATION
+═══════════════════════════════════════════════════════
+
+📱 App Configuration:
+   Name: SeaTime Tracker
+   Slug: seatime-tracker
+   Scheme: seatimetracker
+
+🔍 Validating URL Scheme...
+   ✅ VALID: "seatimetracker" matches RFC1738 pattern
+
+✅ CONFIRMED: Old "SeaTime Tracker" scheme has been replaced
+
+📄 Simulated Info.plist CFBundleURLTypes Section:
+═══════════════════════════════════════════════════════
+
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>seatimetracker</string>
+    </array>
+  </dict>
+</array>
+
+🎯 FINAL VERDICT:
+   ✅ URL scheme is VALID and ready for production
+   ✅ "SeaTime Tracker" has been successfully replaced
+   ✅ The built Info.plist will contain: "seatimetracker"
+```
+
+### 4. `extract-plist-after-build.sh` - Post-Build Proof (NEW)
+
+**Purpose**: Extracts and displays the actual Info.plist from a built .ipa or .app.
+
+**Usage**:
+```bash
+# Make executable
+chmod +x scripts/extract-plist-after-build.sh
+
+# Extract from IPA
+./scripts/extract-plist-after-build.sh ~/Downloads/SeaTimeTracker.ipa
+
+# Or from .app bundle
+./scripts/extract-plist-after-build.sh ios/build/.../SeaTimeTracker.app
+```
+
+**What it does**:
+- Extracts Info.plist from .ipa or .app bundle
+- Displays the CFBundleURLTypes section
+- Shows all URL schemes in the built app
+- Validates each scheme (highlights invalid ones in red)
+
+**Use this to**:
+- **Prove the fix worked** after building
+- Extract actual plist data from production builds
+- Verify no invalid schemes made it into the build
+
+**Example Output**:
+```
+═══════════════════════════════════════════════════════
+📦 EXTRACT INFO.PLIST FROM BUILT APP
+═══════════════════════════════════════════════════════
+
+📱 Detected IPA file
+✅ Found Info.plist
+
+═══════════════════════════════════════════════════════
+📋 CFBundleURLTypes Section:
+═══════════════════════════════════════════════════════
+
+<key>CFBundleURLTypes</key>
+<array>
+  <dict>
+    <key>CFBundleURLSchemes</key>
+    <array>
+      <string>seatimetracker</string>
+    </array>
+  </dict>
+</array>
+
+═══════════════════════════════════════════════════════
+🔍 Extracted URL Schemes:
+═══════════════════════════════════════════════════════
+
+✅ VALID: "seatimetracker"
+
+✅ Extraction complete
+```
+
+## 🔄 Complete Verification Workflow
+
+### Before Building (Recommended)
+```bash
+# 1. Validate scheme syntax
+npm run validate-scheme
+
+# 2. Verify what will be built
+node scripts/verify-built-scheme.js
+
+# 3. If both pass, build
+eas build --platform ios
+```
+
+### After Building (Proof)
+```bash
+# 1. Download the .ipa from EAS
+
+# 2. Extract and verify
+./scripts/extract-plist-after-build.sh ~/Downloads/SeaTimeTracker.ipa
+
+# 3. Confirm:
+#    ✅ "seatimetracker" is present
+#    ✅ "SeaTime Tracker" is gone
+```
+
 ## 📞 Support
 
 If you encounter issues with the validation scripts:
 1. Check the error message - it usually contains the fix
 2. Use `test-scheme.js` to test different scheme values
-3. Refer to the RFC1738 rules above
-4. Check the App Store Connect error message for specific requirements
+3. Use `verify-built-scheme.js` to see what will be built
+4. Use `extract-plist-after-build.sh` to verify actual builds
+5. Refer to the RFC1738 rules above
+6. Check the App Store Connect error message for specific requirements
+7. See `SCHEME_VERIFICATION_GUIDE.md` for detailed verification instructions
