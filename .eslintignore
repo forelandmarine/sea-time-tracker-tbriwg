@@ -1,11 +1,10 @@
-# Ignore generated files
-_expo/
-dist/
-web-build/
 
-# Ignore node modules
 node_modules/
-
-# Ignore build artifacts
-*.bundle.js
-*.bundle.js.map
+.expo/
+.expo-shared/
+dist/
+backend/
+babel-plugins/
+scripts/
+*.config.js
+*.config.ts

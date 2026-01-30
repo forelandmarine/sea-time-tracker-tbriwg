@@ -1,0 +1,44 @@
+
+name: Validate URL Scheme
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'app.json'
+      - 'app.config.js'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'app.json'
+      - 'app.config.js'
+
+jobs:
+  validate:
+    name: Validate URL Scheme
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Run URL Scheme Validation
+        run: node scripts/validate-scheme.js
+      
+      - name: Validation Success
+        if: success()
+        run: |
+          echo "✅ URL scheme validation passed!"
+          echo "The app.json scheme is RFC1738 compliant."
+      
+      - name: Validation Failed
+        if: failure()
+        run: |
+          echo "❌ URL scheme validation failed!"
+          echo "Please fix the scheme in app.json before merging."
+          exit 1
