@@ -6,31 +6,13 @@
   },
   "build": {
     "development": {
-      "developmentClient": true,
-      "distribution": "internal",
-      "ios": {
-        "simulator": true,
-        "bundleIdentifier": "com.forelandmarine.ais-seatime-tracker.dev",
-        "appleTeamId": "43GZCFFPR9"
-      },
-      "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleDebug"
-      },
-      "env": {
-        "APP_VARIANT": "development"
-      }
+      "distribution": "internal"
     },
     "preview": {
       "distribution": "internal",
       "ios": {
-        "simulator": false,
-        "resourceClass": "m-medium",
-        "bundleIdentifier": "com.forelandmarine.ais-seatime-tracker.preview",
-        "appleTeamId": "43GZCFFPR9"
       },
       "android": {
-        "buildType": "apk"
       },
       "channel": "preview",
       "env": {
@@ -39,14 +21,8 @@
     },
     "production": {
       "ios": {
-        "simulator": false,
-        "resourceClass": "m-medium",
-        "autoIncrement": true,
-        "bundleIdentifier": "com.forelandmarine.ais-seatime-tracker",
-        "appleTeamId": "43GZCFFPR9"
       },
       "android": {
-        "buildType": "aab"
       },
       "channel": "production",
       "env": {
