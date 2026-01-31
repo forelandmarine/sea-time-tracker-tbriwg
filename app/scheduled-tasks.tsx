@@ -37,7 +37,6 @@ export default function ScheduledTasksScreen() {
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     loadTasks();
@@ -81,51 +80,7 @@ export default function ScheduledTasksScreen() {
     }
   };
 
-  const handleVerifyTasks = async () => {
-    try {
-      console.log('User verifying scheduled tasks deployment');
-      setVerifying(true);
-      const result = await seaTimeApi.verifyVesselTasks();
-      console.log('Verification result:', result);
-      
-      const totalActiveVessels = result.total_active_vessels || 0;
-      const tasksAlreadyActive = result.tasks_already_active || 0;
-      const tasksCreated = result.tasks_created || 0;
-      const tasksReactivated = result.tasks_reactivated || 0;
-      const vesselsWithTasks = tasksAlreadyActive + tasksCreated + tasksReactivated;
-      
-      const messageLines = [];
-      messageLines.push(`✓ Total active vessels: ${totalActiveVessels}`);
-      messageLines.push(`✓ Vessels with tasks: ${vesselsWithTasks}`);
-      
-      if (tasksCreated > 0) {
-        messageLines.push(`✓ New tasks created: ${tasksCreated}`);
-      }
-      
-      if (tasksReactivated > 0) {
-        messageLines.push(`✓ Tasks reactivated: ${tasksReactivated}`);
-      }
-      
-      if (tasksAlreadyActive > 0) {
-        messageLines.push(`✓ Tasks already active: ${tasksAlreadyActive}`);
-      }
-      
-      if (result.vessels_without_tasks && result.vessels_without_tasks.length > 0) {
-        messageLines.push(`\n⚠️ Vessels without tasks: ${result.vessels_without_tasks.join(', ')}`);
-      }
-      
-      Alert.alert(
-        'Task Verification Complete',
-        messageLines.join('\n'),
-        [{ text: 'OK', onPress: () => loadTasks() }]
-      );
-    } catch (error: any) {
-      console.error('Failed to verify tasks:', error);
-      Alert.alert('Error', 'Failed to verify tasks: ' + error.message);
-    } finally {
-      setVerifying(false);
-    }
-  };
+
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'Never';
@@ -236,20 +191,7 @@ export default function ScheduledTasksScreen() {
             </View>
           </View>
 
-          {/* Verification Button */}
-          <TouchableOpacity
-            style={styles.verifyButton}
-            onPress={handleVerifyTasks}
-          >
-            <IconSymbol
-              ios_icon_name="checkmark.shield.fill"
-              android_material_icon_name="verified"
-              size={20}
-              color="#FFFFFF"
-              style={styles.verifyIcon}
-            />
-            <Text style={styles.verifyButtonText}>Verify Task Deployment</Text>
-          </TouchableOpacity>
+
 
           {/* How It Works Section */}
           <View style={styles.section}>
@@ -530,23 +472,7 @@ function createStyles(isDark: boolean) {
       lineHeight: 20,
       color: textColor,
     },
-    verifyButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 24,
-    },
-    verifyIcon: {
-      marginRight: 8,
-    },
-    verifyButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: '#FFFFFF',
-    },
+
     section: {
       marginBottom: 24,
     },
