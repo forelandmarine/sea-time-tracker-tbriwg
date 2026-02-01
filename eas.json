@@ -10,20 +10,16 @@
     },
     "preview": {
       "distribution": "internal",
-      "ios": {
-      },
-      "android": {
-      },
+      "ios": {},
+      "android": {},
       "channel": "preview",
       "env": {
         "APP_VARIANT": "preview"
       }
     },
     "production": {
-      "ios": {
-      },
-      "android": {
-      },
+      "ios": {},
+      "android": {},
       "channel": "production",
       "env": {
         "APP_VARIANT": "production"

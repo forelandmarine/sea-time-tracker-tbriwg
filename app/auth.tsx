@@ -368,6 +368,18 @@ export default function AuthScreen() {
           </Text>
         </TouchableOpacity>
 
+        {!isSignUp && (
+          <TouchableOpacity
+            style={styles.forgotPasswordButton}
+            onPress={() => {
+              console.log('[AuthScreen] User tapped Forgot Password link');
+              router.push('/forgot-password');
+            }}
+          >
+            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+          </TouchableOpacity>
+        )}
+
         {Platform.OS === 'ios' && (
           <>
             <View style={styles.divider}>
@@ -478,6 +490,16 @@ function createStyles(isDark: boolean) {
       color: colors.primary,
       fontSize: 16,
       fontWeight: '500',
+    },
+    forgotPasswordButton: {
+      marginTop: 12,
+      alignItems: 'center',
+    },
+    forgotPasswordText: {
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      fontSize: 15,
+      fontWeight: '500',
+      textDecorationLine: 'underline',
     },
     divider: {
       flexDirection: 'row',
