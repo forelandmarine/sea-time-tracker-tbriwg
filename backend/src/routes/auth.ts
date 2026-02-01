@@ -939,4 +939,343 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     }
   );
+
+  // POST /api/auth/forgot-password - Request password reset code
+  fastify.post<{ Body: { email: string } }>(
+    '/api/auth/forgot-password',
+    {
+      schema: {
+        description: 'Request a password reset code. Code will be sent via email.',
+        tags: ['auth'],
+        body: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: { type: 'string', format: 'email' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' },
+              resetCodeId: { type: 'string', description: 'ID of the reset code record (for testing)' },
+            },
+          },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { email } = request.body;
+
+      app.logger.info({ email }, 'Password reset requested');
+
+      try {
+        // Check if user exists
+        const users = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email));
+
+        if (users.length === 0) {
+          app.logger.warn({ email }, 'Password reset failed: user not found');
+          // Return success anyway for security (prevent email enumeration)
+          return reply.code(200).send({
+            message: 'If an account exists with this email, a password reset code will be sent',
+            resetCodeId: 'N/A',
+          });
+        }
+
+        const user = users[0];
+
+        // Generate reset code (6-digit numeric code)
+        const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // Create verification entry with 15-minute expiry
+        const resetId = crypto.randomUUID();
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+        await app.db
+          .insert(authSchema.verification)
+          .values({
+            id: resetId,
+            identifier: `password-reset:${user.id}`,
+            value: resetCode,
+            expiresAt,
+          });
+
+        app.logger.info(
+          { userId: user.id, email, resetId, expiresAt: expiresAt.toISOString() },
+          'Password reset code generated'
+        );
+
+        // TODO: In production, send email with reset code
+        // For now, we return the code ID for testing
+        // In production, you would use a service like SendGrid, AWS SES, or Resend
+
+        app.logger.info(
+          { userId: user.id, email, resetCode },
+          'Password reset code (in production, this would be sent via email)'
+        );
+
+        return reply.code(200).send({
+          message: 'If an account exists with this email, a password reset code will be sent',
+          resetCodeId: resetId,
+        });
+      } catch (error) {
+        app.logger.error({ err: error, email }, 'Password reset request error');
+        return reply.code(500).send({
+          error: 'Failed to process password reset request',
+        });
+      }
+    }
+  );
+
+  // POST /api/auth/verify-reset-code - Verify the reset code is valid
+  fastify.post<{ Body: { resetCodeId: string; code: string } }>(
+    '/api/auth/verify-reset-code',
+    {
+      schema: {
+        description: 'Verify that a password reset code is valid before allowing password change',
+        tags: ['auth'],
+        body: {
+          type: 'object',
+          required: ['resetCodeId', 'code'],
+          properties: {
+            resetCodeId: { type: 'string', description: 'ID returned from /forgot-password' },
+            code: { type: 'string', description: '6-digit reset code' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' },
+              valid: { type: 'boolean' },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { resetCodeId, code } = request.body;
+
+      app.logger.info({ resetCodeId }, 'Password reset code verification attempted');
+
+      try {
+        // Find the reset code
+        const verification = await app.db
+          .select()
+          .from(authSchema.verification)
+          .where(eq(authSchema.verification.id, resetCodeId));
+
+        if (verification.length === 0) {
+          app.logger.warn({ resetCodeId }, 'Reset code not found');
+          return reply.code(404).send({
+            error: 'Reset code not found',
+          });
+        }
+
+        const resetRecord = verification[0];
+
+        // Check if code is expired
+        if (new Date() > resetRecord.expiresAt) {
+          app.logger.warn({ resetCodeId }, 'Reset code expired');
+          return reply.code(400).send({
+            error: 'Reset code has expired. Please request a new one.',
+          });
+        }
+
+        // Check if code matches
+        if (resetRecord.value !== code) {
+          app.logger.warn({ resetCodeId }, 'Invalid reset code provided');
+          return reply.code(400).send({
+            error: 'Invalid reset code',
+          });
+        }
+
+        // Verify it's a password reset identifier
+        if (!resetRecord.identifier.startsWith('password-reset:')) {
+          app.logger.warn({ resetCodeId, identifier: resetRecord.identifier }, 'Invalid verification record type');
+          return reply.code(400).send({
+            error: 'Invalid reset code',
+          });
+        }
+
+        app.logger.info({ resetCodeId }, 'Reset code verified successfully');
+
+        return reply.code(200).send({
+          message: 'Reset code is valid',
+          valid: true,
+        });
+      } catch (error) {
+        app.logger.error({ err: error, resetCodeId }, 'Reset code verification error');
+        return reply.code(400).send({
+          error: 'Failed to verify reset code',
+        });
+      }
+    }
+  );
+
+  // POST /api/auth/reset-password - Set new password using reset code
+  fastify.post<{ Body: { resetCodeId: string; code: string; newPassword: string } }>(
+    '/api/auth/reset-password',
+    {
+      schema: {
+        description: 'Set a new password using a valid reset code',
+        tags: ['auth'],
+        body: {
+          type: 'object',
+          required: ['resetCodeId', 'code', 'newPassword'],
+          properties: {
+            resetCodeId: { type: 'string', description: 'ID returned from /forgot-password' },
+            code: { type: 'string', description: '6-digit reset code' },
+            newPassword: { type: 'string', minLength: 6, description: 'New password (min 6 characters)' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              message: { type: 'string' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  email: { type: 'string' },
+                  name: { type: 'string' },
+                },
+              },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { resetCodeId, code, newPassword } = request.body;
+
+      app.logger.info({ resetCodeId }, 'Password reset attempted');
+
+      try {
+        // Find and validate the reset code
+        const verification = await app.db
+          .select()
+          .from(authSchema.verification)
+          .where(eq(authSchema.verification.id, resetCodeId));
+
+        if (verification.length === 0) {
+          app.logger.warn({ resetCodeId }, 'Reset code not found');
+          return reply.code(404).send({
+            error: 'Reset code not found',
+          });
+        }
+
+        const resetRecord = verification[0];
+
+        // Check if code is expired
+        if (new Date() > resetRecord.expiresAt) {
+          app.logger.warn({ resetCodeId }, 'Reset code expired');
+          return reply.code(400).send({
+            error: 'Reset code has expired. Please request a new one.',
+          });
+        }
+
+        // Check if code matches
+        if (resetRecord.value !== code) {
+          app.logger.warn({ resetCodeId }, 'Invalid reset code provided');
+          return reply.code(400).send({
+            error: 'Invalid reset code',
+          });
+        }
+
+        // Verify it's a password reset identifier
+        if (!resetRecord.identifier.startsWith('password-reset:')) {
+          app.logger.warn({ resetCodeId, identifier: resetRecord.identifier }, 'Invalid verification record type');
+          return reply.code(400).send({
+            error: 'Invalid reset code',
+          });
+        }
+
+        // Extract user ID from identifier
+        const userId = resetRecord.identifier.split(':')[1];
+
+        // Find user
+        const users = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.id, userId));
+
+        if (users.length === 0) {
+          app.logger.error({ resetCodeId, userId }, 'User not found for reset code');
+          return reply.code(404).send({
+            error: 'User not found',
+          });
+        }
+
+        const user = users[0];
+
+        // Find or create account for password-based authentication
+        const accounts = await app.db
+          .select()
+          .from(authSchema.account)
+          .where(eq(authSchema.account.userId, userId));
+
+        const passwordHash = hashPassword(newPassword);
+
+        if (accounts.length > 0) {
+          // Update existing password
+          await app.db
+            .update(authSchema.account)
+            .set({
+              password: passwordHash,
+            })
+            .where(eq(authSchema.account.userId, userId));
+
+          app.logger.info({ userId, email: user.email }, 'Password updated');
+        } else {
+          // Create new account with password
+          const accountId = crypto.randomUUID();
+          await app.db
+            .insert(authSchema.account)
+            .values({
+              id: accountId,
+              userId,
+              providerId: 'credential',
+              accountId: user.email,
+              password: passwordHash,
+            });
+
+          app.logger.info({ userId, email: user.email }, 'Password account created');
+        }
+
+        // Delete the used reset code to prevent reuse
+        await app.db
+          .delete(authSchema.verification)
+          .where(eq(authSchema.verification.id, resetCodeId));
+
+        app.logger.info({ userId, email: user.email, resetCodeId }, 'Password reset successful, reset code invalidated');
+
+        return reply.code(200).send({
+          message: 'Password reset successfully',
+          user: {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+          },
+        });
+      } catch (error) {
+        app.logger.error({ err: error, resetCodeId }, 'Password reset error');
+        return reply.code(500).send({
+          error: 'Failed to reset password',
+        });
+      }
+    }
+  );
 }
