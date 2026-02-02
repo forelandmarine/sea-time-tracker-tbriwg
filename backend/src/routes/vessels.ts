@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { eq, inArray, desc } from "drizzle-orm";
+import { eq, inArray, desc, and } from "drizzle-orm";
 import * as schema from "../db/schema.js";
 import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
@@ -336,15 +336,20 @@ export function register(app: App, fastify: FastifyInstance) {
       'Creating new vessel'
     );
 
-    // Check if MMSI already exists for this user
+    // Check if MMSI already exists for THIS USER (allow other users to track the same vessel)
     const existing = await app.db
       .select()
       .from(schema.vessels)
-      .where(eq(schema.vessels.mmsi, mmsi));
+      .where(
+        and(
+          eq(schema.vessels.mmsi, mmsi),
+          eq(schema.vessels.user_id, userId)
+        )
+      );
 
     if (existing.length > 0) {
-      app.logger.warn({ mmsi }, 'MMSI already exists');
-      return reply.code(409).send({ error: 'MMSI already exists' });
+      app.logger.warn({ userId, mmsi }, 'MMSI already exists for this user');
+      return reply.code(409).send({ error: 'You already have a vessel with this MMSI. Each user can only track each MMSI once.' });
     }
 
     // If creating as active, deactivate all others and delete their scheduled tasks
