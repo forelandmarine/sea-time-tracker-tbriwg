@@ -171,6 +171,11 @@ function createStyles(isDark: boolean) {
       fontSize: 16,
       fontWeight: '600',
     },
+    sectionDivider: {
+      height: 1,
+      backgroundColor: isDark ? '#444' : '#ddd',
+      marginVertical: 30,
+    },
   });
 }
 
@@ -180,6 +185,7 @@ export default function AdminUpdateSubscriptionScreen() {
   const styles = createStyles(isDark);
   const router = useRouter();
 
+  // Subscription management state
   const [email, setEmail] = useState('dan@forelandmarine.com');
   const [subscriptionStatus, setSubscriptionStatus] = useState<'active' | 'inactive'>('active');
   const [loading, setLoading] = useState(false);
@@ -192,6 +198,23 @@ export default function AdminUpdateSubscriptionScreen() {
     };
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  
+  // Role management state
+  const [roleEmail, setRoleEmail] = useState('jack@forelandmarine.com');
+  const [userRole, setUserRole] = useState<'user' | 'admin'>('admin');
+  const [roleLoading, setRoleLoading] = useState(false);
+  const [roleResult, setRoleResult] = useState<{
+    success: boolean;
+    user: {
+      id: string;
+      email: string;
+      name: string;
+      role: string;
+    };
+  } | null>(null);
+  const [roleError, setRoleError] = useState<string | null>(null);
+  
+  // Modal state
   const [showModal, setShowModal] = useState(false);
   const [modalTitle, setModalTitle] = useState('');
   const [modalMessage, setModalMessage] = useState('');
@@ -245,11 +268,52 @@ export default function AdminUpdateSubscriptionScreen() {
     }
   };
 
+  const handleUpdateRole = async () => {
+    console.log('[AdminUpdateSubscription] User tapped Update Role button', {
+      email: roleEmail,
+      role: userRole,
+    });
+
+    if (!roleEmail) {
+      showModalMessage('Error', 'Please enter a user email', 'error');
+      return;
+    }
+
+    setRoleLoading(true);
+    setRoleResult(null);
+    setRoleError(null);
+
+    try {
+      console.log('[AdminUpdateSubscription] Calling POST /api/admin/set-user-role');
+
+      const response = await authenticatedPost('/api/admin/set-user-role', {
+        email: roleEmail,
+        role: userRole,
+      });
+
+      console.log('[AdminUpdateSubscription] Role update response:', response);
+
+      setRoleResult(response);
+
+      const successMessage = `Successfully updated role for ${response.user.email} to ${response.user.role}`;
+      showModalMessage('Success', successMessage, 'success');
+
+      console.log(successMessage);
+    } catch (err: any) {
+      console.error('[AdminUpdateSubscription] Error updating role:', err);
+      const errorMessage = err.message || 'Failed to update role';
+      setRoleError(errorMessage);
+      showModalMessage('Error', errorMessage, 'error');
+    } finally {
+      setRoleLoading(false);
+    }
+  };
+
   return (
     <>
       <Stack.Screen
         options={{
-          title: 'Update User Subscription',
+          title: 'Admin User Management',
           headerShown: true,
           headerBackTitle: 'Back',
         }}
@@ -343,6 +407,98 @@ export default function AdminUpdateSubscriptionScreen() {
             <View style={styles.errorBox}>
               <Text style={styles.errorTitle}>❌ Error</Text>
               <Text style={styles.errorText}>{error}</Text>
+            </View>
+          )}
+
+          {/* Section Divider */}
+          <View style={styles.sectionDivider} />
+
+          {/* Role Management Section */}
+          <Text style={styles.title}>Update User Role</Text>
+
+          <Text style={styles.description}>
+            Set user roles to control admin access. Admin users can access admin tools and manage other users.
+          </Text>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>User Email</Text>
+            <TextInput
+              style={styles.input}
+              value={roleEmail}
+              onChangeText={setRoleEmail}
+              placeholder="Enter user email"
+              placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>User Role</Text>
+            <View style={styles.statusButtonGroup}>
+              <TouchableOpacity
+                style={[
+                  styles.statusButton,
+                  userRole === 'user' && styles.statusButtonSelected,
+                ]}
+                onPress={() => setUserRole('user')}
+              >
+                <Text
+                  style={[
+                    styles.statusButtonText,
+                    userRole === 'user' && styles.statusButtonTextSelected,
+                  ]}
+                >
+                  👤 User
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.statusButton,
+                  userRole === 'admin' && styles.statusButtonSelected,
+                ]}
+                onPress={() => setUserRole('admin')}
+              >
+                <Text
+                  style={[
+                    styles.statusButtonText,
+                    userRole === 'admin' && styles.statusButtonTextSelected,
+                  ]}
+                >
+                  🔑 Admin
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[styles.button, roleLoading && styles.buttonDisabled]}
+            onPress={handleUpdateRole}
+            disabled={roleLoading}
+          >
+            {roleLoading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.buttonText}>Update Role</Text>
+            )}
+          </TouchableOpacity>
+
+          {roleResult && (
+            <View style={styles.resultBox}>
+              <Text style={styles.resultTitle}>✅ Success</Text>
+              <Text style={styles.resultText}>User ID: {roleResult.user.id}</Text>
+              <Text style={styles.resultText}>Email: {roleResult.user.email}</Text>
+              <Text style={styles.resultText}>Name: {roleResult.user.name}</Text>
+              <Text style={styles.resultText}>Role: {roleResult.user.role}</Text>
+            </View>
+          )}
+
+          {roleError && (
+            <View style={styles.errorBox}>
+              <Text style={styles.errorTitle}>❌ Error</Text>
+              <Text style={styles.errorText}>{roleError}</Text>
             </View>
           )}
         </View>
