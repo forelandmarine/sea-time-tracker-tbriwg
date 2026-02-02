@@ -44,6 +44,7 @@ interface SeaTimeSummary {
   entries_by_vessel: {
     vessel_name: string;
     total_hours: number;
+    total_days?: number;
   }[];
   entries_by_month: {
     month: string;
@@ -52,6 +53,7 @@ interface SeaTimeSummary {
   entries_by_service_type?: {
     service_type: string;
     total_hours: number;
+    total_days?: number;
   }[];
 }
 
@@ -69,44 +71,6 @@ interface Vessel {
   callsign?: string;
 }
 
-interface SeaDayDefinition {
-  title: string;
-  description: string;
-  department: 'deck' | 'engineering' | 'both';
-}
-
-const SEA_DAY_DEFINITIONS: SeaDayDefinition[] = [
-  {
-    title: 'What is a Sea Day?',
-    description: 'A sea day is a period of at least 4 hours spent at sea on a qualifying vessel.',
-    department: 'both',
-  },
-  {
-    title: 'Deck Department',
-    description: 'For deck officers, sea days must be spent performing watchkeeping or other navigational duties.',
-    department: 'deck',
-  },
-  {
-    title: 'Engineering Department',
-    description: 'For engineering officers, sea days must be spent performing watchkeeping or other engineering duties.',
-    department: 'engineering',
-  },
-  {
-    title: 'MCA Requirements',
-    description: 'The Maritime and Coastguard Agency (MCA) requires specific amounts of sea time for different certificates of competency.',
-    department: 'both',
-  },
-];
-
-const ALL_SERVICE_TYPES = [
-  'watchkeeping',
-  'cargo_operations',
-  'maintenance',
-  'training',
-  'standby',
-  'other',
-];
-
 function createStyles(isDark: boolean, topInset: number) {
   return StyleSheet.create({
     container: {
@@ -118,52 +82,18 @@ function createStyles(isDark: boolean, topInset: number) {
       paddingTop: topInset + 16,
       paddingBottom: 100,
     },
-    profileHeader: {
-      alignItems: 'center',
+    header: {
       marginBottom: 24,
-      paddingTop: 16,
     },
-    avatarContainer: {
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 12,
-      overflow: 'hidden',
-    },
-    avatar: {
-      width: 100,
-      height: 100,
-    },
-    avatarText: {
-      fontSize: 36,
-      fontWeight: 'bold',
-      color: '#FFFFFF',
-    },
-    profileName: {
-      fontSize: 24,
+    headerTitle: {
+      fontSize: 32,
       fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
       marginBottom: 4,
     },
-    profileEmail: {
+    headerSubtitle: {
       fontSize: 16,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 8,
-    },
-    departmentBadge: {
-      backgroundColor: colors.primary,
-      paddingHorizontal: 16,
-      paddingVertical: 6,
-      borderRadius: 16,
-    },
-    departmentText: {
-      color: '#FFFFFF',
-      fontSize: 14,
-      fontWeight: '600',
-      textTransform: 'capitalize',
     },
     card: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
@@ -177,30 +107,32 @@ function createStyles(isDark: boolean, topInset: number) {
       color: isDark ? colors.text : colors.textLight,
       marginBottom: 12,
     },
-    summaryRow: {
+    totalDaysCard: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 12,
+      padding: 20,
+      marginBottom: 16,
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
-    summaryRowLast: {
-      borderBottomWidth: 0,
-    },
-    summaryLabel: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-    },
-    summaryValue: {
+    totalDaysLabel: {
       fontSize: 18,
       fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
+    },
+    totalDaysValue: {
+      fontSize: 32,
+      fontWeight: 'bold',
+      color: colors.primary,
     },
     vesselItem: {
       paddingVertical: 12,
       borderBottomWidth: 1,
       borderBottomColor: isDark ? colors.border : colors.borderLight,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
     },
     vesselItemLast: {
       borderBottomWidth: 0,
@@ -209,37 +141,50 @@ function createStyles(isDark: boolean, topInset: number) {
       fontSize: 16,
       fontWeight: '500',
       color: isDark ? colors.text : colors.textLight,
-      marginBottom: 4,
     },
-    vesselDetails: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-    },
-    button: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 12,
-    },
-    buttonSecondary: {
-      backgroundColor: 'transparent',
-      borderWidth: 2,
-      borderColor: isDark ? colors.border : colors.borderLight,
-    },
-    buttonText: {
-      color: '#FFFFFF',
+    vesselDays: {
       fontSize: 16,
       fontWeight: '600',
-      marginLeft: 8,
+      color: colors.primary,
     },
-    buttonTextSecondary: {
+    serviceTypeItem: {
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+    },
+    serviceTypeItemLast: {
+      borderBottomWidth: 0,
+    },
+    serviceTypeLabel: {
+      fontSize: 16,
       color: isDark ? colors.text : colors.textLight,
     },
-    signOutButton: {
-      backgroundColor: colors.error,
+    serviceTypeValue: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    infoCard: {
+      backgroundColor: isDark ? '#1a2332' : '#e3f2fd',
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 16,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+    },
+    infoTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 8,
+    },
+    infoText: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      lineHeight: 20,
     },
     loadingContainer: {
       flex: 1,
@@ -251,54 +196,7 @@ function createStyles(isDark: boolean, topInset: number) {
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
       fontStyle: 'italic',
-    },
-    modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 20,
-    },
-    modalContent: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 16,
-      padding: 24,
-      width: '100%',
-      maxWidth: 400,
-      maxHeight: '80%',
-    },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: 'bold',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 16,
-    },
-    modalSection: {
-      marginBottom: 20,
-    },
-    modalSectionTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 8,
-    },
-    modalText: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      lineHeight: 20,
-      marginBottom: 8,
-    },
-    modalCloseButton: {
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      padding: 14,
-      alignItems: 'center',
-      marginTop: 8,
-    },
-    modalCloseButtonText: {
-      color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '600',
+      paddingVertical: 20,
     },
   });
 }
@@ -311,8 +209,6 @@ export default function ProfileScreen() {
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showSeaDayModal, setShowSeaDayModal] = useState(false);
-  const [selectedVesselName, setSelectedVesselName] = useState<string | null>(null);
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -391,41 +287,6 @@ export default function ProfileScreen() {
     setRefreshing(false);
   }, [loadProfile, loadSummary, loadVessels]);
 
-  const handleEditProfile = () => {
-    console.log('[Profile] User tapped Edit Profile button');
-    router.push('/user-profile');
-  };
-
-  const handleScheduledTasks = () => {
-    console.log('[Profile] User tapped Scheduled Tasks button');
-    router.push('/scheduled-tasks');
-  };
-
-  const handleSupport = async () => {
-    console.log('[Profile] User tapped Support button');
-    const email = 'support@forelandmarine.com';
-    const subject = 'SeaTime Tracker Support Request';
-    const url = `mailto:${email}?subject=${encodeURIComponent(subject)}`;
-    
-    const canOpen = await Linking.canOpenURL(url);
-    if (canOpen) {
-      await Linking.openURL(url);
-    } else {
-      Alert.alert('Support', `Please email us at ${email}`);
-    }
-  };
-
-  const handleVesselPress = (vesselName: string) => {
-    console.log('[Profile] User tapped vessel:', vesselName);
-    setSelectedVesselName(vesselName);
-    setShowSeaDayModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setShowSeaDayModal(false);
-    setSelectedVesselName(null);
-  };
-
   const formatServiceType = (serviceType: string): string => {
     return serviceType
       .split('_')
@@ -433,76 +294,8 @@ export default function ProfileScreen() {
       .join(' ');
   };
 
-  const getAllServiceTypesWithHours = () => {
-    const serviceTypeMap = new Map<string, number>();
-    
-    ALL_SERVICE_TYPES.forEach(type => {
-      serviceTypeMap.set(type, 0);
-    });
-    
-    if (summary?.entries_by_service_type) {
-      summary.entries_by_service_type.forEach(entry => {
-        serviceTypeMap.set(entry.service_type, entry.total_hours);
-      });
-    }
-    
-    return Array.from(serviceTypeMap.entries()).map(([service_type, total_hours]) => ({
-      service_type,
-      total_hours,
-    }));
-  };
-
-  const handleDownloadPDF = async () => {
-    try {
-      console.log('[Profile] User tapped Download PDF button');
-      Alert.alert('Download PDF', 'PDF report generation is coming soon!');
-    } catch (error: any) {
-      console.error('[Profile] Error downloading PDF:', error);
-      Alert.alert('Error', 'Failed to download PDF report');
-    }
-  };
-
-  const handleDownloadCSV = async () => {
-    try {
-      console.log('[Profile] User tapped Download CSV button');
-      Alert.alert('Download CSV', 'CSV report generation is coming soon!');
-    } catch (error: any) {
-      console.error('[Profile] Error downloading CSV:', error);
-      Alert.alert('Error', 'Failed to download CSV report');
-    }
-  };
-
-  const handleSignOut = () => {
-    console.log('[Profile] User tapped Sign Out button');
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('[Profile] User confirmed sign out');
-              await signOut();
-              router.replace('/auth');
-            } catch (error: any) {
-              console.error('[Profile] Sign out error:', error);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const getInitials = (name: string | null | undefined): string => {
-    if (!name) return '?';
-    const parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
+  const convertHoursToDays = (hours: number): number => {
+    return Math.floor(hours / 4);
   };
 
   const styles = createStyles(isDark, insets.top);
@@ -515,192 +308,89 @@ export default function ProfileScreen() {
     );
   }
 
-  const totalHoursText = summary?.total_hours?.toFixed(1) || '0.0';
-  const totalDaysText = summary?.total_days?.toFixed(1) || '0.0';
-  const vesselCountText = vessels.length.toString();
-  const activeVesselCountText = vessels.filter(v => v.is_active).length.toString();
+  const totalDays = summary?.total_days || 0;
+  const totalDaysText = Math.floor(totalDays).toString();
 
-  const userDepartment = profile?.department || 'both';
-  const filteredDefinitions = SEA_DAY_DEFINITIONS.filter(
-    def => def.department === 'both' || def.department === userDepartment
-  );
-
-  const allServiceTypes = getAllServiceTypesWithHours();
+  const vesselsBySeaTime = summary?.entries_by_vessel || [];
+  const serviceTypesBySeaTime = summary?.entries_by_service_type || [];
 
   return (
-    <>
-      <ScrollView 
-        style={styles.container} 
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
-        }
-      >
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarContainer}>
-            {profile?.image || profile?.imageUrl ? (
-              <Image
-                source={{ uri: profile.image || profile.imageUrl || undefined }}
-                style={styles.avatar}
-              />
-            ) : (
-              <Text style={styles.avatarText}>{getInitials(profile?.name)}</Text>
-            )}
-          </View>
-          <Text style={styles.profileName}>{profile?.name || 'User'}</Text>
-          <Text style={styles.profileEmail}>{profile?.email || user?.email || ''}</Text>
-          {profile?.department && (
-            <View style={styles.departmentBadge}>
-              <Text style={styles.departmentText}>{profile.department}</Text>
-            </View>
-          )}
-        </View>
+    <ScrollView 
+      style={styles.container} 
+      contentContainerStyle={styles.scrollContent}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+      }
+    >
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Profile</Text>
+        <Text style={styles.headerSubtitle}>Your Sea Time Profile &amp; Reports</Text>
+      </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Sea Time Summary</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Hours</Text>
-            <Text style={styles.summaryValue}>{totalHoursText}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Days</Text>
-            <Text style={styles.summaryValue}>{totalDaysText}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Vessels</Text>
-            <Text style={styles.summaryValue}>{vesselCountText}</Text>
-          </View>
-          <View style={[styles.summaryRow, styles.summaryRowLast]}>
-            <Text style={styles.summaryLabel}>Active Vessels</Text>
-            <Text style={styles.summaryValue}>{activeVesselCountText}</Text>
-          </View>
-        </View>
+      <View style={styles.totalDaysCard}>
+        <Text style={styles.totalDaysLabel}>Total Days</Text>
+        <Text style={styles.totalDaysValue}>{totalDaysText}</Text>
+      </View>
 
-        {allServiceTypes.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Hours by Service Type</Text>
-            {allServiceTypes.map((entry, index) => {
-              const isLast = index === allServiceTypes.length - 1;
-              const serviceTypeLabel = formatServiceType(entry.service_type);
-              const hoursText = entry.total_hours.toFixed(1);
-              
-              return (
-                <View key={entry.service_type} style={[styles.summaryRow, isLast && styles.summaryRowLast]}>
-                  <Text style={styles.summaryLabel}>{serviceTypeLabel}</Text>
-                  <Text style={styles.summaryValue}>{hoursText}</Text>
-                </View>
-              );
-            })}
-          </View>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Sea Time by Vessel</Text>
+        {vesselsBySeaTime.length > 0 ? (
+          vesselsBySeaTime.map((vessel, index) => {
+            const isLast = index === vesselsBySeaTime.length - 1;
+            const vesselName = vessel.vessel_name;
+            const days = vessel.total_days !== undefined 
+              ? Math.floor(vessel.total_days) 
+              : convertHoursToDays(vessel.total_hours);
+            const daysText = `${days} days`;
+            
+            return (
+              <View key={index} style={[styles.vesselItem, isLast && styles.vesselItemLast]}>
+                <Text style={styles.vesselName}>{vesselName}</Text>
+                <Text style={styles.vesselDays}>{daysText}</Text>
+              </View>
+            );
+          })
+        ) : (
+          <Text style={styles.emptyText}>No vessel data available</Text>
         )}
+      </View>
 
-        {vessels.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>My Vessels</Text>
-            {vessels.map((vessel, index) => {
-              const isLast = index === vessels.length - 1;
-              const statusText = vessel.is_active ? 'Active' : 'Inactive';
-              const mmsiText = `MMSI: ${vessel.mmsi}`;
-              
-              return (
-                <TouchableOpacity
-                  key={vessel.id}
-                  style={[styles.vesselItem, isLast && styles.vesselItemLast]}
-                  onPress={() => handleVesselPress(vessel.vessel_name)}
-                >
-                  <Text style={styles.vesselName}>{vessel.vessel_name}</Text>
-                  <Text style={styles.vesselDetails}>{mmsiText}</Text>
-                  <Text style={styles.vesselDetails}>{statusText}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Sea Time by Service Type</Text>
+        {serviceTypesBySeaTime.length > 0 ? (
+          serviceTypesBySeaTime.map((entry, index) => {
+            const isLast = index === serviceTypesBySeaTime.length - 1;
+            const serviceTypeLabel = formatServiceType(entry.service_type);
+            const value = entry.total_days !== undefined 
+              ? Math.floor(entry.total_days) 
+              : convertHoursToDays(entry.total_hours);
+            const valueText = value.toString();
+            
+            return (
+              <View key={entry.service_type} style={[styles.serviceTypeItem, isLast && styles.serviceTypeItemLast]}>
+                <Text style={styles.serviceTypeLabel}>{serviceTypeLabel}</Text>
+                <Text style={styles.serviceTypeValue}>{valueText}</Text>
+              </View>
+            );
+          })
+        ) : (
+          <Text style={styles.emptyText}>No service type data available</Text>
         )}
+      </View>
 
-        <TouchableOpacity style={styles.button} onPress={handleEditProfile}>
-          <IconSymbol
-            ios_icon_name="person.circle"
-            android_material_icon_name="person"
-            size={20}
-            color="#FFFFFF"
-          />
-          <Text style={styles.buttonText}>Edit Profile</Text>
-        </TouchableOpacity>
+      <View style={styles.infoCard}>
+        <Text style={styles.infoTitle}>Engineering Department - Sea Service Definitions (MSN 1904)</Text>
+        <Text style={styles.infoText}>
+          These definitions ensure your sea time records are compliant with MCA regulations for Engineering officers. All data capture in this app follows these standards.
+        </Text>
+      </View>
 
-        <TouchableOpacity style={styles.button} onPress={handleScheduledTasks}>
-          <IconSymbol
-            ios_icon_name="calendar"
-            android_material_icon_name="calendar-today"
-            size={20}
-            color="#FFFFFF"
-          />
-          <Text style={styles.buttonText}>Scheduled Tasks</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.button} onPress={handleDownloadPDF}>
-          <IconSymbol
-            ios_icon_name="doc.fill"
-            android_material_icon_name="description"
-            size={20}
-            color="#FFFFFF"
-          />
-          <Text style={styles.buttonText}>Download PDF Report</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.button} onPress={handleDownloadCSV}>
-          <IconSymbol
-            ios_icon_name="tablecells"
-            android_material_icon_name="insert-drive-file"
-            size={20}
-            color="#FFFFFF"
-          />
-          <Text style={styles.buttonText}>Download CSV Report</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={handleSupport}>
-          <IconSymbol
-            ios_icon_name="envelope"
-            android_material_icon_name="email"
-            size={20}
-            color={isDark ? colors.text : colors.textLight}
-          />
-          <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Contact Support</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.button, styles.signOutButton]} onPress={handleSignOut}>
-          <IconSymbol
-            ios_icon_name="arrow.right.square"
-            android_material_icon_name="exit-to-app"
-            size={20}
-            color="#FFFFFF"
-          />
-          <Text style={styles.buttonText}>Sign Out</Text>
-        </TouchableOpacity>
-      </ScrollView>
-
-      <Modal
-        visible={showSeaDayModal}
-        transparent
-        animationType="slide"
-        onRequestClose={handleCloseModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Sea Day Information</Text>
-            <ScrollView>
-              {filteredDefinitions.map((def, index) => (
-                <View key={index} style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>{def.title}</Text>
-                  <Text style={styles.modalText}>{def.description}</Text>
-                </View>
-              ))}
-            </ScrollView>
-            <TouchableOpacity style={styles.modalCloseButton} onPress={handleCloseModal}>
-              <Text style={styles.modalCloseButtonText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </>
+      <View style={styles.infoCard}>
+        <Text style={styles.infoTitle}>Onboard Yacht Service</Text>
+        <Text style={styles.infoText}>
+          Service on yachts is recognized for MCA certification purposes when properly documented and verified.
+        </Text>
+      </View>
+    </ScrollView>
   );
 }
