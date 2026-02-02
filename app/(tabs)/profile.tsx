@@ -1,561 +1,362 @@
 
-import { useRouter } from 'expo-router';
+import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
-import { 
-  isBiometricAvailable, 
-  getBiometricCredentials, 
-  clearBiometricCredentials,
-  getBiometricType 
-} from '@/utils/biometricAuth';
+import { colors } from '@/styles/commonStyles';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  TextInput,
   Alert,
   useColorScheme,
-  Platform,
-  Image,
-  ActivityIndicator,
+  RefreshControl,
   Modal,
-  Linking,
+  ActivityIndicator,
+  Platform,
 } from 'react-native';
-import * as Sharing from 'expo-sharing';
-import { colors } from '@/styles/commonStyles';
-import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'expo-router';
 import * as seaTimeApi from '@/utils/seaTimeApi';
-import { IconSymbol } from '@/components/IconSymbol';
-import * as FileSystem from 'expo-file-system/legacy';
 
 interface UserProfile {
   id: string;
   name: string;
   email: string;
-  email_verified: boolean;
   emailVerified: boolean;
   image: string | null;
   imageUrl: string | null;
-  created_at: string;
+  address: string | null;
+  tel_no: string | null;
+  date_of_birth: string | null;
+  srb_no: string | null;
+  nationality: string | null;
+  pya_membership_no: string | null;
+  department: 'deck' | 'engineering' | null;
   createdAt: string;
   updatedAt: string;
-  department?: string | null;
 }
 
 interface SeaTimeSummary {
   total_hours: number;
   total_days: number;
-  entries_by_vessel: {
+  entries_by_vessel: Array<{
     vessel_name: string;
     total_hours: number;
-  }[];
-  entries_by_month: {
+  }>;
+  entries_by_month: Array<{
     month: string;
     total_hours: number;
-  }[];
-  entries_by_service_type?: {
+  }>;
+  entries_by_service_type: Array<{
     service_type: string;
     total_hours: number;
-  }[];
+  }>;
 }
-
-interface Vessel {
-  id: string;
-  mmsi: string;
-  vessel_name: string;
-  is_active: boolean;
-  created_at: string;
-  flag?: string;
-  official_number?: string;
-  vessel_type?: string;
-  length_metres?: number;
-  gross_tonnes?: number;
-  callsign?: string;
-}
-
-interface SeaDayDefinition {
-  title: string;
-  description: string;
-  department: 'deck' | 'engineering' | 'both';
-}
-
-const SEA_DAY_DEFINITIONS: SeaDayDefinition[] = [
-  {
-    title: 'What is a Sea Day?',
-    description: 'A sea day is a period of at least 4 hours spent at sea on a qualifying vessel.',
-    department: 'both',
-  },
-  {
-    title: 'Deck Department',
-    description: 'For deck officers, sea days must be spent performing watchkeeping or other navigational duties.',
-    department: 'deck',
-  },
-  {
-    title: 'Engineering Department',
-    description: 'For engineering officers, sea days must be spent performing watchkeeping or other engineering duties.',
-    department: 'engineering',
-  },
-  {
-    title: 'MCA Requirements',
-    description: 'The Maritime and Coastguard Agency (MCA) requires specific amounts of sea time for different certificates of competency.',
-    department: 'both',
-  },
-];
-
-const ALL_SERVICE_TYPES = [
-  'watchkeeping',
-  'cargo_operations',
-  'maintenance',
-  'training',
-  'standby',
-  'other',
-];
 
 function createStyles(isDark: boolean) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
     },
-    scrollContent: {
-      padding: 16,
-      paddingBottom: 100,
+    content: {
+      padding: 20,
     },
-    profileHeader: {
-      alignItems: 'center',
-      marginBottom: 24,
-      paddingTop: 16,
+    header: {
+      marginBottom: 30,
     },
-    avatarContainer: {
-      width: 100,
-      height: 100,
-      borderRadius: 50,
-      backgroundColor: colors.primary,
-      alignItems: 'center',
-      justifyContent: 'center',
-      marginBottom: 12,
-      overflow: 'hidden',
-    },
-    avatar: {
-      width: 100,
-      height: 100,
-    },
-    avatarText: {
-      fontSize: 36,
+    title: {
+      fontSize: 32,
       fontWeight: 'bold',
-      color: '#FFFFFF',
-    },
-    profileName: {
-      fontSize: 24,
-      fontWeight: 'bold',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 4,
-    },
-    profileEmail: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      color: isDark ? colors.textDark : colors.textLight,
       marginBottom: 8,
     },
-    departmentBadge: {
-      backgroundColor: colors.primary,
-      paddingHorizontal: 16,
-      paddingVertical: 6,
-      borderRadius: 16,
+    subtitle: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
     },
-    departmentText: {
-      color: '#FFFFFF',
-      fontSize: 14,
+    section: {
+      marginBottom: 30,
+    },
+    sectionTitle: {
+      fontSize: 20,
       fontWeight: '600',
-      textTransform: 'capitalize',
-    },
-    card: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 12,
-      padding: 16,
+      color: isDark ? colors.textDark : colors.textLight,
       marginBottom: 16,
     },
-    cardTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
+    card: {
+      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      borderRadius: 12,
+      padding: 16,
       marginBottom: 12,
     },
-    summaryRow: {
+    row: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      paddingVertical: 8,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.border : colors.borderLight,
+      marginBottom: 12,
     },
-    summaryRowLast: {
-      borderBottomWidth: 0,
+    label: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
     },
-    summaryLabel: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-    },
-    summaryValue: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-    },
-    vesselItem: {
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.border : colors.borderLight,
-    },
-    vesselItemLast: {
-      borderBottomWidth: 0,
-    },
-    vesselName: {
+    value: {
       fontSize: 16,
       fontWeight: '500',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 4,
-    },
-    vesselDetails: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      color: isDark ? colors.textDark : colors.textLight,
     },
     button: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
       backgroundColor: colors.primary,
       borderRadius: 12,
       padding: 16,
+      alignItems: 'center',
       marginBottom: 12,
     },
     buttonSecondary: {
-      backgroundColor: 'transparent',
-      borderWidth: 2,
-      borderColor: isDark ? colors.border : colors.borderLight,
+      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      borderWidth: 1,
+      borderColor: colors.primary,
     },
     buttonText: {
       color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '600',
-      marginLeft: 8,
     },
     buttonTextSecondary: {
-      color: isDark ? colors.text : colors.textLight,
+      color: colors.primary,
     },
-    signOutButton: {
-      backgroundColor: colors.error,
-    },
-    loadingContainer: {
-      flex: 1,
-      justifyContent: 'center',
+    statCard: {
+      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      borderRadius: 12,
+      padding: 20,
+      marginBottom: 12,
       alignItems: 'center',
     },
-    emptyText: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      textAlign: 'center',
-      fontStyle: 'italic',
+    statValue: {
+      fontSize: 36,
+      fontWeight: 'bold',
+      color: colors.primary,
+      marginBottom: 4,
+    },
+    statLabel: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
     },
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'center',
       alignItems: 'center',
-      padding: 20,
     },
     modalContent: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
       borderRadius: 16,
       padding: 24,
-      width: '100%',
+      width: '90%',
       maxWidth: 400,
-      maxHeight: '80%',
     },
     modalTitle: {
       fontSize: 20,
       fontWeight: 'bold',
-      color: isDark ? colors.text : colors.textLight,
+      color: isDark ? colors.textDark : colors.textLight,
       marginBottom: 16,
     },
-    modalSection: {
-      marginBottom: 20,
-    },
-    modalSectionTitle: {
+    input: {
+      backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+      borderRadius: 8,
+      padding: 12,
+      marginBottom: 12,
+      color: isDark ? colors.textDark : colors.textLight,
       fontSize: 16,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 8,
     },
-    modalText: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      lineHeight: 20,
-      marginBottom: 8,
-    },
-    modalCloseButton: {
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      padding: 14,
-      alignItems: 'center',
-      marginTop: 8,
-    },
-    modalCloseButtonText: {
-      color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    biometricStatusRow: {
+    modalButtons: {
       flexDirection: 'row',
+      justifyContent: 'space-between',
+      marginTop: 16,
+    },
+    modalButton: {
+      flex: 1,
+      padding: 12,
+      borderRadius: 8,
+      alignItems: 'center',
+      marginHorizontal: 6,
+    },
+    modalButtonCancel: {
+      backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+    },
+    modalButtonConfirm: {
+      backgroundColor: colors.primary,
+    },
+    modalButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    modalButtonTextCancel: {
+      color: isDark ? colors.textDark : colors.textLight,
+    },
+    modalButtonTextConfirm: {
+      color: '#FFFFFF',
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+    },
+    adminSection: {
+      marginTop: 20,
+      paddingTop: 20,
+      borderTopWidth: 1,
+      borderTopColor: isDark ? colors.cardDark : colors.cardLight,
+    },
+    adminButton: {
+      backgroundColor: isDark ? '#3a2a1a' : '#fff3cd',
+      borderRadius: 12,
+      padding: 16,
       alignItems: 'center',
       marginBottom: 12,
+      borderWidth: 1,
+      borderColor: isDark ? '#6a4a2a' : '#ffc107',
     },
-    biometricStatusText: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginLeft: 8,
+    adminButtonText: {
+      color: isDark ? '#ffc107' : '#856404',
+      fontSize: 16,
+      fontWeight: '600',
     },
   });
 }
 
 export default function ProfileScreen() {
-  const { user, signOut } = useAuth();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [summary, setSummary] = useState<SeaTimeSummary | null>(null);
-  const [vessels, setVessels] = useState<Vessel[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showSeaDayModal, setShowSeaDayModal] = useState(false);
-  const [selectedVesselName, setSelectedVesselName] = useState<string | null>(null);
-  const [biometricAvailable, setBiometricAvailable] = useState(false);
-  const [biometricEnabled, setBiometricEnabled] = useState(false);
-  const [biometricType, setBiometricType] = useState<string>('');
-  const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
+  const styles = createStyles(isDark);
+  const router = useRouter();
+  const { user, signOut } = useAuth();
 
-  const checkBiometricStatus = useCallback(async () => {
-    const available = await isBiometricAvailable();
-    setBiometricAvailable(available);
-    
-    if (available) {
-      const credentials = await getBiometricCredentials();
-      setBiometricEnabled(!!credentials);
-      
-      const type = await getBiometricType();
-      setBiometricType(type);
-    }
-  }, []);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [summary, setSummary] = useState<SeaTimeSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [signOutModalVisible, setSignOutModalVisible] = useState(false);
+  const [editedProfile, setEditedProfile] = useState<Partial<UserProfile>>({});
 
-  const loadProfile = useCallback(async (retryCount = 0) => {
+  const loadData = useCallback(async () => {
+    console.log('Loading profile data');
     try {
-      console.log('[Profile] Loading user profile');
-      const data = await seaTimeApi.getUserProfile();
-      console.log('[Profile] Profile loaded:', data);
-      setProfile(data);
-    } catch (error: any) {
-      console.error('[Profile] Error loading profile:', error);
-      
-      if (retryCount < 2) {
-        console.log(`[Profile] Retrying profile load (${retryCount + 1}/2)`);
-        setTimeout(() => loadProfile(retryCount + 1), 1000);
-      }
-    }
-  }, []);
-
-  const loadSummary = useCallback(async (retryCount = 0) => {
-    try {
-      console.log('[Profile] Loading sea time summary');
-      const data = await seaTimeApi.getSeaTimeSummary();
-      console.log('[Profile] Summary loaded:', data);
-      setSummary(data);
-    } catch (error: any) {
-      console.error('[Profile] Error loading summary:', error);
-      
-      if (retryCount < 2) {
-        console.log(`[Profile] Retrying summary load (${retryCount + 1}/2)`);
-        setTimeout(() => loadSummary(retryCount + 1), 1000);
-      }
-    }
-  }, []);
-
-  const loadVessels = useCallback(async (retryCount = 0) => {
-    try {
-      console.log('[Profile] Loading vessels');
-      const data = await seaTimeApi.getVessels();
-      console.log('[Profile] Vessels loaded:', data.length);
-      setVessels(data);
-    } catch (error: any) {
-      console.error('[Profile] Error loading vessels:', error);
-      
-      if (retryCount < 2) {
-        console.log(`[Profile] Retrying vessels load (${retryCount + 1}/2)`);
-        setTimeout(() => loadVessels(retryCount + 1), 1000);
-      }
+      const [profileData, summaryData] = await Promise.all([
+        seaTimeApi.getProfile(),
+        seaTimeApi.getSeaTimeSummary(),
+      ]);
+      console.log('Profile data loaded:', profileData);
+      console.log('Summary data loaded:', summaryData);
+      setProfile(profileData);
+      setSummary(summaryData);
+    } catch (error) {
+      console.error('Error loading profile data:', error);
+      Alert.alert('Error', 'Failed to load profile data');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    console.log('[Profile] Component mounted');
-    checkBiometricStatus();
-    loadProfile();
-    loadSummary();
-    loadVessels();
-  }, [loadProfile, loadSummary, loadVessels, checkBiometricStatus]);
+    loadData();
+  }, [loadData]);
 
-  useEffect(() => {
-    const refreshTrigger = (global as any).__GLOBAL_REFRESH_TRIGGER__;
-    if (refreshTrigger) {
-      console.log('[Profile] Global refresh triggered');
-      loadProfile();
-      loadSummary();
-      loadVessels();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [(global as any).__GLOBAL_REFRESH_TRIGGER__]);
+  const onRefresh = useCallback(() => {
+    console.log('User pulled to refresh profile');
+    setRefreshing(true);
+    loadData();
+  }, [loadData]);
 
-  const handleEditProfile = () => {
-    console.log('[Profile] User tapped Edit Profile button');
-    router.push('/user-profile');
-  };
-
-  const handleScheduledTasks = () => {
-    console.log('[Profile] User tapped Scheduled Tasks button');
-    router.push('/scheduled-tasks');
-  };
-
-  const handleSupport = async () => {
-    console.log('[Profile] User tapped Support button');
-    const email = 'support@forelandmarine.com';
-    const subject = 'SeaTime Tracker Support Request';
-    const url = `mailto:${email}?subject=${encodeURIComponent(subject)}`;
-    
-    const canOpen = await Linking.canOpenURL(url);
-    if (canOpen) {
-      await Linking.openURL(url);
-    } else {
-      Alert.alert('Support', `Please email us at ${email}`);
-    }
-  };
-
-  const handleVesselPress = (vesselName: string) => {
-    console.log('[Profile] User tapped vessel:', vesselName);
-    setSelectedVesselName(vesselName);
-    setShowSeaDayModal(true);
-  };
-
-  const handleCloseModal = () => {
-    setShowSeaDayModal(false);
-    setSelectedVesselName(null);
-  };
-
-  const formatServiceType = (serviceType: string): string => {
-    return serviceType
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
-  };
-
-  const getAllServiceTypesWithHours = () => {
-    const serviceTypeMap = new Map<string, number>();
-    
-    ALL_SERVICE_TYPES.forEach(type => {
-      serviceTypeMap.set(type, 0);
-    });
-    
-    if (summary?.entries_by_service_type) {
-      summary.entries_by_service_type.forEach(entry => {
-        serviceTypeMap.set(entry.service_type, entry.total_hours);
+  const handleEditProfile = useCallback(() => {
+    console.log('User tapped Edit Profile button');
+    if (profile) {
+      setEditedProfile({
+        name: profile.name,
+        address: profile.address || '',
+        tel_no: profile.tel_no || '',
+        nationality: profile.nationality || '',
+        pya_membership_no: profile.pya_membership_no || '',
       });
+      setEditModalVisible(true);
     }
-    
-    return Array.from(serviceTypeMap.entries()).map(([service_type, total_hours]) => ({
-      service_type,
-      total_hours,
-    }));
-  };
+  }, [profile]);
 
-  const handleDownloadPDF = async () => {
+  const handleSaveProfile = useCallback(async () => {
+    console.log('User tapped Save Profile button', editedProfile);
     try {
-      console.log('[Profile] User tapped Download PDF button');
-      Alert.alert('Download PDF', 'PDF report generation is coming soon!');
-    } catch (error: any) {
-      console.error('[Profile] Error downloading PDF:', error);
-      Alert.alert('Error', 'Failed to download PDF report');
+      await seaTimeApi.updateProfile(editedProfile);
+      console.log('Profile updated successfully');
+      setEditModalVisible(false);
+      loadData();
+      Alert.alert('Success', 'Profile updated successfully');
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      Alert.alert('Error', 'Failed to update profile');
     }
-  };
+  }, [editedProfile, loadData]);
 
-  const handleDownloadCSV = async () => {
+  const handleSignOut = useCallback(() => {
+    console.log('User tapped Sign Out button');
+    setSignOutModalVisible(true);
+  }, []);
+
+  const confirmSignOut = useCallback(async () => {
+    console.log('User confirmed sign out');
+    setSignOutModalVisible(false);
     try {
-      console.log('[Profile] User tapped Download CSV button');
-      Alert.alert('Download CSV', 'CSV report generation is coming soon!');
-    } catch (error: any) {
-      console.error('[Profile] Error downloading CSV:', error);
-      Alert.alert('Error', 'Failed to download CSV report');
+      await signOut();
+      console.log('User signed out successfully');
+      router.replace('/auth');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      Alert.alert('Error', 'Failed to sign out');
     }
-  };
+  }, [signOut, router]);
 
-  const handleManageBiometric = async () => {
-    try {
-      if (biometricEnabled) {
-        Alert.alert(
-          `Disable ${biometricType}?`,
-          `Are you sure you want to disable ${biometricType} login?`,
-          [
-            { text: 'Cancel', style: 'cancel' },
-            {
-              text: 'Disable',
-              style: 'destructive',
-              onPress: async () => {
-                await clearBiometricCredentials();
-                await checkBiometricStatus();
-                Alert.alert('Success', `${biometricType} login has been disabled`);
-              },
-            },
-          ]
-        );
-      } else {
-        router.push('/auth');
-      }
-    } catch (error: any) {
-      console.error('[Profile] Error managing biometric:', error);
-      Alert.alert('Error', 'Failed to manage biometric authentication');
+  const cancelSignOut = useCallback(() => {
+    console.log('User cancelled sign out');
+    setSignOutModalVisible(false);
+  }, []);
+
+  const handleViewReports = useCallback(() => {
+    console.log('User tapped View Reports button');
+    router.push('/reports');
+  }, [router]);
+
+  const handleNotificationSettings = useCallback(() => {
+    console.log('User tapped Notification Settings button');
+    router.push('/notification-settings');
+  }, [router]);
+
+  const handleActivateSubscriptions = useCallback(() => {
+    console.log('User tapped Activate All Subscriptions button');
+    router.push('/admin-activate-subscriptions');
+  }, [router]);
+
+  const formatDate = useCallback((dateString: string | null) => {
+    if (!dateString) {
+      return 'Not set';
     }
-  };
+    const date = new Date(dateString);
+    const day = date.getDate();
+    const month = date.toLocaleString('default', { month: 'short' });
+    const year = date.getFullYear();
+    return `${day} ${month} ${year}`;
+  }, []);
 
-  const handleSignOut = () => {
-    console.log('[Profile] User tapped Sign Out button');
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('[Profile] User confirmed sign out');
-              await signOut();
-              router.replace('/auth');
-            } catch (error: any) {
-              console.error('[Profile] Sign out error:', error);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const getInitials = (name: string | null | undefined): string => {
-    if (!name) return '?';
-    const parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  const formatDepartment = useCallback((department: string | null) => {
+    if (!department) {
+      return 'Not set';
     }
-    return name.substring(0, 2).toUpperCase();
-  };
-
-  const styles = createStyles(isDark);
+    const departmentText = department.charAt(0).toUpperCase() + department.slice(1);
+    return departmentText;
+  }, []);
 
   if (loading) {
     return (
@@ -565,197 +366,211 @@ export default function ProfileScreen() {
     );
   }
 
-  const totalHoursText = summary?.total_hours?.toFixed(1) || '0.0';
-  const totalDaysText = summary?.total_days?.toFixed(1) || '0.0';
-  const vesselCountText = vessels.length.toString();
-  const activeVesselCountText = vessels.filter(v => v.is_active).length.toString();
-
-  const userDepartment = profile?.department || 'both';
-  const filteredDefinitions = SEA_DAY_DEFINITIONS.filter(
-    def => def.department === 'both' || def.department === userDepartment
-  );
-
-  const allServiceTypes = getAllServiceTypesWithHours();
+  const totalDaysText = summary?.total_days?.toFixed(0) || '0';
+  const totalHoursText = summary?.total_hours?.toFixed(1) || '0';
 
   return (
     <>
-      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.profileHeader}>
-          <View style={styles.avatarContainer}>
-            {profile?.image || profile?.imageUrl ? (
-              <Image
-                source={{ uri: profile.image || profile.imageUrl || undefined }}
-                style={styles.avatar}
-              />
-            ) : (
-              <Text style={styles.avatarText}>{getInitials(profile?.name)}</Text>
-            )}
+      <ScrollView
+        style={styles.container}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
+      >
+        <View style={styles.content}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Profile</Text>
+            <Text style={styles.subtitle}>{profile?.email}</Text>
           </View>
-          <Text style={styles.profileName}>{profile?.name || 'User'}</Text>
-          <Text style={styles.profileEmail}>{profile?.email || user?.email || ''}</Text>
-          {profile?.department && (
-            <View style={styles.departmentBadge}>
-              <Text style={styles.departmentText}>{profile.department}</Text>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sea Time Summary</Text>
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{totalDaysText}</Text>
+              <Text style={styles.statLabel}>Total Sea Days</Text>
             </View>
-          )}
+            <View style={styles.statCard}>
+              <Text style={styles.statValue}>{totalHoursText}</Text>
+              <Text style={styles.statLabel}>Total Hours</Text>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Personal Information</Text>
+            <View style={styles.card}>
+              <View style={styles.row}>
+                <Text style={styles.label}>Name</Text>
+                <Text style={styles.value}>{profile?.name}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Email</Text>
+                <Text style={styles.value}>{profile?.email}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Department</Text>
+                <Text style={styles.value}>{formatDepartment(profile?.department || null)}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Address</Text>
+                <Text style={styles.value}>{profile?.address || 'Not set'}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Phone</Text>
+                <Text style={styles.value}>{profile?.tel_no || 'Not set'}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>Nationality</Text>
+                <Text style={styles.value}>{profile?.nationality || 'Not set'}</Text>
+              </View>
+              <View style={styles.row}>
+                <Text style={styles.label}>PYA Membership</Text>
+                <Text style={styles.value}>{profile?.pya_membership_no || 'Not set'}</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <TouchableOpacity style={styles.button} onPress={handleEditProfile}>
+              <Text style={styles.buttonText}>Edit Profile</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.button} onPress={handleViewReports}>
+              <Text style={styles.buttonText}>View Reports</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.button} onPress={handleNotificationSettings}>
+              <Text style={styles.buttonText}>Notification Settings</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.button, styles.buttonSecondary]}
+              onPress={handleSignOut}
+            >
+              <Text style={[styles.buttonText, styles.buttonTextSecondary]}>
+                Sign Out
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.adminSection}>
+            <Text style={styles.sectionTitle}>Admin Tools</Text>
+            <TouchableOpacity
+              style={styles.adminButton}
+              onPress={handleActivateSubscriptions}
+            >
+              <Text style={styles.adminButtonText}>
+                Activate All Subscriptions (Testing)
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Sea Time Summary</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Hours</Text>
-            <Text style={styles.summaryValue}>{totalHoursText}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Total Days</Text>
-            <Text style={styles.summaryValue}>{totalDaysText}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Vessels</Text>
-            <Text style={styles.summaryValue}>{vesselCountText}</Text>
-          </View>
-          <View style={[styles.summaryRow, styles.summaryRowLast]}>
-            <Text style={styles.summaryLabel}>Active Vessels</Text>
-            <Text style={styles.summaryValue}>{activeVesselCountText}</Text>
-          </View>
-        </View>
-
-        {allServiceTypes.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Hours by Service Type</Text>
-            {allServiceTypes.map((entry, index) => {
-              const isLast = index === allServiceTypes.length - 1;
-              const serviceTypeLabel = formatServiceType(entry.service_type);
-              const hoursText = entry.total_hours.toFixed(1);
-              
-              return (
-                <View key={entry.service_type} style={[styles.summaryRow, isLast && styles.summaryRowLast]}>
-                  <Text style={styles.summaryLabel}>{serviceTypeLabel}</Text>
-                  <Text style={styles.summaryValue}>{hoursText}</Text>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {vessels.length > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>My Vessels</Text>
-            {vessels.map((vessel, index) => {
-              const isLast = index === vessels.length - 1;
-              const statusText = vessel.is_active ? 'Active' : 'Inactive';
-              const mmsiText = `MMSI: ${vessel.mmsi}`;
-              
-              return (
-                <TouchableOpacity
-                  key={vessel.id}
-                  style={[styles.vesselItem, isLast && styles.vesselItemLast]}
-                  onPress={() => handleVesselPress(vessel.vessel_name)}
-                >
-                  <Text style={styles.vesselName}>{vessel.vessel_name}</Text>
-                  <Text style={styles.vesselDetails}>{mmsiText}</Text>
-                  <Text style={styles.vesselDetails}>{statusText}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        )}
-
-        <TouchableOpacity style={styles.button} onPress={handleEditProfile}>
-          <IconSymbol
-            ios_icon_name="person.circle"
-            android_material_icon_name="person"
-            size={20}
-            color="#FFFFFF"
-          />
-          <Text style={styles.buttonText}>Edit Profile</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.button} onPress={handleScheduledTasks}>
-          <IconSymbol
-            ios_icon_name="calendar"
-            android_material_icon_name="calendar-today"
-            size={20}
-            color="#FFFFFF"
-          />
-          <Text style={styles.buttonText}>Scheduled Tasks</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.button} onPress={handleDownloadPDF}>
-          <IconSymbol
-            ios_icon_name="doc.fill"
-            android_material_icon_name="description"
-            size={20}
-            color="#FFFFFF"
-          />
-          <Text style={styles.buttonText}>Download PDF Report</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.button} onPress={handleDownloadCSV}>
-          <IconSymbol
-            ios_icon_name="tablecells"
-            android_material_icon_name="insert-drive-file"
-            size={20}
-            color="#FFFFFF"
-          />
-          <Text style={styles.buttonText}>Download CSV Report</Text>
-        </TouchableOpacity>
-
-        {biometricAvailable && (
-          <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={handleManageBiometric}>
-            <IconSymbol
-              ios_icon_name="faceid"
-              android_material_icon_name="fingerprint"
-              size={20}
-              color={isDark ? colors.text : colors.textLight}
-            />
-            <Text style={[styles.buttonText, styles.buttonTextSecondary]}>
-              {biometricEnabled ? `Disable ${biometricType}` : `Enable ${biometricType}`}
-            </Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity style={[styles.button, styles.buttonSecondary]} onPress={handleSupport}>
-          <IconSymbol
-            ios_icon_name="envelope"
-            android_material_icon_name="email"
-            size={20}
-            color={isDark ? colors.text : colors.textLight}
-          />
-          <Text style={[styles.buttonText, styles.buttonTextSecondary]}>Contact Support</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={[styles.button, styles.signOutButton]} onPress={handleSignOut}>
-          <IconSymbol
-            ios_icon_name="arrow.right.square"
-            android_material_icon_name="exit-to-app"
-            size={20}
-            color="#FFFFFF"
-          />
-          <Text style={styles.buttonText}>Sign Out</Text>
-        </TouchableOpacity>
       </ScrollView>
 
       <Modal
-        visible={showSeaDayModal}
+        visible={editModalVisible}
         transparent
-        animationType="slide"
-        onRequestClose={handleCloseModal}
+        animationType="fade"
+        onRequestClose={() => setEditModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Sea Day Information</Text>
-            <ScrollView>
-              {filteredDefinitions.map((def, index) => (
-                <View key={index} style={styles.modalSection}>
-                  <Text style={styles.modalSectionTitle}>{def.title}</Text>
-                  <Text style={styles.modalText}>{def.description}</Text>
-                </View>
-              ))}
-            </ScrollView>
-            <TouchableOpacity style={styles.modalCloseButton} onPress={handleCloseModal}>
-              <Text style={styles.modalCloseButtonText}>Close</Text>
-            </TouchableOpacity>
+            <Text style={styles.modalTitle}>Edit Profile</Text>
+
+            <TextInput
+              style={styles.input}
+              placeholder="Name"
+              placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+              value={editedProfile.name}
+              onChangeText={(text) => setEditedProfile({ ...editedProfile, name: text })}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Address"
+              placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+              value={editedProfile.address}
+              onChangeText={(text) => setEditedProfile({ ...editedProfile, address: text })}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Phone"
+              placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+              value={editedProfile.tel_no}
+              onChangeText={(text) => setEditedProfile({ ...editedProfile, tel_no: text })}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="Nationality"
+              placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+              value={editedProfile.nationality}
+              onChangeText={(text) => setEditedProfile({ ...editedProfile, nationality: text })}
+            />
+
+            <TextInput
+              style={styles.input}
+              placeholder="PYA Membership No"
+              placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+              value={editedProfile.pya_membership_no}
+              onChangeText={(text) => setEditedProfile({ ...editedProfile, pya_membership_no: text })}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setEditModalVisible(false)}
+              >
+                <Text style={[styles.modalButtonText, styles.modalButtonTextCancel]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={handleSaveProfile}
+              >
+                <Text style={[styles.modalButtonText, styles.modalButtonTextConfirm]}>
+                  Save
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={signOutModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelSignOut}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Sign Out</Text>
+            <Text style={styles.subtitle}>
+              Are you sure you want to sign out?
+            </Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={cancelSignOut}
+              >
+                <Text style={[styles.modalButtonText, styles.modalButtonTextCancel]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={confirmSignOut}
+              >
+                <Text style={[styles.modalButtonText, styles.modalButtonTextConfirm]}>
+                  Sign Out
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
