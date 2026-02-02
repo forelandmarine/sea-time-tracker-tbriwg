@@ -92,7 +92,7 @@ app.fastify.addHook('onReady', async () => {
     const vessels = await app.db.select().from(appSchema.vessels);
     app.logger.info({ vesselCount: vessels.length }, 'Database connection verified');
 
-    // Update jack@forelandmarine.com's subscription to active
+    // Update jack@forelandmarine.com's subscription to active and set role to admin
     const jackEmail = 'jack@forelandmarine.com';
     try {
       const jackUsers = await app.db
@@ -105,14 +105,15 @@ app.fastify.addHook('onReady', async () => {
           .update(authSchema.user)
           .set({
             subscription_status: 'active',
+            role: 'admin',
             updatedAt: new Date(),
           })
           .where(eq(authSchema.user.id, jackUsers[0].id));
 
-        app.logger.info({ email: jackEmail }, 'Ensured jack@forelandmarine.com has active subscription');
+        app.logger.info({ email: jackEmail }, 'Ensured jack@forelandmarine.com has active subscription and admin role');
       }
     } catch (jackError) {
-      app.logger.debug({ err: jackError, email: jackEmail }, 'Could not update jack@forelandmarine.com subscription (user may not exist yet)');
+      app.logger.debug({ err: jackError, email: jackEmail }, 'Could not update jack@forelandmarine.com (user may not exist yet)');
     }
 
     // Update test@seatime.com's subscription to active with 1-year expiration

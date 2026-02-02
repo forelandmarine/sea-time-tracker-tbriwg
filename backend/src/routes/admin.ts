@@ -2667,4 +2667,101 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     }
   );
+
+  // POST /api/admin/set-user-role - Set user role (admin/user)
+  fastify.post<{
+    Body: {
+      email: string;
+      role: 'user' | 'admin';
+    };
+  }>(
+    '/api/admin/set-user-role',
+    {
+      schema: {
+        description: 'Set user role (admin endpoint)',
+        tags: ['admin'],
+        body: {
+          type: 'object',
+          required: ['email', 'role'],
+          properties: {
+            email: { type: 'string', format: 'email', description: 'User email' },
+            role: { type: 'string', enum: ['user', 'admin'], description: 'Role to assign' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  email: { type: 'string' },
+                  name: { type: 'string' },
+                  role: { type: 'string' },
+                },
+              },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { email, role } = request.body;
+
+      app.logger.info({ email, role }, 'Setting user role');
+
+      try {
+        // Validate role
+        if (!['user', 'admin'].includes(role)) {
+          app.logger.warn({ email, role }, 'Invalid role value');
+          return reply.code(400).send({ error: 'Invalid role. Must be "user" or "admin".' });
+        }
+
+        // Find user by email
+        const users = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email));
+
+        if (users.length === 0) {
+          app.logger.warn({ email }, 'User not found for role update');
+          return reply.code(400).send({ error: 'User not found' });
+        }
+
+        const user = users[0];
+
+        // Update user role
+        const [updatedUser] = await app.db
+          .update(authSchema.user)
+          .set({
+            role,
+            updatedAt: new Date(),
+          })
+          .where(eq(authSchema.user.id, user.id))
+          .returning();
+
+        app.logger.info(
+          { userId: user.id, email, role },
+          'User role updated successfully'
+        );
+
+        return reply.code(200).send({
+          success: true,
+          user: {
+            id: updatedUser.id,
+            email: updatedUser.email,
+            name: updatedUser.name,
+            role: updatedUser.role,
+          },
+        });
+      } catch (error) {
+        app.logger.error({ err: error, email, role }, 'Error updating user role');
+        return reply.code(500).send({ error: 'Failed to update user role' });
+      }
+    }
+  );
 }

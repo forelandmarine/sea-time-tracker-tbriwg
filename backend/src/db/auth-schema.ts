@@ -16,6 +16,7 @@ export const user = pgTable("user", {
   subscription_status: text("subscription_status").default("inactive"), // 'active', 'inactive', or 'trial'
   subscription_expires_at: timestamp("subscription_expires_at", { withTimezone: true }), // When subscription expires
   subscription_product_id: text("subscription_product_id"), // iOS App Store product ID
+  role: text("role").default("user"), // User role: 'user' or 'admin'
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
