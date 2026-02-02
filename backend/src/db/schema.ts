@@ -1,10 +1,10 @@
-import { pgTable, text, timestamp, uuid, boolean, decimal, index, integer } from 'drizzle-orm/pg-core';
+import { pgTable, text, timestamp, uuid, boolean, decimal, index, integer, uniqueIndex } from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 export const vessels = pgTable('vessels', {
   id: uuid('id').primaryKey().defaultRandom(),
   user_id: text('user_id'), // User ownership - required for data sandboxing (nullable for backward compatibility with existing data)
-  mmsi: text('mmsi').notNull().unique(),
+  mmsi: text('mmsi').notNull(), // Removed global unique constraint to allow multiple users to track the same MMSI
   vessel_name: text('vessel_name').notNull(),
   callsign: text('callsign'), // Radio callsign from AIS data
   flag: text('flag'),
@@ -21,6 +21,8 @@ export const vessels = pgTable('vessels', {
   index('vessels_user_id_idx').on(table.user_id),
   index('vessels_mmsi_idx').on(table.mmsi),
   index('vessels_is_active_idx').on(table.is_active),
+  // Composite unique constraint: user_id + mmsi (allows same MMSI for different users, but not for same user)
+  uniqueIndex('vessels_user_id_mmsi_uq').on(table.user_id, table.mmsi),
 ]);
 
 export const sea_time_entries = pgTable('sea_time_entries', {
