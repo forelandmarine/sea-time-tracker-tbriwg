@@ -2041,4 +2041,249 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     }
   );
+
+  // POST /api/admin/generate-demo-entries - Generate demo sea time entries for testing
+  fastify.post<{ Body: { email: string; count?: number } }>(
+    '/api/admin/generate-demo-entries',
+    {
+      schema: {
+        description: 'Generate demo sea time entries for testing purposes',
+        tags: ['admin'],
+        body: {
+          type: 'object',
+          required: ['email'],
+          properties: {
+            email: { type: 'string', format: 'email', description: 'User email' },
+            count: { type: 'number', minimum: 1, maximum: 100, description: 'Number of entries to generate (default: 43)' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              userId: { type: 'string' },
+              vesselId: { type: 'string' },
+              entriesCreated: { type: 'number' },
+              entries: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    id: { type: 'string' },
+                    start_time: { type: 'string', format: 'date-time' },
+                    end_time: { type: 'string', format: 'date-time' },
+                    duration_hours: { type: 'number' },
+                    sea_days: { type: 'number' },
+                    status: { type: 'string' },
+                    service_type: { type: 'string' },
+                    notes: { type: 'string' },
+                    mca_compliant: { type: 'boolean' },
+                    start_latitude: { type: 'number' },
+                    start_longitude: { type: 'number' },
+                    end_latitude: { type: 'number' },
+                    end_longitude: { type: 'number' },
+                  },
+                },
+              },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { email, count = 43 } = request.body;
+
+      app.logger.info({ email, count }, 'Generating demo sea time entries');
+
+      try {
+        // Validate count
+        if (count < 1 || count > 100) {
+          app.logger.warn({ count }, 'Invalid count for demo entries');
+          return reply.code(400).send({
+            error: 'Count must be between 1 and 100',
+          });
+        }
+
+        // Step 1: Find user by email
+        const users = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email.toLowerCase()));
+
+        if (users.length === 0) {
+          app.logger.warn({ email }, 'User not found for demo entries');
+          return reply.code(404).send({ error: `User with email ${email} not found` });
+        }
+
+        const user = users[0];
+        app.logger.debug({ userId: user.id, email }, 'User found');
+
+        // Step 2: Find or create demo vessel
+        const existingVessels = await app.db
+          .select()
+          .from(schema.vessels)
+          .where(eq(schema.vessels.mmsi, '123456789'));
+
+        let vessel: typeof schema.vessels.$inferSelect;
+
+        if (existingVessels.length > 0) {
+          vessel = existingVessels[0];
+          app.logger.debug({ vesselId: vessel.id }, 'Demo vessel already exists');
+        } else {
+          // Create new demo vessel
+          const [newVessel] = await app.db
+            .insert(schema.vessels)
+            .values({
+              user_id: user.id,
+              vessel_name: 'Demo Yacht',
+              mmsi: '123456789',
+              flag: 'GBR',
+              official_number: 'DEMO001',
+              type: 'Yacht',
+              length_metres: '24.5',
+              gross_tonnes: '45',
+              callsign: 'DEMO',
+              engine_kilowatts: '450',
+              engine_type: 'Diesel',
+              is_active: true,
+            })
+            .returning();
+
+          vessel = newVessel;
+          app.logger.info({ vesselId: vessel.id }, 'Created demo vessel');
+        }
+
+        // Step 3: Generate demo sea time entries
+        const serviceTypes = ['actual_sea_service', 'watchkeeping_service', 'standby_service', 'yard_service'];
+        const statuses = Array(80).fill('confirmed')
+          .concat(Array(15).fill('pending'))
+          .concat(Array(5).fill('rejected'));
+        const notes = [
+          'Coastal passage',
+          'Training voyage',
+          'Delivery trip',
+          'Harbor operations',
+          'Routine patrol',
+          'Survey mission',
+          'Maintenance voyage',
+          'Positioning exercise',
+        ];
+
+        const createdEntries: typeof schema.sea_time_entries.$inferSelect[] = [];
+
+        for (let i = 0; i < count; i++) {
+          // Spread entries over the past 12 months
+          const daysAgo = Math.floor(Math.random() * 365);
+          const hoursOffset = Math.floor(Math.random() * 24);
+          const startTime = new Date();
+          startTime.setDate(startTime.getDate() - daysAgo);
+          startTime.setHours(hoursOffset, 0, 0, 0);
+
+          // Select service type
+          const serviceType = serviceTypes[Math.floor(Math.random() * serviceTypes.length)];
+
+          // Calculate duration based on service type
+          let durationHours: number;
+          switch (serviceType) {
+            case 'actual_sea_service':
+              durationHours = 4 + Math.random() * 8; // 4-12 hours
+              break;
+            case 'watchkeeping_service':
+              durationHours = 2 + Math.random() * 6; // 2-8 hours
+              break;
+            case 'standby_service':
+            case 'yard_service':
+              durationHours = 4 + Math.random() * 6; // 4-10 hours
+              break;
+            default:
+              durationHours = 6;
+          }
+
+          const endTime = new Date(startTime.getTime() + durationHours * 60 * 60 * 1000);
+
+          // Calculate sea days
+          const seaDays = Math.ceil(durationHours / 24);
+
+          // MCA compliance (true for entries >= 4 hours)
+          const mcaCompliant = durationHours >= 4;
+
+          // Random UK coastal coordinates (latitude: 50-58, longitude: -6 to 2)
+          const startLatitude = 50 + Math.random() * 8;
+          const startLongitude = -6 + Math.random() * 8;
+          const endLatitude = 50 + Math.random() * 8;
+          const endLongitude = -6 + Math.random() * 8;
+
+          // Random status from weighted distribution
+          const status = statuses[Math.floor(Math.random() * statuses.length)];
+
+          // Random note
+          const note = notes[Math.floor(Math.random() * notes.length)];
+
+          // Create entry
+          const [entry] = await app.db
+            .insert(schema.sea_time_entries)
+            .values({
+              user_id: user.id,
+              vessel_id: vessel.id,
+              start_time: startTime,
+              end_time: endTime,
+              duration_hours: String(Math.round(durationHours * 100) / 100),
+              sea_days: seaDays,
+              mca_compliant: mcaCompliant,
+              status,
+              service_type: serviceType,
+              notes: note,
+              detection_window_hours: String(Math.round(durationHours * 100) / 100),
+              watchkeeping_hours: serviceType === 'watchkeeping_service' ? String(Math.round(durationHours * 100) / 100) : undefined,
+              start_latitude: String(Math.round(startLatitude * 1000000) / 1000000),
+              start_longitude: String(Math.round(startLongitude * 1000000) / 1000000),
+              end_latitude: String(Math.round(endLatitude * 1000000) / 1000000),
+              end_longitude: String(Math.round(endLongitude * 1000000) / 1000000),
+            })
+            .returning();
+
+          createdEntries.push(entry);
+        }
+
+        app.logger.info(
+          { userId: user.id, vesselId: vessel.id, entriesCreated: count },
+          `Generated ${count} demo sea time entries`
+        );
+
+        // Format response entries
+        const responseEntries = createdEntries.map(e => ({
+          id: e.id,
+          start_time: e.start_time.toISOString(),
+          end_time: e.end_time ? e.end_time.toISOString() : '',
+          duration_hours: parseFloat(String(e.duration_hours || 0)),
+          sea_days: e.sea_days || 0,
+          status: e.status,
+          service_type: e.service_type || 'actual_sea_service',
+          notes: e.notes || '',
+          mca_compliant: e.mca_compliant || false,
+          start_latitude: parseFloat(String(e.start_latitude || 0)),
+          start_longitude: parseFloat(String(e.start_longitude || 0)),
+          end_latitude: parseFloat(String(e.end_latitude || 0)),
+          end_longitude: parseFloat(String(e.end_longitude || 0)),
+        }));
+
+        return reply.code(200).send({
+          success: true,
+          message: `Generated ${count} demo entries for user ${email}`,
+          userId: user.id,
+          vesselId: vessel.id,
+          entriesCreated: count,
+          entries: responseEntries,
+        });
+      } catch (error) {
+        app.logger.error({ err: error, email, count }, 'Error generating demo sea time entries');
+        return reply.code(500).send({ error: 'Failed to generate demo sea time entries' });
+      }
+    }
+  );
 }
