@@ -382,7 +382,8 @@ export default function ProfileScreen() {
       loadSummary();
       loadVessels();
     }
-  }, [(global as any).__GLOBAL_REFRESH_TRIGGER__, loadProfile, loadSummary, loadVessels]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(global as any).__GLOBAL_REFRESH_TRIGGER__]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

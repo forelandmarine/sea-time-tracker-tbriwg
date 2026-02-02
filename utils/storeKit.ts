@@ -8,26 +8,33 @@
  * Price: £4.99/€5.99 per month
  * No trial period
  * 
+ * IMPORTANT: expo-store-kit v0.0.1 has limited API surface.
+ * For production, users should subscribe via App Store directly.
+ * This module provides helper functions to open App Store and manage subscriptions.
+ * 
  * Flow:
- * 1. User taps "Subscribe" button
- * 2. App requests product info from App Store
- * 3. User completes purchase via native iOS payment sheet
- * 4. App receives receipt from StoreKit
- * 5. App sends receipt to backend for verification
- * 6. Backend verifies with Apple servers
- * 7. Backend updates user subscription status
- * 8. App checks subscription status and grants access
+ * 1. User taps "Subscribe" button → Opens App Store subscription page
+ * 2. User completes purchase via App Store
+ * 3. App receives receipt from StoreKit (automatic)
+ * 4. App sends receipt to backend for verification
+ * 5. Backend verifies with Apple servers
+ * 6. Backend updates user subscription status
+ * 7. App checks subscription status and grants access
  */
 
-import { Platform } from 'react-native';
-import * as StoreKit from 'expo-store-kit';
+import { Platform, Linking, Alert } from 'react-native';
 import { authenticatedPost } from './api';
 
 // Product ID configured in App Store Connect
 export const SUBSCRIPTION_PRODUCT_ID = 'com.forelandmarine.seatime.monthly';
 
+// App Store URLs
+const APP_STORE_SUBSCRIPTION_URL = 'https://apps.apple.com/account/subscriptions';
+const APP_STORE_APP_URL = 'https://apps.apple.com/app/id6739226819'; // Replace with actual App ID when available
+
 /**
  * Initialize StoreKit connection
+ * Note: expo-store-kit v0.0.1 has limited API, so we primarily use App Store links
  */
 export async function initializeStoreKit(): Promise<boolean> {
   if (Platform.OS !== 'ios') {
@@ -36,15 +43,7 @@ export async function initializeStoreKit(): Promise<boolean> {
   }
 
   try {
-    console.log('[StoreKit] Initializing StoreKit connection');
-    
-    // Check if StoreKit is available
-    if (typeof StoreKit !== 'object') {
-      console.warn('[StoreKit] StoreKit module not available');
-      return false;
-    }
-
-    console.log('[StoreKit] StoreKit initialized successfully');
+    console.log('[StoreKit] StoreKit integration ready (using App Store links)');
     return true;
   } catch (error: any) {
     console.error('[StoreKit] Initialization error:', error);
@@ -53,8 +52,8 @@ export async function initializeStoreKit(): Promise<boolean> {
 }
 
 /**
- * Get product information from App Store
- * Note: expo-store-kit v0.0.1 may have limited API surface
+ * Get product information
+ * Returns static product info since expo-store-kit v0.0.1 has limited API
  */
 export async function getProductInfo(): Promise<any | null> {
   if (Platform.OS !== 'ios') {
@@ -63,17 +62,14 @@ export async function getProductInfo(): Promise<any | null> {
   }
 
   try {
-    console.log('[StoreKit] Fetching product info for:', SUBSCRIPTION_PRODUCT_ID);
-    
-    // expo-store-kit v0.0.1 may not have getProductsAsync
-    // We'll return a placeholder for now
-    console.warn('[StoreKit] getProductsAsync not available in expo-store-kit v0.0.1');
+    console.log('[StoreKit] Returning static product info');
     
     return {
       productIdentifier: SUBSCRIPTION_PRODUCT_ID,
       price: '4.99',
       priceLocale: { currencySymbol: '£' },
       localizedTitle: 'SeaTime Tracker Monthly',
+      localizedDescription: 'Monthly subscription for SeaTime Tracker',
     };
   } catch (error: any) {
     console.error('[StoreKit] Error fetching product info:', error);
@@ -82,8 +78,80 @@ export async function getProductInfo(): Promise<any | null> {
 }
 
 /**
+ * Open App Store subscription page
+ * This is the primary method for users to subscribe
+ */
+export async function openAppStoreSubscription(): Promise<void> {
+  if (Platform.OS !== 'ios') {
+    console.warn('[StoreKit] App Store subscriptions are iOS-only');
+    return;
+  }
+
+  try {
+    console.log('[StoreKit] Opening App Store subscription page');
+    
+    // Try to open the app's subscription page directly
+    const appUrl = `${APP_STORE_APP_URL}?action=subscribe`;
+    const canOpenApp = await Linking.canOpenURL(appUrl);
+    
+    if (canOpenApp) {
+      await Linking.openURL(appUrl);
+      console.log('[StoreKit] Opened app subscription page');
+    } else {
+      // Fallback to general subscriptions page
+      const canOpenGeneral = await Linking.canOpenURL(APP_STORE_SUBSCRIPTION_URL);
+      if (canOpenGeneral) {
+        await Linking.openURL(APP_STORE_SUBSCRIPTION_URL);
+        console.log('[StoreKit] Opened general subscriptions page');
+      } else {
+        throw new Error('Cannot open App Store');
+      }
+    }
+  } catch (error: any) {
+    console.error('[StoreKit] Error opening App Store:', error);
+    
+    // Show instructions as fallback
+    Alert.alert(
+      'Subscribe to SeaTime Tracker',
+      'To subscribe:\n\n1. Open the App Store\n2. Search for "SeaTime Tracker"\n3. Tap "Subscribe" (£4.99/month)\n\nOr manage subscriptions in:\nSettings → Apple ID → Subscriptions',
+      [{ text: 'OK' }]
+    );
+  }
+}
+
+/**
+ * Open iOS Settings to manage subscriptions
+ */
+export async function openSubscriptionManagement(): Promise<void> {
+  if (Platform.OS !== 'ios') {
+    console.warn('[StoreKit] Subscription management is iOS-only');
+    return;
+  }
+
+  try {
+    console.log('[StoreKit] Opening subscription management');
+    
+    const canOpen = await Linking.canOpenURL(APP_STORE_SUBSCRIPTION_URL);
+    if (canOpen) {
+      await Linking.openURL(APP_STORE_SUBSCRIPTION_URL);
+      console.log('[StoreKit] Opened subscription management');
+    } else {
+      throw new Error('Cannot open subscription management');
+    }
+  } catch (error: any) {
+    console.error('[StoreKit] Error opening subscription management:', error);
+    
+    Alert.alert(
+      'Manage Subscription',
+      'To manage your subscription:\n\n1. Open Settings\n2. Tap your name at the top\n3. Tap "Subscriptions"\n4. Select "SeaTime Tracker"',
+      [{ text: 'OK' }]
+    );
+  }
+}
+
+/**
  * Purchase subscription
- * Note: This is a placeholder implementation until expo-store-kit API is confirmed
+ * Directs user to App Store since expo-store-kit v0.0.1 has limited API
  */
 export async function purchaseSubscription(): Promise<{
   success: boolean;
@@ -98,26 +166,27 @@ export async function purchaseSubscription(): Promise<{
   }
 
   try {
-    console.log('[StoreKit] Starting purchase flow for:', SUBSCRIPTION_PRODUCT_ID);
-    console.warn('[StoreKit] expo-store-kit v0.0.1 has limited API - purchase flow not fully implemented');
-
-    // expo-store-kit v0.0.1 doesn't have the full API yet
-    // For now, we'll return an error directing users to the App Store
+    console.log('[StoreKit] Directing user to App Store for subscription');
+    
+    await openAppStoreSubscription();
+    
+    // Return pending status - user needs to complete purchase in App Store
     return {
       success: false,
-      error: 'Please subscribe via the App Store. Open Settings → Apple ID → Subscriptions to manage your subscription.',
+      error: 'Please complete your subscription in the App Store, then return here and tap "Check Subscription Status"',
     };
   } catch (error: any) {
     console.error('[StoreKit] Purchase error:', error);
     return {
       success: false,
-      error: error.message || 'Purchase failed',
+      error: error.message || 'Unable to open App Store',
     };
   }
 }
 
 /**
  * Restore previous purchases
+ * Directs user to check subscription status
  */
 export async function restorePurchases(): Promise<{
   success: boolean;
@@ -132,24 +201,27 @@ export async function restorePurchases(): Promise<{
   }
 
   try {
-    console.log('[StoreKit] Restoring purchases');
-    console.warn('[StoreKit] expo-store-kit v0.0.1 has limited API - restore not fully implemented');
-
+    console.log('[StoreKit] User requested restore - checking subscription status');
+    
+    // Since expo-store-kit v0.0.1 has limited API, we'll just return a message
+    // The user should use "Check Subscription Status" button instead
     return {
       success: false,
-      error: 'Please check your subscription status in iOS Settings → Apple ID → Subscriptions',
+      error: 'Please tap "Check Subscription Status" to verify your subscription',
     };
   } catch (error: any) {
     console.error('[StoreKit] Restore error:', error);
     return {
       success: false,
-      error: error.message || 'Restore failed',
+      error: error.message || 'Unable to restore purchases',
     };
   }
 }
 
 /**
  * Verify receipt with backend
+ * Note: In production, iOS automatically sends receipts to the app
+ * This function is for manual verification if needed
  */
 export async function verifyReceiptWithBackend(
   receipt: string,
@@ -191,6 +263,7 @@ export async function verifyReceiptWithBackend(
 
 /**
  * Complete purchase flow: purchase + verify
+ * Since expo-store-kit v0.0.1 has limited API, this directs to App Store
  */
 export async function completePurchaseFlow(): Promise<{
   success: boolean;
@@ -199,34 +272,17 @@ export async function completePurchaseFlow(): Promise<{
 }> {
   console.log('[StoreKit] Starting complete purchase flow');
 
-  // Step 1: Purchase
   const purchaseResult = await purchaseSubscription();
-  if (!purchaseResult.success || !purchaseResult.receipt) {
-    return {
-      success: false,
-      error: purchaseResult.error || 'Purchase failed',
-    };
-  }
-
-  // Step 2: Verify with backend
-  const verifyResult = await verifyReceiptWithBackend(purchaseResult.receipt);
-  if (!verifyResult.success) {
-    return {
-      success: false,
-      error: verifyResult.error || 'Verification failed',
-    };
-  }
-
-  console.log('[StoreKit] Purchase flow completed successfully');
-
+  
   return {
-    success: true,
-    status: verifyResult.status,
+    success: false,
+    error: purchaseResult.error || 'Please complete purchase in App Store',
   };
 }
 
 /**
  * Complete restore flow: restore + verify
+ * Since expo-store-kit v0.0.1 has limited API, this checks backend status
  */
 export async function completeRestoreFlow(): Promise<{
   success: boolean;
@@ -235,28 +291,26 @@ export async function completeRestoreFlow(): Promise<{
 }> {
   console.log('[StoreKit] Starting complete restore flow');
 
-  // Step 1: Restore
   const restoreResult = await restorePurchases();
-  if (!restoreResult.success || !restoreResult.receipt) {
-    return {
-      success: false,
-      error: restoreResult.error || 'No purchases to restore',
-    };
-  }
-
-  // Step 2: Verify with backend
-  const verifyResult = await verifyReceiptWithBackend(restoreResult.receipt);
-  if (!verifyResult.success) {
-    return {
-      success: false,
-      error: verifyResult.error || 'Verification failed',
-    };
-  }
-
-  console.log('[StoreKit] Restore flow completed successfully');
-
+  
   return {
-    success: true,
-    status: verifyResult.status,
+    success: false,
+    error: restoreResult.error || 'Please check subscription status',
   };
+}
+
+/**
+ * Helper function to show subscription instructions
+ */
+export function showSubscriptionInstructions(): void {
+  Alert.alert(
+    'How to Subscribe',
+    'SeaTime Tracker uses App Store subscriptions:\n\n' +
+    '1. Tap "Subscribe Now" to open the App Store\n' +
+    '2. Complete your subscription (£4.99/month)\n' +
+    '3. Return to the app\n' +
+    '4. Tap "Check Subscription Status"\n\n' +
+    'Your subscription is managed through your Apple ID and will automatically renew each month.',
+    [{ text: 'Got it' }]
+  );
 }

@@ -980,5 +980,42 @@ export const generateDemoEntries = async (email: string, count: number = 43) => 
   return data;
 };
 
+// Get sea time summary
+export const getSeaTimeSummary = async () => {
+  console.log('[seaTimeApi] Fetching sea time summary');
+  const options = await getFetchOptions('GET');
+  const response = await fetch(`${API_BASE_URL}/api/reports/summary`, options);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[seaTimeApi] Failed to fetch sea time summary:', response.status, errorText);
+    throw new Error(`Failed to fetch sea time summary: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log('[seaTimeApi] Sea time summary fetched successfully');
+  return data;
+};
+
+// Get single sea time entry by ID
+export const getSeaTimeEntry = async (entryId: string) => {
+  console.log('[seaTimeApi] Fetching sea time entry:', entryId);
+  const options = await getFetchOptions('GET');
+  const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}`, options);
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[seaTimeApi] Failed to fetch sea time entry:', response.status, errorText);
+    throw new Error(`Failed to fetch sea time entry: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log('[seaTimeApi] Sea time entry fetched successfully');
+  return {
+    ...data,
+    vessel: normalizeVessel(data.vessel),
+  };
+};
+
 // Export getAuthToken and getApiHeaders for use in other components
 export { getAuthToken, getApiHeaders };
