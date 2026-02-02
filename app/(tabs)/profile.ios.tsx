@@ -1,11 +1,8 @@
 
-import { useRouter } from 'expo-router';
+import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { colors } from '@/styles/commonStyles';
 import React, { useState, useEffect, useCallback } from 'react';
-import * as seaTimeApi from '@/utils/seaTimeApi';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { IconSymbol } from '@/components/IconSymbol';
 import {
   View,
   Text,
@@ -13,24 +10,31 @@ import {
   ScrollView,
   TouchableOpacity,
   useColorScheme,
-  ActivityIndicator,
   RefreshControl,
+  ActivityIndicator,
   Modal,
   Linking,
 } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as seaTimeApi from '@/utils/seaTimeApi';
 
 interface UserProfile {
   id: string;
   name: string;
   email: string;
-  email_verified: boolean;
   emailVerified: boolean;
   image: string | null;
   imageUrl: string | null;
-  created_at: string;
+  address: string | null;
+  tel_no: string | null;
+  date_of_birth: string | null;
+  srb_no: string | null;
+  nationality: string | null;
+  pya_membership_no: string | null;
+  department: 'deck' | 'engineering' | null;
   createdAt: string;
   updatedAt: string;
-  department?: string | null;
 }
 
 interface SeaTimeSummary {
@@ -306,126 +310,101 @@ function createStyles(isDark: boolean, topInset: number) {
 }
 
 export default function ProfileScreen() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === 'dark';
   const insets = useSafeAreaInsets();
+  const styles = createStyles(isDark, insets.top);
+  const router = useRouter();
   const { user, signOut } = useAuth();
+
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [summary, setSummary] = useState<SeaTimeSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
-  const router = useRouter();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === 'dark';
 
-  const loadProfile = useCallback(async (retryCount = 0) => {
+  const loadData = useCallback(async () => {
+    console.log('Loading profile data');
     try {
-      console.log('[Profile] Loading user profile');
-      const data = await seaTimeApi.getUserProfile();
-      console.log('[Profile] Profile loaded:', data);
-      setProfile(data);
-    } catch (error: any) {
-      console.error('[Profile] Error loading profile:', error);
-      
-      if (retryCount < 2) {
-        console.log(`[Profile] Retrying profile load (${retryCount + 1}/2)`);
-        setTimeout(() => loadProfile(retryCount + 1), 1000);
-      }
-    }
-  }, []);
-
-  const loadSummary = useCallback(async (retryCount = 0) => {
-    try {
-      console.log('[Profile] Loading sea time summary');
-      const data = await seaTimeApi.getSeaTimeSummary();
-      console.log('[Profile] Summary loaded:', data);
-      setSummary(data);
-    } catch (error: any) {
-      console.error('[Profile] Error loading summary:', error);
-      
-      if (retryCount < 2) {
-        console.log(`[Profile] Retrying summary load (${retryCount + 1}/2)`);
-        setTimeout(() => loadSummary(retryCount + 1), 1000);
-      }
+      const [profileData, summaryData] = await Promise.all([
+        seaTimeApi.getUserProfile(),
+        seaTimeApi.getSeaTimeSummary(),
+      ]);
+      console.log('Profile data loaded:', profileData);
+      console.log('Summary data loaded:', summaryData);
+      setProfile(profileData);
+      setSummary(summaryData);
+    } catch (error) {
+      console.error('Error loading profile data:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    console.log('[Profile] Component mounted');
-    loadProfile();
-    loadSummary();
-  }, [loadProfile, loadSummary]);
+    loadData();
+  }, [loadData]);
 
-  useEffect(() => {
-    const refreshTrigger = (global as any).__GLOBAL_REFRESH_TRIGGER__;
-    if (refreshTrigger) {
-      console.log('[Profile] Global refresh triggered');
-      loadProfile();
-      loadSummary();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [(global as any).__GLOBAL_REFRESH_TRIGGER__]);
-
-  const handleRefresh = useCallback(async () => {
+  const onRefresh = useCallback(() => {
+    console.log('User pulled to refresh profile');
     setRefreshing(true);
-    await Promise.all([loadProfile(), loadSummary()]);
-    setRefreshing(false);
-  }, [loadProfile, loadSummary]);
+    loadData();
+  }, [loadData]);
 
   const handleEditProfile = () => {
-    console.log('[Profile] User tapped Edit Profile');
+    console.log('User tapped Edit Profile');
     router.push('/user-profile');
   };
 
   const handleScheduledTasks = () => {
-    console.log('[Profile] User tapped Scheduled Tasks');
+    console.log('User tapped Scheduled Tasks');
     router.push('/scheduled-tasks');
   };
 
   const handleNotificationSettings = () => {
-    console.log('[Profile] User tapped Notification Settings');
+    console.log('User tapped Notification Settings');
     router.push('/notification-settings');
   };
 
   const handleSignOut = () => {
-    console.log('[Profile] User tapped Sign Out');
+    console.log('User tapped Sign Out');
     setShowSignOutModal(true);
   };
 
   const confirmSignOut = async () => {
-    console.log('[Profile] User confirmed sign out');
+    console.log('User confirmed sign out');
     setShowSignOutModal(false);
     try {
       await signOut();
       router.replace('/auth');
     } catch (error) {
-      console.error('[Profile] Error signing out:', error);
+      console.error('Error signing out:', error);
     }
   };
 
   const cancelSignOut = () => {
-    console.log('[Profile] User cancelled sign out');
+    console.log('User cancelled sign out');
     setShowSignOutModal(false);
   };
 
   const handleContactSupport = () => {
-    console.log('[Profile] User tapped Contact Support');
+    console.log('User tapped Contact Support');
     Linking.openURL('mailto:support@seatimetracker.com');
   };
 
   const handleGeneratePDF = () => {
-    console.log('[Profile] User tapped Generate PDF Report');
+    console.log('User tapped Generate PDF Report');
     router.push('/reports');
   };
 
   const handleGenerateCSV = () => {
-    console.log('[Profile] User tapped Generate CSV Report');
+    console.log('User tapped Generate CSV Report');
     router.push('/reports');
   };
 
   const handleSelectPathway = () => {
-    console.log('[Profile] User tapped Select Pathway');
+    console.log('User tapped Select Pathway');
     router.push('/select-pathway');
   };
 
@@ -433,8 +412,6 @@ export default function ProfileScreen() {
     if (hours === null || hours === undefined) return 0;
     return Math.floor(hours / 4);
   };
-
-  const styles = createStyles(isDark, insets.top);
 
   if (loading) {
     return (
@@ -482,11 +459,11 @@ export default function ProfileScreen() {
 
   return (
     <>
-      <ScrollView 
-        style={styles.container} 
+      <ScrollView
+        style={styles.container}
         contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
         <View style={styles.greyHeader}>
