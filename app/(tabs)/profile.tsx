@@ -41,18 +41,18 @@ interface UserProfile {
 interface SeaTimeSummary {
   total_hours: number;
   total_days: number;
-  entries_by_vessel: Array<{
+  entries_by_vessel: {
     vessel_name: string;
     total_hours: number;
-  }>;
-  entries_by_month: Array<{
+  }[];
+  entries_by_month: {
     month: string;
     total_hours: number;
-  }>;
-  entries_by_service_type: Array<{
+  }[];
+  entries_by_service_type: {
     service_type: string;
     total_hours: number;
-  }>;
+  }[];
 }
 
 function createStyles(isDark: boolean) {
@@ -247,7 +247,7 @@ export default function ProfileScreen() {
     console.log('Loading profile data');
     try {
       const [profileData, summaryData] = await Promise.all([
-        seaTimeApi.getProfile(),
+        seaTimeApi.getUserProfile(),
         seaTimeApi.getSeaTimeSummary(),
       ]);
       console.log('Profile data loaded:', profileData);
@@ -290,7 +290,7 @@ export default function ProfileScreen() {
   const handleSaveProfile = useCallback(async () => {
     console.log('User tapped Save Profile button', editedProfile);
     try {
-      await seaTimeApi.updateProfile(editedProfile);
+      await seaTimeApi.updateUserProfile(editedProfile);
       console.log('Profile updated successfully');
       setEditModalVisible(false);
       loadData();

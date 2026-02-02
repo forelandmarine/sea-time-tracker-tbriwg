@@ -455,6 +455,16 @@ function RootLayoutNav() {
               }} 
             />
 
+            {/* Admin activate subscriptions screen */}
+            <Stack.Screen 
+              name="admin-activate-subscriptions" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                headerBackTitle: 'Back',
+              }} 
+            />
+
             {/* Modal Demo Screens */}
             <Stack.Screen
               name="modal"

@@ -63,19 +63,7 @@ export default function SubscriptionPaywallScreen() {
   const { subscriptionStatus, checkSubscription, loading: subscriptionLoading } = useSubscription();
   const { signOut } = useAuth();
 
-  useEffect(() => {
-    console.log('[SubscriptionPaywall] Screen mounted');
-    console.log('[SubscriptionPaywall] Current subscription status:', subscriptionStatus?.status);
-    
-    // Initialize StoreKit and fetch product info
-    if (Platform.OS === 'ios') {
-      initializeAndFetchProduct();
-    } else {
-      setLoadingPrice(false);
-    }
-  }, []);
-
-  const initializeAndFetchProduct = async () => {
+  const initializeAndFetchProduct = useCallback(async () => {
     try {
       console.log('[SubscriptionPaywall] Initializing StoreKit');
       await StoreKitUtils.initializeStoreKit();
@@ -94,7 +82,19 @@ export default function SubscriptionPaywallScreen() {
     } finally {
       setLoadingPrice(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    console.log('[SubscriptionPaywall] Screen mounted');
+    console.log('[SubscriptionPaywall] Current subscription status:', subscriptionStatus?.status);
+    
+    // Initialize StoreKit and fetch product info
+    if (Platform.OS === 'ios') {
+      initializeAndFetchProduct();
+    } else {
+      setLoadingPrice(false);
+    }
+  }, [initializeAndFetchProduct, subscriptionStatus?.status]);
 
   const handleSubscribe = async () => {
     if (Platform.OS !== 'ios') {
