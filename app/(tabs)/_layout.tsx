@@ -1,39 +1,36 @@
 
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs } from 'expo-router';
 import React, { useEffect } from 'react';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
-import { useColorScheme, View, Text, ActivityIndicator } from 'react-native';
+import { useColorScheme, View, Text } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSubscription } from '@/contexts/SubscriptionContext';
+import { usePathname } from 'expo-router';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { user, loading } = useAuth();
-  const { hasActiveSubscription, loading: subscriptionLoading } = useSubscription();
-  const router = useRouter();
+  const { user, loading, triggerRefresh } = useAuth();
+  const pathname = usePathname();
 
-  // Check subscription status and redirect if needed
+  // Trigger refresh when navigating between tabs (simulates back button behavior)
   useEffect(() => {
-    if (!loading && !subscriptionLoading && user && !hasActiveSubscription) {
-      console.log('[TabLayout] User does not have active subscription, redirecting to paywall');
-      router.replace('/subscription-paywall');
-    }
-  }, [loading, subscriptionLoading, user, hasActiveSubscription, router]);
+    console.log('[TabLayout] Navigation detected to:', pathname);
+    console.log('[TabLayout] Triggering global refresh');
+    triggerRefresh();
+  }, [pathname, triggerRefresh]);
 
-  // Show loading state while checking auth or subscription
-  if (loading || subscriptionLoading) {
+  // Show loading state while checking auth
+  if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? colors.background : colors.backgroundLight }}>
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ fontSize: 14, color: isDark ? '#999' : '#666', marginTop: 12 }}>Loading...</Text>
+        <Text style={{ fontSize: 14, color: isDark ? '#999' : '#666' }}>Loading...</Text>
       </View>
     );
   }
 
-  // If no user or no subscription, show a blank screen - redirects will handle navigation
-  if (!user || !hasActiveSubscription) {
+  // If no user, show a blank screen - the root layout will handle redirect
+  if (!user) {
     return (
       <View style={{ flex: 1, backgroundColor: isDark ? colors.background : colors.backgroundLight }} />
     );

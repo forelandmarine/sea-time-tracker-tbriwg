@@ -1,39 +1,45 @@
 
 import { IconSymbol } from '@/components/IconSymbol';
+import React, { useState, useEffect } from 'react';
+import * as seaTimeApi from '@/utils/seaTimeApi';
 import { useAuth } from '@/contexts/AuthContext';
-import { colors } from '@/styles/commonStyles';
-import React, { useState, useEffect, useCallback } from 'react';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
   useColorScheme,
-  RefreshControl,
+  Platform,
+  Image,
   ActivityIndicator,
   Modal,
   Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as seaTimeApi from '@/utils/seaTimeApi';
+import { colors } from '@/styles/commonStyles';
+import { 
+  isBiometricAvailable, 
+  getBiometricCredentials, 
+  clearBiometricCredentials,
+  getBiometricType 
+} from '@/utils/biometricAuth';
 
 interface UserProfile {
   id: string;
   name: string;
   email: string;
+  email_verified: boolean;
   emailVerified: boolean;
   image: string | null;
   imageUrl: string | null;
-  address: string | null;
-  tel_no: string | null;
-  date_of_birth: string | null;
-  srb_no: string | null;
-  nationality: string | null;
-  pya_membership_no: string | null;
-  department: 'deck' | 'engineering' | null;
+  created_at: string;
   createdAt: string;
   updatedAt: string;
+  department?: string | null;
 }
 
 interface SeaTimeSummary {
@@ -42,7 +48,6 @@ interface SeaTimeSummary {
   entries_by_vessel: {
     vessel_name: string;
     total_hours: number;
-    total_days?: number;
   }[];
   entries_by_month: {
     month: string;
@@ -51,304 +56,541 @@ interface SeaTimeSummary {
   entries_by_service_type?: {
     service_type: string;
     total_hours: number;
-    total_days?: number;
   }[];
 }
 
-function createStyles(isDark: boolean) {
-  return StyleSheet.create({
+interface Vessel {
+  id: string;
+  mmsi: string;
+  vessel_name: string;
+  is_active: boolean;
+  created_at: string;
+  flag?: string;
+  official_number?: string;
+  vessel_type?: string;
+  length_metres?: number;
+  gross_tonnes?: number;
+  callsign?: string;
+}
+
+interface SeaDayDefinition {
+  title: string;
+  description: string;
+  department: 'deck' | 'engineering' | 'both';
+}
+
+const SEA_DAY_DEFINITIONS: SeaDayDefinition[] = [
+  {
+    title: 'Onboard Yacht Service',
+    description: 'All time signed on a yacht, regardless of activity.',
+    department: 'both',
+  },
+  {
+    title: 'Actual Days at Sea (Deck)',
+    description: 'Vessel underway with propulsion (engine ≥4 hours or sailing). Anchor time only counts if unavoidable during passage (berth waiting, canal transit, severe weather). Anchor time must not exceed previous voyage duration, cannot end a passage, and does not count if for rest or leisure.',
+    department: 'deck',
+  },
+  {
+    title: 'Actual Days at Sea (Engineering)',
+    description: 'Same propulsion and anchoring rules as Deck. Anchor time may qualify as Additional Watchkeeping, not sea time.',
+    department: 'engineering',
+  },
+  {
+    title: 'Watchkeeping Service - Bridge Watch (Deck)',
+    description: 'Must be OOW 3000 CoC holder in charge of the navigational watch. Every 4 hours = 1 day, cumulative allowed. Watchkeeping days cannot exceed actual days at sea.',
+    department: 'deck',
+  },
+  {
+    title: 'Watchkeeping Service - Engine Room Underway (Engineering)',
+    description: 'Every 4 hours = 1 day, cumulative allowed. OOW: may be subsidiary. Chief Engineer: must be in full charge or UMS. Cannot exceed days at sea.',
+    department: 'engineering',
+  },
+  {
+    title: 'Additional Watchkeeping (Engineering Only)',
+    description: 'Engine room watch while stationary (anchor or alongside). Generators must be running. Cannot be logged on the same day as a sea day. Only valid for Yacht-restricted CoCs (not full SV).',
+    department: 'engineering',
+  },
+  {
+    title: 'Shipyard (Yard) Service - Deck',
+    description: 'Time standing by during build, refit, or major repair. Routine maintenance excluded. Maximum 90 days per OOW 3000 NOE application. Over 90 days requires supporting documentation.',
+    department: 'deck',
+  },
+  {
+    title: 'Shipyard (Yard) Service - Engineering',
+    description: 'Applies when vessel is in dock, drydock, or service facility. Must involve major engine, auxiliary, or systems work (e.g. engines, gearboxes, pumps, firefighting systems, hull fittings). Over 90 days requires works list and job descriptions. Evidence must be submitted with NOE application.',
+    department: 'engineering',
+  },
+];
+
+const ALL_SERVICE_TYPES = [
+  'actual_sea_service',
+  'watchkeeping_service',
+  'standby_service',
+  'yard_service',
+  'service_in_port',
+];
+
+const createStyles = (isDark: boolean) =>
+  StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
-    scrollContent: {
-      paddingBottom: 100,
+    scrollView: {
+      flex: 1,
     },
-    greyHeader: {
-      backgroundColor: isDark ? '#2C2C2E' : '#E5E5EA',
-      paddingTop: 64,
-      paddingBottom: 32,
-      paddingHorizontal: 20,
-      alignItems: 'flex-start',
+    pageHeader: {
+      padding: 20,
+      paddingTop: Platform.OS === 'android' ? 48 : 20,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
-    headerRow: {
+    headerTitleContainer: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: 8,
-      width: '100%',
+      gap: 12,
     },
-    lighthouseIcon: {
-      marginRight: 12,
+    appIcon: {
+      width: 53,
+      height: 53,
+      borderRadius: 12,
+    },
+    headerTextContainer: {
+      flex: 1,
+      minWidth: 0,
     },
     headerTitle: {
-      fontSize: 34,
+      fontSize: 28,
       fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
     },
     headerSubtitle: {
-      fontSize: 16,
+      fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 32,
+      marginTop: 4,
     },
-    profileInfoContainer: {
+    content: {
+      padding: 20,
+    },
+    profileSection: {
       alignItems: 'center',
-      width: '100%',
+      marginBottom: 30,
+      paddingTop: 20,
     },
-    avatarContainer: {
+    profileImageContainer: {
       width: 100,
       height: 100,
       borderRadius: 50,
       backgroundColor: colors.primary,
-      justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: 16,
+      justifyContent: 'center',
+      marginBottom: 15,
+      overflow: 'hidden',
     },
-    avatarText: {
-      fontSize: 44,
+    profileImage: {
+      width: 100,
+      height: 100,
+    },
+    profileInitials: {
+      fontSize: 36,
       fontWeight: 'bold',
-      color: '#FFFFFF',
+      color: '#ffffff',
     },
-    userName: {
-      fontSize: 22,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 4,
+    profileName: {
+      fontSize: 24,
+      fontWeight: 'bold',
+      color: colors.text,
+      marginBottom: 5,
     },
-    userEmail: {
-      fontSize: 15,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    profileEmail: {
+      fontSize: 16,
+      color: colors.textSecondary,
     },
-    contentSection: {
-      padding: 16,
+    section: {
+      marginBottom: 20,
     },
     sectionTitle: {
-      fontSize: 20,
+      fontSize: 18,
       fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 12,
-      marginTop: 8,
+      color: colors.text,
+      marginBottom: 10,
     },
     card: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
-      padding: 20,
-      marginBottom: 16,
+      padding: 15,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
     },
-    emptyStateText: {
+    summaryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    summaryRowLast: {
+      borderBottomWidth: 0,
+    },
+    summaryLabel: {
+      fontSize: 15,
+      color: isDark ? colors.text : colors.textLight,
+      flex: 1,
+    },
+    summaryValue: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    totalRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 12,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
+      borderRadius: 8,
+      paddingHorizontal: 12,
+      marginTop: 8,
+    },
+    totalLabel: {
       fontSize: 16,
+      fontWeight: '700',
+      color: isDark ? colors.text : colors.textLight,
+    },
+    totalValue: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    loadingText: {
+      fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
+      paddingVertical: 10,
     },
-    reportButtonsRow: {
+    menuItem: {
       flexDirection: 'row',
-      gap: 12,
-      marginBottom: 16,
+      alignItems: 'center',
+      paddingVertical: 15,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    menuItemLast: {
+      borderBottomWidth: 0,
+    },
+    menuItemIcon: {
+      marginRight: 15,
+    },
+    menuItemText: {
+      flex: 1,
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
+    },
+    menuItemChevron: {
+      marginLeft: 10,
     },
     reportButton: {
-      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
       backgroundColor: colors.primary,
       borderRadius: 12,
-      padding: 16,
-      alignItems: 'center',
-      flexDirection: 'row',
-      justifyContent: 'center',
+      padding: 15,
+      marginBottom: 10,
     },
     reportButtonText: {
+      color: '#ffffff',
       fontSize: 16,
       fontWeight: '600',
-      color: '#FFFFFF',
-      marginLeft: 8,
+      marginLeft: 10,
     },
-    pathwayCard: {
+    signOutButton: {
+      backgroundColor: '#ff4444',
+      borderRadius: 12,
+      padding: 15,
+      alignItems: 'center',
+      marginTop: 20,
+    },
+    signOutButtonText: {
+      color: '#ffffff',
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    supportButton: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
-      padding: 20,
-      marginBottom: 16,
-      flexDirection: 'row',
+      padding: 15,
       alignItems: 'center',
-      justifyContent: 'space-between',
+      marginTop: 10,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: colors.primary,
     },
-    pathwayContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    pathwayText: {
+    supportButtonText: {
+      color: colors.primary,
       fontSize: 16,
       fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginLeft: 12,
     },
-    serviceTypeRow: {
+    departmentBadge: {
+      backgroundColor: colors.primary + '20',
+      borderRadius: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      marginTop: 8,
+      alignSelf: 'center',
+    },
+    departmentBadgeText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.primary,
+    },
+    vesselButton: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
       paddingVertical: 12,
       borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.border : colors.borderLight,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
     },
-    serviceTypeRowLast: {
+    vesselButtonLast: {
       borderBottomWidth: 0,
     },
-    serviceTypeLabel: {
-      fontSize: 16,
-      color: isDark ? colors.text : colors.textLight,
-    },
-    serviceTypeValue: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.primary,
-    },
-    accountCard: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 12,
-      marginBottom: 16,
-    },
-    accountButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.border : colors.borderLight,
-    },
-    accountButtonLast: {
-      borderBottomWidth: 0,
-    },
-    accountButtonContent: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
-    accountButtonText: {
-      fontSize: 16,
-      color: isDark ? colors.text : colors.textLight,
-      marginLeft: 12,
-    },
-    signOutButton: {
-      backgroundColor: '#FF3B30',
-      borderRadius: 12,
-      padding: 16,
-      alignItems: 'center',
-      marginBottom: 16,
-    },
-    signOutButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: '#FFFFFF',
-    },
-    contactSupportButton: {
-      backgroundColor: 'transparent',
-      borderWidth: 2,
-      borderColor: colors.primary,
-      borderRadius: 12,
-      padding: 16,
-      alignItems: 'center',
-      marginBottom: 16,
-    },
-    contactSupportButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.primary,
-    },
-    loadingContainer: {
+    vesselButtonLeft: {
       flex: 1,
-      justifyContent: 'center',
-      alignItems: 'center',
+    },
+    vesselName: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 2,
+    },
+    vesselDays: {
+      fontSize: 13,
+      color: colors.primary,
+    },
+    definitionCard: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 10,
+      padding: 14,
+      marginBottom: 10,
+      borderWidth: 1,
+      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    definitionTitle: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 6,
+    },
+    definitionDescription: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      lineHeight: 20,
     },
     modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0, 0, 0, 0.5)',
       justifyContent: 'center',
       alignItems: 'center',
+      padding: 20,
     },
     modalContent: {
-      backgroundColor: isDark ? colors.cardBackground : '#FFFFFF',
+      backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
       borderRadius: 16,
-      padding: 24,
-      width: '80%',
+      padding: 20,
+      width: '100%',
       maxWidth: 400,
+      maxHeight: '80%',
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 16,
+      paddingBottom: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
     },
     modalTitle: {
       fontSize: 20,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 12,
-      textAlign: 'center',
-    },
-    modalMessage: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 24,
-      textAlign: 'center',
-    },
-    modalButtons: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-    },
-    modalButton: {
+      fontWeight: '700',
+      color: isDark ? '#ffffff' : '#000000',
       flex: 1,
-      padding: 12,
-      borderRadius: 8,
-      alignItems: 'center',
-      marginHorizontal: 6,
     },
-    modalButtonCancel: {
-      backgroundColor: isDark ? colors.border : colors.borderLight,
+    closeButton: {
+      padding: 4,
     },
-    modalButtonConfirm: {
-      backgroundColor: '#FF3B30',
+    modalScrollView: {
+      maxHeight: 400,
     },
-    modalButtonText: {
-      fontSize: 16,
+    particularRow: {
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+    },
+    particularRowLast: {
+      borderBottomWidth: 0,
+    },
+    particularLabel: {
+      fontSize: 13,
       fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
+      color: isDark ? '#8e8e93' : '#8e8e93',
+      marginBottom: 4,
     },
-    modalButtonTextConfirm: {
-      color: '#FFFFFF',
+    particularValue: {
+      fontSize: 16,
+      color: isDark ? '#ffffff' : '#000000',
+      fontWeight: '500',
+    },
+    infoBox: {
+      backgroundColor: colors.primary + '15',
+      borderRadius: 10,
+      padding: 14,
+      marginBottom: 16,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+    },
+    infoText: {
+      fontSize: 13,
+      color: isDark ? colors.text : colors.textLight,
+      lineHeight: 20,
     },
   });
-}
 
 export default function ProfileScreen() {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [summary, setSummary] = useState<SeaTimeSummary | null>(null);
+  const [vessels, setVessels] = useState<Vessel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingSummary, setLoadingSummary] = useState(true);
+  const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [downloadingCSV, setDownloadingCSV] = useState(false);
+  const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
+  const [showVesselModal, setShowVesselModal] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
+  const [biometricType, setBiometricType] = useState('Biometric');
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { signOut, refreshTrigger } = useAuth();
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [summary, setSummary] = useState<SeaTimeSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showSignOutModal, setShowSignOutModal] = useState(false);
+  console.log('ProfileScreen rendered');
 
-  const loadData = useCallback(async () => {
-    console.log('Loading profile data');
-    try {
-      const [profileData, summaryData] = await Promise.all([
-        seaTimeApi.getUserProfile(),
-        seaTimeApi.getSeaTimeSummary(),
-      ]);
-      console.log('Profile data loaded:', profileData);
-      console.log('Summary data loaded:', summaryData);
-      setProfile(profileData);
-      setSummary(summaryData);
-    } catch (error) {
-      console.error('Error loading profile data:', error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
+  // Initial load on mount
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    console.log('ProfileScreen: Initial mount, loading data');
+    loadProfile();
+    loadSummary();
+    loadVessels();
+    checkBiometricStatus();
+  }, [loadProfile, loadSummary, loadVessels]);
 
-  const onRefresh = useCallback(() => {
-    console.log('User pulled to refresh profile');
-    setRefreshing(true);
-    loadData();
-  }, [loadData]);
+  // Listen to refreshTrigger and reload data when it changes (but not on initial mount)
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      console.log('ProfileScreen: Global refresh triggered, reloading profile data');
+      loadProfile();
+      loadSummary();
+      loadVessels();
+    }
+  }, [refreshTrigger, loadProfile, loadSummary, loadVessels]);
+
+  const checkBiometricStatus = async () => {
+    const available = await isBiometricAvailable();
+    setBiometricAvailable(available);
+    
+    if (available) {
+      const type = await getBiometricType();
+      setBiometricType(type);
+      
+      const credentials = await getBiometricCredentials();
+      setHasSavedCredentials(!!credentials);
+    }
+  };
+
+  const loadProfile = async (retryCount = 0) => {
+    const maxRetries = 2;
+    console.log(`Loading user profile (attempt ${retryCount + 1}/${maxRetries + 1})`);
+    
+    try {
+      const data = await seaTimeApi.getUserProfile();
+      console.log('User profile loaded successfully:', data?.email);
+      setProfile(data);
+      setLoading(false);
+    } catch (error: any) {
+      console.error(`Failed to load profile (attempt ${retryCount + 1}):`, error?.message);
+      
+      // Retry on network errors
+      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
+        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        console.log(`Retrying profile load in ${waitTime}ms...`);
+        setTimeout(() => loadProfile(retryCount + 1), waitTime);
+      } else {
+        setLoading(false);
+        Alert.alert(
+          'Profile Load Error',
+          'Unable to load your profile. Please check your internet connection and try again.',
+          [
+            { text: 'Retry', onPress: () => loadProfile(0) },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+      }
+    }
+  };
+
+  const loadSummary = async (retryCount = 0) => {
+    const maxRetries = 2;
+    console.log(`Loading sea time summary (attempt ${retryCount + 1}/${maxRetries + 1})`);
+    
+    try {
+      const data = await seaTimeApi.getReportSummary();
+      console.log('Sea time summary loaded successfully');
+      setSummary(data);
+      setLoadingSummary(false);
+    } catch (error: any) {
+      console.error(`Failed to load sea time summary (attempt ${retryCount + 1}):`, error?.message);
+      
+      // Retry on network errors
+      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
+        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        console.log(`Retrying summary load in ${waitTime}ms...`);
+        setTimeout(() => loadSummary(retryCount + 1), waitTime);
+      } else {
+        setLoadingSummary(false);
+        // Don't show alert for summary - it's not critical
+        console.warn('Summary load failed after retries, continuing without summary');
+      }
+    }
+  };
+
+  const loadVessels = async (retryCount = 0) => {
+    const maxRetries = 2;
+    console.log(`Loading vessels (attempt ${retryCount + 1}/${maxRetries + 1})`);
+    
+    try {
+      const data = await seaTimeApi.getVessels();
+      console.log('Vessels loaded successfully:', data?.length);
+      setVessels(data);
+    } catch (error: any) {
+      console.error(`Failed to load vessels (attempt ${retryCount + 1}):`, error?.message);
+      
+      // Retry on network errors
+      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
+        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        console.log(`Retrying vessels load in ${waitTime}ms...`);
+        setTimeout(() => loadVessels(retryCount + 1), waitTime);
+      } else {
+        // Don't show alert for vessels - it's not critical
+        console.warn('Vessels load failed after retries, continuing without vessels');
+      }
+    }
+  };
 
   const handleEditProfile = () => {
     console.log('User tapped Edit Profile');
@@ -360,295 +602,687 @@ export default function ProfileScreen() {
     router.push('/scheduled-tasks');
   };
 
-  const handleNotificationSettings = () => {
-    console.log('User tapped Notification Settings');
-    router.push('/notification-settings');
-  };
-
-  const handleSignOut = () => {
-    console.log('User tapped Sign Out');
-    setShowSignOutModal(true);
-  };
-
-  const confirmSignOut = async () => {
-    console.log('User confirmed sign out');
-    setShowSignOutModal(false);
+  const handleSupport = async () => {
+    console.log('User tapped Support button');
+    const supportEmail = 'info@forelandmarine.com';
+    const subject = 'SeaTime Tracker Support Request';
+    const body = 'Hello,\n\nI need assistance with:\n\n';
+    
+    const mailtoUrl = `mailto:${supportEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    
     try {
-      await signOut();
-      router.replace('/auth');
+      const canOpen = await Linking.canOpenURL(mailtoUrl);
+      if (canOpen) {
+        await Linking.openURL(mailtoUrl);
+        console.log('Support email opened successfully');
+      } else {
+        console.log('Cannot open email client, showing alert with email address');
+        Alert.alert(
+          'Contact Support',
+          `Please email us at:\n${supportEmail}`,
+          [
+            { text: 'OK', style: 'default' }
+          ]
+        );
+      }
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('Failed to open email client:', error);
+      Alert.alert(
+        'Contact Support',
+        `Please email us at:\n${supportEmail}`,
+        [
+          { text: 'OK', style: 'default' }
+        ]
+      );
     }
   };
 
-  const cancelSignOut = () => {
-    console.log('User cancelled sign out');
-    setShowSignOutModal(false);
+  const handleVesselPress = (vesselName: string) => {
+    console.log('User tapped vessel:', vesselName);
+    const vessel = vessels.find((v) => v.vessel_name === vesselName);
+    if (vessel) {
+      setSelectedVessel(vessel);
+      setShowVesselModal(true);
+    }
   };
 
-  const handleContactSupport = () => {
-    console.log('User tapped Contact Support');
-    Linking.openURL('mailto:support@seatimetracker.com');
+  const handleCloseModal = () => {
+    console.log('User closed vessel modal');
+    setShowVesselModal(false);
+    setSelectedVessel(null);
   };
 
-  const handleGeneratePDF = () => {
-    console.log('User tapped Generate PDF Report');
-    router.push('/reports');
+  const formatServiceType = (serviceType: string): string => {
+    const typeMap: { [key: string]: string } = {
+      'actual_sea_service': 'Actual Sea Service',
+      'watchkeeping_service': 'Watchkeeping Service',
+      'standby_service': 'Stand-by Service',
+      'yard_service': 'Yard Service',
+      'service_in_port': 'Service in Port',
+    };
+    return typeMap[serviceType] || serviceType;
   };
 
-  const handleGenerateCSV = () => {
-    console.log('User tapped Generate CSV Report');
-    router.push('/reports');
+  const getAllServiceTypesWithHours = () => {
+    const serviceTypeMap: { [key: string]: number } = {};
+    
+    ALL_SERVICE_TYPES.forEach((type) => {
+      serviceTypeMap[type] = 0;
+    });
+    
+    if (summary?.entries_by_service_type) {
+      summary.entries_by_service_type.forEach((entry) => {
+        serviceTypeMap[entry.service_type] = entry.total_hours;
+      });
+    }
+    
+    return ALL_SERVICE_TYPES.map((type) => ({
+      service_type: type,
+      total_hours: serviceTypeMap[type],
+    }));
   };
 
-  const handleSelectPathway = () => {
-    console.log('User tapped Select Pathway');
-    router.push('/select-pathway');
+  const handleDownloadPDF = async () => {
+    console.log('User tapped Download PDF Report');
+    setDownloadingPDF(true);
+    try {
+      const pdfBlob = await seaTimeApi.downloadPDFReport();
+      console.log('PDF report downloaded, blob size:', pdfBlob.size);
+
+      if (Platform.OS === 'web') {
+        const url = URL.createObjectURL(pdfBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `SeaTime_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        Alert.alert('Success', 'PDF report downloaded successfully');
+      } else {
+        const fileUri = `${FileSystem.documentDirectory}SeaTime_Report_${new Date().toISOString().split('T')[0]}.pdf`;
+        
+        const reader = new FileReader();
+        reader.readAsDataURL(pdfBlob);
+        reader.onloadend = async () => {
+          const base64data = reader.result as string;
+          const base64 = base64data.split(',')[1];
+          
+          await FileSystem.writeAsStringAsync(fileUri, base64, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          
+          console.log('PDF saved to:', fileUri);
+          
+          if (await Sharing.isAvailableAsync()) {
+            await Sharing.shareAsync(fileUri);
+          } else {
+            Alert.alert('Success', 'PDF report saved to device');
+          }
+        };
+      }
+    } catch (error) {
+      console.error('Failed to download PDF report:', error);
+      Alert.alert('Error', 'Failed to download PDF report. Please try again.');
+    } finally {
+      setDownloadingPDF(false);
+    }
   };
 
-  const convertHoursToDays = (hours: number | null | undefined): number => {
-    if (hours === null || hours === undefined) return 0;
-    return Math.floor(hours / 4);
+  const handleDownloadCSV = async () => {
+    console.log('User tapped Download CSV Report');
+    setDownloadingCSV(true);
+    try {
+      const csvData = await seaTimeApi.downloadCSVReport();
+      console.log('CSV report downloaded, size:', csvData.length);
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csvData], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `SeaTime_Report_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        Alert.alert('Success', 'CSV report downloaded successfully');
+      } else {
+        const fileUri = `${FileSystem.documentDirectory}SeaTime_Report_${new Date().toISOString().split('T')[0]}.csv`;
+        
+        await FileSystem.writeAsStringAsync(fileUri, csvData, {
+          encoding: FileSystem.EncodingType.UTF8,
+        });
+        
+        console.log('CSV saved to:', fileUri);
+        
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(fileUri);
+        } else {
+          Alert.alert('Success', 'CSV report saved to device');
+        }
+      }
+    } catch (error) {
+      console.error('Failed to download CSV report:', error);
+      Alert.alert('Error', 'Failed to download CSV report. Please try again.');
+    } finally {
+      setDownloadingCSV(false);
+    }
+  };
+
+  const handleManageBiometric = async () => {
+    console.log('User tapped Manage Biometric Authentication');
+    
+    if (!biometricAvailable) {
+      Alert.alert(
+        'Not Available',
+        `${biometricType} is not available on this device. Please ensure you have enrolled biometric credentials in your device settings.`
+      );
+      return;
+    }
+
+    if (hasSavedCredentials) {
+      Alert.alert(
+        `Disable ${biometricType}`,
+        `Do you want to disable ${biometricType} sign in? You will need to enter your password next time.`,
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Disable',
+            style: 'destructive',
+            onPress: async () => {
+              console.log('User confirmed disable biometric');
+              await clearBiometricCredentials();
+              setHasSavedCredentials(false);
+              Alert.alert('Success', `${biometricType} sign in has been disabled`);
+            },
+          },
+        ]
+      );
+    } else {
+      Alert.alert(
+        `Enable ${biometricType}`,
+        `To enable ${biometricType} sign in, please sign out and sign in again with the "Remember me" checkbox enabled.`
+      );
+    }
+  };
+
+  const handleSignOut = async () => {
+    console.log('User tapped Sign Out');
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('User confirmed sign out');
+            try {
+              await signOut();
+              console.log('Sign out successful');
+            } catch (error) {
+              console.error('Sign out error:', error);
+              Alert.alert('Error', 'Failed to sign out');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const getInitials = (name: string | null | undefined) => {
+    if (!name || typeof name !== 'string') {
+      return '?';
+    }
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .substring(0, 2);
   };
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
         <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={{ color: isDark ? colors.text : colors.textLight, marginTop: 16, fontSize: 16 }}>
+          Loading your profile...
+        </Text>
+        <Text style={{ color: isDark ? colors.textSecondary : colors.textSecondaryLight, marginTop: 8, fontSize: 14, textAlign: 'center' }}>
+          This may take a moment on slower connections
+        </Text>
       </View>
     );
   }
 
-  const userName = profile?.name || user?.name || 'User';
-  const userEmail = profile?.email || user?.email || '';
-  const avatarLetter = userName.charAt(0).toUpperCase();
-  
-  const totalDays = summary?.total_days || 0;
-  const hasSeaTimeEntries = totalDays > 0;
-  const seaTimeSummaryMessage = hasSeaTimeEntries 
-    ? `Total Days: ${totalDays}` 
-    : 'No confirmed sea time entries yet';
-
-  const pathwayDepartment = profile?.department;
-  const pathwayText = pathwayDepartment === 'deck' 
-    ? 'Deck Officer' 
-    : pathwayDepartment === 'engineering' 
-    ? 'Engineering Officer' 
-    : 'Not Selected';
-
-  const serviceTypes = [
-    { key: 'actual_sea_service', label: 'Actual Sea Service' },
-    { key: 'watchkeeping_service', label: 'Watchkeeping Service' },
-    { key: 'stand_by_service', label: 'Stand-by Service' },
-    { key: 'yard_service', label: 'Yard Service' },
-    { key: 'service_in_port', label: 'Service in Port' },
-  ];
-
-  const getServiceTypeDays = (serviceTypeKey: string): number => {
-    if (!summary?.entries_by_service_type) return 0;
-    const entry = summary.entries_by_service_type.find(
-      (e) => e.service_type === serviceTypeKey
+  if (!profile) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+        <IconSymbol
+          ios_icon_name="exclamationmark.triangle"
+          android_material_icon_name="warning"
+          size={48}
+          color={colors.primary}
+        />
+        <Text style={{ color: isDark ? colors.text : colors.textLight, marginTop: 16, fontSize: 18, fontWeight: '600' }}>
+          Unable to Load Profile
+        </Text>
+        <Text style={{ color: isDark ? colors.textSecondary : colors.textSecondaryLight, marginTop: 8, fontSize: 14, textAlign: 'center' }}>
+          Please check your internet connection
+        </Text>
+        <TouchableOpacity
+          style={[styles.reportButton, { marginTop: 20, width: 200 }]}
+          onPress={() => {
+            setLoading(true);
+            loadProfile(0);
+            loadSummary(0);
+            loadVessels(0);
+          }}
+        >
+          <IconSymbol
+            ios_icon_name="arrow.clockwise"
+            android_material_icon_name="refresh"
+            size={20}
+            color="#ffffff"
+          />
+          <Text style={styles.reportButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
     );
-    if (!entry) return 0;
-    return entry.total_days !== undefined
-      ? Math.floor(entry.total_days)
-      : convertHoursToDays(entry.total_hours);
-  };
+  }
+
+  const imageUrl = profile.imageUrl || (profile.image ? `${seaTimeApi.API_BASE_URL}/${profile.image}` : null);
+  const displayName = profile.name || 'User';
+  const initials = getInitials(profile.name);
+  const totalDays = summary ? Math.floor(summary.total_hours / 24) : 0;
+
+  const userDepartment = profile?.department?.toLowerCase();
+  const filteredDefinitions = SEA_DAY_DEFINITIONS.filter(
+    (def) => (def.department === 'both' || def.department === userDepartment) && def.title !== 'Administrative Rules'
+  );
+
+  const allServiceTypes = getAllServiceTypesWithHours();
+
+  console.log('Profile image URL:', imageUrl);
+  console.log('User department:', userDepartment, '- Showing', filteredDefinitions.length, 'definitions');
 
   return (
-    <>
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
-      >
-        <View style={styles.greyHeader}>
-          <View style={styles.headerRow}>
-            <View style={styles.lighthouseIcon}>
-              <IconSymbol
-                ios_icon_name="lighthouse.fill"
-                android_material_icon_name="place"
-                size={32}
-                color={colors.primary}
-              />
-            </View>
-            <Text style={styles.headerTitle}>Profile</Text>
-          </View>
-          
-          <Text style={styles.headerSubtitle}>Your Sea Time Profile & Reports</Text>
-
-          <View style={styles.profileInfoContainer}>
-            <View style={styles.avatarContainer}>
-              <Text style={styles.avatarText}>{avatarLetter}</Text>
-            </View>
-
-            <Text style={styles.userName}>{userName}</Text>
-            <Text style={styles.userEmail}>{userEmail}</Text>
+    <View style={styles.container}>
+      <View style={styles.pageHeader}>
+        <View style={styles.headerTitleContainer}>
+          <Image
+            source={require('@/assets/images/c13cbd51-c2f7-489f-bbbb-6b28094d9b2b.png')}
+            style={styles.appIcon}
+            resizeMode="contain"
+          />
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.headerTitle} numberOfLines={1} ellipsizeMode="tail">
+              Profile
+            </Text>
+            <Text style={styles.headerSubtitle}>Your Sea Time Profile & Reports</Text>
           </View>
         </View>
+      </View>
 
-        <View style={styles.contentSection}>
-          <Text style={styles.sectionTitle}>Sea Time Summary</Text>
-          <View style={styles.card}>
-            <Text style={styles.emptyStateText}>{seaTimeSummaryMessage}</Text>
-          </View>
-
-          <View style={styles.reportButtonsRow}>
-            <TouchableOpacity style={styles.reportButton} onPress={handleGeneratePDF}>
-              <IconSymbol
-                ios_icon_name="doc.fill"
-                android_material_icon_name="description"
-                size={20}
-                color="#FFFFFF"
-              />
-              <Text style={styles.reportButtonText}>PDF Report</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.reportButton} onPress={handleGenerateCSV}>
-              <IconSymbol
-                ios_icon_name="tablecells"
-                android_material_icon_name="insert-drive-file"
-                size={20}
-                color="#FFFFFF"
-              />
-              <Text style={styles.reportButtonText}>CSV Report</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.sectionTitle}>Pathway Badge</Text>
-          <TouchableOpacity style={styles.pathwayCard} onPress={handleSelectPathway}>
-            <View style={styles.pathwayContent}>
-              <IconSymbol
-                ios_icon_name="shield.fill"
-                android_material_icon_name="verified"
-                size={24}
-                color={colors.primary}
-              />
-              <Text style={styles.pathwayText}>{pathwayText}</Text>
+      <ScrollView style={styles.scrollView}>
+        <View style={styles.content}>
+          <View style={styles.profileSection}>
+            <View style={styles.profileImageContainer}>
+              {imageUrl ? (
+                <Image source={{ uri: imageUrl }} style={styles.profileImage} />
+              ) : (
+                <Text style={styles.profileInitials}>{initials}</Text>
+              )}
             </View>
-            <IconSymbol
-              ios_icon_name="chevron.right"
-              android_material_icon_name="arrow-forward"
-              size={20}
-              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-            />
-          </TouchableOpacity>
-
-          <Text style={styles.sectionTitle}>Sea Time by Service Type</Text>
-          <View style={styles.card}>
-            {serviceTypes.map((serviceType, index) => {
-              const isLast = index === serviceTypes.length - 1;
-              const days = getServiceTypeDays(serviceType.key);
-              const daysText = days.toString();
-              
-              return (
-                <View
-                  key={serviceType.key}
-                  style={[styles.serviceTypeRow, isLast && styles.serviceTypeRowLast]}
-                >
-                  <Text style={styles.serviceTypeLabel}>{serviceType.label}</Text>
-                  <Text style={styles.serviceTypeValue}>{daysText}</Text>
-                </View>
-              );
-            })}
+            <Text style={styles.profileName}>{displayName}</Text>
+            <Text style={styles.profileEmail}>{profile.email}</Text>
+            {profile.department && (
+              <View style={styles.departmentBadge}>
+                <Text style={styles.departmentBadgeText}>
+                  {profile.department.toLowerCase() === 'deck' ? '⚓ Deck Department' : '⚙️ Engineering Department'}
+                </Text>
+              </View>
+            )}
           </View>
 
-          <Text style={styles.sectionTitle}>Account</Text>
-          <View style={styles.accountCard}>
-            <TouchableOpacity style={styles.accountButton} onPress={handleEditProfile}>
-              <View style={styles.accountButtonContent}>
+          {!loadingSummary && summary && summary.entries_by_vessel.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Download Reports</Text>
+              <View style={styles.card}>
+                <TouchableOpacity
+                  style={styles.reportButton}
+                  onPress={handleDownloadPDF}
+                  disabled={downloadingPDF}
+                >
+                  {downloadingPDF ? (
+                    <ActivityIndicator color="#ffffff" />
+                  ) : (
+                    <>
+                      <IconSymbol
+                        ios_icon_name="doc.fill"
+                        android_material_icon_name="description"
+                        size={24}
+                        color="#ffffff"
+                      />
+                      <Text style={styles.reportButtonText}>Download PDF Report</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.reportButton}
+                  onPress={handleDownloadCSV}
+                  disabled={downloadingCSV}
+                >
+                  {downloadingCSV ? (
+                    <ActivityIndicator color="#ffffff" />
+                  ) : (
+                    <>
+                      <IconSymbol
+                        ios_icon_name="tablecells"
+                        android_material_icon_name="grid-on"
+                        size={24}
+                        color="#ffffff"
+                      />
+                      <Text style={styles.reportButtonText}>Download CSV Report</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Sea Time Summary</Text>
+            <View style={styles.card}>
+              {loadingSummary ? (
+                <Text style={styles.loadingText}>Loading summary...</Text>
+              ) : summary ? (
+                <>
+                  {summary.entries_by_vessel.length === 0 && (
+                    <Text style={styles.loadingText}>No confirmed sea time entries yet</Text>
+                  )}
+
+                  {summary.entries_by_vessel.length > 0 && (
+                    <>
+                      <View style={[styles.summaryRow, styles.summaryRowLast]}>
+                        <Text style={styles.summaryLabel}>Total Days</Text>
+                        <Text style={styles.summaryValue}>{totalDays}</Text>
+                      </View>
+                    </>
+                  )}
+                </>
+              ) : (
+                <Text style={styles.loadingText}>Unable to load summary</Text>
+              )}
+            </View>
+          </View>
+
+          {!loadingSummary && summary && summary.entries_by_vessel.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Sea Time by Vessel</Text>
+              <View style={styles.card}>
+                {summary.entries_by_vessel.map((vessel, index) => {
+                  const vesselDays = Math.floor(vessel.total_hours / 24);
+                  const isLast = index === summary.entries_by_vessel.length - 1;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={[styles.vesselButton, isLast && styles.vesselButtonLast]}
+                      onPress={() => handleVesselPress(vessel.vessel_name)}
+                    >
+                      <View style={styles.vesselButtonLeft}>
+                        <Text style={styles.vesselName}>{vessel.vessel_name}</Text>
+                        <Text style={styles.vesselDays}>
+                          {vesselDays} {vesselDays === 1 ? 'day' : 'days'}
+                        </Text>
+                      </View>
+                      <IconSymbol
+                        ios_icon_name="chevron.right"
+                        android_material_icon_name="arrow-forward"
+                        size={20}
+                        color={colors.textSecondary}
+                      />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {!loadingSummary && summary && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Sea Time by Service Type</Text>
+              <View style={styles.card}>
+                {allServiceTypes.map((serviceEntry, index) => {
+                  const serviceDays = Math.floor(serviceEntry.total_hours / 24);
+                  const isLast = index === allServiceTypes.length - 1;
+                  const formattedType = formatServiceType(serviceEntry.service_type);
+                  
+                  return (
+                    <View
+                      key={index}
+                      style={[styles.summaryRow, isLast && styles.summaryRowLast]}
+                    >
+                      <Text style={styles.summaryLabel}>{formattedType}</Text>
+                      <Text style={styles.summaryValue}>
+                        {serviceDays}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {profile.department && (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>
+                {profile.department.toLowerCase() === 'deck' ? 'Deck Department - Sea Service Definitions (MSN 1858)' : 'Engineering Department - Sea Service Definitions (MSN 1904)'}
+              </Text>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoText}>
+                  These definitions ensure your sea time records are compliant with MCA regulations for {profile.department.toLowerCase() === 'deck' ? 'Deck' : 'Engineering'} officers. All data capture in this app follows these standards.
+                </Text>
+              </View>
+              {filteredDefinitions.map((definition, index) => (
+                <View key={index} style={styles.definitionCard}>
+                  <Text style={styles.definitionTitle}>{definition.title}</Text>
+                  <Text style={styles.definitionDescription}>{definition.description}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Account</Text>
+            <View style={styles.card}>
+              <TouchableOpacity style={styles.menuItem} onPress={handleEditProfile}>
                 <IconSymbol
                   ios_icon_name="person.circle"
-                  android_material_icon_name="account-circle"
+                  android_material_icon_name="person"
                   size={24}
                   color={colors.primary}
+                  style={styles.menuItemIcon}
                 />
-                <Text style={styles.accountButtonText}>Edit Profile</Text>
-              </View>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={20}
-                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-              />
-            </TouchableOpacity>
+                <Text style={styles.menuItemText}>Edit Profile</Text>
+                <IconSymbol
+                  ios_icon_name="chevron.right"
+                  android_material_icon_name="arrow-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                  style={styles.menuItemChevron}
+                />
+              </TouchableOpacity>
 
-            <TouchableOpacity style={styles.accountButton} onPress={handleScheduledTasks}>
-              <View style={styles.accountButtonContent}>
+              <TouchableOpacity style={styles.menuItem} onPress={handleScheduledTasks}>
                 <IconSymbol
                   ios_icon_name="clock"
                   android_material_icon_name="schedule"
                   size={24}
                   color={colors.primary}
+                  style={styles.menuItemIcon}
                 />
-                <Text style={styles.accountButtonText}>Scheduled Tasks</Text>
-              </View>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={20}
-                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-              />
-            </TouchableOpacity>
+                <Text style={styles.menuItemText}>Scheduled Tasks</Text>
+                <IconSymbol
+                  ios_icon_name="chevron.right"
+                  android_material_icon_name="arrow-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                  style={styles.menuItemChevron}
+                />
+              </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.accountButton, styles.accountButtonLast]} onPress={handleNotificationSettings}>
-              <View style={styles.accountButtonContent}>
+              <TouchableOpacity 
+                style={biometricAvailable ? styles.menuItem : [styles.menuItem, styles.menuItemLast]} 
+                onPress={() => router.push('/notification-settings')}
+              >
                 <IconSymbol
                   ios_icon_name="bell"
                   android_material_icon_name="notifications"
                   size={24}
                   color={colors.primary}
+                  style={styles.menuItemIcon}
                 />
-                <Text style={styles.accountButtonText}>Notification Settings</Text>
-              </View>
-              <IconSymbol
-                ios_icon_name="chevron.right"
-                android_material_icon_name="arrow-forward"
-                size={20}
-                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-              />
-            </TouchableOpacity>
+                <Text style={styles.menuItemText}>Notification Settings</Text>
+                <IconSymbol
+                  ios_icon_name="chevron.right"
+                  android_material_icon_name="arrow-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                  style={styles.menuItemChevron}
+                />
+              </TouchableOpacity>
+
+              {biometricAvailable && (
+                <TouchableOpacity style={[styles.menuItem, styles.menuItemLast]} onPress={handleManageBiometric}>
+                  <IconSymbol
+                    ios_icon_name="faceid"
+                    android_material_icon_name="fingerprint"
+                    size={24}
+                    color={colors.primary}
+                    style={styles.menuItemIcon}
+                  />
+                  <Text style={styles.menuItemText}>
+                    {biometricType} Sign In {hasSavedCredentials ? '(Enabled)' : '(Disabled)'}
+                  </Text>
+                  <IconSymbol
+                    ios_icon_name="chevron.right"
+                    android_material_icon_name="arrow-forward"
+                    size={20}
+                    color={colors.textSecondary}
+                    style={styles.menuItemChevron}
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
 
           <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
             <Text style={styles.signOutButtonText}>Sign Out</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.contactSupportButton} onPress={handleContactSupport}>
-            <Text style={styles.contactSupportButtonText}>Contact Support</Text>
+          <TouchableOpacity style={styles.supportButton} onPress={handleSupport}>
+            <Text style={styles.supportButtonText}>Contact Support</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
       <Modal
-        visible={showSignOutModal}
-        transparent
+        visible={showVesselModal}
+        transparent={true}
         animationType="fade"
-        onRequestClose={cancelSignOut}
+        onRequestClose={handleCloseModal}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Sign Out</Text>
-            <Text style={styles.modalMessage}>Are you sure you want to sign out?</Text>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={cancelSignOut}
-              >
-                <Text style={styles.modalButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonConfirm]}
-                onPress={confirmSignOut}
-              >
-                <Text style={[styles.modalButtonText, styles.modalButtonTextConfirm]}>Sign Out</Text>
-              </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={handleCloseModal}
+        >
+          <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Yacht Particulars</Text>
+                <TouchableOpacity onPress={handleCloseModal} style={styles.closeButton}>
+                  <IconSymbol
+                    ios_icon_name="xmark"
+                    android_material_icon_name="close"
+                    size={24}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalScrollView}>
+                {selectedVessel && (
+                  <>
+                    <View style={styles.particularRow}>
+                      <Text style={styles.particularLabel}>Vessel Name</Text>
+                      <Text style={styles.particularValue}>{selectedVessel.vessel_name}</Text>
+                    </View>
+                    <View style={styles.particularRow}>
+                      <Text style={styles.particularLabel}>MMSI</Text>
+                      <Text style={styles.particularValue}>{selectedVessel.mmsi}</Text>
+                    </View>
+                    {selectedVessel.flag && (
+                      <View style={styles.particularRow}>
+                        <Text style={styles.particularLabel}>Flag</Text>
+                        <Text style={styles.particularValue}>{selectedVessel.flag}</Text>
+                      </View>
+                    )}
+                    {selectedVessel.official_number && (
+                      <View style={styles.particularRow}>
+                        <Text style={styles.particularLabel}>Official Number</Text>
+                        <Text style={styles.particularValue}>{selectedVessel.official_number}</Text>
+                      </View>
+                    )}
+                    {selectedVessel.vessel_type && (
+                      <View style={styles.particularRow}>
+                        <Text style={styles.particularLabel}>Vessel Type</Text>
+                        <Text style={styles.particularValue}>{selectedVessel.vessel_type}</Text>
+                      </View>
+                    )}
+                    {selectedVessel.length_metres && (
+                      <View style={styles.particularRow}>
+                        <Text style={styles.particularLabel}>Length</Text>
+                        <Text style={styles.particularValue}>{selectedVessel.length_metres}m</Text>
+                      </View>
+                    )}
+                    {selectedVessel.gross_tonnes && (
+                      <View style={styles.particularRow}>
+                        <Text style={styles.particularLabel}>Gross Tonnes</Text>
+                        <Text style={styles.particularValue}>{selectedVessel.gross_tonnes}</Text>
+                      </View>
+                    )}
+                    {selectedVessel.callsign && (
+                      <View style={styles.particularRow}>
+                        <Text style={styles.particularLabel}>Callsign</Text>
+                        <Text style={styles.particularValue}>{selectedVessel.callsign}</Text>
+                      </View>
+                    )}
+                    <View style={[styles.particularRow, styles.particularRowLast]}>
+                      <Text style={styles.particularLabel}>Status</Text>
+                      <Text style={styles.particularValue}>
+                        {selectedVessel.is_active ? 'Active' : 'Inactive'}
+                      </Text>
+                    </View>
+                  </>
+                )}
+              </ScrollView>
             </View>
-          </View>
-        </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
-    </>
+    </View>
   );
 }

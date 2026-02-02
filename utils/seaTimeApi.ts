@@ -270,8 +270,6 @@ export const createVessel = async (
     // Provide user-friendly error messages based on status code
     if (response.status === 409) {
       errorMessage = 'You already have a vessel with this MMSI. Please use a different MMSI or edit your existing vessel.';
-    } else if (response.status === 403) {
-      errorMessage = 'Active subscription required. Please subscribe to add vessels and track sea time.';
     } else if (response.status === 500) {
       errorMessage = 'Server error while creating vessel. Please try again or contact support if the issue persists.';
     } else if (response.status === 401) {
@@ -978,43 +976,6 @@ export const generateDemoEntries = async (email: string, count: number = 43) => 
   const data = await response.json();
   console.log('[seaTimeApi] Demo entries generated successfully:', data.entriesCreated);
   return data;
-};
-
-// Get sea time summary
-export const getSeaTimeSummary = async () => {
-  console.log('[seaTimeApi] Fetching sea time summary');
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/reports/summary`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch sea time summary:', response.status, errorText);
-    throw new Error(`Failed to fetch sea time summary: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Sea time summary fetched successfully');
-  return data;
-};
-
-// Get single sea time entry by ID
-export const getSeaTimeEntry = async (entryId: string) => {
-  console.log('[seaTimeApi] Fetching sea time entry:', entryId);
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch sea time entry:', response.status, errorText);
-    throw new Error(`Failed to fetch sea time entry: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Sea time entry fetched successfully');
-  return {
-    ...data,
-    vessel: normalizeVessel(data.vessel),
-  };
 };
 
 // Export getAuthToken and getApiHeaders for use in other components

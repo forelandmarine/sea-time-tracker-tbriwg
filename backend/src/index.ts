@@ -27,7 +27,6 @@
 import { createApplication } from "@specific-dev/framework";
 import * as appSchema from './db/schema.js';
 import * as authSchema from './db/auth-schema.js';
-import { eq } from 'drizzle-orm';
 
 // Import route registration functions
 import * as vesselsRoutes from './routes/vessels.js';
@@ -39,7 +38,6 @@ import * as authRoutes from './routes/auth.js';
 import * as profileRoutes from './routes/profile.js';
 import * as adminRoutes from './routes/admin.js';
 import * as notificationsRoutes from './routes/notifications.js';
-import * as subscriptionRoutes from './routes/subscription.js';
 
 // Import scheduler service
 import { startScheduler } from './services/scheduler.js';
@@ -91,84 +89,6 @@ app.fastify.addHook('onReady', async () => {
     // Test database connection by querying vessels table
     const vessels = await app.db.select().from(appSchema.vessels);
     app.logger.info({ vesselCount: vessels.length }, 'Database connection verified');
-
-    // Update jack@forelandmarine.com's subscription to active and set role to admin
-    const jackEmail = 'jack@forelandmarine.com';
-    try {
-      const jackUsers = await app.db
-        .select()
-        .from(authSchema.user)
-        .where(eq(authSchema.user.email, jackEmail));
-
-      if (jackUsers.length > 0) {
-        await app.db
-          .update(authSchema.user)
-          .set({
-            subscription_status: 'active',
-            role: 'admin',
-            updatedAt: new Date(),
-          })
-          .where(eq(authSchema.user.id, jackUsers[0].id));
-
-        app.logger.info({ email: jackEmail }, 'Ensured jack@forelandmarine.com has active subscription and admin role');
-      }
-    } catch (jackError) {
-      app.logger.debug({ err: jackError, email: jackEmail }, 'Could not update jack@forelandmarine.com (user may not exist yet)');
-    }
-
-    // Update test@seatime.com's subscription to active with 1-year expiration
-    const testEmail = 'test@seatime.com';
-    try {
-      const testUsers = await app.db
-        .select()
-        .from(authSchema.user)
-        .where(eq(authSchema.user.email, testEmail));
-
-      if (testUsers.length > 0) {
-        const expirationDate = new Date();
-        expirationDate.setFullYear(expirationDate.getFullYear() + 1);
-
-        await app.db
-          .update(authSchema.user)
-          .set({
-            subscription_status: 'active',
-            subscription_expires_at: expirationDate,
-            subscription_product_id: 'manual_activation',
-            updatedAt: new Date(),
-          })
-          .where(eq(authSchema.user.id, testUsers[0].id));
-
-        app.logger.info(
-          { email: testEmail, expiresAt: expirationDate.toISOString() },
-          'Ensured test@seatime.com has active subscription'
-        );
-      }
-    } catch (testError) {
-      app.logger.debug({ err: testError, email: testEmail }, 'Could not update test@seatime.com subscription (user may not exist yet)');
-    }
-
-    // Update dan@forelandmarine.com's subscription to active
-    const danEmail = 'dan@forelandmarine.com';
-    try {
-      const danUsers = await app.db
-        .select()
-        .from(authSchema.user)
-        .where(eq(authSchema.user.email, danEmail));
-
-      if (danUsers.length > 0) {
-        await app.db
-          .update(authSchema.user)
-          .set({
-            subscription_status: 'active',
-            updatedAt: new Date(),
-          })
-          .where(eq(authSchema.user.id, danUsers[0].id));
-
-        app.logger.info({ email: danEmail }, 'Ensured dan@forelandmarine.com has active subscription');
-      }
-    } catch (danError) {
-      app.logger.debug({ err: danError, email: danEmail }, 'Could not update dan@forelandmarine.com subscription (user may not exist yet)');
-    }
   } catch (error) {
     app.logger.warn({ err: error }, 'Database connection test failed - will attempt to connect on first query');
   }
@@ -188,7 +108,6 @@ authRoutes.register(app, app.fastify);
 profileRoutes.register(app, app.fastify);
 adminRoutes.register(app, app.fastify);
 notificationsRoutes.register(app, app.fastify);
-subscriptionRoutes.register(app, app.fastify);
 
 // Log API configuration status
 const aisApiKey = process.env.MYSHIPTRACKING_API_KEY;

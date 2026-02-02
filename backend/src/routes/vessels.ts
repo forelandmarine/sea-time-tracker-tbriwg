@@ -317,26 +317,6 @@ export function register(app: App, fastify: FastifyInstance) {
       return reply.code(401).send({ error: 'Authentication required' });
     }
 
-    // Check user subscription status
-    const users = await app.db
-      .select()
-      .from(authSchema.user)
-      .where(eq(authSchema.user.id, userId));
-
-    if (users.length === 0) {
-      app.logger.warn({ userId }, 'User not found');
-      return reply.code(401).send({ error: 'User not found' });
-    }
-
-    const user = users[0];
-    const subscriptionStatus = user.subscription_status || 'inactive';
-
-    // Check if subscription is active
-    if (subscriptionStatus !== 'active') {
-      app.logger.warn({ userId }, 'Vessel creation attempted with inactive subscription');
-      return reply.code(403).send({ error: 'Subscription required to create vessels. Please subscribe.' });
-    }
-
     const {
       mmsi,
       vessel_name,

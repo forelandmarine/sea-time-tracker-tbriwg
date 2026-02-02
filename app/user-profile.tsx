@@ -41,7 +41,6 @@ interface UserProfile {
   nationality?: string | null;
   pya_membership_no?: string | null;
   department?: string | null;
-  role?: string | null;
 }
 
 function createStyles(isDark: boolean) {
@@ -649,18 +648,10 @@ export default function UserProfileScreen() {
 
             <Text style={styles.sectionTitle}>Account</Text>
             <View style={styles.profileCard}>
-              <View style={[styles.profileRow, profile.role ? {} : styles.profileRowLast]}>
+              <View style={[styles.profileRow, styles.profileRowLast]}>
                 <Text style={styles.profileLabel}>Member Since</Text>
                 <Text style={styles.profileValue}>{formatDate(profile.createdAt || profile.created_at)}</Text>
               </View>
-              {profile.role && (
-                <View style={[styles.profileRow, styles.profileRowLast]}>
-                  <Text style={styles.profileLabel}>Role</Text>
-                  <Text style={[styles.profileValue, profile.role === 'admin' && { color: colors.primary }]}>
-                    {profile.role === 'admin' ? '🔑 Admin' : '👤 User'}
-                  </Text>
-                </View>
-              )}
             </View>
           </>
         )}

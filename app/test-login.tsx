@@ -34,44 +34,6 @@ export default function TestLoginScreen() {
     }
   };
 
-  const runSandboxUserTest = async () => {
-    setLoading(true);
-    setTestResult('Testing sandbox user creation and login...\n');
-    
-    try {
-      // Test 1: Create/verify sandbox user via backend endpoint
-      setTestResult(prev => prev + '\n✓ Step 1: Creating/verifying sandbox user via API...');
-      const response = await fetch(`${Constants.expoConfig?.extra?.backendUrl}/api/auth/test-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to create sandbox user: ${response.status}`);
-      }
-
-      const data = await response.json();
-      setTestResult(prev => prev + `\n✓ Step 2: ${data.message || 'Sandbox user ready'}`);
-      
-      // Test 2: Sign in with sandbox credentials
-      setTestResult(prev => prev + '\n✓ Step 3: Attempting sign in with sandboxuser@seatime.com...');
-      await signIn('sandboxuser@seatime.com', 'Testpassword123');
-      
-      setTestResult(prev => prev + '\n✓ Step 4: Sign in successful!');
-      setTestResult(prev => prev + `\n✓ Step 5: User authenticated: ${user?.email || 'checking...'}`);
-      setTestResult(prev => prev + `\n✓ Step 6: Auth status: ${isAuthenticated ? 'AUTHENTICATED' : 'NOT AUTHENTICATED'}`);
-      
-      setTestResult(prev => prev + '\n\n🎉 SANDBOX USER TEST PASSED! Sandbox user is working correctly.');
-    } catch (error: any) {
-      setTestResult(prev => prev + `\n\n❌ SANDBOX USER TEST FAILED: ${error.message || 'Unknown error'}`);
-      console.error('[TestLogin] Sandbox user error:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const runSignOutTest = async () => {
     setLoading(true);
     setTestResult('Testing sign out...\n');
