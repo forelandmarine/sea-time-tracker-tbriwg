@@ -100,6 +100,9 @@ export default function VesselDetailScreen() {
 
   const vesselId = Array.isArray(id) ? id[0] : id;
 
+  // Use global refresh hook FIRST (before loadData is defined)
+  const { triggerRefresh } = useGlobalRefresh();
+
   const loadData = useCallback(async () => {
     if (!vesselId) return;
 
@@ -159,9 +162,6 @@ export default function VesselDetailScreen() {
       setLoading(false);
     }
   }, [vesselId]);
-
-  // Use global refresh hook - but don't pass loadData to avoid infinite loop
-  const { triggerRefresh } = useGlobalRefresh();
 
   useEffect(() => {
     loadData();
