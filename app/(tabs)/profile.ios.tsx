@@ -555,7 +555,7 @@ export default function ProfileScreen() {
     loadProfile();
     loadSummary();
     loadVessels();
-  }, []);
+  }, [loadProfile, loadSummary, loadVessels]);
 
   useEffect(() => {
     if (refreshTrigger > 0) {
@@ -564,7 +564,7 @@ export default function ProfileScreen() {
       loadSummary();
       loadVessels();
     }
-  }, [refreshTrigger]);
+  }, [refreshTrigger, loadProfile, loadSummary, loadVessels]);
 
   const handleEditProfile = () => {
     console.log('User tapped Edit Profile');

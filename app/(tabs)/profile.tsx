@@ -482,15 +482,19 @@ export default function ProfileScreen() {
   console.log('ProfileScreen rendered');
 
   const checkBiometricStatus = useCallback(async () => {
-    const available = await isBiometricAvailable();
-    setBiometricAvailable(available);
-    
-    if (available) {
-      const type = await getBiometricType();
-      setBiometricType(type);
+    try {
+      const available = await isBiometricAvailable();
+      setBiometricAvailable(available);
       
-      const credentials = await getBiometricCredentials();
-      setHasSavedCredentials(!!credentials);
+      if (available) {
+        const type = await getBiometricType();
+        setBiometricType(type);
+        
+        const credentials = await getBiometricCredentials();
+        setHasSavedCredentials(!!credentials);
+      }
+    } catch (error) {
+      console.error('Error checking biometric status:', error);
     }
   }, []);
 
@@ -574,7 +578,7 @@ export default function ProfileScreen() {
     loadSummary();
     loadVessels();
     checkBiometricStatus();
-  }, []);
+  }, [loadProfile, loadSummary, loadVessels, checkBiometricStatus]);
 
   useEffect(() => {
     if (refreshTrigger > 0) {
@@ -583,7 +587,7 @@ export default function ProfileScreen() {
       loadSummary();
       loadVessels();
     }
-  }, [refreshTrigger]);
+  }, [refreshTrigger, loadProfile, loadSummary, loadVessels]);
 
   const handleEditProfile = () => {
     console.log('User tapped Edit Profile');
