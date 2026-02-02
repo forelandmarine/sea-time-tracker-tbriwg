@@ -74,18 +74,18 @@ export default function SeaTimeScreen() {
   const activeVessel = vessels.find(v => v.is_active);
   const historicVessels = vessels.filter(v => !v.is_active);
 
-  useEffect(() => {
-    console.log('[Home] Initial data load - will auto-refresh if stale');
-    loadData();
-  }, [loadData]);
-
-  // Listen for global refresh trigger
-  useEffect(() => {
-    if (refreshTrigger > 0) {
-      console.log('[Home] Global refresh triggered, reloading data');
-      loadData();
+  const isLocationStale = useCallback((timestamp: string | null | undefined): boolean => {
+    if (!timestamp) return false;
+    try {
+      const date = new Date(timestamp);
+      const now = new Date();
+      const hoursSinceUpdate = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+      // Consider data stale if it's more than 2 hours old (matching the AIS check interval)
+      return hoursSinceUpdate > 2;
+    } catch (e) {
+      return false;
     }
-  }, [refreshTrigger, loadData]);
+  }, []);
 
   const loadActiveVesselLocation = useCallback(async (vesselId: string, forceRefresh: boolean = false) => {
     try {
@@ -128,7 +128,7 @@ export default function SeaTimeScreen() {
     } finally {
       setLocationLoading(false);
     }
-  }, []);
+  }, [isLocationStale]);
 
   const loadData = useCallback(async () => {
     try {
@@ -153,6 +153,20 @@ export default function SeaTimeScreen() {
       setLoading(false);
     }
   }, [loadActiveVesselLocation]);
+
+  // Initial data load - MUST come AFTER loadData is defined
+  useEffect(() => {
+    console.log('[Home] Initial data load - will auto-refresh if stale');
+    loadData();
+  }, [loadData]);
+
+  // Listen for global refresh trigger - MUST come AFTER loadData is defined
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      console.log('[Home] Global refresh triggered, reloading data');
+      loadData();
+    }
+  }, [refreshTrigger, loadData]);
 
   const onRefresh = async () => {
     console.log('[Home] User triggered manual refresh');
@@ -348,19 +362,6 @@ export default function SeaTimeScreen() {
     } catch (e) {
       console.error('[Home] Failed to format timestamp:', e);
       return '';
-    }
-  };
-
-  const isLocationStale = (timestamp: string | null | undefined): boolean => {
-    if (!timestamp) return false;
-    try {
-      const date = new Date(timestamp);
-      const now = new Date();
-      const hoursSinceUpdate = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-      // Consider data stale if it's more than 2 hours old (matching the AIS check interval)
-      return hoursSinceUpdate > 2;
-    } catch (e) {
-      return false;
     }
   };
 
