@@ -2,9 +2,10 @@
 /**
  * StoreKit Integration for iOS In-App Purchases
  * 
- * This module handles iOS App Store subscriptions using expo-store-kit.
+ * This module handles iOS App Store subscriptions using direct App Store links.
  * 
  * Product ID: com.forelandmarine.seatime.monthly
+ * App ID: 6758010893
  * 
  * IMPORTANT: Prices are NEVER hardcoded. They are fetched from the App Store
  * to comply with Apple's StoreKit guidelines and ensure accurate pricing.
@@ -12,11 +13,14 @@
  * Flow:
  * 1. User taps "Subscribe" button → Opens App Store subscription page
  * 2. User completes purchase via App Store
- * 3. App receives receipt from StoreKit (automatic)
+ * 3. App receives receipt from StoreKit (automatic via iOS)
  * 4. App sends receipt to backend for verification
- * 5. Backend verifies with Apple servers
+ * 5. Backend verifies with Apple servers using APPLE_APP_SECRET
  * 6. Backend updates user subscription status
  * 7. App checks subscription status and grants access
+ * 
+ * Note: We use direct App Store links instead of expo-store-kit because
+ * expo-store-kit v0.0.1 is incomplete and causes build failures.
  */
 
 import { Platform, Linking, Alert } from 'react-native';
@@ -27,11 +31,11 @@ export const SUBSCRIPTION_PRODUCT_ID = 'com.forelandmarine.seatime.monthly';
 
 // App Store URLs
 const APP_STORE_SUBSCRIPTION_URL = 'https://apps.apple.com/account/subscriptions';
-const APP_STORE_APP_URL = 'https://apps.apple.com/app/id6739226819'; // Replace with actual App ID when available
+const APP_STORE_APP_URL = 'https://apps.apple.com/app/id6758010893';
 
 /**
  * Initialize StoreKit connection
- * Note: expo-store-kit v0.0.1 has limited API, so we primarily use App Store links
+ * Since we're using App Store links, this just validates the platform
  */
 export async function initializeStoreKit(): Promise<boolean> {
   if (Platform.OS !== 'ios') {
@@ -39,19 +43,14 @@ export async function initializeStoreKit(): Promise<boolean> {
     return false;
   }
 
-  try {
-    console.log('[StoreKit] StoreKit integration ready (using App Store links)');
-    return true;
-  } catch (error: any) {
-    console.error('[StoreKit] Initialization error:', error);
-    return false;
-  }
+  console.log('[StoreKit] StoreKit integration ready (using App Store links)');
+  return true;
 }
 
 /**
  * Get product information from App Store
  * CRITICAL: Never hardcode prices - always fetch from App Store
- * Returns null if unable to fetch (user should be directed to App Store)
+ * Returns null because we direct users to App Store for pricing
  */
 export async function getProductInfo(): Promise<{
   productIdentifier: string;
@@ -65,20 +64,8 @@ export async function getProductInfo(): Promise<{
     return null;
   }
 
-  try {
-    console.log('[StoreKit] Fetching product info from App Store (prices are never hardcoded)');
-    
-    // Note: expo-store-kit v0.0.1 has limited API
-    // In production, this would fetch actual prices from App Store
-    // For now, we return null to indicate prices should be viewed in App Store
-    console.warn('[StoreKit] expo-store-kit v0.0.1 does not support getProductsAsync');
-    console.warn('[StoreKit] Users must view pricing in App Store (no hardcoded prices)');
-    
-    return null;
-  } catch (error: any) {
-    console.error('[StoreKit] Error fetching product info:', error);
-    return null;
-  }
+  console.log('[StoreKit] Product info must be viewed in App Store (no hardcoded prices)');
+  return null;
 }
 
 /**
@@ -88,6 +75,11 @@ export async function getProductInfo(): Promise<{
 export async function openAppStoreSubscription(): Promise<void> {
   if (Platform.OS !== 'ios') {
     console.warn('[StoreKit] App Store subscriptions are iOS-only');
+    Alert.alert(
+      'iOS Only',
+      'Subscriptions are currently only available on iOS devices.',
+      [{ text: 'OK' }]
+    );
     return;
   }
 
@@ -129,6 +121,11 @@ export async function openAppStoreSubscription(): Promise<void> {
 export async function openSubscriptionManagement(): Promise<void> {
   if (Platform.OS !== 'ios') {
     console.warn('[StoreKit] Subscription management is iOS-only');
+    Alert.alert(
+      'iOS Only',
+      'Subscription management is only available on iOS devices.',
+      [{ text: 'OK' }]
+    );
     return;
   }
 
@@ -155,7 +152,7 @@ export async function openSubscriptionManagement(): Promise<void> {
 
 /**
  * Purchase subscription
- * Directs user to App Store since expo-store-kit v0.0.1 has limited API
+ * Directs user to App Store since we're using direct links
  */
 export async function purchaseSubscription(): Promise<{
   success: boolean;
@@ -207,8 +204,7 @@ export async function restorePurchases(): Promise<{
   try {
     console.log('[StoreKit] User requested restore - checking subscription status');
     
-    // Since expo-store-kit v0.0.1 has limited API, we'll just return a message
-    // The user should use "Check Subscription Status" button instead
+    // User should use "Check Subscription Status" button instead
     return {
       success: false,
       error: 'Please tap "Check Subscription Status" to verify your subscription',
@@ -267,7 +263,7 @@ export async function verifyReceiptWithBackend(
 
 /**
  * Complete purchase flow: purchase + verify
- * Since expo-store-kit v0.0.1 has limited API, this directs to App Store
+ * Since we're using App Store links, this directs to App Store
  */
 export async function completePurchaseFlow(): Promise<{
   success: boolean;
@@ -286,7 +282,7 @@ export async function completePurchaseFlow(): Promise<{
 
 /**
  * Complete restore flow: restore + verify
- * Since expo-store-kit v0.0.1 has limited API, this checks backend status
+ * Since we're using App Store links, this checks backend status
  */
 export async function completeRestoreFlow(): Promise<{
   success: boolean;
