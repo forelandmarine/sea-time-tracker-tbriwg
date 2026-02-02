@@ -16,7 +16,7 @@ import {
   Platform,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { API_BASE_URL, getApiHeaders } from '@/utils/seaTimeApi';
+import { generateDemoEntries } from '@/utils/seaTimeApi';
 
 interface GeneratedEntry {
   id: string;
@@ -185,8 +185,8 @@ export default function AdminGenerateSamplesScreen() {
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
 
-  const [email, setEmail] = useState('test@seatime.com');
-  const [vesselName, setVesselName] = useState('Lionheart');
+  const [email, setEmail] = useState('jack@forelandmarine.com');
+  const [count, setCount] = useState('43');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<GenerateResponse | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -202,10 +202,16 @@ export default function AdminGenerateSamplesScreen() {
   };
 
   const handleGenerate = async () => {
-    console.log('[AdminGenerate] User tapped Generate Samples button', { email, vesselName });
+    console.log('[AdminGenerate] User tapped Generate Demo Entries button', { email, count });
     
-    if (!email || !vesselName) {
-      showModalMessage('Error', 'Please enter both email and vessel name', 'error');
+    if (!email) {
+      showModalMessage('Error', 'Please enter an email address', 'error');
+      return;
+    }
+
+    const entryCount = parseInt(count, 10);
+    if (isNaN(entryCount) || entryCount < 1 || entryCount > 100) {
+      showModalMessage('Error', 'Please enter a valid count between 1 and 100', 'error');
       return;
     }
 
@@ -213,23 +219,9 @@ export default function AdminGenerateSamplesScreen() {
     setResult(null);
 
     try {
-      console.log('[AdminGenerate] Calling POST /api/sea-time/generate-sample-entries');
-      const headers = await getApiHeaders();
-      const response = await fetch(`${API_BASE_URL}/api/sea-time/generate-sample-entries`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          email,
-          vesselName,
-        }),
-      });
-
-      const data = await response.json();
-      console.log('[AdminGenerate] Response:', response.status, data);
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate samples');
-      }
+      console.log('[AdminGenerate] Calling generateDemoEntries API');
+      const data = await generateDemoEntries(email, entryCount);
+      console.log('[AdminGenerate] Response:', data);
 
       setResult(data);
       const entriesCount = data.entries?.length || data.entriesCreated || 0;
@@ -237,12 +229,12 @@ export default function AdminGenerateSamplesScreen() {
       
       showModalMessage(
         'Success',
-        `Generated ${entriesCount} sample entries for ${data.vessel.vessel_name}\n\nTotal Sea Days: ${totalSeaDays}`,
+        `Generated ${entriesCount} demo entries for ${email}\n\nTotal Sea Days: ${totalSeaDays}`,
         'success'
       );
     } catch (error) {
-      console.error('[AdminGenerate] Error generating samples:', error);
-      showModalMessage('Error', error instanceof Error ? error.message : 'Failed to generate samples', 'error');
+      console.error('[AdminGenerate] Error generating demo entries:', error);
+      showModalMessage('Error', error instanceof Error ? error.message : 'Failed to generate demo entries', 'error');
     } finally {
       setLoading(false);
     }
@@ -295,9 +287,9 @@ export default function AdminGenerateSamplesScreen() {
       />
       
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Generate Sample Sea Time Entries</Text>
+        <Text style={styles.title}>Generate Demo Sea Time Entries</Text>
         <Text style={styles.subtitle}>
-          Create 4 sample sea day entries for testing purposes. This will create a vessel if it doesn&apos;t exist.
+          Create demo sea time entries for testing purposes. This will create a demo vessel and generate entries spread over the past 12 months.
         </Text>
 
         <View style={styles.inputGroup}>
@@ -306,7 +298,7 @@ export default function AdminGenerateSamplesScreen() {
             style={styles.input}
             value={email}
             onChangeText={setEmail}
-            placeholder="test@seatime.com"
+            placeholder="jack@forelandmarine.com"
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
             keyboardType="email-address"
             autoCapitalize="none"
@@ -315,13 +307,14 @@ export default function AdminGenerateSamplesScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>Vessel Name</Text>
+          <Text style={styles.label}>Number of Entries (1-100)</Text>
           <TextInput
             style={styles.input}
-            value={vesselName}
-            onChangeText={setVesselName}
-            placeholder="Lionheart"
+            value={count}
+            onChangeText={setCount}
+            placeholder="43"
             placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
+            keyboardType="number-pad"
             editable={!loading}
           />
         </View>
@@ -334,19 +327,23 @@ export default function AdminGenerateSamplesScreen() {
           {loading ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.generateButtonText}>Generate 4 Sample Entries</Text>
+            <Text style={styles.generateButtonText}>Generate Demo Entries</Text>
           )}
         </TouchableOpacity>
 
         {result && (
           <View style={styles.resultCard}>
             <Text style={styles.resultTitle}>✅ {result.message}</Text>
-            <Text style={styles.resultText}>
-              <Text style={{ fontWeight: '600' }}>Vessel:</Text> {result.vessel.vessel_name}
-            </Text>
-            <Text style={styles.resultText}>
-              <Text style={{ fontWeight: '600' }}>MMSI:</Text> {result.vessel.mmsi}
-            </Text>
+            {result.vessel && (
+              <>
+                <Text style={styles.resultText}>
+                  <Text style={{ fontWeight: '600' }}>Vessel:</Text> {result.vessel.vessel_name}
+                </Text>
+                <Text style={styles.resultText}>
+                  <Text style={{ fontWeight: '600' }}>MMSI:</Text> {result.vessel.mmsi}
+                </Text>
+              </>
+            )}
             <Text style={styles.resultText}>
               <Text style={{ fontWeight: '600' }}>Entries Created:</Text> {result.entries?.length || result.entriesCreated || 0}
             </Text>

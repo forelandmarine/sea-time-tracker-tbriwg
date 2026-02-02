@@ -936,5 +936,26 @@ export const getVesselDiagnosticStatus = async (mmsi: string) => {
   return data;
 };
 
-// Export getAuthToken for use in other components
-export { getAuthToken };
+// Generate demo sea time entries for a user (admin endpoint)
+export const generateDemoEntries = async (email: string, count: number = 43) => {
+  console.log('[seaTimeApi] Generating demo entries for user:', email, 'count:', count);
+  const headers = await getApiHeaders();
+  const response = await fetch(`${API_BASE_URL}/api/admin/generate-demo-entries`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ email, count }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('[seaTimeApi] Failed to generate demo entries:', response.status, errorText);
+    throw new Error(`Failed to generate demo entries: ${response.status}`);
+  }
+
+  const data = await response.json();
+  console.log('[seaTimeApi] Demo entries generated successfully:', data.entriesCreated);
+  return data;
+};
+
+// Export getAuthToken and getApiHeaders for use in other components
+export { getAuthToken, getApiHeaders };
