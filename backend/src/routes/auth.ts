@@ -1013,74 +1013,85 @@ export function register(app: App, fastify: FastifyInstance) {
         );
 
         // Send email with reset code
-        try {
-          const resend = new Resend(process.env.RESEND_API_KEY);
-          const { data, error: emailError } = await resend.emails.send({
-            from: 'SeaTime Tracker <noreply@seatime.com>',
-            to: email,
-            subject: 'SeaTime Tracker - Password Reset Code',
-            html: `
-              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb; border-radius: 8px;">
-                <div style="background-color: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                  <h2 style="color: #1f2937; margin-top: 0; margin-bottom: 24px;">Password Reset Request</h2>
+        const resendApiKey = process.env.RESEND_API_KEY;
 
-                  <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-                    Hi ${user.name},
-                  </p>
+        if (!resendApiKey) {
+          // Development/testing mode: log the code to console for manual testing
+          app.logger.warn(
+            { userId: user.id, email, resetCode, expiresAt: expiresAt.toISOString() },
+            'RESEND_API_KEY not configured - password reset code logged to console for development. Set RESEND_API_KEY environment variable for production email sending.'
+          );
+        } else {
+          // Production mode: send email via Resend
+          try {
+            const resend = new Resend(resendApiKey);
+            const { data, error: emailError } = await resend.emails.send({
+              from: 'SeaTime Tracker <noreply@seatime.com>',
+              to: email,
+              subject: 'SeaTime Tracker - Password Reset Code',
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9fafb; border-radius: 8px;">
+                  <div style="background-color: #ffffff; padding: 40px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    <h2 style="color: #1f2937; margin-top: 0; margin-bottom: 24px;">Password Reset Request</h2>
 
-                  <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
-                    We received a request to reset your SeaTime Tracker password. If you made this request, use the code below to reset your password:
-                  </p>
+                    <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+                      Hi ${user.name},
+                    </p>
 
-                  <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 30px 0; text-align: center;">
-                    <div style="font-size: 32px; font-weight: bold; color: #0066cc; letter-spacing: 4px; font-family: 'Courier New', monospace;">
-                      ${resetCode}
+                    <p style="color: #4b5563; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+                      We received a request to reset your SeaTime Tracker password. If you made this request, use the code below to reset your password:
+                    </p>
+
+                    <div style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; margin: 30px 0; text-align: center;">
+                      <div style="font-size: 32px; font-weight: bold; color: #0066cc; letter-spacing: 4px; font-family: 'Courier New', monospace;">
+                        ${resetCode}
+                      </div>
+                    </div>
+
+                    <p style="color: #9ca3af; font-size: 14px; margin: 20px 0;">
+                      This code expires in <strong>15 minutes</strong>. If you didn't request this reset, you can safely ignore this email.
+                    </p>
+
+                    <p style="color: #4b5563; font-size: 14px; line-height: 1.6; margin-bottom: 20px;">
+                      For security reasons:
+                    </p>
+
+                    <ul style="color: #4b5563; font-size: 14px; line-height: 1.8; margin: 0 0 20px 20px; padding: 0;">
+                      <li>Never share this code with anyone</li>
+                      <li>SeaTime Tracker staff will never ask for this code</li>
+                      <li>This code is valid for 15 minutes only</li>
+                    </ul>
+
+                    <div style="border-top: 1px solid #e5e7eb; margin-top: 30px; padding-top: 20px;">
+                      <p style="color: #9ca3af; font-size: 12px; margin: 0;">
+                        © SeaTime Tracker. All rights reserved.
+                      </p>
                     </div>
                   </div>
-
-                  <p style="color: #9ca3af; font-size: 14px; margin: 20px 0;">
-                    This code expires in <strong>15 minutes</strong>. If you didn't request this reset, you can safely ignore this email.
-                  </p>
-
-                  <p style="color: #4b5563; font-size: 14px; line-height: 1.6; margin-bottom: 20px;">
-                    For security reasons:
-                  </p>
-
-                  <ul style="color: #4b5563; font-size: 14px; line-height: 1.8; margin: 0 0 20px 20px; padding: 0;">
-                    <li>Never share this code with anyone</li>
-                    <li>SeaTime Tracker staff will never ask for this code</li>
-                    <li>This code is valid for 15 minutes only</li>
-                  </ul>
-
-                  <div style="border-top: 1px solid #e5e7eb; margin-top: 30px; padding-top: 20px;">
-                    <p style="color: #9ca3af; font-size: 12px; margin: 0;">
-                      © SeaTime Tracker. All rights reserved.
-                    </p>
-                  </div>
                 </div>
-              </div>
-            `,
-            text: `Password Reset Code: ${resetCode}\n\nThis code expires in 15 minutes. If you didn't request this, you can safely ignore this email.`,
-          });
+              `,
+              text: `Password Reset Code: ${resetCode}\n\nThis code expires in 15 minutes. If you didn't request this, you can safely ignore this email.`,
+            });
 
-          if (emailError) {
+            if (emailError) {
+              app.logger.error(
+                { userId: user.id, email, emailError: emailError.message },
+                'Failed to send password reset email - user should still receive success response'
+              );
+              // Still return success to prevent email enumeration attacks
+            } else {
+              app.logger.info(
+                { userId: user.id, email, resetId, emailId: data?.id },
+                'Password reset email sent successfully'
+              );
+            }
+          } catch (emailError) {
             app.logger.error(
-              { userId: user.id, email, emailError: emailError.message },
+              { userId: user.id, email, emailError: emailError instanceof Error ? emailError.message : String(emailError) },
               'Failed to send password reset email - user should still receive success response'
             );
             // Still return success to prevent email enumeration attacks
-          } else {
-            app.logger.info(
-              { userId: user.id, email, resetId, emailId: data?.id },
-              'Password reset email sent successfully'
-            );
           }
-        } catch (emailError) {
-          app.logger.error(
-            { userId: user.id, email, emailError: emailError instanceof Error ? emailError.message : String(emailError) },
-            'Failed to send password reset email - user should still receive success response'
-          );
-          // Still return success to prevent email enumeration attacks
         }
 
         return reply.code(200).send({
