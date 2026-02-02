@@ -339,6 +339,11 @@ export default function ProfileScreen() {
     router.push('/admin-activate-subscriptions');
   }, [router]);
 
+  const handleUpdateUserSubscription = useCallback(() => {
+    console.log('User tapped Update User Subscription button');
+    router.push('/admin-update-subscription');
+  }, [router]);
+
   const formatDate = useCallback((dateString: string | null) => {
     if (!dateString) {
       return 'Not set';
@@ -460,6 +465,14 @@ export default function ProfileScreen() {
             >
               <Text style={styles.adminButtonText}>
                 Activate All Subscriptions (Testing)
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.adminButton}
+              onPress={handleUpdateUserSubscription}
+            >
+              <Text style={styles.adminButtonText}>
+                Update User Subscription
               </Text>
             </TouchableOpacity>
           </View>
