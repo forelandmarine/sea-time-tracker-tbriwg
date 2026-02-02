@@ -1,27 +1,20 @@
 
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import * as Sharing from 'expo-sharing';
 import { colors } from '@/styles/commonStyles';
 import React, { useState, useEffect, useCallback } from 'react';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
-import * as FileSystem from 'expo-file-system/legacy';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   useColorScheme,
-  Platform,
-  Image,
   ActivityIndicator,
-  Modal,
   RefreshControl,
-  Linking,
 } from 'react-native';
 
 interface UserProfile {
@@ -57,20 +50,6 @@ interface SeaTimeSummary {
   }[];
 }
 
-interface Vessel {
-  id: string;
-  mmsi: string;
-  vessel_name: string;
-  is_active: boolean;
-  created_at: string;
-  flag?: string;
-  official_number?: string;
-  vessel_type?: string;
-  length_metres?: number;
-  gross_tonnes?: number;
-  callsign?: string;
-}
-
 function createStyles(isDark: boolean, topInset: number) {
   return StyleSheet.create({
     container: {
@@ -95,67 +74,68 @@ function createStyles(isDark: boolean, topInset: number) {
       fontSize: 16,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
-    card: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 12,
-      padding: 16,
+    profileSection: {
+      alignItems: 'center',
+      marginBottom: 32,
+      paddingVertical: 24,
+    },
+    avatar: {
+      width: 120,
+      height: 120,
+      borderRadius: 60,
+      backgroundColor: colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
       marginBottom: 16,
     },
-    cardTitle: {
-      fontSize: 18,
+    avatarText: {
+      fontSize: 48,
+      fontWeight: 'bold',
+      color: '#FFFFFF',
+    },
+    userName: {
+      fontSize: 24,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 4,
+    },
+    userEmail: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+    },
+    sectionTitle: {
+      fontSize: 20,
       fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
       marginBottom: 12,
     },
-    totalDaysCard: {
+    card: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
       padding: 20,
       marginBottom: 16,
+    },
+    emptyCard: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 12,
+      padding: 24,
+      marginBottom: 16,
+      alignItems: 'center',
+    },
+    emptyText: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      textAlign: 'center',
+    },
+    serviceTypeRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-    },
-    totalDaysLabel: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-    },
-    totalDaysValue: {
-      fontSize: 32,
-      fontWeight: 'bold',
-      color: colors.primary,
-    },
-    vesselItem: {
       paddingVertical: 12,
       borderBottomWidth: 1,
       borderBottomColor: isDark ? colors.border : colors.borderLight,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
     },
-    vesselItemLast: {
-      borderBottomWidth: 0,
-    },
-    vesselName: {
-      fontSize: 16,
-      fontWeight: '500',
-      color: isDark ? colors.text : colors.textLight,
-    },
-    vesselDays: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: colors.primary,
-    },
-    serviceTypeItem: {
-      paddingVertical: 12,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? colors.border : colors.borderLight,
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    serviceTypeItemLast: {
+    serviceTypeRowLast: {
       borderBottomWidth: 0,
     },
     serviceTypeLabel: {
@@ -167,46 +147,42 @@ function createStyles(isDark: boolean, topInset: number) {
       fontWeight: '600',
       color: colors.primary,
     },
-    infoCard: {
-      backgroundColor: isDark ? '#1a2332' : '#e3f2fd',
+    accountSection: {
+      marginTop: 8,
+    },
+    accountCard: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
-      padding: 16,
       marginBottom: 16,
-      borderLeftWidth: 4,
-      borderLeftColor: colors.primary,
     },
-    infoTitle: {
+    accountButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: 16,
+    },
+    accountButtonContent: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    accountButtonText: {
       fontSize: 16,
-      fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
-      marginBottom: 8,
-    },
-    infoText: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      lineHeight: 20,
+      marginLeft: 12,
     },
     loadingContainer: {
       flex: 1,
       justifyContent: 'center',
       alignItems: 'center',
     },
-    emptyText: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      textAlign: 'center',
-      fontStyle: 'italic',
-      paddingVertical: 20,
-    },
   });
 }
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [summary, setSummary] = useState<SeaTimeSummary | null>(null);
-  const [vessels, setVessels] = useState<Vessel[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const router = useRouter();
@@ -242,22 +218,6 @@ export default function ProfileScreen() {
         console.log(`[Profile] Retrying summary load (${retryCount + 1}/2)`);
         setTimeout(() => loadSummary(retryCount + 1), 1000);
       }
-    }
-  }, []);
-
-  const loadVessels = useCallback(async (retryCount = 0) => {
-    try {
-      console.log('[Profile] Loading vessels');
-      const data = await seaTimeApi.getVessels();
-      console.log('[Profile] Vessels loaded:', data.length);
-      setVessels(data);
-    } catch (error: any) {
-      console.error('[Profile] Error loading vessels:', error);
-      
-      if (retryCount < 2) {
-        console.log(`[Profile] Retrying vessels load (${retryCount + 1}/2)`);
-        setTimeout(() => loadVessels(retryCount + 1), 1000);
-      }
     } finally {
       setLoading(false);
     }
@@ -267,8 +227,7 @@ export default function ProfileScreen() {
     console.log('[Profile] Component mounted');
     loadProfile();
     loadSummary();
-    loadVessels();
-  }, [loadProfile, loadSummary, loadVessels]);
+  }, [loadProfile, loadSummary]);
 
   useEffect(() => {
     const refreshTrigger = (global as any).__GLOBAL_REFRESH_TRIGGER__;
@@ -276,25 +235,23 @@ export default function ProfileScreen() {
       console.log('[Profile] Global refresh triggered');
       loadProfile();
       loadSummary();
-      loadVessels();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [(global as any).__GLOBAL_REFRESH_TRIGGER__]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await Promise.all([loadProfile(), loadSummary(), loadVessels()]);
+    await Promise.all([loadProfile(), loadSummary()]);
     setRefreshing(false);
-  }, [loadProfile, loadSummary, loadVessels]);
+  }, [loadProfile, loadSummary]);
 
-  const formatServiceType = (serviceType: string): string => {
-    return serviceType
-      .split('_')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join(' ');
+  const handleEditProfile = () => {
+    console.log('[Profile] User tapped Edit Profile');
+    router.push('/user-profile');
   };
 
-  const convertHoursToDays = (hours: number): number => {
+  const convertHoursToDays = (hours: number | null | undefined): number => {
+    if (hours === null || hours === undefined) return 0;
     return Math.floor(hours / 4);
   };
 
@@ -308,11 +265,30 @@ export default function ProfileScreen() {
     );
   }
 
-  const totalDays = summary?.total_days || 0;
-  const totalDaysText = Math.floor(totalDays).toString();
+  const userName = profile?.name || 'User';
+  const userEmail = profile?.email || user?.email || '';
+  const avatarLetter = userName.charAt(0).toUpperCase();
 
-  const vesselsBySeaTime = summary?.entries_by_vessel || [];
-  const serviceTypesBySeaTime = summary?.entries_by_service_type || [];
+  const hasConfirmedEntries = summary && summary.total_days > 0;
+
+  const serviceTypes = [
+    { key: 'actual_sea_service', label: 'Actual Sea Service' },
+    { key: 'watchkeeping_service', label: 'Watchkeeping Service' },
+    { key: 'stand_by_service', label: 'Stand-by Service' },
+    { key: 'yard_service', label: 'Yard Service' },
+    { key: 'service_in_port', label: 'Service in Port' },
+  ];
+
+  const getServiceTypeDays = (serviceTypeKey: string): number => {
+    if (!summary?.entries_by_service_type) return 0;
+    const entry = summary.entries_by_service_type.find(
+      (e) => e.service_type === serviceTypeKey
+    );
+    if (!entry) return 0;
+    return entry.total_days !== undefined
+      ? Math.floor(entry.total_days)
+      : convertHoursToDays(entry.total_hours);
+  };
 
   return (
     <ScrollView 
@@ -327,69 +303,65 @@ export default function ProfileScreen() {
         <Text style={styles.headerSubtitle}>Your Sea Time Profile &amp; Reports</Text>
       </View>
 
-      <View style={styles.totalDaysCard}>
-        <Text style={styles.totalDaysLabel}>Total Days</Text>
-        <Text style={styles.totalDaysValue}>{totalDaysText}</Text>
+      <View style={styles.profileSection}>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{avatarLetter}</Text>
+        </View>
+        <Text style={styles.userName}>{userName}</Text>
+        <Text style={styles.userEmail}>{userEmail}</Text>
       </View>
 
+      <Text style={styles.sectionTitle}>Sea Time Summary</Text>
+      {hasConfirmedEntries ? (
+        <View style={styles.card}>
+          <Text style={styles.emptyText}>Summary data available</Text>
+        </View>
+      ) : (
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyText}>No confirmed sea time entries yet</Text>
+        </View>
+      )}
+
+      <Text style={styles.sectionTitle}>Sea Time by Service Type</Text>
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Sea Time by Vessel</Text>
-        {vesselsBySeaTime.length > 0 ? (
-          vesselsBySeaTime.map((vessel, index) => {
-            const isLast = index === vesselsBySeaTime.length - 1;
-            const vesselName = vessel.vessel_name;
-            const days = vessel.total_days !== undefined 
-              ? Math.floor(vessel.total_days) 
-              : convertHoursToDays(vessel.total_hours);
-            const daysText = `${days} days`;
-            
-            return (
-              <View key={index} style={[styles.vesselItem, isLast && styles.vesselItemLast]}>
-                <Text style={styles.vesselName}>{vesselName}</Text>
-                <Text style={styles.vesselDays}>{daysText}</Text>
-              </View>
-            );
-          })
-        ) : (
-          <Text style={styles.emptyText}>No vessel data available</Text>
-        )}
+        {serviceTypes.map((serviceType, index) => {
+          const isLast = index === serviceTypes.length - 1;
+          const days = getServiceTypeDays(serviceType.key);
+          const daysText = days.toString();
+          
+          return (
+            <View
+              key={serviceType.key}
+              style={[styles.serviceTypeRow, isLast && styles.serviceTypeRowLast]}
+            >
+              <Text style={styles.serviceTypeLabel}>{serviceType.label}</Text>
+              <Text style={styles.serviceTypeValue}>{daysText}</Text>
+            </View>
+          );
+        })}
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Sea Time by Service Type</Text>
-        {serviceTypesBySeaTime.length > 0 ? (
-          serviceTypesBySeaTime.map((entry, index) => {
-            const isLast = index === serviceTypesBySeaTime.length - 1;
-            const serviceTypeLabel = formatServiceType(entry.service_type);
-            const value = entry.total_days !== undefined 
-              ? Math.floor(entry.total_days) 
-              : convertHoursToDays(entry.total_hours);
-            const valueText = value.toString();
-            
-            return (
-              <View key={entry.service_type} style={[styles.serviceTypeItem, isLast && styles.serviceTypeItemLast]}>
-                <Text style={styles.serviceTypeLabel}>{serviceTypeLabel}</Text>
-                <Text style={styles.serviceTypeValue}>{valueText}</Text>
-              </View>
-            );
-          })
-        ) : (
-          <Text style={styles.emptyText}>No service type data available</Text>
-        )}
-      </View>
-
-      <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>Engineering Department - Sea Service Definitions (MSN 1904)</Text>
-        <Text style={styles.infoText}>
-          These definitions ensure your sea time records are compliant with MCA regulations for Engineering officers. All data capture in this app follows these standards.
-        </Text>
-      </View>
-
-      <View style={styles.infoCard}>
-        <Text style={styles.infoTitle}>Onboard Yacht Service</Text>
-        <Text style={styles.infoText}>
-          Service on yachts is recognized for MCA certification purposes when properly documented and verified.
-        </Text>
+      <View style={styles.accountSection}>
+        <Text style={styles.sectionTitle}>Account</Text>
+        <View style={styles.accountCard}>
+          <TouchableOpacity style={styles.accountButton} onPress={handleEditProfile}>
+            <View style={styles.accountButtonContent}>
+              <IconSymbol
+                ios_icon_name="person.circle"
+                android_material_icon_name="account-circle"
+                size={24}
+                color={colors.primary}
+              />
+              <Text style={styles.accountButtonText}>Edit Profile</Text>
+            </View>
+            <IconSymbol
+              ios_icon_name="chevron.right"
+              android_material_icon_name="arrow-forward"
+              size={20}
+              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
     </ScrollView>
   );
