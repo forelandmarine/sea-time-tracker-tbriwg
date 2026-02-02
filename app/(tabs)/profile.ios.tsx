@@ -64,46 +64,55 @@ function createStyles(isDark: boolean, topInset: number) {
     greyHeader: {
       backgroundColor: isDark ? '#2C2C2E' : '#E5E5EA',
       paddingTop: topInset + 16,
-      paddingBottom: 24,
-      paddingHorizontal: 16,
-      alignItems: 'center',
+      paddingBottom: 32,
+      paddingHorizontal: 20,
+      alignItems: 'flex-start',
     },
     headerRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      marginBottom: 16,
+      marginBottom: 8,
       width: '100%',
     },
     lighthouseIcon: {
       marginRight: 12,
     },
     headerTitle: {
-      fontSize: 28,
+      fontSize: 34,
       fontWeight: 'bold',
       color: isDark ? colors.text : colors.textLight,
     },
+    headerSubtitle: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 32,
+    },
+    profileInfoContainer: {
+      alignItems: 'center',
+      width: '100%',
+    },
     avatarContainer: {
-      width: 80,
-      height: 80,
-      borderRadius: 40,
+      width: 100,
+      height: 100,
+      borderRadius: 50,
       backgroundColor: colors.primary,
       justifyContent: 'center',
       alignItems: 'center',
-      marginBottom: 12,
+      marginBottom: 16,
     },
     avatarText: {
-      fontSize: 36,
+      fontSize: 44,
       fontWeight: 'bold',
       color: '#FFFFFF',
     },
     userName: {
-      fontSize: 20,
+      fontSize: 22,
       fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
       marginBottom: 4,
     },
     userEmail: {
-      fontSize: 14,
+      fontSize: 15,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
     contentSection: {
@@ -492,13 +501,17 @@ export default function ProfileScreen() {
             </View>
             <Text style={styles.headerTitle}>Profile</Text>
           </View>
+          
+          <Text style={styles.headerSubtitle}>Your Sea Time Profile & Reports</Text>
 
-          <View style={styles.avatarContainer}>
-            <Text style={styles.avatarText}>{avatarLetter}</Text>
+          <View style={styles.profileInfoContainer}>
+            <View style={styles.avatarContainer}>
+              <Text style={styles.avatarText}>{avatarLetter}</Text>
+            </View>
+
+            <Text style={styles.userName}>{userName}</Text>
+            <Text style={styles.userEmail}>{userEmail}</Text>
           </View>
-
-          <Text style={styles.userName}>{userName}</Text>
-          <Text style={styles.userEmail}>{userEmail}</Text>
         </View>
 
         <View style={styles.contentSection}>
@@ -507,7 +520,6 @@ export default function ProfileScreen() {
             <Text style={styles.emptyStateText}>{seaTimeSummaryMessage}</Text>
           </View>
 
-          <Text style={styles.sectionTitle}>Generate Reports</Text>
           <View style={styles.reportButtonsRow}>
             <TouchableOpacity style={styles.reportButton} onPress={handleGeneratePDF}>
               <IconSymbol
