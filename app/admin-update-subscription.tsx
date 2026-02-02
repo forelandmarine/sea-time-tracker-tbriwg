@@ -180,7 +180,7 @@ export default function AdminUpdateSubscriptionScreen() {
   const styles = createStyles(isDark);
   const router = useRouter();
 
-  const [email, setEmail] = useState('test@seatime.com');
+  const [email, setEmail] = useState('dan@forelandmarine.com');
   const [subscriptionStatus, setSubscriptionStatus] = useState<'active' | 'inactive'>('active');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
@@ -220,9 +220,9 @@ export default function AdminUpdateSubscriptionScreen() {
     setError(null);
 
     try {
-      console.log('[AdminUpdateSubscription] Calling POST /api/admin/update-user-subscription');
+      console.log('[AdminUpdateSubscription] Calling POST /api/admin/update-user-subscription-by-email');
 
-      const response = await authenticatedPost('/api/admin/update-user-subscription', {
+      const response = await authenticatedPost('/api/admin/update-user-subscription-by-email', {
         email,
         subscriptionStatus,
       });
