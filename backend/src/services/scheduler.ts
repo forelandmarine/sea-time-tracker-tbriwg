@@ -327,6 +327,10 @@ async function processScheduledTask(
 
   // Handle sea time entry lifecycle based on movement analysis (only if AIS check was successful)
   if (ais_check) {
+    // First check for offshore passages (long gaps with significant distance)
+    await handleOffshorePassage(app, vesselId, vessel_name, mmsi, user_id, ais_check, taskId);
+
+    // Then handle regular 2-hour window detections
     await handleSeaTimeEntries(app, vessel, vesselId, vessel_name, mmsi, ais_data.is_moving, check_time, taskId, user_id);
   }
 
@@ -434,6 +438,191 @@ function getCalendarDay(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+/**
+ * Detect and handle offshore passages (vessel travels > 50nm with 3+ days gap in AIS data)
+ * Creates sea time entries for each calendar day in the gap
+ */
+async function handleOffshorePassage(
+  app: App,
+  vesselId: string,
+  vessel_name: string,
+  mmsi: string,
+  userId: string,
+  currentCheck: typeof schema.ais_checks.$inferSelect,
+  taskId: string
+): Promise<void> {
+  try {
+    // Get all AIS checks for this vessel, ordered by time
+    const allChecks = await app.db
+      .select()
+      .from(schema.ais_checks)
+      .where(eq(schema.ais_checks.vessel_id, vesselId))
+      .orderBy(schema.ais_checks.check_time);
+
+    if (allChecks.length < 2) {
+      app.logger.debug(
+        { vesselId, mmsi, checkCount: allChecks.length },
+        `Not enough AIS checks for offshore passage detection (need 2+)`
+      );
+      return;
+    }
+
+    // Find the previous check (the one before current)
+    const previousCheckIndex = allChecks.findIndex(c => c.id === currentCheck.id) - 1;
+    if (previousCheckIndex < 0) {
+      app.logger.debug({ vesselId, mmsi }, 'Current check is the first check, skipping offshore passage detection');
+      return;
+    }
+
+    const previousCheck = allChecks[previousCheckIndex];
+
+    // Check if both positions have valid coordinates
+    if (!previousCheck.latitude || !previousCheck.longitude || !currentCheck.latitude || !currentCheck.longitude) {
+      app.logger.debug(
+        { vesselId, mmsi },
+        `Missing position data in checks, skipping offshore passage detection`
+      );
+      return;
+    }
+
+    // Calculate time gap in days
+    const timeDiffMs = currentCheck.check_time.getTime() - previousCheck.check_time.getTime();
+    const daysBetween = timeDiffMs / (1000 * 60 * 60 * 24);
+
+    // Check if gap is at least 3 days
+    if (daysBetween < 3) {
+      app.logger.debug(
+        { vesselId, mmsi, daysBetween: Math.round(daysBetween * 100) / 100 },
+        `Gap too short for offshore passage (need 3+ days, got ${Math.round(daysBetween * 100) / 100})`
+      );
+      return;
+    }
+
+    // Calculate distance between previous and current positions
+    const prevLat = parseFloat(String(previousCheck.latitude));
+    const prevLng = parseFloat(String(previousCheck.longitude));
+    const currLat = parseFloat(String(currentCheck.latitude));
+    const currLng = parseFloat(String(currentCheck.longitude));
+
+    const distanceNm = calculateDistanceNauticalMiles(prevLat, prevLng, currLat, currLng);
+
+    // Check if distance is > 50nm (offshore passage threshold)
+    if (distanceNm <= 50) {
+      app.logger.debug(
+        { vesselId, mmsi, distanceNm, threshold: 50 },
+        `Distance too short for offshore passage (need >50nm, got ${distanceNm}nm)`
+      );
+      return;
+    }
+
+    // Offshore passage detected!
+    const daysCount = Math.ceil(daysBetween);
+
+    app.logger.info(
+      {
+        taskId,
+        vesselId,
+        mmsi,
+        userId,
+        distanceNm,
+        daysBetween: Math.round(daysBetween * 100) / 100,
+        daysCount,
+        previousCheckTime: previousCheck.check_time.toISOString(),
+        currentCheckTime: currentCheck.check_time.toISOString(),
+      },
+      `Offshore passage detected for vessel ${vessel_name} (MMSI: ${mmsi}): ${distanceNm}nm over ${Math.round(daysBetween * 100) / 100} days, creating ${daysCount} sea day entries`
+    );
+
+    // Generate sea time entries for each day in the gap (including end day, excluding start day)
+    const entriesCreated: string[] = [];
+
+    for (let dayOffset = 1; dayOffset <= daysCount; dayOffset++) {
+      // Calculate the calendar day (starting from day after previous check)
+      const dayDate = new Date(previousCheck.check_time.getTime() + dayOffset * 24 * 60 * 60 * 1000);
+
+      // Create start time as 00:00:00 UTC for that day
+      const startTime = new Date(Date.UTC(
+        dayDate.getUTCFullYear(),
+        dayDate.getUTCMonth(),
+        dayDate.getUTCDate(),
+        0, 0, 0, 0
+      ));
+
+      // Create end time as 23:59:59 UTC for that day
+      const endTime = new Date(Date.UTC(
+        dayDate.getUTCFullYear(),
+        dayDate.getUTCMonth(),
+        dayDate.getUTCDate(),
+        23, 59, 59, 999
+      ));
+
+      try {
+        const [entry] = await app.db
+          .insert(schema.sea_time_entries)
+          .values({
+            user_id: userId,
+            vessel_id: vesselId,
+            start_time: startTime,
+            end_time: endTime,
+            duration_hours: '24',
+            sea_days: 1,
+            start_latitude: String(prevLat),
+            start_longitude: String(prevLng),
+            end_latitude: String(currLat),
+            end_longitude: String(currLng),
+            status: 'pending',
+            service_type: 'actual_sea_service',
+            mca_compliant: true, // 24 hours > 4 hour requirement
+            is_stationary: false,
+            notes: `Offshore passage detected: vessel traveled ${distanceNm} nm over ${Math.round(daysBetween * 100) / 100} days. Estimated sea day.`,
+          })
+          .returning();
+
+        entriesCreated.push(entry.id);
+
+        app.logger.info(
+          {
+            taskId,
+            vesselId,
+            mmsi,
+            entryId: entry.id,
+            dayDate: getCalendarDay(dayDate),
+            startTime: startTime.toISOString(),
+            endTime: endTime.toISOString(),
+            durationHours: 24,
+            seaDays: 1,
+            mcaCompliant: true,
+          },
+          `Created offshore passage sea day entry for ${getCalendarDay(dayDate)}: ${entry.id}`
+        );
+      } catch (error) {
+        app.logger.error(
+          { err: error, vesselId, mmsi, dayOffset, dayDate: getCalendarDay(dayDate) },
+          `Failed to create offshore passage entry for day offset ${dayOffset}`
+        );
+      }
+    }
+
+    app.logger.info(
+      {
+        taskId,
+        vesselId,
+        mmsi,
+        userId,
+        entriesCreated: entriesCreated.length,
+        distanceNm,
+        daysBetween: Math.round(daysBetween * 100) / 100,
+      },
+      `Offshore passage processing complete for vessel ${vessel_name}: created ${entriesCreated.length} sea day entries`
+    );
+  } catch (error) {
+    app.logger.error(
+      { err: error, vesselId, mmsi, userId, taskId },
+      `Error processing offshore passage for vessel ${vessel_name}`
+    );
+  }
 }
 
 /**
