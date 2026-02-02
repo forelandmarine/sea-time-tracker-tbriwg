@@ -270,6 +270,8 @@ export const createVessel = async (
     // Provide user-friendly error messages based on status code
     if (response.status === 409) {
       errorMessage = 'You already have a vessel with this MMSI. Please use a different MMSI or edit your existing vessel.';
+    } else if (response.status === 403) {
+      errorMessage = 'Active subscription required. Please subscribe to add vessels and track sea time.';
     } else if (response.status === 500) {
       errorMessage = 'Server error while creating vessel. Please try again or contact support if the issue persists.';
     } else if (response.status === 401) {
