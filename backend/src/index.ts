@@ -114,6 +114,37 @@ app.fastify.addHook('onReady', async () => {
     } catch (jackError) {
       app.logger.debug({ err: jackError, email: jackEmail }, 'Could not update jack@forelandmarine.com subscription (user may not exist yet)');
     }
+
+    // Update test@seatime.com's subscription to active with 1-year expiration
+    const testEmail = 'test@seatime.com';
+    try {
+      const testUsers = await app.db
+        .select()
+        .from(authSchema.user)
+        .where(eq(authSchema.user.email, testEmail));
+
+      if (testUsers.length > 0) {
+        const expirationDate = new Date();
+        expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+
+        await app.db
+          .update(authSchema.user)
+          .set({
+            subscription_status: 'active',
+            subscription_expires_at: expirationDate,
+            subscription_product_id: 'manual_activation',
+            updatedAt: new Date(),
+          })
+          .where(eq(authSchema.user.id, testUsers[0].id));
+
+        app.logger.info(
+          { email: testEmail, expiresAt: expirationDate.toISOString() },
+          'Ensured test@seatime.com has active subscription'
+        );
+      }
+    } catch (testError) {
+      app.logger.debug({ err: testError, email: testEmail }, 'Could not update test@seatime.com subscription (user may not exist yet)');
+    }
   } catch (error) {
     app.logger.warn({ err: error }, 'Database connection test failed - will attempt to connect on first query');
   }

@@ -2499,6 +2499,7 @@ export function register(app: App, fastify: FastifyInstance) {
                   id: { type: 'string' },
                   email: { type: 'string' },
                   subscriptionStatus: { type: 'string' },
+                  subscriptionExpiresAt: { type: ['string', 'null'], format: 'date-time' },
                 },
               },
             },
@@ -2527,18 +2528,34 @@ export function register(app: App, fastify: FastifyInstance) {
 
         const user = users[0];
 
+        // Prepare update data
+        const updateData: any = {
+          subscription_status: subscriptionStatus,
+          updatedAt: new Date(),
+        };
+
+        // If setting to 'active', also set expiration date and product ID
+        if (subscriptionStatus === 'active') {
+          const expirationDate = new Date();
+          expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+          updateData.subscription_expires_at = expirationDate;
+          updateData.subscription_product_id = 'manual_activation';
+        }
+
         // Update user subscription status
         const [updatedUser] = await app.db
           .update(authSchema.user)
-          .set({
-            subscription_status: subscriptionStatus,
-            updatedAt: new Date(),
-          })
+          .set(updateData)
           .where(eq(authSchema.user.id, user.id))
           .returning();
 
         app.logger.info(
-          { userId: user.id, email, subscriptionStatus },
+          {
+            userId: user.id,
+            email,
+            subscriptionStatus,
+            expiresAt: updatedUser.subscription_expires_at?.toISOString(),
+          },
           'User subscription status updated successfully'
         );
 
@@ -2548,6 +2565,9 @@ export function register(app: App, fastify: FastifyInstance) {
             id: updatedUser.id,
             email: updatedUser.email,
             subscriptionStatus: updatedUser.subscription_status,
+            subscriptionExpiresAt: updatedUser.subscription_expires_at
+              ? updatedUser.subscription_expires_at.toISOString()
+              : null,
           },
         });
       } catch (error) {
