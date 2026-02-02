@@ -1,5 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { colors } from '@/styles/commonStyles';
+import React, { useState, useEffect, useCallback } from 'react';
+import * as seaTimeApi from '@/utils/seaTimeApi';
+import { IconSymbol } from '@/components/IconSymbol';
 import {
   View,
   Text,
@@ -15,10 +19,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import { colors } from '@/styles/commonStyles';
-import { IconSymbol } from '@/components/IconSymbol';
-import * as seaTimeApi from '@/utils/seaTimeApi';
-import DateTimePicker from '@react-native-community/datetimepicker';
 
 interface Vessel {
   id: string;
@@ -34,191 +34,98 @@ interface SeaTimeEntry {
   vessel: Vessel | null;
   start_time: string;
   end_time: string | null;
-  duration_hours: number | string | null;
-  sea_days: number | null;
+  duration_hours: number | null;
   status: 'pending' | 'confirmed' | 'rejected';
   notes: string | null;
   created_at: string;
-  start_latitude?: number | string | null;
-  start_longitude?: number | string | null;
-  end_latitude?: number | string | null;
-  end_longitude?: number | string | null;
+  start_latitude?: number | null;
+  start_longitude?: number | null;
+  end_latitude?: number | null;
+  end_longitude?: number | null;
   service_type?: string | null;
 }
 
-type ServiceType = 'seagoing' | 'standby' | 'yard';
+type ServiceType = 'watchkeeping' | 'cargo_operations' | 'maintenance' | 'training' | 'standby' | 'other';
 
-const createStyles = (isDark: boolean) =>
-  StyleSheet.create({
+function createStyles(isDark: boolean) {
+  return StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
-    header: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      paddingTop: Platform.OS === 'ios' ? 60 : 48,
-      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-    },
-    headerTitle: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: isDark ? colors.text : colors.textLight,
-    },
-    backButton: {
-      padding: 8,
-      marginLeft: -8,
-    },
-    deleteButton: {
-      padding: 8,
-      marginRight: -8,
-    },
-    scrollView: {
-      flex: 1,
-    },
     scrollContent: {
-      padding: 20,
-      paddingBottom: 40,
+      padding: 16,
+      paddingBottom: 100,
     },
-    inputGroup: {
-      marginBottom: 20,
+    section: {
+      marginBottom: 24,
     },
-    inputLabel: {
-      fontSize: 15,
+    label: {
+      fontSize: 16,
       fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
       marginBottom: 8,
     },
-    inputLabelOptional: {
-      fontSize: 13,
-      fontWeight: '400',
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-    },
     input: {
-      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
-      padding: 14,
+      padding: 16,
       fontSize: 16,
       color: isDark ? colors.text : colors.textLight,
       borderWidth: 1,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    textArea: {
+      minHeight: 100,
+      textAlignVertical: 'top',
+    },
+    dateButton: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 12,
+      padding: 16,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    dateButtonText: {
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
     },
     pickerButton: {
-      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
-      padding: 14,
+      padding: 16,
       borderWidth: 1,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+      borderColor: isDark ? colors.border : colors.borderLight,
       flexDirection: 'row',
-      justifyContent: 'space-between',
       alignItems: 'center',
+      justifyContent: 'space-between',
     },
     pickerButtonText: {
       fontSize: 16,
       color: isDark ? colors.text : colors.textLight,
-    },
-    pickerButtonPlaceholder: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-    },
-    dateTimeButton: {
-      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
-      borderRadius: 12,
-      padding: 14,
-      borderWidth: 1,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-    },
-    dateTimeText: {
-      fontSize: 16,
-      color: isDark ? colors.text : colors.textLight,
-    },
-    dateTimePlaceholder: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-    },
-    mcaButton: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
-      borderRadius: 12,
-      padding: 12,
-      marginBottom: 20,
-      borderWidth: 1,
-      borderColor: colors.primary,
-    },
-    mcaButtonText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: colors.primary,
-      marginLeft: 8,
-    },
-    serviceTypeContainer: {
-      flexDirection: 'row',
-      gap: 8,
-    },
-    serviceTypeButton: {
-      flex: 1,
-      paddingVertical: 12,
-      paddingHorizontal: 12,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
-      alignItems: 'center',
-    },
-    serviceTypeButtonActive: {
-      backgroundColor: colors.primary,
-      borderColor: colors.primary,
-    },
-    serviceTypeText: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-    },
-    serviceTypeTextActive: {
-      color: '#FFFFFF',
-    },
-    helperText: {
-      fontSize: 12,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 6,
-      fontStyle: 'italic',
-      lineHeight: 16,
-    },
-    voyageRow: {
-      flexDirection: 'row',
-      gap: 12,
-    },
-    voyageColumn: {
-      flex: 1,
-    },
-    divider: {
-      height: 1,
-      backgroundColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-      marginVertical: 20,
     },
     saveButton: {
       backgroundColor: colors.primary,
       borderRadius: 12,
       padding: 16,
       alignItems: 'center',
-      marginTop: 20,
+      marginTop: 24,
     },
     saveButtonDisabled: {
       opacity: 0.5,
     },
     saveButtonText: {
-      fontSize: 16,
-      fontWeight: '600',
       color: '#FFFFFF',
+      fontSize: 18,
+      fontWeight: '600',
+    },
+    loadingContainer: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
     },
     modalOverlay: {
       flex: 1,
@@ -226,217 +133,167 @@ const createStyles = (isDark: boolean) =>
       justifyContent: 'flex-end',
     },
     modalContent: {
-      backgroundColor: isDark ? colors.cardBackground : colors.cardBackgroundLight,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderTopLeftRadius: 20,
       borderTopRightRadius: 20,
-      maxHeight: '80%',
-    },
-    modalHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
       padding: 20,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
+      maxHeight: '50%',
     },
     modalTitle: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: isDark ? colors.text : colors.textLight,
-    },
-    modalCloseButton: {
-      padding: 4,
-    },
-    modalBody: {
-      maxHeight: 400,
-    },
-    vesselOption: {
-      padding: 16,
-      borderBottomWidth: 1,
-      borderBottomColor: isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)',
-    },
-    vesselOptionLast: {
-      borderBottomWidth: 0,
-    },
-    vesselOptionText: {
-      fontSize: 16,
-      color: isDark ? colors.text : colors.textLight,
-    },
-    vesselOptionSubtext: {
-      fontSize: 13,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 4,
-    },
-    datePickerContainer: {
-      padding: 20,
-    },
-    datePickerButton: {
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      padding: 16,
-      alignItems: 'center',
-      marginTop: 16,
-    },
-    datePickerButtonText: {
-      fontSize: 16,
+      fontSize: 18,
       fontWeight: '600',
-      color: '#FFFFFF',
-    },
-    emptyState: {
-      padding: 40,
-      alignItems: 'center',
-    },
-    emptyStateText: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 16,
       textAlign: 'center',
     },
-    loadingContainer: {
-      flex: 1,
-      justifyContent: 'center',
+    modalItem: {
+      padding: 16,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
+    },
+    modalItemText: {
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
+    },
+    modalItemSelected: {
+      backgroundColor: colors.primary + '20',
+    },
+    modalCloseButton: {
+      marginTop: 16,
+      padding: 16,
+      backgroundColor: colors.primary,
+      borderRadius: 12,
       alignItems: 'center',
     },
-    loadingText: {
-      marginTop: 12,
+    modalCloseButtonText: {
+      color: '#FFFFFF',
       fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-    },
-    disabledInput: {
-      opacity: 0.6,
+      fontWeight: '600',
     },
   });
+}
 
-const formatDateTime = (date: Date | null) => {
-  if (!date) return '';
+function formatDateTime(date: Date | null): string {
+  if (!date) return 'Not set';
   return date.toLocaleString('en-GB', {
     day: '2-digit',
-    month: 'short',
+    month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   });
-};
+}
 
 export default function EditSeaTimeScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const styles = createStyles(isDark);
-  const router = useRouter();
   const params = useLocalSearchParams();
   const entryId = params.id as string;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [entry, setEntry] = useState<SeaTimeEntry | null>(null);
+  const [vessels, setVessels] = useState<Vessel[]>([]);
+  const [selectedVesselId, setSelectedVesselId] = useState<string>('');
+  const [startTime, setStartTime] = useState<Date | null>(null);
+  const [endTime, setEndTime] = useState<Date | null>(null);
   const [notes, setNotes] = useState('');
-  const [serviceType, setServiceType] = useState<ServiceType>('seagoing');
-  const [voyageFrom, setVoyageFrom] = useState('');
-  const [voyageTo, setVoyageTo] = useState('');
+  const [startLat, setStartLat] = useState('');
+  const [startLon, setStartLon] = useState('');
+  const [endLat, setEndLat] = useState('');
+  const [endLon, setEndLon] = useState('');
+  const [serviceType, setServiceType] = useState<ServiceType>('watchkeeping');
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [showVesselPicker, setShowVesselPicker] = useState(false);
+  const [showServiceTypePicker, setShowServiceTypePicker] = useState(false);
 
-  useEffect(() => {
-    console.log('[EditSeaTimeScreen] Component mounted, loading entry:', entryId);
-    loadEntry();
-  }, [entryId, loadEntry]);
+  const router = useRouter();
 
-  const loadEntry = async () => {
+  const loadEntry = useCallback(async () => {
     try {
-      console.log('[EditSeaTimeScreen] Fetching entry details');
-      setLoading(true);
-      const entries = await seaTimeApi.getSeaTimeEntries();
-      const foundEntry = entries.find((e) => e.id === entryId);
+      console.log('[EditSeaTime] Loading entry:', entryId);
+      const data = await seaTimeApi.getSeaTimeEntry(entryId);
+      console.log('[EditSeaTime] Entry loaded:', data);
+      setEntry(data);
       
-      if (!foundEntry) {
-        Alert.alert('Error', 'Sea time entry not found');
-        router.back();
-        return;
+      if (data.vessel) {
+        setSelectedVesselId(data.vessel.id);
       }
-
-      console.log('[EditSeaTimeScreen] Entry loaded:', foundEntry);
-      setEntry(foundEntry);
-
-      const backendToUIServiceType: { [key: string]: ServiceType } = {
-        'actual_sea_service': 'seagoing',
-        'watchkeeping_service': 'seagoing',
-        'standby_service': 'standby',
-        'yard_service': 'yard',
-        'service_in_port': 'seagoing',
-      };
-      const uiServiceType = foundEntry.service_type 
-        ? (backendToUIServiceType[foundEntry.service_type] || 'seagoing')
-        : 'seagoing';
-      setServiceType(uiServiceType);
-      
-      const notesText = foundEntry.notes || '';
-      const lines = notesText.split('\n');
-      
-      let extractedFrom = '';
-      let extractedTo = '';
-      let remainingNotes: string[] = [];
-      
-      lines.forEach(line => {
-        if (line.startsWith('From:')) {
-          extractedFrom = line.replace('From:', '').trim();
-        } else if (line.startsWith('To:')) {
-          extractedTo = line.replace('To:', '').trim();
-        } else if (line.trim()) {
-          remainingNotes.push(line);
-        }
-      });
-      
-      setVoyageFrom(extractedFrom);
-      setVoyageTo(extractedTo);
-      setNotes(remainingNotes.join('\n'));
-    } catch (error) {
-      console.error('[EditSeaTimeScreen] Error loading entry:', error);
+      setStartTime(new Date(data.start_time));
+      if (data.end_time) {
+        setEndTime(new Date(data.end_time));
+      }
+      setNotes(data.notes || '');
+      setStartLat(data.start_latitude?.toString() || '');
+      setStartLon(data.start_longitude?.toString() || '');
+      setEndLat(data.end_latitude?.toString() || '');
+      setEndLon(data.end_longitude?.toString() || '');
+      setServiceType((data.service_type as ServiceType) || 'watchkeeping');
+    } catch (error: any) {
+      console.error('[EditSeaTime] Error loading entry:', error);
       Alert.alert('Error', 'Failed to load sea time entry');
       router.back();
     } finally {
       setLoading(false);
     }
+  }, [entryId, router]);
+
+  useEffect(() => {
+    console.log('[EditSeaTime] Component mounted');
+    loadEntry();
+    loadVessels();
+  }, [loadEntry]);
+
+  const loadVessels = async () => {
+    try {
+      console.log('[EditSeaTime] Loading vessels');
+      const data = await seaTimeApi.getVessels();
+      console.log('[EditSeaTime] Vessels loaded:', data.length);
+      setVessels(data);
+    } catch (error: any) {
+      console.error('[EditSeaTime] Error loading vessels:', error);
+    }
   };
 
-  const handleViewMCARequirements = async () => {
-    console.log('[EditSeaTimeScreen] User tapped View MCA Requirements');
-    try {
-      const userProfile = await seaTimeApi.getUserProfile();
-      const department = userProfile?.department?.toLowerCase() || 'deck';
-      console.log('[EditSeaTimeScreen] User department:', department);
-      router.push(`/mca-requirements?department=${department}`);
-    } catch (error) {
-      console.error('[EditSeaTimeScreen] Failed to get user profile:', error);
-      router.push('/mca-requirements?department=deck');
-    }
+  const parseLatLong = (text: string): number | null => {
+    const cleaned = text.trim();
+    if (!cleaned) return null;
+    const num = parseFloat(cleaned);
+    return isNaN(num) ? null : num;
   };
 
   const handleSave = async () => {
-    console.log('[EditSeaTimeScreen] User tapped Save');
-    
-    if (!entry) {
-      Alert.alert('Error', 'Entry not found');
+    if (!selectedVesselId) {
+      Alert.alert('Validation Error', 'Please select a vessel');
       return;
     }
 
+    if (!startTime) {
+      Alert.alert('Validation Error', 'Please select a start time');
+      return;
+    }
+
+    setSaving(true);
     try {
-      setSaving(true);
+      console.log('[EditSeaTime] Saving entry');
 
-      const serviceTypeMap: { [key: string]: string } = {
-        'seagoing': 'actual_sea_service',
-        'standby': 'standby_service',
-        'yard': 'yard_service',
+      const updateData = {
+        vessel_id: selectedVesselId,
+        start_time: startTime.toISOString(),
+        end_time: endTime ? endTime.toISOString() : null,
+        notes: notes.trim() || null,
+        start_latitude: parseLatLong(startLat),
+        start_longitude: parseLatLong(startLon),
+        end_latitude: parseLatLong(endLat),
+        end_longitude: parseLatLong(endLon),
+        service_type: serviceType,
       };
-      const backendServiceType = serviceTypeMap[serviceType] || 'actual_sea_service';
 
-      const voyageFromNote = voyageFrom ? `From: ${voyageFrom}` : '';
-      const voyageToNote = voyageTo ? `To: ${voyageTo}` : '';
-      
-      const noteParts = [voyageFromNote, voyageToNote, notes].filter(Boolean);
-      const fullNotes = noteParts.join('\n');
+      console.log('[EditSeaTime] Update data:', updateData);
 
-      console.log('[EditSeaTimeScreen] Updating sea time entry');
-      await seaTimeApi.updateSeaTimeEntry(entry.id, {
-        notes: fullNotes || null,
-        service_type: backendServiceType,
-      });
+      await seaTimeApi.updateSeaTimeEntry(entryId, updateData);
+      console.log('[EditSeaTime] Entry updated successfully');
 
       Alert.alert('Success', 'Sea time entry updated successfully', [
         {
@@ -445,342 +302,266 @@ export default function EditSeaTimeScreen() {
         },
       ]);
     } catch (error: any) {
-      console.error('[EditSeaTimeScreen] Error saving entry:', error);
+      console.error('[EditSeaTime] Error saving entry:', error);
       Alert.alert('Error', error.message || 'Failed to update sea time entry');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = () => {
-    if (!entry) return;
-
-    console.log('[EditSeaTimeScreen] User tapped delete button');
-    
-    Alert.alert(
-      'Delete Entry',
-      'Are you sure you want to delete this sea time entry? This action cannot be undone.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: () => console.log('[EditSeaTimeScreen] Delete cancelled'),
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              console.log('[EditSeaTimeScreen] Deleting sea time entry:', entry.id);
-              await seaTimeApi.deleteSeaTimeEntry(entry.id);
-              Alert.alert('Success', 'Sea time entry deleted successfully', [
-                {
-                  text: 'OK',
-                  onPress: () => router.back(),
-                },
-              ]);
-            } catch (error: any) {
-              console.error('[EditSeaTimeScreen] Error deleting entry:', error);
-              Alert.alert('Error', error.message || 'Failed to delete sea time entry');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
-  };
-
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-GB', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const mcaButtonText = 'View MCA Requirements';
-  const seagoingText = 'Seagoing';
-  const standbyText = 'Standby';
-  const yardText = 'Yard';
-  const standbyHelperText = 'Max 14 consecutive days; cannot exceed previous voyage length';
-  const yardHelperText = 'Up to 90 days total (continuous or split)';
-  const serviceTypeLabel = 'Service Type';
-  const vesselLabel = 'Vessel';
-  const startDateLabel = 'Start Date & Time';
-  const endDateLabel = 'End Date & Time';
-  const voyageLocationsLabel = 'Voyage Locations';
-  const voyageHelperText = 'Enter location names or coordinates (e.g., "51.5074, -0.1278")';
-  const fromLabel = 'From';
-  const fromPlaceholder = 'Port or coordinates';
-  const toLabel = 'To';
-  const toPlaceholder = 'Port or coordinates';
-  const notesLabel = 'Additional Notes';
-  const optionalText = '(Optional)';
-  const notesPlaceholder = 'Add any notes about this sea time...';
-  const saveButtonText = saving ? 'Saving...' : 'Update Entry';
-  const loadingText = 'Loading entry...';
-  const headerTitleText = 'Edit Sea Time Entry';
-  const cannotChangeText = 'Cannot be changed when editing';
+  const styles = createStyles(isDark);
 
   if (loading) {
     return (
-      <>
-        <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.container}>
-          <View style={styles.header}>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-              <IconSymbol
-                ios_icon_name="chevron.left"
-                android_material_icon_name="arrow-back"
-                size={24}
-                color={colors.primary}
-              />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>{headerTitleText}</Text>
-            <View style={styles.deleteButton} />
-          </View>
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>{loadingText}</Text>
-          </View>
-        </View>
-      </>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
     );
   }
 
-  if (!entry) {
-    return null;
-  }
+  const selectedVessel = vessels.find(v => v.id === selectedVesselId);
+  const vesselButtonText = selectedVessel ? selectedVessel.vessel_name : 'Select Vessel';
 
-  const startDateDisplay = `${formatDate(entry.start_time)} at ${formatTime(entry.start_time)}`;
-  const endDateDisplay = entry.end_time 
-    ? `${formatDate(entry.end_time)} at ${formatTime(entry.end_time)}`
-    : 'Not set';
+  const serviceTypeLabels: Record<ServiceType, string> = {
+    watchkeeping: 'Watchkeeping',
+    cargo_operations: 'Cargo Operations',
+    maintenance: 'Maintenance',
+    training: 'Training',
+    standby: 'Standby',
+    other: 'Other',
+  };
+
+  const serviceTypeButtonText = serviceTypeLabels[serviceType];
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
-      
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+      <Stack.Screen
+        options={{
+          title: 'Edit Sea Time',
+          headerShown: true,
+        }}
+      />
+      <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+        <View style={styles.section}>
+          <Text style={styles.label}>Vessel *</Text>
+          <TouchableOpacity style={styles.pickerButton} onPress={() => setShowVesselPicker(true)}>
+            <Text style={styles.pickerButtonText}>{vesselButtonText}</Text>
             <IconSymbol
-              ios_icon_name="chevron.left"
-              android_material_icon_name="arrow-back"
+              ios_icon_name="chevron.down"
+              android_material_icon_name="arrow-drop-down"
               size={24}
-              color={colors.primary}
-            />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{headerTitleText}</Text>
-          <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-            <IconSymbol
-              ios_icon_name="trash"
-              android_material_icon_name="delete"
-              size={22}
-              color="#FF3B30"
+              color={isDark ? colors.text : colors.textLight}
             />
           </TouchableOpacity>
         </View>
 
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={true}
-          bounces={true}
-        >
-          <TouchableOpacity style={styles.mcaButton} onPress={handleViewMCARequirements}>
+        <View style={styles.section}>
+          <Text style={styles.label}>Start Time *</Text>
+          <TouchableOpacity style={styles.dateButton} onPress={() => setShowStartPicker(true)}>
+            <Text style={styles.dateButtonText}>{formatDateTime(startTime)}</Text>
             <IconSymbol
-              ios_icon_name="info.circle"
-              android_material_icon_name="info"
-              size={20}
-              color={colors.primary}
+              ios_icon_name="calendar"
+              android_material_icon_name="calendar-today"
+              size={24}
+              color={isDark ? colors.text : colors.textLight}
             />
-            <Text style={styles.mcaButtonText}>{mcaButtonText}</Text>
           </TouchableOpacity>
+        </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{serviceTypeLabel}</Text>
-            <View style={styles.serviceTypeContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.serviceTypeButton,
-                  serviceType === 'seagoing' && styles.serviceTypeButtonActive,
-                ]}
-                onPress={() => setServiceType('seagoing')}
-              >
-                <Text
-                  style={[
-                    styles.serviceTypeText,
-                    serviceType === 'seagoing' && styles.serviceTypeTextActive,
-                  ]}
-                >
-                  {seagoingText}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.serviceTypeButton,
-                  serviceType === 'standby' && styles.serviceTypeButtonActive,
-                ]}
-                onPress={() => setServiceType('standby')}
-              >
-                <Text
-                  style={[
-                    styles.serviceTypeText,
-                    serviceType === 'standby' && styles.serviceTypeTextActive,
-                  ]}
-                >
-                  {standbyText}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.serviceTypeButton,
-                  serviceType === 'yard' && styles.serviceTypeButtonActive,
-                ]}
-                onPress={() => setServiceType('yard')}
-              >
-                <Text
-                  style={[
-                    styles.serviceTypeText,
-                    serviceType === 'yard' && styles.serviceTypeTextActive,
-                  ]}
-                >
-                  {yardText}
-                </Text>
-              </TouchableOpacity>
-            </View>
-            {serviceType === 'standby' && (
-              <Text style={styles.helperText}>
-                {standbyHelperText}
-              </Text>
-            )}
-            {serviceType === 'yard' && (
-              <Text style={styles.helperText}>
-                {yardHelperText}
-              </Text>
-            )}
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{vesselLabel}</Text>
-            <View style={[styles.pickerButton, styles.disabledInput]}>
-              <Text style={styles.pickerButtonText}>
-                {entry.vessel?.vessel_name || 'Unknown Vessel'}
-              </Text>
-            </View>
-            <Text style={styles.helperText}>{cannotChangeText}</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{startDateLabel}</Text>
-            <View style={[styles.dateTimeButton, styles.disabledInput]}>
-              <Text style={styles.dateTimeText}>{startDateDisplay}</Text>
-              <IconSymbol
-                ios_icon_name="calendar"
-                android_material_icon_name="calendar-today"
-                size={20}
-                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-              />
-            </View>
-            <Text style={styles.helperText}>{cannotChangeText}</Text>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>{endDateLabel}</Text>
-            <View style={[styles.dateTimeButton, styles.disabledInput]}>
-              <Text style={styles.dateTimeText}>{endDateDisplay}</Text>
-              <IconSymbol
-                ios_icon_name="calendar"
-                android_material_icon_name="calendar-today"
-                size={20}
-                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-              />
-            </View>
-            <Text style={styles.helperText}>{cannotChangeText}</Text>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.inputGroup}>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-              <Text style={styles.inputLabel}>{voyageLocationsLabel}</Text>
-              <Text style={styles.inputLabel}>
-                <Text style={styles.inputLabelOptional}> {optionalText}</Text>
-              </Text>
-            </View>
-            <Text style={styles.helperText}>
-              {voyageHelperText}
-            </Text>
-          </View>
-
-          <View style={styles.voyageRow}>
-            <View style={styles.voyageColumn}>
-              <Text style={[styles.inputLabel, { marginBottom: 8 }]}>{fromLabel}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={fromPlaceholder}
-                placeholderTextColor={
-                  isDark ? colors.textSecondary : colors.textSecondaryLight
-                }
-                value={voyageFrom}
-                onChangeText={setVoyageFrom}
-              />
-            </View>
-            <View style={styles.voyageColumn}>
-              <Text style={[styles.inputLabel, { marginBottom: 8 }]}>{toLabel}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={toPlaceholder}
-                placeholderTextColor={
-                  isDark ? colors.textSecondary : colors.textSecondaryLight
-                }
-                value={voyageTo}
-                onChangeText={setVoyageTo}
-              />
-            </View>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
-              <Text style={styles.inputLabel}>{notesLabel}</Text>
-              <Text style={styles.inputLabel}>
-                <Text style={styles.inputLabelOptional}> {optionalText}</Text>
-              </Text>
-            </View>
-            <TextInput
-              style={[styles.input, { height: 80, textAlignVertical: 'top' }]}
-              placeholder={notesPlaceholder}
-              placeholderTextColor={
-                isDark ? colors.textSecondary : colors.textSecondaryLight
-              }
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={3}
+        <View style={styles.section}>
+          <Text style={styles.label}>End Time</Text>
+          <TouchableOpacity style={styles.dateButton} onPress={() => setShowEndPicker(true)}>
+            <Text style={styles.dateButtonText}>{formatDateTime(endTime)}</Text>
+            <IconSymbol
+              ios_icon_name="calendar"
+              android_material_icon_name="calendar-today"
+              size={24}
+              color={isDark ? colors.text : colors.textLight}
             />
-          </View>
-
-          <TouchableOpacity 
-            style={[styles.saveButton, saving && styles.saveButtonDisabled]} 
-            onPress={handleSave}
-            disabled={saving}
-          >
-            <Text style={styles.saveButtonText}>{saveButtonText}</Text>
           </TouchableOpacity>
-        </ScrollView>
-      </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Service Type</Text>
+          <TouchableOpacity style={styles.pickerButton} onPress={() => setShowServiceTypePicker(true)}>
+            <Text style={styles.pickerButtonText}>{serviceTypeButtonText}</Text>
+            <IconSymbol
+              ios_icon_name="chevron.down"
+              android_material_icon_name="arrow-drop-down"
+              size={24}
+              color={isDark ? colors.text : colors.textLight}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Start Latitude</Text>
+          <TextInput
+            style={styles.input}
+            value={startLat}
+            onChangeText={setStartLat}
+            placeholder="e.g., 51.5074"
+            placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+            keyboardType="numeric"
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Start Longitude</Text>
+          <TextInput
+            style={styles.input}
+            value={startLon}
+            onChangeText={setStartLon}
+            placeholder="e.g., -0.1278"
+            placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+            keyboardType="numeric"
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>End Latitude</Text>
+          <TextInput
+            style={styles.input}
+            value={endLat}
+            onChangeText={setEndLat}
+            placeholder="e.g., 51.5074"
+            placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+            keyboardType="numeric"
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>End Longitude</Text>
+          <TextInput
+            style={styles.input}
+            value={endLon}
+            onChangeText={setEndLon}
+            placeholder="e.g., -0.1278"
+            placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+            keyboardType="numeric"
+          />
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>Notes</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            value={notes}
+            onChangeText={setNotes}
+            placeholder="Add any additional notes..."
+            placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
+            multiline
+            numberOfLines={4}
+          />
+        </View>
+
+        <TouchableOpacity
+          style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={saving}
+        >
+          {saving ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.saveButtonText}>Save Changes</Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
+
+      {showStartPicker && (
+        <DateTimePicker
+          value={startTime || new Date()}
+          mode="datetime"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event, selectedDate) => {
+            setShowStartPicker(Platform.OS === 'ios');
+            if (selectedDate) {
+              setStartTime(selectedDate);
+            }
+          }}
+        />
+      )}
+
+      {showEndPicker && (
+        <DateTimePicker
+          value={endTime || new Date()}
+          mode="datetime"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={(event, selectedDate) => {
+            setShowEndPicker(Platform.OS === 'ios');
+            if (selectedDate) {
+              setEndTime(selectedDate);
+            }
+          }}
+        />
+      )}
+
+      <Modal
+        visible={showVesselPicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowVesselPicker(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowVesselPicker(false)}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Vessel</Text>
+            <ScrollView>
+              {vessels.map(vessel => {
+                const isSelected = vessel.id === selectedVesselId;
+                return (
+                  <TouchableOpacity
+                    key={vessel.id}
+                    style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                    onPress={() => {
+                      setSelectedVesselId(vessel.id);
+                      setShowVesselPicker(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{vessel.vessel_name}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowVesselPicker(false)}>
+              <Text style={styles.modalCloseButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={showServiceTypePicker}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowServiceTypePicker(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setShowServiceTypePicker(false)}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Select Service Type</Text>
+            <ScrollView>
+              {(Object.keys(serviceTypeLabels) as ServiceType[]).map(type => {
+                const isSelected = type === serviceType;
+                const label = serviceTypeLabels[type];
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                    onPress={() => {
+                      setServiceType(type);
+                      setShowServiceTypePicker(false);
+                    }}
+                  >
+                    <Text style={styles.modalItemText}>{label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowServiceTypePicker(false)}>
+              <Text style={styles.modalCloseButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </>
   );
 }

@@ -2,12 +2,13 @@
 /**
  * Subscription Paywall Screen
  * 
- * This screen displays subscription information and directs users to subscribe
- * via the iOS App Store or other payment methods.
+ * This screen displays subscription information and handles native iOS StoreKit purchases.
  * 
  * Features:
  * - Display subscription features and pricing (£4.99/€5.99 per month)
- * - Direct users to App Store for subscription management
+ * - Native iOS StoreKit integration for in-app purchases
+ * - Receipt verification with backend
+ * - Restore previous purchases
  * - Check subscription status
  * - Sign out option
  * 
@@ -18,14 +19,17 @@
  * - Status: 'active' or 'inactive'
  * 
  * Backend Integration:
+ * - POST /api/subscription/verify - Verify App Store receipt
  * - GET /api/subscription/status - Get current subscription status
  * - PATCH /api/subscription/pause-tracking - Pause tracking when subscription expires
  * 
- * Note: Subscription purchases are handled directly through the iOS App Store.
- * Users should manage their subscriptions via iOS Settings > Apple ID > Subscriptions.
+ * StoreKit Integration:
+ * - Product ID: com.forelandmarine.seatime.monthly
+ * - Uses expo-store-kit for native iOS purchases
+ * - Automatic receipt verification with Apple servers
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -37,12 +41,14 @@ import {
   Platform,
   Linking,
   Modal,
+  Alert,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useAuth } from '@/contexts/AuthContext';
+import * as StoreKitUtils from '@/utils/storeKit';
 
 export default function SubscriptionPaywallScreen() {
   const router = useRouter();
@@ -50,39 +56,150 @@ export default function SubscriptionPaywallScreen() {
   const isDark = colorScheme === 'dark';
   const [loading, setLoading] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [productPrice, setProductPrice] = useState<string>('£4.99/€5.99');
   const { subscriptionStatus, checkSubscription } = useSubscription();
   const { signOut } = useAuth();
+
+  const initializeStore = useCallback(async () => {
+    try {
+      console.log('[SubscriptionPaywall] Initializing StoreKit');
+      const initialized = await StoreKitUtils.initializeStoreKit();
+      
+      if (initialized) {
+        const product = await StoreKitUtils.getProductInfo();
+        if (product && product.price) {
+          const formattedPrice = `${product.priceLocale?.currencySymbol || ''}${product.price}`;
+          setProductPrice(formattedPrice);
+          console.log('[SubscriptionPaywall] Product price:', formattedPrice);
+        }
+      }
+    } catch (error: any) {
+      console.error('[SubscriptionPaywall] Store initialization error:', error);
+    }
+  }, []);
 
   useEffect(() => {
     console.log('[SubscriptionPaywall] Screen mounted');
     console.log('[SubscriptionPaywall] Current subscription status:', subscriptionStatus?.status);
-  }, [subscriptionStatus]);
+    
+    // Initialize StoreKit and fetch product info
+    if (Platform.OS === 'ios') {
+      initializeStore();
+    }
+  }, [subscriptionStatus?.status, initializeStore]);
 
   const handleSubscribe = async () => {
+    if (Platform.OS !== 'ios') {
+      Alert.alert(
+        'iOS Only',
+        'Subscriptions are currently only available on iOS via the App Store.\n\nFor information about Android subscriptions, please contact support@forelandmarine.com'
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       console.log('[SubscriptionPaywall] User tapped Subscribe button');
       
-      if (Platform.OS === 'ios') {
-        const alertMessage = 'To subscribe to SeaTime Tracker:\n\n1. Visit the App Store\n2. Search for "SeaTime Tracker"\n3. Subscribe via In-App Purchase\n\nPrice: £4.99/€5.99 per month\n\nAfter subscribing, return to the app and tap "Check Subscription Status" to continue.';
+      // Complete purchase flow (purchase + verify)
+      const result = await StoreKitUtils.completePurchaseFlow();
+      
+      if (result.success) {
+        console.log('[SubscriptionPaywall] Purchase successful, status:', result.status);
         
-        const url = 'https://apps.apple.com/app/seatime-tracker/id123456789';
-        const canOpen = await Linking.canOpenURL(url);
+        // Refresh subscription status
+        await checkSubscription();
         
-        if (canOpen) {
-          await Linking.openURL(url);
+        if (result.status === 'active') {
+          Alert.alert(
+            'Subscription Active',
+            'Your subscription is now active! You can now access all features of SeaTime Tracker.',
+            [
+              {
+                text: 'Continue',
+                onPress: () => router.replace('/(tabs)'),
+              },
+            ]
+          );
         } else {
-          console.warn('[SubscriptionPaywall] Cannot open App Store URL');
+          Alert.alert(
+            'Subscription Issue',
+            'Your purchase was successful, but the subscription is not yet active. Please try checking your subscription status in a moment.'
+          );
         }
-      } else if (Platform.OS === 'android') {
-        const alertMessage = 'Subscriptions are currently only available on iOS via the App Store.\n\nFor information about Android subscriptions, please contact support@forelandmarine.com';
-        console.log('[SubscriptionPaywall]', alertMessage);
       } else {
-        const alertMessage = 'Subscriptions are available on iOS via the App Store.\n\nFor more information, please contact support@forelandmarine.com';
-        console.log('[SubscriptionPaywall]', alertMessage);
+        console.error('[SubscriptionPaywall] Purchase failed:', result.error);
+        
+        if (result.error && !result.error.includes('cancelled')) {
+          Alert.alert(
+            'Purchase Failed',
+            result.error || 'Unable to complete purchase. Please try again.'
+          );
+        }
       }
     } catch (error: any) {
       console.error('[SubscriptionPaywall] Subscription error:', error);
+      Alert.alert(
+        'Error',
+        'An unexpected error occurred. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestorePurchases = async () => {
+    if (Platform.OS !== 'ios') {
+      Alert.alert(
+        'iOS Only',
+        'Restore purchases is only available on iOS.'
+      );
+      return;
+    }
+
+    setLoading(true);
+    try {
+      console.log('[SubscriptionPaywall] User tapped Restore Purchases button');
+      
+      // Complete restore flow (restore + verify)
+      const result = await StoreKitUtils.completeRestoreFlow();
+      
+      if (result.success) {
+        console.log('[SubscriptionPaywall] Restore successful, status:', result.status);
+        
+        // Refresh subscription status
+        await checkSubscription();
+        
+        if (result.status === 'active') {
+          Alert.alert(
+            'Subscription Restored',
+            'Your subscription has been restored successfully!',
+            [
+              {
+                text: 'Continue',
+                onPress: () => router.replace('/(tabs)'),
+              },
+            ]
+          );
+        } else {
+          Alert.alert(
+            'No Active Subscription',
+            'No active subscription was found. If you recently purchased, please wait a moment and try again.'
+          );
+        }
+      } else {
+        console.error('[SubscriptionPaywall] Restore failed:', result.error);
+        Alert.alert(
+          'Restore Failed',
+          result.error || 'No previous purchases found.'
+        );
+      }
+    } catch (error: any) {
+      console.error('[SubscriptionPaywall] Restore error:', error);
+      Alert.alert(
+        'Error',
+        'An unexpected error occurred. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
@@ -99,9 +216,17 @@ export default function SubscriptionPaywallScreen() {
         router.replace('/(tabs)');
       } else {
         console.log('[SubscriptionPaywall] No active subscription found');
+        Alert.alert(
+          'No Active Subscription',
+          'No active subscription was found. Please subscribe to continue using SeaTime Tracker.'
+        );
       }
     } catch (error: any) {
       console.error('[SubscriptionPaywall] Check status error:', error);
+      Alert.alert(
+        'Error',
+        'Unable to check subscription status. Please try again.'
+      );
     } finally {
       setLoading(false);
     }
@@ -118,7 +243,10 @@ export default function SubscriptionPaywallScreen() {
         if (canOpen) {
           await Linking.openURL(url);
         } else {
-          console.warn('[SubscriptionPaywall] Cannot open subscriptions URL');
+          Alert.alert(
+            'Manage Subscription',
+            'To manage your subscription:\n\n1. Open Settings\n2. Tap your name at the top\n3. Tap Subscriptions\n4. Select SeaTime Tracker'
+          );
         }
       }
     } catch (error: any) {
@@ -219,7 +347,7 @@ export default function SubscriptionPaywallScreen() {
 
         <View style={styles.pricingContainer}>
           <Text style={styles.pricingTitle}>Monthly Subscription</Text>
-          <Text style={styles.price}>£4.99/€5.99</Text>
+          <Text style={styles.price}>{productPrice}</Text>
           <Text style={styles.pricingSubtitle}>per month</Text>
           <Text style={styles.pricingNote}>Cancel anytime</Text>
         </View>
@@ -233,9 +361,24 @@ export default function SubscriptionPaywallScreen() {
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.buttonText}>Subscribe via App Store</Text>
+              <>
+                <Text style={styles.buttonText}>Subscribe Now</Text>
+                {Platform.OS === 'ios' && (
+                  <Text style={styles.buttonSubtext}>via App Store</Text>
+                )}
+              </>
             )}
           </TouchableOpacity>
+
+          {Platform.OS === 'ios' && (
+            <TouchableOpacity
+              style={[styles.button, styles.secondaryButton]}
+              onPress={handleRestorePurchases}
+              disabled={loading}
+            >
+              <Text style={styles.secondaryButtonText}>Restore Purchases</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[styles.button, styles.secondaryButton]}
@@ -286,7 +429,7 @@ export default function SubscriptionPaywallScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Sign Out?</Text>
             <Text style={styles.modalMessage}>
-              Are you sure you want to sign out? You'll need to sign in again to access the app.
+              Are you sure you want to sign out? You&apos;ll need to sign in again to access the app.
             </Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -415,6 +558,12 @@ function createStyles(isDark: boolean) {
       color: '#FFFFFF',
       fontSize: 18,
       fontWeight: '600',
+    },
+    buttonSubtext: {
+      color: '#FFFFFF',
+      fontSize: 14,
+      marginTop: 4,
+      opacity: 0.9,
     },
     secondaryButton: {
       backgroundColor: 'transparent',
