@@ -1,6 +1,6 @@
 
 import { IconSymbol } from '@/components/IconSymbol';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 import { useAuth } from '@/contexts/AuthContext';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -481,26 +481,7 @@ export default function ProfileScreen() {
 
   console.log('ProfileScreen rendered');
 
-  // Initial load on mount
-  useEffect(() => {
-    console.log('ProfileScreen: Initial mount, loading data');
-    loadProfile();
-    loadSummary();
-    loadVessels();
-    checkBiometricStatus();
-  }, [loadProfile, loadSummary, loadVessels]);
-
-  // Listen to refreshTrigger and reload data when it changes (but not on initial mount)
-  useEffect(() => {
-    if (refreshTrigger > 0) {
-      console.log('ProfileScreen: Global refresh triggered, reloading profile data');
-      loadProfile();
-      loadSummary();
-      loadVessels();
-    }
-  }, [refreshTrigger, loadProfile, loadSummary, loadVessels]);
-
-  const checkBiometricStatus = async () => {
+  const checkBiometricStatus = useCallback(async () => {
     const available = await isBiometricAvailable();
     setBiometricAvailable(available);
     
@@ -511,9 +492,9 @@ export default function ProfileScreen() {
       const credentials = await getBiometricCredentials();
       setHasSavedCredentials(!!credentials);
     }
-  };
+  }, []);
 
-  const loadProfile = async (retryCount = 0) => {
+  const loadProfile = useCallback(async (retryCount = 0) => {
     const maxRetries = 2;
     console.log(`Loading user profile (attempt ${retryCount + 1}/${maxRetries + 1})`);
     
@@ -525,7 +506,6 @@ export default function ProfileScreen() {
     } catch (error: any) {
       console.error(`Failed to load profile (attempt ${retryCount + 1}):`, error?.message);
       
-      // Retry on network errors
       if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
         const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
         console.log(`Retrying profile load in ${waitTime}ms...`);
@@ -542,9 +522,9 @@ export default function ProfileScreen() {
         );
       }
     }
-  };
+  }, []);
 
-  const loadSummary = async (retryCount = 0) => {
+  const loadSummary = useCallback(async (retryCount = 0) => {
     const maxRetries = 2;
     console.log(`Loading sea time summary (attempt ${retryCount + 1}/${maxRetries + 1})`);
     
@@ -556,20 +536,18 @@ export default function ProfileScreen() {
     } catch (error: any) {
       console.error(`Failed to load sea time summary (attempt ${retryCount + 1}):`, error?.message);
       
-      // Retry on network errors
       if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
         const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
         console.log(`Retrying summary load in ${waitTime}ms...`);
         setTimeout(() => loadSummary(retryCount + 1), waitTime);
       } else {
         setLoadingSummary(false);
-        // Don't show alert for summary - it's not critical
         console.warn('Summary load failed after retries, continuing without summary');
       }
     }
-  };
+  }, []);
 
-  const loadVessels = async (retryCount = 0) => {
+  const loadVessels = useCallback(async (retryCount = 0) => {
     const maxRetries = 2;
     console.log(`Loading vessels (attempt ${retryCount + 1}/${maxRetries + 1})`);
     
@@ -580,17 +558,32 @@ export default function ProfileScreen() {
     } catch (error: any) {
       console.error(`Failed to load vessels (attempt ${retryCount + 1}):`, error?.message);
       
-      // Retry on network errors
       if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
         const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
         console.log(`Retrying vessels load in ${waitTime}ms...`);
         setTimeout(() => loadVessels(retryCount + 1), waitTime);
       } else {
-        // Don't show alert for vessels - it's not critical
         console.warn('Vessels load failed after retries, continuing without vessels');
       }
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    console.log('ProfileScreen: Initial mount, loading data');
+    loadProfile();
+    loadSummary();
+    loadVessels();
+    checkBiometricStatus();
+  }, []);
+
+  useEffect(() => {
+    if (refreshTrigger > 0) {
+      console.log('ProfileScreen: Global refresh triggered, reloading profile data');
+      loadProfile();
+      loadSummary();
+      loadVessels();
+    }
+  }, [refreshTrigger]);
 
   const handleEditProfile = () => {
     console.log('User tapped Edit Profile');
