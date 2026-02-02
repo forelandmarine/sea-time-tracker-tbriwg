@@ -6,22 +6,13 @@ import { colors } from '@/styles/commonStyles';
 import { useColorScheme, View, Text, ActivityIndicator } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
-import { usePathname } from 'expo-router';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { user, loading, triggerRefresh } = useAuth();
+  const { user, loading } = useAuth();
   const { hasActiveSubscription, loading: subscriptionLoading } = useSubscription();
-  const pathname = usePathname();
   const router = useRouter();
-
-  // Trigger refresh when navigating between tabs (simulates back button behavior)
-  useEffect(() => {
-    console.log('[TabLayout] Navigation detected to:', pathname);
-    console.log('[TabLayout] Triggering global refresh');
-    triggerRefresh();
-  }, [pathname, triggerRefresh]);
 
   // Check subscription status and redirect if needed
   useEffect(() => {
