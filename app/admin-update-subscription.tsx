@@ -180,7 +180,7 @@ export default function AdminUpdateSubscriptionScreen() {
   const styles = createStyles(isDark);
   const router = useRouter();
 
-  const [email, setEmail] = useState('jack@forelandmarine.com');
+  const [email, setEmail] = useState('test@seatime.com');
   const [subscriptionStatus, setSubscriptionStatus] = useState<'active' | 'inactive'>('active');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
