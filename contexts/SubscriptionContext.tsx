@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
-import { authenticatedGet, authenticatedPost, authenticatedPatch } from '@/utils/api';
+import { authenticatedGet, authenticatedPatch } from '@/utils/api';
 
 interface SubscriptionStatus {
   status: 'active' | 'inactive';
@@ -9,18 +9,11 @@ interface SubscriptionStatus {
   productId: string | null;
 }
 
-interface VerifyReceiptResponse {
-  success: boolean;
-  status: 'active' | 'inactive';
-  expiresAt: string | null;
-}
-
 interface SubscriptionContextType {
   subscriptionStatus: SubscriptionStatus | null;
   loading: boolean;
   hasActiveSubscription: boolean;
   checkSubscription: () => Promise<void>;
-  verifyReceipt: (receiptData: string, productId: string, isSandbox?: boolean) => Promise<VerifyReceiptResponse>;
   pauseTracking: () => Promise<void>;
 }
 
@@ -55,49 +48,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     } catch (error: any) {
       console.error('[Subscription] Error checking subscription:', error);
       
-      // If user is not authenticated (401), set to inactive
       if (error.message?.includes('401')) {
         console.log('[Subscription] User not authenticated, setting to inactive');
         setSubscriptionStatus({ status: 'inactive', expiresAt: null, productId: null });
       } else {
-        // For other errors, default to inactive
         console.warn('[Subscription] Defaulting to inactive due to error');
         setSubscriptionStatus({ status: 'inactive', expiresAt: null, productId: null });
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const verifyReceipt = async (
-    receiptData: string, 
-    productId: string, 
-    isSandbox: boolean = true
-  ): Promise<VerifyReceiptResponse> => {
-    try {
-      console.log('[Subscription] Verifying iOS App Store receipt');
-      console.log('[Subscription] Product ID:', productId);
-      console.log('[Subscription] Sandbox mode:', isSandbox);
-
-      const response = await authenticatedPost<VerifyReceiptResponse>('/api/subscription/verify', {
-        receiptData,
-        productId,
-        isSandbox,
-      });
-
-      console.log('[Subscription] Receipt verification successful:', response.status);
-      
-      // Update local subscription status
-      setSubscriptionStatus({
-        status: response.status,
-        expiresAt: response.expiresAt,
-        productId,
-      });
-
-      return response;
-    } catch (error: any) {
-      console.error('[Subscription] Receipt verification failed:', error);
-      throw new Error(error.message || 'Failed to verify receipt');
     }
   };
 
@@ -125,7 +84,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         loading,
         hasActiveSubscription,
         checkSubscription,
-        verifyReceipt,
         pauseTracking,
       }}
     >
