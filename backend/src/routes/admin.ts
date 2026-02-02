@@ -3,6 +3,17 @@ import { eq } from "drizzle-orm";
 import * as authSchema from "../db/auth-schema.js";
 import * as schema from "../db/schema.js";
 import type { App } from "../index.js";
+import crypto from "crypto";
+
+/**
+ * Hash password using PBKDF2 with SHA-256
+ */
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const iterations = 100000;
+  const hash = crypto.pbkdf2Sync(password, salt, iterations, 64, 'sha256').toString('hex');
+  return `${salt}:${iterations}:${hash}`;
+}
 
 export function register(app: App, fastify: FastifyInstance) {
   // GET /api/admin/verify-sea-time - Check sea time entries for a specific user and vessel
@@ -2308,6 +2319,93 @@ export function register(app: App, fastify: FastifyInstance) {
       } catch (error) {
         app.logger.error({ err: error, email, count }, 'Error generating demo sea time entries');
         return reply.code(500).send({ error: 'Failed to generate demo sea time entries' });
+      }
+    }
+  );
+
+  // POST /api/admin/setup-sandbox-user - Create or verify sandbox test user for development/testing
+  fastify.post(
+    '/api/admin/setup-sandbox-user',
+    {
+      schema: {
+        description: 'Create or verify sandbox test user for development/testing (idempotent)',
+        tags: ['admin'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              email: { type: 'string' },
+              userId: { type: ['string', 'null'] },
+            },
+          },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const testEmail = 'sandboxuser@seatime.com';
+      const testPassword = 'Testpassword123';
+      const testName = 'Sandbox Test User';
+
+      app.logger.info({}, 'Setting up sandbox test user');
+
+      try {
+        // Check if user already exists
+        const existingUsers = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, testEmail));
+
+        if (existingUsers.length > 0) {
+          app.logger.info({ email: testEmail }, 'Sandbox test user already exists');
+          return reply.code(200).send({
+            success: true,
+            message: 'Test user already exists',
+            email: testEmail,
+            userId: existingUsers[0].id,
+          });
+        }
+
+        // Create the test user
+        const userId = crypto.randomUUID();
+        const [user] = await app.db
+          .insert(authSchema.user)
+          .values({
+            id: userId,
+            email: testEmail,
+            name: testName,
+            emailVerified: true, // Mark as verified so they can log in immediately
+          })
+          .returning();
+
+        app.logger.info({ userId, email: testEmail }, 'Sandbox test user created');
+
+        // Create account with password
+        const accountId = crypto.randomUUID();
+        const passwordHash = hashPassword(testPassword);
+        await app.db
+          .insert(authSchema.account)
+          .values({
+            id: accountId,
+            userId,
+            providerId: 'credential',
+            accountId: testEmail,
+            password: passwordHash,
+          });
+
+        app.logger.info({ userId, email: testEmail }, 'Sandbox test user account created with password');
+
+        return reply.code(200).send({
+          success: true,
+          message: 'Test user created successfully',
+          email: testEmail,
+          userId: user.id,
+        });
+      } catch (error) {
+        app.logger.error({ err: error }, 'Error setting up sandbox test user');
+        return reply.code(500).send({ error: 'Failed to set up sandbox test user' });
       }
     }
   );
