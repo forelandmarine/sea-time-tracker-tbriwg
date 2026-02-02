@@ -29,7 +29,7 @@ interface Vessel {
   callsign?: string;
 }
 
-type ServiceType = 'seagoing' | 'standby' | 'yard';
+type ServiceType = 'seagoing' | 'watchkeeping' | 'standby' | 'yard';
 
 const createStyles = (isDark: boolean) =>
   StyleSheet.create({
@@ -145,12 +145,14 @@ const createStyles = (isDark: boolean) =>
     },
     serviceTypeContainer: {
       flexDirection: 'row',
+      flexWrap: 'wrap',
       gap: 8,
     },
     serviceTypeButton: {
       flex: 1,
+      minWidth: '45%',
       paddingVertical: 12,
-      paddingHorizontal: 12,
+      paddingHorizontal: 8,
       borderRadius: 10,
       borderWidth: 1,
       borderColor: isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)',
@@ -161,7 +163,7 @@ const createStyles = (isDark: boolean) =>
       borderColor: colors.primary,
     },
     serviceTypeText: {
-      fontSize: 14,
+      fontSize: 13,
       fontWeight: '600',
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
     },
@@ -392,6 +394,7 @@ export default function AddSeaTimeScreen() {
 
       const serviceTypeMap: { [key: string]: string } = {
         'seagoing': 'actual_sea_service',
+        'watchkeeping': 'watchkeeping_service',
         'standby': 'standby_service',
         'yard': 'yard_service',
       };
@@ -432,8 +435,10 @@ export default function AddSeaTimeScreen() {
 
   const mcaButtonText = 'View MCA Requirements';
   const seagoingText = 'Seagoing';
+  const watchkeepingText = 'Watchkeeping';
   const standbyText = 'Standby';
   const yardText = 'Yard';
+  const watchkeepingHelperText = 'Every 4 hours = 1 day, cumulative allowed. Cannot exceed days at sea.';
   const standbyHelperText = 'Max 14 consecutive days; cannot exceed previous voyage length';
   const yardHelperText = 'Up to 90 days total (continuous or split)';
   const serviceTypeLabel = 'Service Type';
@@ -546,6 +551,22 @@ export default function AddSeaTimeScreen() {
               <TouchableOpacity
                 style={[
                   styles.serviceTypeButton,
+                  serviceType === 'watchkeeping' && styles.serviceTypeButtonActive,
+                ]}
+                onPress={() => setServiceType('watchkeeping')}
+              >
+                <Text
+                  style={[
+                    styles.serviceTypeText,
+                    serviceType === 'watchkeeping' && styles.serviceTypeTextActive,
+                  ]}
+                >
+                  {watchkeepingText}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.serviceTypeButton,
                   serviceType === 'standby' && styles.serviceTypeButtonActive,
                 ]}
                 onPress={() => setServiceType('standby')}
@@ -576,6 +597,11 @@ export default function AddSeaTimeScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+            {serviceType === 'watchkeeping' && (
+              <Text style={styles.helperText}>
+                {watchkeepingHelperText}
+              </Text>
+            )}
             {serviceType === 'standby' && (
               <Text style={styles.helperText}>
                 {standbyHelperText}
