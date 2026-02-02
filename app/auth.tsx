@@ -18,7 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { colors } from '@/styles/commonStyles';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { BACKEND_URL, authenticatedPost } from '@/utils/api';
+import { BACKEND_URL } from '@/utils/api';
 import { 
   getBiometricCredentials, 
   saveBiometricCredentials, 
@@ -36,7 +36,6 @@ export default function AuthScreen() {
   const [rememberMe, setRememberMe] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
-  const [activatingSubscriptions, setActivatingSubscriptions] = useState(false);
   const { signIn, signUp, signInWithApple } = useAuth();
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -245,36 +244,6 @@ export default function AuthScreen() {
     }
   };
 
-  const handleActivateAllSubscriptions = async () => {
-    console.log('[AuthScreen] User tapped Activate All Subscriptions button');
-    
-    setActivatingSubscriptions(true);
-
-    try {
-      console.log('[AuthScreen] Calling POST /api/admin/activate-all-subscriptions');
-      
-      const response = await authenticatedPost('/api/admin/activate-all-subscriptions', {});
-      
-      console.log('[AuthScreen] Subscription activation response:', response);
-      
-      const successMessage = `Successfully activated subscriptions for ${response.usersUpdated || 0} users`;
-      
-      Alert.alert(
-        'Success',
-        successMessage,
-        [{ text: 'OK' }]
-      );
-
-      console.log('[AuthScreen]', successMessage);
-    } catch (err: any) {
-      console.error('[AuthScreen] Error activating subscriptions:', err);
-      const errorMessage = err.message || 'Failed to activate subscriptions';
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setActivatingSubscriptions(false);
-    }
-  };
-
   const styles = createStyles(isDark);
 
   return (
@@ -432,36 +401,6 @@ export default function AuthScreen() {
             />
           </>
         )}
-
-        {/* Admin Testing Tool - Activate All Subscriptions */}
-        <View style={styles.adminSection}>
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>TESTING</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <View style={styles.adminWarningBox}>
-            <Text style={styles.adminWarningTitle}>🧪 Testing Tool</Text>
-            <Text style={styles.adminWarningText}>
-              Activate subscriptions for all users for testing purposes
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.button, styles.adminButton]}
-            onPress={handleActivateAllSubscriptions}
-            disabled={activatingSubscriptions}
-          >
-            {activatingSubscriptions ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.buttonText}>
-                Activate All User Subscriptions
-              </Text>
-            )}
-          </TouchableOpacity>
-        </View>
       </View>
 
       <View style={styles.footer}>
@@ -645,31 +584,6 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       textAlign: 'center',
       fontWeight: '500',
-    },
-    adminSection: {
-      marginTop: 32,
-    },
-    adminWarningBox: {
-      backgroundColor: isDark ? '#3a2a1a' : '#fff3cd',
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor: isDark ? '#6a4a2a' : '#ffc107',
-    },
-    adminWarningTitle: {
-      fontSize: 16,
-      fontWeight: 'bold',
-      color: isDark ? '#ffc107' : '#856404',
-      marginBottom: 8,
-    },
-    adminWarningText: {
-      fontSize: 14,
-      color: isDark ? '#ffd54f' : '#856404',
-      lineHeight: 20,
-    },
-    adminButton: {
-      backgroundColor: '#FF9800',
     },
   });
 }
