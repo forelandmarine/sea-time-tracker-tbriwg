@@ -43,6 +43,7 @@ export const sea_time_entries = pgTable('sea_time_entries', {
   watchkeeping_hours: decimal('watchkeeping_hours', { precision: 10, scale: 2 }), // Watchkeeping hours (accumulated across days, 4hrs = 1 day)
   additional_watchkeeping_hours: decimal('additional_watchkeeping_hours', { precision: 10, scale: 2 }), // Additional watchkeeping at anchor/mooring (engineering only)
   is_stationary: boolean('is_stationary'), // Whether vessel is stationary (at anchor or moored) for this entry
+  distance_nm: decimal('distance_nm', { precision: 10, scale: 2 }), // Distance traveled in nautical miles (calculated from start/end coordinates)
   created_at: timestamp('created_at').defaultNow().notNull(),
 }, (table) => [
   index('sea_time_entries_user_id_idx').on(table.user_id),

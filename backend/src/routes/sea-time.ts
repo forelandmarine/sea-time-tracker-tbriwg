@@ -23,6 +23,27 @@ function isValidServiceType(serviceType: any): boolean {
   return typeof serviceType === 'string' && VALID_SERVICE_TYPES.includes(serviceType);
 }
 
+// Helper function to calculate distance in nautical miles using Haversine formula
+function calculateDistanceNauticalMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const EARTH_RADIUS_NM = 3440.065; // Nautical miles
+
+  // Convert degrees to radians
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const lat1Rad = lat1 * (Math.PI / 180);
+  const lat2Rad = lat2 * (Math.PI / 180);
+
+  // Haversine formula
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.asin(Math.sqrt(a));
+  const distance = EARTH_RADIUS_NM * c;
+
+  // Round to 2 decimal places
+  return Math.round(distance * 100) / 100;
+}
+
 // Helper function to get calendar day (YYYY-MM-DD) from a date
 function getCalendarDay(date: Date): string {
   const year = date.getFullYear();
@@ -940,6 +961,18 @@ export function register(app: App, fastify: FastifyInstance) {
       const duration_hours = Math.round((duration_ms / (1000 * 60 * 60)) * 100) / 100;
       const sea_days = calculateSeaDays(duration_hours);
 
+      // Calculate distance traveled using Haversine formula
+      const EARTH_RADIUS_NM = 3440.065;
+      const dLat = (endLat - startLat) * (Math.PI / 180);
+      const dLon = (endLng - startLng) * (Math.PI / 180);
+      const lat1Rad = startLat * (Math.PI / 180);
+      const lat2Rad = endLat * (Math.PI / 180);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.asin(Math.sqrt(a));
+      const distanceNm = Math.round((EARTH_RADIUS_NM * c) * 100) / 100;
+
       app.logger.info(
         {
           vesselId: vessel.id,
@@ -952,9 +985,21 @@ export function register(app: App, fastify: FastifyInstance) {
           endLng,
           durationHours: duration_hours,
           seaDays: sea_days,
+          distanceNm,
         },
         `Test endpoint: Creating sea day entry from two most recent positions`
       );
+
+      // VALIDATION: Only create entries if vessel has traveled at least 0.5 nm
+      if (distanceNm < 0.5) {
+        app.logger.warn(
+          { vesselId: vessel.id, distanceNm, minimumThreshold: 0.5 },
+          `Test endpoint: Vessel has not traveled enough distance (${distanceNm} nm < 0.5 nm minimum), skipping entry creation`
+        );
+        return reply.code(400).send({
+          error: `Cannot create sea time entry: vessel has not traveled enough distance (${distanceNm} nm < 0.5 nm minimum)`,
+        });
+      }
 
       // Check if another entry exists for this calendar day
       const testCalendarDay = getCalendarDay(new Date(olderRecord.check_time));
@@ -981,9 +1026,11 @@ export function register(app: App, fastify: FastifyInstance) {
           start_longitude: String(startLng),
           end_latitude: String(endLat),
           end_longitude: String(endLng),
+          distance_nm: String(distanceNm),
+          is_stationary: false,
           status: 'pending',
           service_type: 'actual_sea_service',
-          notes: 'Test entry created from two most recent position records',
+          notes: `Test entry created from two most recent position records - vessel moved ${distanceNm} nm`,
         })
         .returning();
 
@@ -1135,6 +1182,11 @@ export function register(app: App, fastify: FastifyInstance) {
 
       const entry1Duration = calculateDurationHours(entry1Start, entry1End);
       const entry1SeaDays = calculateSeaDays(entry1Duration);
+      const entry1StartLat = 50.9097;
+      const entry1StartLng = -1.4044;
+      const entry1EndLat = 50.7964;
+      const entry1EndLng = -1.1089;
+      const entry1Distance = calculateDistanceNauticalMiles(entry1StartLat, entry1StartLng, entry1EndLat, entry1EndLng);
 
       const [sampleEntry1] = await app.db
         .insert(schema.sea_time_entries)
@@ -1146,11 +1198,13 @@ export function register(app: App, fastify: FastifyInstance) {
           duration_hours: String(entry1Duration),
           sea_days: entry1SeaDays,
           status: 'pending',
-          notes: 'Coastal passage from Southampton to Portsmouth. Good weather conditions.',
-          start_latitude: '50.9097',
-          start_longitude: '-1.4044',
-          end_latitude: '50.7964',
-          end_longitude: '-1.1089',
+          notes: `Coastal passage from Southampton to Portsmouth. Good weather conditions. Vessel moved ${entry1Distance} nm.`,
+          start_latitude: String(entry1StartLat),
+          start_longitude: String(entry1StartLng),
+          end_latitude: String(entry1EndLat),
+          end_longitude: String(entry1EndLng),
+          distance_nm: String(entry1Distance),
+          is_stationary: false,
         })
         .returning();
 
@@ -1168,6 +1222,11 @@ export function register(app: App, fastify: FastifyInstance) {
 
       const entry2Duration = calculateDurationHours(entry2Start, entry2End);
       const entry2SeaDays = calculateSeaDays(entry2Duration);
+      const entry2StartLat = 50.7964;
+      const entry2StartLng = -1.1089;
+      const entry2EndLat = 50.8429;
+      const entry2EndLng = -1.2981;
+      const entry2Distance = calculateDistanceNauticalMiles(entry2StartLat, entry2StartLng, entry2EndLat, entry2EndLng);
 
       const [sampleEntry2] = await app.db
         .insert(schema.sea_time_entries)
@@ -1179,11 +1238,13 @@ export function register(app: App, fastify: FastifyInstance) {
           duration_hours: String(entry2Duration),
           sea_days: entry2SeaDays,
           status: 'pending',
-          notes: 'Training voyage in the Solent. Practiced navigation and mooring.',
-          start_latitude: '50.7964',
-          start_longitude: '-1.1089',
-          end_latitude: '50.8429',
-          end_longitude: '-1.2981',
+          notes: `Training voyage in the Solent. Practiced navigation and mooring. Vessel moved ${entry2Distance} nm.`,
+          start_latitude: String(entry2StartLat),
+          start_longitude: String(entry2StartLng),
+          end_latitude: String(entry2EndLat),
+          end_longitude: String(entry2EndLng),
+          distance_nm: String(entry2Distance),
+          is_stationary: false,
         })
         .returning();
 
@@ -1201,6 +1262,11 @@ export function register(app: App, fastify: FastifyInstance) {
 
       const entry3Duration = calculateDurationHours(entry3Start, entry3End);
       const entry3SeaDays = calculateSeaDays(entry3Duration);
+      const entry3StartLat = 50.8429;
+      const entry3StartLng = -1.2981;
+      const entry3EndLat = 50.6929;
+      const entry3EndLng = -1.3047;
+      const entry3Distance = calculateDistanceNauticalMiles(entry3StartLat, entry3StartLng, entry3EndLat, entry3EndLng);
 
       const [sampleEntry3] = await app.db
         .insert(schema.sea_time_entries)
@@ -1212,11 +1278,13 @@ export function register(app: App, fastify: FastifyInstance) {
           duration_hours: String(entry3Duration),
           sea_days: entry3SeaDays,
           status: 'pending',
-          notes: 'Extended passage to Isle of Wight. Overnight preparation and early departure.',
-          start_latitude: '50.8429',
-          start_longitude: '-1.2981',
-          end_latitude: '50.6929',
-          end_longitude: '-1.3047',
+          notes: `Extended passage to Isle of Wight. Overnight preparation and early departure. Vessel moved ${entry3Distance} nm.`,
+          start_latitude: String(entry3StartLat),
+          start_longitude: String(entry3StartLng),
+          end_latitude: String(entry3EndLat),
+          end_longitude: String(entry3EndLng),
+          distance_nm: String(entry3Distance),
+          is_stationary: false,
         })
         .returning();
 

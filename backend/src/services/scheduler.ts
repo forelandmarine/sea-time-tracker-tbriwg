@@ -576,6 +576,7 @@ async function handleOffshorePassage(
             service_type: 'actual_sea_service',
             mca_compliant: true, // 24 hours > 4 hour requirement
             is_stationary: false,
+            distance_nm: String(distanceNm),
             notes: `Offshore passage detected: vessel traveled ${distanceNm} nm over ${Math.round(daysBetween * 100) / 100} days. Estimated sea day.`,
           })
           .returning();
@@ -742,6 +743,15 @@ async function handleSeaTimeEntries(
     `Movement detected for vessel ${vessel_name}: ${distanceNm} nm (${Math.round(maxDiff * 10000) / 10000}°) over ${durationHours} hours`
   );
 
+  // VALIDATION: Only create entries if vessel has traveled at least 0.5 nm
+  if (distanceNm < 0.5) {
+    app.logger.debug(
+      { vesselId, mmsi, distanceNm, minimumThreshold: 0.5 },
+      `Vessel ${vessel_name} has not traveled enough distance (${distanceNm} nm < 0.5 nm minimum), skipping entry creation`
+    );
+    return;
+  }
+
   // Get calendar day for the old check (start of this observation window)
   const calendarDay = getCalendarDay(oldCheck.check_time);
 
@@ -783,6 +793,9 @@ async function handleSeaTimeEntries(
         totalDistance = calculateDistanceNauticalMiles(startLat, startLng, currentLat, currentLng);
       }
 
+      // VALIDATION: Check if vessel has traveled meaningful distance
+      const isStationary = totalDistance < 0.5;
+
       // Determine MCA compliance based on total duration
       const isMCACompliant = totalDurationHours >= 4.0;
 
@@ -798,6 +811,8 @@ async function handleSeaTimeEntries(
           end_longitude: String(currentLng),
           duration_hours: String(totalDurationHours),
           mca_compliant: isMCACompliant,
+          distance_nm: String(totalDistance),
+          is_stationary: isStationary,
           notes: updatedNotes,
         })
         .where(eq(schema.sea_time_entries.id, existingEntryForDay.id))
@@ -836,6 +851,9 @@ async function handleSeaTimeEntries(
     // Determine MCA compliance based on duration
     const isMCACompliant = durationHours >= 4.0;
 
+    // Determine if vessel is stationary (distance < 0.5 nm)
+    const isStationary = distanceNm < 0.5;
+
     try {
       const [new_entry] = await app.db
         .insert(schema.sea_time_entries)
@@ -852,6 +870,8 @@ async function handleSeaTimeEntries(
           status: 'pending',
           service_type: 'actual_sea_service',
           mca_compliant: isMCACompliant,
+          distance_nm: String(distanceNm),
+          is_stationary: isStationary,
           notes: notes,
         })
         .returning();

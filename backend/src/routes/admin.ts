@@ -2175,8 +2175,12 @@ export function register(app: App, fastify: FastifyInstance) {
         ];
 
         const createdEntries: typeof schema.sea_time_entries.$inferSelect[] = [];
+        let entriesCreatedCount = 0;
+        let attemptsCount = 0;
+        const maxAttempts = count * 3; // Allow up to 3x attempts to account for skipped entries
 
-        for (let i = 0; i < count; i++) {
+        while (entriesCreatedCount < count && attemptsCount < maxAttempts) {
+          attemptsCount++;
           // Spread entries over the past 12 months
           const daysAgo = Math.floor(Math.random() * 365);
           const hoursOffset = Math.floor(Math.random() * 24);
@@ -2224,6 +2228,23 @@ export function register(app: App, fastify: FastifyInstance) {
           // Random note
           const note = notes[Math.floor(Math.random() * notes.length)];
 
+          // Calculate distance between start and end coordinates using Haversine formula
+          const EARTH_RADIUS_NM = 3440.065;
+          const dLat = (endLatitude - startLatitude) * (Math.PI / 180);
+          const dLon = (endLongitude - startLongitude) * (Math.PI / 180);
+          const lat1Rad = startLatitude * (Math.PI / 180);
+          const lat2Rad = endLatitude * (Math.PI / 180);
+          const a =
+            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1Rad) * Math.cos(lat2Rad) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+          const c = 2 * Math.asin(Math.sqrt(a));
+          const distanceNm = Math.round((EARTH_RADIUS_NM * c) * 100) / 100;
+
+          // Skip entries with minimal distance (< 0.5 nm)
+          if (distanceNm < 0.5) {
+            continue;
+          }
+
           // Create entry
           const [entry] = await app.db
             .insert(schema.sea_time_entries)
@@ -2244,15 +2265,18 @@ export function register(app: App, fastify: FastifyInstance) {
               start_longitude: String(Math.round(startLongitude * 1000000) / 1000000),
               end_latitude: String(Math.round(endLatitude * 1000000) / 1000000),
               end_longitude: String(Math.round(endLongitude * 1000000) / 1000000),
+              distance_nm: String(distanceNm),
+              is_stationary: false,
             })
             .returning();
 
           createdEntries.push(entry);
+          entriesCreatedCount++;
         }
 
         app.logger.info(
-          { userId: user.id, vesselId: vessel.id, entriesCreated: count },
-          `Generated ${count} demo sea time entries`
+          { userId: user.id, vesselId: vessel.id, entriesRequested: count, entriesCreated: entriesCreatedCount, attemptsCount },
+          `Generated ${entriesCreatedCount} demo sea time entries (requested ${count}, ${attemptsCount} generation attempts)`
         );
 
         // Format response entries
@@ -2266,6 +2290,7 @@ export function register(app: App, fastify: FastifyInstance) {
           service_type: e.service_type || 'actual_sea_service',
           notes: e.notes || '',
           mca_compliant: e.mca_compliant || false,
+          distance_nm: parseFloat(String(e.distance_nm || 0)),
           start_latitude: parseFloat(String(e.start_latitude || 0)),
           start_longitude: parseFloat(String(e.start_longitude || 0)),
           end_latitude: parseFloat(String(e.end_latitude || 0)),
@@ -2274,10 +2299,10 @@ export function register(app: App, fastify: FastifyInstance) {
 
         return reply.code(200).send({
           success: true,
-          message: `Generated ${count} demo entries for user ${email}`,
+          message: `Generated ${entriesCreatedCount} demo entries for user ${email}`,
           userId: user.id,
           vesselId: vessel.id,
-          entriesCreated: count,
+          entriesCreated: entriesCreatedCount,
           entries: responseEntries,
         });
       } catch (error) {
