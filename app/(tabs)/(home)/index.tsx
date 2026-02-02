@@ -245,7 +245,8 @@ export default function SeaTimeScreen() {
       Alert.alert('Success', `${vesselNameTrimmed} has been added and is now being tracked`);
     } catch (error: any) {
       console.error('[Home] Failed to add vessel:', error);
-      Alert.alert('Error', 'Failed to add vessel: ' + error.message);
+      // Display the error message from the API (which now includes user-friendly messages)
+      Alert.alert('Error', error.message || 'Failed to add vessel. Please try again.');
     }
   };
 

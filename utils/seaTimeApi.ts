@@ -255,7 +255,28 @@ export const createVessel = async (
   if (!response.ok) {
     const errorText = await response.text();
     console.error('[seaTimeApi] Failed to create vessel:', response.status, errorText);
-    throw new Error(`Failed to create vessel: ${response.status}`);
+    
+    // Try to parse error response for better error messages
+    let errorMessage = `Failed to create vessel (${response.status})`;
+    try {
+      const errorData = JSON.parse(errorText);
+      if (errorData.error) {
+        errorMessage = errorData.error;
+      }
+    } catch (parseError) {
+      console.error('[seaTimeApi] Could not parse error response:', parseError);
+    }
+    
+    // Provide user-friendly error messages based on status code
+    if (response.status === 409) {
+      errorMessage = 'You already have a vessel with this MMSI. Please use a different MMSI or edit your existing vessel.';
+    } else if (response.status === 500) {
+      errorMessage = 'Server error while creating vessel. Please try again or contact support if the issue persists.';
+    } else if (response.status === 401) {
+      errorMessage = 'Authentication required. Please sign in again.';
+    }
+    
+    throw new Error(errorMessage);
   }
 
   const data = await response.json();
