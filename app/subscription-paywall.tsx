@@ -5,17 +5,20 @@
  * This screen displays subscription information and handles native iOS StoreKit purchases.
  * 
  * Features:
- * - Display subscription features and pricing (£4.99/€5.99 per month)
+ * - Display subscription features (NO HARDCODED PRICES - fetched from App Store)
  * - Direct users to App Store for subscription purchase
  * - Check subscription status with backend
  * - Manage subscription via iOS Settings
  * - Sign out option
  * 
  * Subscription Model:
- * - Price: £4.99/€5.99 per month
+ * - Monthly subscription (price fetched from App Store)
  * - No free trial period
  * - Users must subscribe to access the app
  * - Status: 'active' or 'inactive'
+ * 
+ * CRITICAL: Prices are NEVER hardcoded per Apple StoreKit guidelines.
+ * Users view pricing in the App Store where it's displayed in their local currency.
  * 
  * Backend Integration:
  * - GET /api/subscription/status - Get current subscription status
@@ -55,7 +58,8 @@ export default function SubscriptionPaywallScreen() {
   const [loading, setLoading] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
-  const [productPrice] = useState<string>('£4.99/€5.99');
+  const [productInfo, setProductInfo] = useState<any>(null);
+  const [loadingPrice, setLoadingPrice] = useState(true);
   const { subscriptionStatus, checkSubscription, loading: subscriptionLoading } = useSubscription();
   const { signOut } = useAuth();
 
@@ -63,11 +67,34 @@ export default function SubscriptionPaywallScreen() {
     console.log('[SubscriptionPaywall] Screen mounted');
     console.log('[SubscriptionPaywall] Current subscription status:', subscriptionStatus?.status);
     
-    // Initialize StoreKit
+    // Initialize StoreKit and fetch product info
     if (Platform.OS === 'ios') {
-      StoreKitUtils.initializeStoreKit();
+      initializeAndFetchProduct();
+    } else {
+      setLoadingPrice(false);
     }
-  }, [subscriptionStatus?.status]);
+  }, []);
+
+  const initializeAndFetchProduct = async () => {
+    try {
+      console.log('[SubscriptionPaywall] Initializing StoreKit');
+      await StoreKitUtils.initializeStoreKit();
+      
+      console.log('[SubscriptionPaywall] Fetching product info (no hardcoded prices)');
+      const info = await StoreKitUtils.getProductInfo();
+      
+      if (info) {
+        console.log('[SubscriptionPaywall] Product info fetched:', info);
+        setProductInfo(info);
+      } else {
+        console.log('[SubscriptionPaywall] Product info not available - user will view pricing in App Store');
+      }
+    } catch (error: any) {
+      console.error('[SubscriptionPaywall] Error fetching product info:', error);
+    } finally {
+      setLoadingPrice(false);
+    }
+  };
 
   const handleSubscribe = async () => {
     if (Platform.OS !== 'ios') {
@@ -162,6 +189,11 @@ export default function SubscriptionPaywallScreen() {
   const statusText = 'Subscription Required';
   const messageText = 'SeaTime Tracker requires an active subscription to track your sea time and generate MCA-compliant reports.';
 
+  // Format price display
+  const priceDisplay = productInfo 
+    ? `${productInfo.priceLocale.currencySymbol}${productInfo.price}`
+    : 'View in App Store';
+
   return (
     <>
       <Stack.Screen
@@ -239,8 +271,17 @@ export default function SubscriptionPaywallScreen() {
 
         <View style={styles.pricingContainer}>
           <Text style={styles.pricingTitle}>Monthly Subscription</Text>
-          <Text style={styles.price}>{productPrice}</Text>
-          <Text style={styles.pricingSubtitle}>per month</Text>
+          {loadingPrice ? (
+            <ActivityIndicator size="large" color={colors.primary} style={styles.priceLoader} />
+          ) : (
+            <>
+              <Text style={styles.price}>{priceDisplay}</Text>
+              {productInfo && <Text style={styles.pricingSubtitle}>per month</Text>}
+              {!productInfo && Platform.OS === 'ios' && (
+                <Text style={styles.pricingNote}>Tap Subscribe to view pricing in your currency</Text>
+              )}
+            </>
+          )}
           <Text style={styles.pricingNote}>Cancel anytime • No trial period</Text>
         </View>
 
@@ -318,6 +359,9 @@ export default function SubscriptionPaywallScreen() {
             Manage your subscription in iOS Settings → Apple ID → Subscriptions
           </Text>
           <Text style={styles.footerText}>
+            Pricing is displayed in the App Store in your local currency.
+          </Text>
+          <Text style={styles.footerText}>
             Need help? Contact info@forelandmarine.com
           </Text>
         </View>
@@ -340,10 +384,11 @@ export default function SubscriptionPaywallScreen() {
             />
             <Text style={styles.modalTitle}>Subscribe in App Store</Text>
             <Text style={styles.modalMessage}>
-              1. Complete your subscription in the App Store (£4.99/month){'\n\n'}
+              1. View pricing and complete your subscription in the App Store{'\n\n'}
               2. Return to SeaTime Tracker{'\n\n'}
               3. Tap &quot;Check Subscription Status&quot;{'\n\n'}
-              Your subscription is managed through your Apple ID and will automatically renew each month.
+              Your subscription is managed through your Apple ID and will automatically renew each month.{'\n\n'}
+              Pricing is displayed in your local currency in the App Store.
             </Text>
             <TouchableOpacity
               style={[styles.modalButton, styles.modalConfirmButton]}
@@ -464,6 +509,9 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.text : colors.textLight,
       marginBottom: 8,
     },
+    priceLoader: {
+      marginVertical: 20,
+    },
     price: {
       fontSize: 36,
       fontWeight: 'bold',
@@ -479,6 +527,7 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
+      marginTop: 4,
     },
     buttonContainer: {
       marginBottom: 24,

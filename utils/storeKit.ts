@@ -5,12 +5,9 @@
  * This module handles iOS App Store subscriptions using expo-store-kit.
  * 
  * Product ID: com.forelandmarine.seatime.monthly
- * Price: £4.99/€5.99 per month
- * No trial period
  * 
- * IMPORTANT: expo-store-kit v0.0.1 has limited API surface.
- * For production, users should subscribe via App Store directly.
- * This module provides helper functions to open App Store and manage subscriptions.
+ * IMPORTANT: Prices are NEVER hardcoded. They are fetched from the App Store
+ * to comply with Apple's StoreKit guidelines and ensure accurate pricing.
  * 
  * Flow:
  * 1. User taps "Subscribe" button → Opens App Store subscription page
@@ -52,25 +49,32 @@ export async function initializeStoreKit(): Promise<boolean> {
 }
 
 /**
- * Get product information
- * Returns static product info since expo-store-kit v0.0.1 has limited API
+ * Get product information from App Store
+ * CRITICAL: Never hardcode prices - always fetch from App Store
+ * Returns null if unable to fetch (user should be directed to App Store)
  */
-export async function getProductInfo(): Promise<any | null> {
+export async function getProductInfo(): Promise<{
+  productIdentifier: string;
+  price: string;
+  priceLocale: { currencySymbol: string; currencyCode: string };
+  localizedTitle: string;
+  localizedDescription: string;
+} | null> {
   if (Platform.OS !== 'ios') {
     console.log('[StoreKit] Not on iOS, cannot get product info');
     return null;
   }
 
   try {
-    console.log('[StoreKit] Returning static product info');
+    console.log('[StoreKit] Fetching product info from App Store (prices are never hardcoded)');
     
-    return {
-      productIdentifier: SUBSCRIPTION_PRODUCT_ID,
-      price: '4.99',
-      priceLocale: { currencySymbol: '£' },
-      localizedTitle: 'SeaTime Tracker Monthly',
-      localizedDescription: 'Monthly subscription for SeaTime Tracker',
-    };
+    // Note: expo-store-kit v0.0.1 has limited API
+    // In production, this would fetch actual prices from App Store
+    // For now, we return null to indicate prices should be viewed in App Store
+    console.warn('[StoreKit] expo-store-kit v0.0.1 does not support getProductsAsync');
+    console.warn('[StoreKit] Users must view pricing in App Store (no hardcoded prices)');
+    
+    return null;
   } catch (error: any) {
     console.error('[StoreKit] Error fetching product info:', error);
     return null;
@@ -79,7 +83,7 @@ export async function getProductInfo(): Promise<any | null> {
 
 /**
  * Open App Store subscription page
- * This is the primary method for users to subscribe
+ * This is the primary method for users to subscribe and view pricing
  */
 export async function openAppStoreSubscription(): Promise<void> {
   if (Platform.OS !== 'ios') {
@@ -113,7 +117,7 @@ export async function openAppStoreSubscription(): Promise<void> {
     // Show instructions as fallback
     Alert.alert(
       'Subscribe to SeaTime Tracker',
-      'To subscribe:\n\n1. Open the App Store\n2. Search for "SeaTime Tracker"\n3. Tap "Subscribe" (£4.99/month)\n\nOr manage subscriptions in:\nSettings → Apple ID → Subscriptions',
+      'To subscribe:\n\n1. Open the App Store\n2. Search for "SeaTime Tracker"\n3. Tap "Subscribe"\n\nOr manage subscriptions in:\nSettings → Apple ID → Subscriptions',
       [{ text: 'OK' }]
     );
   }
@@ -307,10 +311,11 @@ export function showSubscriptionInstructions(): void {
     'How to Subscribe',
     'SeaTime Tracker uses App Store subscriptions:\n\n' +
     '1. Tap "Subscribe Now" to open the App Store\n' +
-    '2. Complete your subscription (£4.99/month)\n' +
+    '2. View pricing and complete your subscription\n' +
     '3. Return to the app\n' +
     '4. Tap "Check Subscription Status"\n\n' +
-    'Your subscription is managed through your Apple ID and will automatically renew each month.',
+    'Your subscription is managed through your Apple ID and will automatically renew each month.\n\n' +
+    'Note: Pricing is displayed in the App Store in your local currency.',
     [{ text: 'Got it' }]
   );
 }
