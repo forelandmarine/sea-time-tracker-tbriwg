@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as authSchema from "../db/auth-schema.js";
 import * as schema from "../db/schema.js";
 import type { App } from "../index.js";
@@ -2406,6 +2406,64 @@ export function register(app: App, fastify: FastifyInstance) {
       } catch (error) {
         app.logger.error({ err: error }, 'Error setting up sandbox test user');
         return reply.code(500).send({ error: 'Failed to set up sandbox test user' });
+      }
+    }
+  );
+
+  // POST /api/admin/activate-all-subscriptions - Flag all users with active subscriptions for testing
+  fastify.post(
+    '/api/admin/activate-all-subscriptions',
+    {
+      schema: {
+        description: 'Flag all users with active subscriptions for testing (admin endpoint)',
+        tags: ['admin'],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              message: { type: 'string' },
+              usersUpdated: { type: 'number' },
+            },
+          },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      app.logger.info({}, 'Activating all user subscriptions for testing');
+
+      try {
+        // Calculate expiration date: 1 year from now
+        const expirationDate = new Date();
+        expirationDate.setFullYear(expirationDate.getFullYear() + 1);
+
+        // Update all users to have active subscriptions
+        const result = await app.db
+          .update(authSchema.user)
+          .set({
+            subscription_status: 'active',
+            subscription_expires_at: expirationDate,
+            subscription_product_id: 'test_subscription',
+            updatedAt: new Date(),
+          })
+          .returning();
+
+        const usersUpdated = result.length;
+
+        app.logger.info(
+          { usersUpdated, expiresAt: expirationDate.toISOString() },
+          'All users flagged with active subscriptions for testing'
+        );
+
+        return reply.code(200).send({
+          success: true,
+          message: 'All users flagged with active subscriptions for testing',
+          usersUpdated,
+        });
+      } catch (error) {
+        app.logger.error({ err: error }, 'Error activating all user subscriptions');
+        return reply.code(500).send({ error: 'Failed to activate all user subscriptions' });
       }
     }
   );
