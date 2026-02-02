@@ -5,11 +5,17 @@
  * This screen handles iOS App Store subscription management using Superwall SDK.
  * 
  * Features:
- * - Display subscription features and pricing
+ * - Display subscription features and pricing (£4.99/€5.99 per month)
  * - Handle iOS In-App Purchase flow via Superwall
  * - Verify receipts with backend API
  * - Restore previous purchases
  * - Check subscription status
+ * 
+ * Subscription Model:
+ * - Price: £4.99/€5.99 per month
+ * - No free trial period
+ * - Users must subscribe immediately to access the app
+ * - Status: 'active' or 'inactive' only
  * 
  * Backend Integration:
  * - POST /api/subscription/verify - Verify iOS receipt and update subscription
@@ -25,7 +31,8 @@
  * 2. Set up iOS In-App Purchase products in App Store Connect:
  *    - Product ID: com.forelandmarine.seatime.monthly
  *    - Type: Auto-renewable subscription
- *    - Price: £9.99/month
+ *    - Price: £4.99/€5.99 per month
+ *    - No trial period
  * 
  * 3. Configure Superwall dashboard:
  *    - Add your product IDs
@@ -53,6 +60,7 @@ import {
   Alert,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import Constants from 'expo-constants';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useSubscription } from '@/contexts/SubscriptionContext';
@@ -165,7 +173,7 @@ export default function SubscriptionPaywallScreen() {
       // The backend should extract it from the receipt
       const result = await verifyReceipt(receipt, 'com.forelandmarine.seatime.monthly', __DEV__);
       
-      if (result.success && (result.status === 'active' || result.status === 'trial')) {
+      if (result.success && result.status === 'active') {
         console.log('[SubscriptionPaywall] Restore verified successfully');
         Alert.alert(
           'Restored!',
@@ -280,13 +288,8 @@ export default function SubscriptionPaywallScreen() {
 
   const styles = createStyles(isDark);
 
-  const statusText = subscriptionStatus?.status === 'trial' 
-    ? 'Your free trial has ended' 
-    : 'Subscription Required';
-
-  const messageText = subscriptionStatus?.status === 'trial'
-    ? 'Your 7-day free trial has ended. Subscribe now to continue tracking your sea time.'
-    : 'SeaTime Tracker requires an active subscription to track your sea time and generate MCA-compliant reports.';
+  const statusText = 'Subscription Required';
+  const messageText = 'SeaTime Tracker requires an active subscription to track your sea time and generate MCA-compliant reports.';
 
   return (
     <>
@@ -365,8 +368,9 @@ export default function SubscriptionPaywallScreen() {
 
         <View style={styles.pricingContainer}>
           <Text style={styles.pricingTitle}>Monthly Subscription</Text>
-          <Text style={styles.price}>£9.99/month</Text>
-          <Text style={styles.pricingNote}>Cancel anytime • 7-day free trial for new users</Text>
+          <Text style={styles.price}>£4.99/€5.99</Text>
+          <Text style={styles.pricingSubtitle}>per month</Text>
+          <Text style={styles.pricingNote}>Cancel anytime</Text>
         </View>
 
         <View style={styles.buttonContainer}>
@@ -489,6 +493,11 @@ function createStyles(isDark: boolean) {
       fontSize: 36,
       fontWeight: 'bold',
       color: colors.primary,
+      marginBottom: 4,
+    },
+    pricingSubtitle: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginBottom: 8,
     },
     pricingNote: {

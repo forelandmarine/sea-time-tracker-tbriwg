@@ -4,14 +4,14 @@ import { useAuth } from './AuthContext';
 import { authenticatedGet, authenticatedPost, authenticatedPatch } from '@/utils/api';
 
 interface SubscriptionStatus {
-  status: 'active' | 'inactive' | 'trial';
+  status: 'active' | 'inactive';
   expiresAt: string | null;
   productId: string | null;
 }
 
 interface VerifyReceiptResponse {
   success: boolean;
-  status: 'active' | 'inactive' | 'trial';
+  status: 'active' | 'inactive';
   expiresAt: string | null;
 }
 
@@ -31,7 +31,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { user, isAuthenticated } = useAuth();
 
-  const hasActiveSubscription = subscriptionStatus?.status === 'active' || subscriptionStatus?.status === 'trial';
+  const hasActiveSubscription = subscriptionStatus?.status === 'active';
 
   useEffect(() => {
     if (isAuthenticated && user) {
