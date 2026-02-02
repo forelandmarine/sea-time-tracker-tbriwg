@@ -2467,4 +2467,93 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     }
   );
+
+  // POST /api/admin/update-user-subscription - Update a specific user's subscription status
+  fastify.post<{
+    Body: {
+      email: string;
+      subscriptionStatus: 'active' | 'inactive';
+    };
+  }>(
+    '/api/admin/update-user-subscription',
+    {
+      schema: {
+        description: 'Update a specific user\'s subscription status (admin endpoint)',
+        tags: ['admin'],
+        body: {
+          type: 'object',
+          required: ['email', 'subscriptionStatus'],
+          properties: {
+            email: { type: 'string', format: 'email', description: 'User email' },
+            subscriptionStatus: { type: 'string', enum: ['active', 'inactive'], description: 'Subscription status to set' },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  email: { type: 'string' },
+                  subscriptionStatus: { type: 'string' },
+                },
+              },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { email, subscriptionStatus } = request.body;
+
+      app.logger.info({ email, subscriptionStatus }, 'Updating user subscription status');
+
+      try {
+        // Find user by email
+        const users = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email));
+
+        if (users.length === 0) {
+          app.logger.warn({ email }, 'User not found for subscription update');
+          return reply.code(400).send({ error: 'User not found' });
+        }
+
+        const user = users[0];
+
+        // Update user subscription status
+        const [updatedUser] = await app.db
+          .update(authSchema.user)
+          .set({
+            subscription_status: subscriptionStatus,
+            updatedAt: new Date(),
+          })
+          .where(eq(authSchema.user.id, user.id))
+          .returning();
+
+        app.logger.info(
+          { userId: user.id, email, subscriptionStatus },
+          'User subscription status updated successfully'
+        );
+
+        return reply.code(200).send({
+          success: true,
+          user: {
+            id: updatedUser.id,
+            email: updatedUser.email,
+            subscriptionStatus: updatedUser.subscription_status,
+          },
+        });
+      } catch (error) {
+        app.logger.error({ err: error, email }, 'Error updating user subscription status');
+        return reply.code(500).send({ error: 'Failed to update user subscription status' });
+      }
+    }
+  );
 }

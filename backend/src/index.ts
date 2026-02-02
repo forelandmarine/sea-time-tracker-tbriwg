@@ -27,6 +27,7 @@
 import { createApplication } from "@specific-dev/framework";
 import * as appSchema from './db/schema.js';
 import * as authSchema from './db/auth-schema.js';
+import { eq } from 'drizzle-orm';
 
 // Import route registration functions
 import * as vesselsRoutes from './routes/vessels.js';
@@ -90,6 +91,29 @@ app.fastify.addHook('onReady', async () => {
     // Test database connection by querying vessels table
     const vessels = await app.db.select().from(appSchema.vessels);
     app.logger.info({ vesselCount: vessels.length }, 'Database connection verified');
+
+    // Update jack@forelandmarine.com's subscription to active
+    const jackEmail = 'jack@forelandmarine.com';
+    try {
+      const jackUsers = await app.db
+        .select()
+        .from(authSchema.user)
+        .where(eq(authSchema.user.email, jackEmail));
+
+      if (jackUsers.length > 0) {
+        await app.db
+          .update(authSchema.user)
+          .set({
+            subscription_status: 'active',
+            updatedAt: new Date(),
+          })
+          .where(eq(authSchema.user.id, jackUsers[0].id));
+
+        app.logger.info({ email: jackEmail }, 'Ensured jack@forelandmarine.com has active subscription');
+      }
+    } catch (jackError) {
+      app.logger.debug({ err: jackError, email: jackEmail }, 'Could not update jack@forelandmarine.com subscription (user may not exist yet)');
+    }
   } catch (error) {
     app.logger.warn({ err: error }, 'Database connection test failed - will attempt to connect on first query');
   }
