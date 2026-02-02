@@ -19,6 +19,7 @@ import {
   ActivityIndicator,
   Modal,
   RefreshControl,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
@@ -314,6 +315,21 @@ const createStyles = (isDark: boolean, topInset: number) =>
       fontSize: 16,
       fontWeight: '600',
     },
+    supportButton: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 12,
+      padding: 15,
+      alignItems: 'center',
+      marginTop: 10,
+      marginBottom: 20,
+      borderWidth: 1,
+      borderColor: colors.primary,
+    },
+    supportButtonText: {
+      color: colors.primary,
+      fontSize: 16,
+      fontWeight: '600',
+    },
     departmentBadge: {
       backgroundColor: colors.primary + '20',
       borderRadius: 20,
@@ -567,7 +583,40 @@ export default function ProfileScreen() {
     router.push('/scheduled-tasks');
   };
 
-
+  const handleSupport = async () => {
+    console.log('User tapped Support button');
+    const supportEmail = 'info@forelandmarine.com';
+    const subject = 'SeaTime Tracker Support Request';
+    const body = 'Hello,\n\nI need assistance with:\n\n';
+    
+    const mailtoUrl = `mailto:${supportEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    
+    try {
+      const canOpen = await Linking.canOpenURL(mailtoUrl);
+      if (canOpen) {
+        await Linking.openURL(mailtoUrl);
+        console.log('Support email opened successfully');
+      } else {
+        console.log('Cannot open email client, showing fallback alert');
+        Alert.alert(
+          'Contact Support',
+          `Please email us at:\n${supportEmail}`,
+          [
+            { text: 'OK' }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Failed to open email client:', error);
+      Alert.alert(
+        'Contact Support',
+        `Please email us at:\n${supportEmail}`,
+        [
+          { text: 'OK' }
+        ]
+      );
+    }
+  };
 
   const handleVesselPress = (vesselName: string) => {
     console.log('User tapped vessel:', vesselName);
@@ -1083,6 +1132,10 @@ export default function ProfileScreen() {
 
           <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
             <Text style={styles.signOutButtonText}>Sign Out</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.supportButton} onPress={handleSupport}>
+            <Text style={styles.supportButtonText}>Contact Support</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
