@@ -145,6 +145,29 @@ app.fastify.addHook('onReady', async () => {
     } catch (testError) {
       app.logger.debug({ err: testError, email: testEmail }, 'Could not update test@seatime.com subscription (user may not exist yet)');
     }
+
+    // Update dan@forelandmarine.com's subscription to active
+    const danEmail = 'dan@forelandmarine.com';
+    try {
+      const danUsers = await app.db
+        .select()
+        .from(authSchema.user)
+        .where(eq(authSchema.user.email, danEmail));
+
+      if (danUsers.length > 0) {
+        await app.db
+          .update(authSchema.user)
+          .set({
+            subscription_status: 'active',
+            updatedAt: new Date(),
+          })
+          .where(eq(authSchema.user.id, danUsers[0].id));
+
+        app.logger.info({ email: danEmail }, 'Ensured dan@forelandmarine.com has active subscription');
+      }
+    } catch (danError) {
+      app.logger.debug({ err: danError, email: danEmail }, 'Could not update dan@forelandmarine.com subscription (user may not exist yet)');
+    }
   } catch (error) {
     app.logger.warn({ err: error }, 'Database connection test failed - will attempt to connect on first query');
   }
