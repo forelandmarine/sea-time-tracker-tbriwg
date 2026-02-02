@@ -317,6 +317,32 @@ export function register(app: App, fastify: FastifyInstance) {
       return reply.code(401).send({ error: 'Authentication required' });
     }
 
+    // Check user subscription status
+    const users = await app.db
+      .select()
+      .from(authSchema.user)
+      .where(eq(authSchema.user.id, userId));
+
+    if (users.length === 0) {
+      app.logger.warn({ userId }, 'User not found');
+      return reply.code(401).send({ error: 'User not found' });
+    }
+
+    const user = users[0];
+    const subscriptionStatus = user.subscription_status || 'inactive';
+
+    // Check if subscription is active or in trial period
+    if (subscriptionStatus === 'inactive') {
+      app.logger.warn({ userId }, 'Vessel creation attempted with inactive subscription');
+      return reply.code(403).send({ error: 'Subscription required to create vessels. Please subscribe or check your trial status.' });
+    }
+
+    // For trial status, check if trial has expired
+    if (subscriptionStatus === 'trial' && user.subscription_expires_at && user.subscription_expires_at < new Date()) {
+      app.logger.warn({ userId }, 'Vessel creation attempted with expired trial');
+      return reply.code(403).send({ error: 'Your trial period has expired. Please subscribe to continue.' });
+    }
+
     const {
       mmsi,
       vessel_name,

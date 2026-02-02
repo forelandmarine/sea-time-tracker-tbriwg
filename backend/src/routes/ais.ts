@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { eq, desc, and, gte, isNotNull, lt } from "drizzle-orm";
 import * as schema from "../db/schema.js";
+import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
 import { extractUserIdFromRequest } from "../middleware/auth.js";
 
@@ -1065,6 +1066,30 @@ export function register(app: App, fastify: FastifyInstance) {
     if (vessel.length === 0) {
       app.logger.warn(`Vessel not found: ${vesselId}`);
       return reply.code(404).send({ error: 'Vessel not found' });
+    }
+
+    // Check user subscription status
+    const vesselUserId = vessel[0].user_id;
+    if (vesselUserId) {
+      const users = await app.db
+        .select()
+        .from(authSchema.user)
+        .where(eq(authSchema.user.id, vesselUserId));
+
+      if (users.length > 0) {
+        const user = users[0];
+        const subscriptionStatus = user.subscription_status || 'inactive';
+
+        if (subscriptionStatus === 'inactive') {
+          app.logger.warn({ userId: vesselUserId, vesselId }, 'AIS check attempted with inactive subscription');
+          return reply.code(403).send({ error: 'Subscription required for vessel tracking. Please subscribe.' });
+        }
+
+        if (subscriptionStatus === 'trial' && user.subscription_expires_at && user.subscription_expires_at < new Date()) {
+          app.logger.warn({ userId: vesselUserId, vesselId }, 'AIS check attempted with expired trial');
+          return reply.code(403).send({ error: 'Your trial period has expired. Please subscribe to continue.' });
+        }
+      }
     }
 
     // Check if vessel is active
