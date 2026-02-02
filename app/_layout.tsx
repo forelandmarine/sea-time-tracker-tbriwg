@@ -286,6 +286,15 @@ function RootLayoutNav() {
               }} 
             />
 
+            {/* Forgot Password Screen */}
+            <Stack.Screen 
+              name="forgot-password" 
+              options={{ 
+                headerShown: false,
+                title: "Reset Password",
+              }} 
+            />
+
             {/* Main app with tabs */}
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
@@ -319,11 +328,10 @@ function RootLayoutNav() {
               }} 
             />
 
-            {/* User profile screen */}
+            {/* User profile screen - Allow header to show */}
             <Stack.Screen 
               name="user-profile" 
               options={{ 
-                headerShown: false,
                 presentation: 'card',
                 headerBackTitle: 'Back',
               }} 
@@ -385,6 +393,16 @@ function RootLayoutNav() {
               options={{ 
                 headerShown: false,
                 presentation: 'card',
+              }} 
+            />
+
+            {/* Admin investigate entry screen */}
+            <Stack.Screen 
+              name="admin-investigate-entry" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                headerBackTitle: 'Back',
               }} 
             />
 
@@ -451,6 +469,14 @@ function RootLayoutNav() {
                 presentation: "transparentModal",
                 headerShown: false,
               }}
+            />
+
+            {/* 404 Not Found */}
+            <Stack.Screen 
+              name="+not-found" 
+              options={{ 
+                headerShown: false,
+              }} 
             />
           </Stack>
           {Platform.OS !== 'web' && SystemBars && <SystemBars style={"auto"} />}
