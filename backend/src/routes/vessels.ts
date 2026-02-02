@@ -331,16 +331,10 @@ export function register(app: App, fastify: FastifyInstance) {
     const user = users[0];
     const subscriptionStatus = user.subscription_status || 'inactive';
 
-    // Check if subscription is active or in trial period
-    if (subscriptionStatus === 'inactive') {
+    // Check if subscription is active
+    if (subscriptionStatus !== 'active') {
       app.logger.warn({ userId }, 'Vessel creation attempted with inactive subscription');
-      return reply.code(403).send({ error: 'Subscription required to create vessels. Please subscribe or check your trial status.' });
-    }
-
-    // For trial status, check if trial has expired
-    if (subscriptionStatus === 'trial' && user.subscription_expires_at && user.subscription_expires_at < new Date()) {
-      app.logger.warn({ userId }, 'Vessel creation attempted with expired trial');
-      return reply.code(403).send({ error: 'Your trial period has expired. Please subscribe to continue.' });
+      return reply.code(403).send({ error: 'Subscription required to create vessels. Please subscribe.' });
     }
 
     const {

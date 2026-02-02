@@ -106,7 +106,7 @@ export function register(app: App, fastify: FastifyInstance): void {
           200: {
             type: "object",
             properties: {
-              status: { type: "string", enum: ["active", "inactive", "trial"] },
+              status: { type: "string", enum: ["active", "inactive"] },
               expiresAt: { type: ["string", "null"], format: "date-time" },
               productId: { type: ["string", "null"] },
             },
@@ -137,11 +137,7 @@ export function register(app: App, fastify: FastifyInstance): void {
 
         const user = users[0];
 
-        // Check if trial has expired
-        let status = user.subscription_status || "inactive";
-        if (status === "trial" && user.subscription_expires_at && user.subscription_expires_at < new Date()) {
-          status = "inactive";
-        }
+        const status = user.subscription_status || "inactive";
 
         return reply.code(200).send({
           status,
@@ -182,7 +178,7 @@ export function register(app: App, fastify: FastifyInstance): void {
             type: "object",
             properties: {
               success: { type: "boolean" },
-              status: { type: "string", enum: ["active", "inactive", "trial"] },
+              status: { type: "string", enum: ["active", "inactive"] },
               expiresAt: { type: ["string", "null"], format: "date-time" },
             },
           },

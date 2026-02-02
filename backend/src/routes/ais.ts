@@ -1080,14 +1080,9 @@ export function register(app: App, fastify: FastifyInstance) {
         const user = users[0];
         const subscriptionStatus = user.subscription_status || 'inactive';
 
-        if (subscriptionStatus === 'inactive') {
+        if (subscriptionStatus !== 'active') {
           app.logger.warn({ userId: vesselUserId, vesselId }, 'AIS check attempted with inactive subscription');
           return reply.code(403).send({ error: 'Subscription required for vessel tracking. Please subscribe.' });
-        }
-
-        if (subscriptionStatus === 'trial' && user.subscription_expires_at && user.subscription_expires_at < new Date()) {
-          app.logger.warn({ userId: vesselUserId, vesselId }, 'AIS check attempted with expired trial');
-          return reply.code(403).send({ error: 'Your trial period has expired. Please subscribe to continue.' });
         }
       }
     }
