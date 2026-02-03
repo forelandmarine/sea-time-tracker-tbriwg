@@ -15,6 +15,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { BACKEND_URL } from "@/utils/api";
 import { registerForPushNotificationsAsync } from "@/utils/notifications";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -445,6 +446,25 @@ function RootLayoutNav() {
               }} 
             />
 
+            {/* Subscription paywall screen */}
+            <Stack.Screen 
+              name="subscription-paywall" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+              }} 
+            />
+
+            {/* Admin update subscription screen */}
+            <Stack.Screen 
+              name="admin-update-subscription" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                headerBackTitle: 'Back',
+              }} 
+            />
+
             {/* Modal Demo Screens */}
             <Stack.Screen
               name="modal"
@@ -522,9 +542,11 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <WidgetProvider>
-          <RootLayoutNav />
-        </WidgetProvider>
+        <SubscriptionProvider>
+          <WidgetProvider>
+            <RootLayoutNav />
+          </WidgetProvider>
+        </SubscriptionProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

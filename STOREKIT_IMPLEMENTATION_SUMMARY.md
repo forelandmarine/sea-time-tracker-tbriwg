@@ -3,7 +3,7 @@
 
 ## What Was Implemented
 
-SeaTime Tracker now uses **native iOS App Store subscriptions** managed directly by Apple. All Superwall integration has been removed and replaced with direct App Store subscription handling.
+SeaTime Tracker now uses **native iOS App Store subscriptions** managed directly by Apple with **strict subscription enforcement**. Users without an active subscription cannot access the app, and tracking is automatically paused when subscriptions become inactive.
 
 ## Changes Made
 
@@ -63,24 +63,32 @@ SeaTime Tracker now uses **native iOS App Store subscriptions** managed directly
 - Provides `hasActiveSubscription` flag
 - Provides `checkSubscription()` function
 - Provides `pauseTracking()` function
+- Automatically pauses tracking when subscription becomes inactive
 - Handles loading states
 
 **Integration**:
 - Used in `app/index.tsx` to gate app access
+- Used in `app/(tabs)/_layout.tsx` to protect tab routes
 - Checks subscription before allowing access to main app
 - Redirects to paywall if no active subscription
+- Automatically calls `pauseTracking()` when subscription is inactive
 
 ### 5. Backend Integration
 **Endpoints Used**:
 - `GET /api/subscription/status` - Get current subscription status
 - `POST /api/subscription/verify` - Verify App Store receipt
 - `PATCH /api/subscription/pause-tracking` - Pause tracking when subscription expires
+- `GET /api/auth/user` - Returns user with subscription status
+- `POST /api/auth/sign-in/email` - Returns user with subscription status
+- `POST /api/auth/sign-up/email` - Creates user with 'inactive' subscription status
+- `POST /api/auth/sign-in/apple` - Returns user with subscription status
 
 **Backend Configuration**:
 - Requires `APPLE_APP_SECRET` environment variable
 - Verifies receipts with Apple servers
 - Updates user subscription status in database
 - Handles App Store Server Notifications
+- Returns subscription status with all auth responses
 
 ## How It Works
 
@@ -90,26 +98,36 @@ SeaTime Tracker now uses **native iOS App Store subscriptions** managed directly
    ↓
 2. Check authentication (AuthContext)
    ↓
-3. Check subscription status (SubscriptionContext)
+3. Auth response includes subscription_status
    ↓
-4. If no subscription → Show paywall
+4. SubscriptionContext uses subscription_status from user object
    ↓
-5. User taps "Subscribe Now"
+5. If subscription is 'inactive' → Automatically pause tracking
    ↓
-6. Open App Store subscription page
+6. If no subscription → Show paywall (cannot access app)
    ↓
-7. User completes purchase in App Store
+7. User taps "Subscribe Now"
    ↓
-8. User returns to app
+8. Open App Store subscription page
    ↓
-9. User taps "Check Subscription Status"
+9. User completes purchase in App Store
    ↓
-10. Backend verifies receipt with Apple
+10. User returns to app
     ↓
-11. Backend updates subscription status
+11. User taps "Check Subscription Status"
     ↓
-12. App checks status and grants access
+12. Backend verifies receipt with Apple
+    ↓
+13. Backend updates subscription status to 'active'
+    ↓
+14. App checks status and grants access
 ```
+
+### Subscription Enforcement:
+- **Login**: Users can log in, but immediately see paywall if subscription is inactive
+- **Tab Access**: Tab routes check subscription status and redirect to paywall if inactive
+- **Tracking**: Automatically paused when subscription becomes inactive
+- **Seamless**: Subscription status is included in auth responses for instant checks
 
 ### Subscription Management:
 - Users manage subscriptions via iOS Settings → Apple ID → Subscriptions
@@ -163,19 +181,39 @@ SeaTime Tracker now uses **native iOS App Store subscriptions** managed directly
 
 3. **Backend Verification**: All receipt verification happens on the backend. The app just checks subscription status.
 
-4. **Subscription Status**: Checked on app launch and when user taps "Check Subscription Status".
+4. **Subscription Status**: 
+   - Included in all auth responses for instant checks
+   - Checked on app launch
+   - Checked when user taps "Check Subscription Status"
+   - Automatically pauses tracking when inactive
 
 5. **No Trial Period**: The subscription starts immediately upon purchase with no free trial.
 
 6. **Cancellation**: Users can cancel anytime via iOS Settings. Access continues until the end of the current billing period.
+
+7. **Strict Enforcement**: 
+   - Users without active subscriptions cannot access the main app
+   - Tracking is automatically paused for inactive subscriptions
+   - Multiple layers of protection (index route, tab layout)
+
+8. **Discreet Implementation**: 
+   - Subscription check happens seamlessly during authentication
+   - No intrusive prompts or popups
+   - Clean paywall UI with clear call-to-action
+   - Simple "Subscribe Now" → App Store flow
 
 ## Files Modified
 
 1. `utils/storeKit.ts` - StoreKit integration utilities
 2. `app/subscription-paywall.tsx` - Subscription paywall UI
 3. `app.json` - iOS configuration with StoreKit entitlements
-4. `contexts/SubscriptionContext.tsx` - Subscription state management (already existed)
-5. `app/index.tsx` - App entry point with subscription check (already existed)
+4. `contexts/SubscriptionContext.tsx` - Subscription state management with auto-pause
+5. `contexts/AuthContext.tsx` - User interface includes subscription fields
+6. `app/index.tsx` - App entry point with subscription check
+7. `app/_layout.tsx` - Root layout with SubscriptionProvider
+8. `app/(tabs)/_layout.tsx` - Tab layout with subscription guard
+9. `app/(tabs)/_layout.ios.tsx` - iOS tab layout with subscription guard
+10. `backend/src/routes/auth.ts` - Auth endpoints return subscription status
 
 ## Files Created
 

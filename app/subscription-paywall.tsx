@@ -187,7 +187,7 @@ export default function SubscriptionPaywallScreen() {
   const styles = createStyles(isDark);
 
   const statusText = 'Subscription Required';
-  const messageText = 'SeaTime Tracker requires an active subscription to track your sea time and generate MCA-compliant reports.';
+  const messageText = 'SeaTime Tracker requires an active subscription to access the app. Subscribe now to start tracking your sea time and generating MCA-compliant reports.';
 
   // Format price display
   const priceDisplay = productInfo 

@@ -12,6 +12,13 @@ interface User {
   id: string;
   email: string;
   name?: string;
+  emailVerified?: boolean;
+  image?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  subscription_status?: 'active' | 'inactive';
+  subscription_expires_at?: string | null;
+  subscription_product_id?: string | null;
 }
 
 interface AuthContextType {
@@ -161,7 +168,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (response.ok) {
             const data = await response.json();
             console.log('[Auth] User authenticated:', data.user?.email || 'unknown');
-            setUser(data.user);
+            console.log('[Auth] Subscription status from auth check:', data.user?.subscription_status);
+            
+            // Store user with subscription data
+            setUser({
+              ...data.user,
+              subscription_status: data.user?.subscription_status || 'inactive',
+              subscription_expires_at: data.user?.subscription_expires_at || null,
+              subscription_product_id: data.user?.subscription_product_id || null,
+            });
+            
             setLoading(false);
             return; // Success - exit retry loop
           } else {
@@ -239,6 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       console.log('[Auth] Sign in response received');
       console.log('[Auth] User:', data.user?.email);
+      console.log('[Auth] Subscription status:', data.user?.subscription_status);
 
       if (!data.session || !data.session.token) {
         console.error('[Auth] Missing session or token');
@@ -246,8 +263,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       await tokenStorage.setToken(data.session.token);
-      setUser(data.user);
-      console.log('[Auth] Sign in successful, user state updated');
+      
+      // Store user with subscription data
+      setUser({
+        ...data.user,
+        subscription_status: data.user?.subscription_status || 'inactive',
+        subscription_expires_at: data.user?.subscription_expires_at || null,
+        subscription_product_id: data.user?.subscription_product_id || null,
+      });
+      
+      console.log('[Auth] Sign in successful, user state updated with subscription data');
     } catch (error: any) {
       console.error('[Auth] Sign in failed:', error?.message);
       
@@ -291,6 +316,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       console.log('[Auth] Sign up response received');
       console.log('[Auth] User:', data.user?.email);
+      console.log('[Auth] Subscription status:', data.user?.subscription_status);
 
       if (!data.session || !data.session.token) {
         console.error('[Auth] Missing session or token');
@@ -298,8 +324,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       await tokenStorage.setToken(data.session.token);
-      setUser(data.user);
-      console.log('[Auth] Sign up successful');
+      
+      // Store user with subscription data (defaults to inactive for new users)
+      setUser({
+        ...data.user,
+        subscription_status: data.user?.subscription_status || 'inactive',
+        subscription_expires_at: data.user?.subscription_expires_at || null,
+        subscription_product_id: data.user?.subscription_product_id || null,
+      });
+      
+      console.log('[Auth] Sign up successful with subscription data');
     } catch (error: any) {
       console.error('[Auth] Sign up failed:', error?.message);
       
@@ -361,6 +395,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       console.log('[Auth] Apple sign in response received');
       console.log('[Auth] Is new user:', data.isNewUser);
+      console.log('[Auth] Subscription status:', data.user?.subscription_status);
 
       if (!data.session || !data.session.token) {
         console.error('[Auth] Missing session or token');
@@ -368,8 +403,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       await tokenStorage.setToken(data.session.token);
-      setUser(data.user);
-      console.log('[Auth] Apple sign in successful, user:', data.user.email);
+      
+      // Store user with subscription data
+      setUser({
+        ...data.user,
+        subscription_status: data.user?.subscription_status || 'inactive',
+        subscription_expires_at: data.user?.subscription_expires_at || null,
+        subscription_product_id: data.user?.subscription_product_id || null,
+      });
+      
+      console.log('[Auth] Apple sign in successful, user:', data.user.email, 'with subscription data');
     } catch (error: any) {
       console.error('[Auth] Apple sign in failed:', error?.message);
       
