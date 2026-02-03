@@ -4,16 +4,27 @@ import {
   View,
   Text,
   StyleSheet,
-  TextInput,
+  ScrollView,
   TouchableOpacity,
   useColorScheme,
   ActivityIndicator,
-  ScrollView,
-  Modal,
+  Alert,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
+import { IconSymbol } from '@/components/IconSymbol';
 import { authenticatedPost } from '@/utils/api';
+
+const TARGET_EMAILS = [
+  'maud.collette@gmail.com',
+  'info@forelandmarine.com',
+  'test@seatime.com',
+  'jimmy.milne44@outlook.com',
+  'cjbrowning23@hotmail.com',
+  'jack@forelandmarine.com',
+  'macnally@me.com',
+  'dan@forelandmarine.com',
+];
 
 function createStyles(isDark: boolean) {
   return StyleSheet.create({
@@ -21,160 +32,129 @@ function createStyles(isDark: boolean) {
       flex: 1,
       backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
     },
-    content: {
+    scrollContent: {
       padding: 20,
+    },
+    header: {
+      marginBottom: 24,
     },
     title: {
       fontSize: 24,
       fontWeight: 'bold',
       color: isDark ? colors.textDark : colors.textLight,
-      marginBottom: 10,
-    },
-    description: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
-      marginBottom: 30,
-      lineHeight: 24,
-    },
-    inputGroup: {
-      marginBottom: 20,
-    },
-    label: {
-      fontSize: 14,
-      fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
       marginBottom: 8,
     },
-    input: {
-      backgroundColor: isDark ? '#2a2a2a' : '#ffffff',
+    subtitle: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      lineHeight: 20,
+    },
+    section: {
+      marginBottom: 24,
+    },
+    sectionTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: isDark ? colors.textDark : colors.textLight,
+      marginBottom: 12,
+    },
+    emailList: {
+      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
       borderRadius: 12,
       padding: 16,
-      fontSize: 16,
-      color: isDark ? colors.textDark : colors.textLight,
-      borderWidth: 1,
-      borderColor: isDark ? '#444' : '#ddd',
+      marginBottom: 16,
     },
-    statusButtonGroup: {
+    emailItem: {
+      paddingVertical: 8,
+      borderBottomWidth: 1,
+      borderBottomColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)',
+    },
+    emailItemLast: {
+      borderBottomWidth: 0,
+    },
+    emailText: {
+      fontSize: 14,
+      color: isDark ? colors.textDark : colors.textLight,
+      fontFamily: 'monospace',
+    },
+    statusSelector: {
       flexDirection: 'row',
       gap: 12,
+      marginBottom: 16,
     },
     statusButton: {
       flex: 1,
-      borderRadius: 12,
-      padding: 16,
-      alignItems: 'center',
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 8,
       borderWidth: 2,
-      borderColor: isDark ? '#444' : '#ddd',
+      borderColor: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)',
+      alignItems: 'center',
     },
-    statusButtonSelected: {
+    statusButtonActive: {
       borderColor: colors.primary,
-      backgroundColor: isDark ? '#1a3a1a' : '#e8f5e9',
+      backgroundColor: isDark ? 'rgba(0,122,255,0.2)' : 'rgba(0,122,255,0.1)',
     },
     statusButtonText: {
       fontSize: 16,
       fontWeight: '600',
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      color: isDark ? colors.textDark : colors.textLight,
     },
-    statusButtonTextSelected: {
+    statusButtonTextActive: {
       color: colors.primary,
     },
-    button: {
+    updateButton: {
       backgroundColor: colors.primary,
+      paddingVertical: 16,
       borderRadius: 12,
-      padding: 16,
       alignItems: 'center',
-      marginTop: 20,
+      flexDirection: 'row',
+      justifyContent: 'center',
+      gap: 8,
     },
-    buttonDisabled: {
+    updateButtonDisabled: {
       opacity: 0.5,
     },
-    buttonText: {
+    updateButtonText: {
       color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '600',
     },
-    resultBox: {
-      backgroundColor: isDark ? '#1a3a1a' : '#d4edda',
+    resultCard: {
+      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
       borderRadius: 12,
       padding: 16,
-      marginTop: 20,
-      borderWidth: 1,
-      borderColor: isDark ? '#2a6a2a' : '#28a745',
+      marginTop: 16,
     },
     resultTitle: {
       fontSize: 16,
-      fontWeight: 'bold',
-      color: isDark ? '#4caf50' : '#155724',
-      marginBottom: 8,
+      fontWeight: '600',
+      color: isDark ? colors.textDark : colors.textLight,
+      marginBottom: 12,
     },
     resultText: {
       fontSize: 14,
-      color: isDark ? '#81c784' : '#155724',
-      lineHeight: 20,
-    },
-    errorBox: {
-      backgroundColor: isDark ? '#3a1a1a' : '#f8d7da',
-      borderRadius: 12,
-      padding: 16,
-      marginTop: 20,
-      borderWidth: 1,
-      borderColor: isDark ? '#6a2a2a' : '#dc3545',
-    },
-    errorTitle: {
-      fontSize: 16,
-      fontWeight: 'bold',
-      color: isDark ? '#f44336' : '#721c24',
+      color: isDark ? colors.textDark : colors.textLight,
       marginBottom: 8,
     },
+    successText: {
+      color: '#34C759',
+    },
     errorText: {
-      fontSize: 14,
-      color: isDark ? '#ef5350' : '#721c24',
-      lineHeight: 20,
+      color: '#FF3B30',
     },
-    modalBackdrop: {
-      flex: 1,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
-      padding: 20,
-    },
-    modalContent: {
+    warningCard: {
+      backgroundColor: isDark ? 'rgba(255,149,0,0.2)' : 'rgba(255,149,0,0.1)',
       borderRadius: 12,
-      padding: 24,
-      width: '100%',
-      maxWidth: 400,
-      shadowColor: '#000',
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 4,
-      elevation: 5,
+      padding: 16,
+      marginBottom: 16,
+      borderLeftWidth: 4,
+      borderLeftColor: '#FF9500',
     },
-    modalTitle: {
-      fontSize: 20,
-      fontWeight: '600',
-      marginBottom: 12,
-      textAlign: 'center',
-    },
-    modalMessage: {
-      fontSize: 16,
-      marginBottom: 20,
-      textAlign: 'center',
-      lineHeight: 22,
-    },
-    modalButton: {
-      borderRadius: 8,
-      padding: 12,
-      alignItems: 'center',
-    },
-    modalButtonText: {
-      color: '#FFFFFF',
-      fontSize: 16,
-      fontWeight: '600',
-    },
-    sectionDivider: {
-      height: 1,
-      backgroundColor: isDark ? '#444' : '#ddd',
-      marginVertical: 30,
+    warningText: {
+      fontSize: 14,
+      color: isDark ? colors.textDark : colors.textLight,
+      lineHeight: 20,
     },
   });
 }
@@ -183,372 +163,214 @@ export default function AdminUpdateSubscriptionScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
-  const router = useRouter();
 
-  // Subscription management state
-  const [email, setEmail] = useState('dan@forelandmarine.com');
-  const [subscriptionStatus, setSubscriptionStatus] = useState<'active' | 'inactive'>('active');
+  const [selectedStatus, setSelectedStatus] = useState<'active' | 'inactive'>('active');
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{
     success: boolean;
-    user: {
-      id: string;
-      email: string;
-      subscriptionStatus: string;
-    };
+    updated_count?: number;
+    updated_emails?: string[];
+    not_found_emails?: string[];
+    error?: string;
   } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  
-  // Role management state
-  const [roleEmail, setRoleEmail] = useState('jack@forelandmarine.com');
-  const [userRole, setUserRole] = useState<'user' | 'admin'>('admin');
-  const [roleLoading, setRoleLoading] = useState(false);
-  const [roleResult, setRoleResult] = useState<{
-    success: boolean;
-    user: {
-      id: string;
-      email: string;
-      name: string;
-      role: string;
-    };
-  } | null>(null);
-  const [roleError, setRoleError] = useState<string | null>(null);
-  
-  // Modal state
-  const [showModal, setShowModal] = useState(false);
-  const [modalTitle, setModalTitle] = useState('');
-  const [modalMessage, setModalMessage] = useState('');
-  const [modalType, setModalType] = useState<'success' | 'error'>('success');
 
-  const showModalMessage = (title: string, message: string, type: 'success' | 'error' = 'success') => {
-    setModalTitle(title);
-    setModalMessage(message);
-    setModalType(type);
-    setShowModal(true);
-  };
-
-  const handleUpdateSubscription = async () => {
-    console.log('[AdminUpdateSubscription] User tapped Update Subscription button', {
-      email,
-      subscriptionStatus,
-    });
-
-    if (!email) {
-      showModalMessage('Error', 'Please enter a user email', 'error');
-      return;
-    }
+  const handleUpdateSubscriptions = async () => {
+    console.log('Admin: Updating subscription status to:', selectedStatus);
+    console.log('Admin: Target emails:', TARGET_EMAILS);
 
     setLoading(true);
     setResult(null);
-    setError(null);
 
     try {
-      console.log('[AdminUpdateSubscription] Calling POST /api/admin/update-user-subscription-by-email');
-
-      const response = await authenticatedPost('/api/admin/update-user-subscription-by-email', {
-        email,
-        subscriptionStatus,
+      const response = await authenticatedPost('/api/admin/update-subscription-status', {
+        emails: TARGET_EMAILS,
+        subscription_status: selectedStatus,
       });
 
-      console.log('[AdminUpdateSubscription] Subscription update response:', response);
-
+      console.log('Admin: Subscription update response:', response);
       setResult(response);
 
-      const successMessage = `Successfully updated subscription for ${response.user.email} to ${response.user.subscriptionStatus}`;
-      showModalMessage('Success', successMessage, 'success');
-
-      console.log(successMessage);
-    } catch (err: any) {
-      console.error('[AdminUpdateSubscription] Error updating subscription:', err);
-      const errorMessage = err.message || 'Failed to update subscription';
-      setError(errorMessage);
-      showModalMessage('Error', errorMessage, 'error');
+      if (response.success) {
+        const updatedCount = response.updated_count || 0;
+        const successMessage = `Successfully updated ${updatedCount} user${updatedCount !== 1 ? 's' : ''} to ${selectedStatus} status.`;
+        Alert.alert('Success', successMessage);
+      }
+    } catch (error: any) {
+      console.error('Admin: Error updating subscriptions:', error);
+      const errorMessage = error.message || 'Failed to update subscriptions';
+      setResult({
+        success: false,
+        error: errorMessage,
+      });
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleUpdateRole = async () => {
-    console.log('[AdminUpdateSubscription] User tapped Update Role button', {
-      email: roleEmail,
-      role: userRole,
-    });
-
-    if (!roleEmail) {
-      showModalMessage('Error', 'Please enter a user email', 'error');
-      return;
-    }
-
-    setRoleLoading(true);
-    setRoleResult(null);
-    setRoleError(null);
-
-    try {
-      console.log('[AdminUpdateSubscription] Calling POST /api/admin/set-user-role');
-
-      const response = await authenticatedPost('/api/admin/set-user-role', {
-        email: roleEmail,
-        role: userRole,
-      });
-
-      console.log('[AdminUpdateSubscription] Role update response:', response);
-
-      setRoleResult(response);
-
-      const successMessage = `Successfully updated role for ${response.user.email} to ${response.user.role}`;
-      showModalMessage('Success', successMessage, 'success');
-
-      console.log(successMessage);
-    } catch (err: any) {
-      console.error('[AdminUpdateSubscription] Error updating role:', err);
-      const errorMessage = err.message || 'Failed to update role';
-      setRoleError(errorMessage);
-      showModalMessage('Error', errorMessage, 'error');
-    } finally {
-      setRoleLoading(false);
-    }
-  };
+  const updatedCount = result?.updated_count || 0;
+  const notFoundCount = result?.not_found_emails?.length || 0;
 
   return (
-    <>
+    <View style={styles.container}>
       <Stack.Screen
         options={{
-          title: 'Admin User Management',
-          headerShown: true,
-          headerBackTitle: 'Back',
+          title: 'Update Subscriptions',
+          headerStyle: {
+            backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+          },
+          headerTintColor: isDark ? colors.textDark : colors.textLight,
         }}
       />
-      <ScrollView style={styles.container}>
-        <View style={styles.content}>
-          <Text style={styles.title}>Update User Subscription</Text>
 
-          <Text style={styles.description}>
-            Update a specific user's subscription status. This admin tool allows you to activate or
-            deactivate subscriptions for individual users.
+      <ScrollView style={styles.scrollContent}>
+        <View style={styles.header}>
+          <Text style={styles.title}>Admin: Update Subscription Status</Text>
+          <Text style={styles.subtitle}>
+            Update subscription status for multiple users directly in the database.
           </Text>
+        </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>User Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="Enter user email"
-              placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
+        <View style={styles.warningCard}>
+          <Text style={styles.warningText}>
+            ⚠️ This is an admin operation. You must be logged in as an admin user to perform this action.
+          </Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Target Users ({TARGET_EMAILS.length})</Text>
+          <View style={styles.emailList}>
+            {TARGET_EMAILS.map((email, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.emailItem,
+                  index === TARGET_EMAILS.length - 1 && styles.emailItemLast,
+                ]}
+              >
+                <Text style={styles.emailText}>{email}</Text>
+              </View>
+            ))}
           </View>
+        </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Subscription Status</Text>
-            <View style={styles.statusButtonGroup}>
-              <TouchableOpacity
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Subscription Status</Text>
+          <View style={styles.statusSelector}>
+            <TouchableOpacity
+              style={[
+                styles.statusButton,
+                selectedStatus === 'active' && styles.statusButtonActive,
+              ]}
+              onPress={() => setSelectedStatus('active')}
+            >
+              <Text
                 style={[
-                  styles.statusButton,
-                  subscriptionStatus === 'active' && styles.statusButtonSelected,
+                  styles.statusButtonText,
+                  selectedStatus === 'active' && styles.statusButtonTextActive,
                 ]}
-                onPress={() => setSubscriptionStatus('active')}
               >
-                <Text
-                  style={[
-                    styles.statusButtonText,
-                    subscriptionStatus === 'active' && styles.statusButtonTextSelected,
-                  ]}
-                >
-                  Active
-                </Text>
-              </TouchableOpacity>
+                Active
+              </Text>
+            </TouchableOpacity>
 
-              <TouchableOpacity
+            <TouchableOpacity
+              style={[
+                styles.statusButton,
+                selectedStatus === 'inactive' && styles.statusButtonActive,
+              ]}
+              onPress={() => setSelectedStatus('inactive')}
+            >
+              <Text
                 style={[
-                  styles.statusButton,
-                  subscriptionStatus === 'inactive' && styles.statusButtonSelected,
+                  styles.statusButtonText,
+                  selectedStatus === 'inactive' && styles.statusButtonTextActive,
                 ]}
-                onPress={() => setSubscriptionStatus('inactive')}
               >
-                <Text
-                  style={[
-                    styles.statusButtonText,
-                    subscriptionStatus === 'inactive' && styles.statusButtonTextSelected,
-                  ]}
-                >
-                  Inactive
-                </Text>
-              </TouchableOpacity>
-            </View>
+                Inactive
+              </Text>
+            </TouchableOpacity>
           </View>
 
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
-            onPress={handleUpdateSubscription}
+            style={[styles.updateButton, loading && styles.updateButtonDisabled]}
+            onPress={handleUpdateSubscriptions}
             disabled={loading}
           >
             {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.buttonText}>Update Subscription</Text>
+              <>
+                <IconSymbol
+                  ios_icon_name="checkmark.circle.fill"
+                  android_material_icon_name="check-circle"
+                  size={20}
+                  color="#FFFFFF"
+                />
+                <Text style={styles.updateButtonText}>
+                  Update to {selectedStatus === 'active' ? 'Active' : 'Inactive'}
+                </Text>
+              </>
             )}
           </TouchableOpacity>
-
-          {result && (
-            <View style={styles.resultBox}>
-              <Text style={styles.resultTitle}>✅ Success</Text>
-              <Text style={styles.resultText}>User ID: {result.user.id}</Text>
-              <Text style={styles.resultText}>Email: {result.user.email}</Text>
-              <Text style={styles.resultText}>
-                Subscription Status: {result.user.subscriptionStatus}
-              </Text>
-            </View>
-          )}
-
-          {error && (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorTitle}>❌ Error</Text>
-              <Text style={styles.errorText}>{error}</Text>
-            </View>
-          )}
-
-          {/* Section Divider */}
-          <View style={styles.sectionDivider} />
-
-          {/* Role Management Section */}
-          <Text style={styles.title}>Update User Role</Text>
-
-          <Text style={styles.description}>
-            Set user roles to control admin access. Admin users can access admin tools and manage other users.
-          </Text>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>User Email</Text>
-            <TextInput
-              style={styles.input}
-              value={roleEmail}
-              onChangeText={setRoleEmail}
-              placeholder="Enter user email"
-              placeholderTextColor={isDark ? colors.textSecondaryDark : colors.textSecondaryLight}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>User Role</Text>
-            <View style={styles.statusButtonGroup}>
-              <TouchableOpacity
-                style={[
-                  styles.statusButton,
-                  userRole === 'user' && styles.statusButtonSelected,
-                ]}
-                onPress={() => setUserRole('user')}
-              >
-                <Text
-                  style={[
-                    styles.statusButtonText,
-                    userRole === 'user' && styles.statusButtonTextSelected,
-                  ]}
-                >
-                  👤 User
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.statusButton,
-                  userRole === 'admin' && styles.statusButtonSelected,
-                ]}
-                onPress={() => setUserRole('admin')}
-              >
-                <Text
-                  style={[
-                    styles.statusButtonText,
-                    userRole === 'admin' && styles.statusButtonTextSelected,
-                  ]}
-                >
-                  🔑 Admin
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={[styles.button, roleLoading && styles.buttonDisabled]}
-            onPress={handleUpdateRole}
-            disabled={roleLoading}
-          >
-            {roleLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.buttonText}>Update Role</Text>
-            )}
-          </TouchableOpacity>
-
-          {roleResult && (
-            <View style={styles.resultBox}>
-              <Text style={styles.resultTitle}>✅ Success</Text>
-              <Text style={styles.resultText}>User ID: {roleResult.user.id}</Text>
-              <Text style={styles.resultText}>Email: {roleResult.user.email}</Text>
-              <Text style={styles.resultText}>Name: {roleResult.user.name}</Text>
-              <Text style={styles.resultText}>Role: {roleResult.user.role}</Text>
-            </View>
-          )}
-
-          {roleError && (
-            <View style={styles.errorBox}>
-              <Text style={styles.errorTitle}>❌ Error</Text>
-              <Text style={styles.errorText}>{roleError}</Text>
-            </View>
-          )}
         </View>
+
+        {result && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Result</Text>
+            <View style={styles.resultCard}>
+              {result.success ? (
+                <>
+                  <Text style={[styles.resultTitle, styles.successText]}>
+                    ✓ Success
+                  </Text>
+                  <Text style={styles.resultText}>
+                    Updated: {updatedCount} user{updatedCount !== 1 ? 's' : ''}
+                  </Text>
+                  {notFoundCount > 0 && (
+                    <Text style={[styles.resultText, styles.errorText]}>
+                      Not found: {notFoundCount} user{notFoundCount !== 1 ? 's' : ''}
+                    </Text>
+                  )}
+                  {result.updated_emails && result.updated_emails.length > 0 && (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={[styles.resultText, { fontWeight: '600' }]}>
+                        Updated emails:
+                      </Text>
+                      {result.updated_emails.map((email, index) => (
+                        <Text key={index} style={[styles.emailText, { marginTop: 4 }]}>
+                          • {email}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                  {result.not_found_emails && result.not_found_emails.length > 0 && (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={[styles.resultText, { fontWeight: '600' }]}>
+                        Not found:
+                      </Text>
+                      {result.not_found_emails.map((email, index) => (
+                        <Text key={index} style={[styles.emailText, { marginTop: 4 }]}>
+                          • {email}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Text style={[styles.resultTitle, styles.errorText]}>
+                    ✗ Error
+                  </Text>
+                  <Text style={styles.resultText}>
+                    {result.error || 'Failed to update subscriptions'}
+                  </Text>
+                </>
+              )}
+            </View>
+          </View>
+        )}
       </ScrollView>
-
-      {/* Modal for messages - replaces Alert.alert for web compatibility */}
-      <Modal
-        visible={showModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowModal(false)}
-      >
-        <View style={styles.modalBackdrop}>
-          <View
-            style={[
-              styles.modalContent,
-              { backgroundColor: isDark ? '#2C2C2E' : '#FFFFFF' },
-            ]}
-          >
-            <Text
-              style={[
-                styles.modalTitle,
-                { color: isDark ? colors.textDark : colors.textLight },
-              ]}
-            >
-              {modalTitle}
-            </Text>
-            <Text
-              style={[
-                styles.modalMessage,
-                { color: isDark ? colors.textDark : colors.textLight },
-              ]}
-            >
-              {modalMessage}
-            </Text>
-            <TouchableOpacity
-              style={[
-                styles.modalButton,
-                {
-                  backgroundColor:
-                    modalType === 'error' ? '#FF3B30' : colors.primary,
-                },
-              ]}
-              onPress={() => setShowModal(false)}
-            >
-              <Text style={styles.modalButtonText}>OK</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </>
+    </View>
   );
 }
