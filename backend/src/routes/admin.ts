@@ -1,8 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import * as authSchema from "../db/auth-schema.js";
 import * as schema from "../db/schema.js";
 import type { App } from "../index.js";
+import { extractUserIdFromRequest } from "../middleware/auth.js";
 
 export function register(app: App, fastify: FastifyInstance) {
   // GET /api/admin/verify-sea-time - Check sea time entries for a specific user and vessel
@@ -2308,6 +2309,144 @@ export function register(app: App, fastify: FastifyInstance) {
       } catch (error) {
         app.logger.error({ err: error, email, count }, 'Error generating demo sea time entries');
         return reply.code(500).send({ error: 'Failed to generate demo sea time entries' });
+      }
+    }
+  );
+
+  // POST /api/admin/update-subscription-status - Update subscription status for multiple users (admin only)
+  fastify.post<{
+    Body: {
+      emails: string[];
+      subscription_status: 'active' | 'inactive';
+    };
+  }>(
+    '/api/admin/update-subscription-status',
+    {
+      schema: {
+        description: 'Update subscription status for multiple users (admin endpoint only)',
+        tags: ['admin'],
+        body: {
+          type: 'object',
+          required: ['emails', 'subscription_status'],
+          properties: {
+            emails: {
+              type: 'array',
+              items: { type: 'string', format: 'email' },
+              description: 'Array of user emails to update',
+            },
+            subscription_status: {
+              type: 'string',
+              enum: ['active', 'inactive'],
+              description: 'Subscription status to set for all users',
+            },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              updated_count: { type: 'number' },
+              updated_emails: { type: 'array', items: { type: 'string' } },
+              not_found_emails: { type: 'array', items: { type: 'string' } },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+          403: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { emails, subscription_status } = request.body;
+
+      app.logger.info({ emailCount: emails.length, subscription_status }, 'Bulk subscription status update requested');
+
+      try {
+        // Check authentication
+        const userId = await extractUserIdFromRequest(request, app);
+        if (!userId) {
+          app.logger.warn({}, 'Bulk subscription update attempted without authentication');
+          return reply.code(403).send({ error: 'Authentication required' });
+        }
+
+        // Verify user is admin
+        const adminUsers = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.id, userId));
+
+        if (adminUsers.length === 0) {
+          app.logger.warn({ userId }, 'Admin user not found');
+          return reply.code(403).send({ error: 'User not found' });
+        }
+
+        const adminUser = adminUsers[0];
+        if (adminUser.role !== 'admin') {
+          app.logger.warn({ userId, userRole: adminUser.role }, 'Non-admin user attempted bulk subscription update');
+          return reply.code(403).send({ error: 'Admin access required. Only administrators can perform this action.' });
+        }
+
+        // Validate input
+        if (!emails || emails.length === 0) {
+          app.logger.warn({}, 'Bulk subscription update attempted with empty emails array');
+          return reply.code(400).send({ error: 'emails array cannot be empty' });
+        }
+
+        if (!['active', 'inactive'].includes(subscription_status)) {
+          app.logger.warn({ subscription_status }, 'Invalid subscription_status value');
+          return reply.code(400).send({ error: 'subscription_status must be "active" or "inactive"' });
+        }
+
+        // Find which emails exist in the database
+        const existingUsers = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(inArray(authSchema.user.email, emails));
+
+        const foundEmails = existingUsers.map(u => u.email);
+        const notFoundEmails = emails.filter(e => !foundEmails.includes(e));
+
+        if (foundEmails.length === 0) {
+          app.logger.warn({ requestedEmails: emails }, 'No users found with provided emails');
+          return reply.code(400).send({
+            error: 'No users found with the provided email addresses',
+          });
+        }
+
+        // Update subscription status for all found users
+        const updatedUsers = await app.db
+          .update(authSchema.user)
+          .set({
+            subscription_status,
+            updatedAt: new Date(),
+          })
+          .where(inArray(authSchema.user.email, foundEmails))
+          .returning();
+
+        const updatedCount = updatedUsers.length;
+        const updatedEmails = updatedUsers.map(u => u.email);
+
+        app.logger.info(
+          {
+            adminId: userId,
+            updatedCount,
+            updatedEmails,
+            notFoundEmails,
+            subscription_status,
+          },
+          `Bulk subscription status update completed: ${updatedCount} users updated, ${notFoundEmails.length} not found`
+        );
+
+        return reply.code(200).send({
+          success: true,
+          updated_count: updatedCount,
+          updated_emails: updatedEmails,
+          not_found_emails: notFoundEmails,
+        });
+      } catch (error) {
+        app.logger.error({ err: error, emailCount: emails.length }, 'Error updating subscription status for multiple users');
+        return reply.code(500).send({ error: 'Failed to update subscription status' });
       }
     }
   );
