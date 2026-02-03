@@ -33,6 +33,24 @@ function verifyPassword(password: string, hash: string): boolean {
   }
 }
 
+/**
+ * Format user object with subscription fields for API responses
+ */
+function formatUserResponse(user: any) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    emailVerified: user.emailVerified,
+    image: user.image,
+    subscription_status: user.subscription_status || 'inactive',
+    subscription_expires_at: user.subscription_expires_at ? user.subscription_expires_at.toISOString() : null,
+    subscription_product_id: user.subscription_product_id || null,
+    createdAt: user.createdAt.toISOString(),
+    updatedAt: user.updatedAt.toISOString(),
+  };
+}
+
 export function register(app: App, fastify: FastifyInstance) {
   // POST /api/auth/sign-up/email - Register with email and password
   fastify.post<{ Body: { email: string; password: string; name: string } }>(
@@ -62,6 +80,9 @@ export function register(app: App, fastify: FastifyInstance) {
                   name: { type: 'string' },
                   emailVerified: { type: 'boolean' },
                   image: { type: ['string', 'null'] },
+                  subscription_status: { type: 'string' },
+                  subscription_expires_at: { type: ['string', 'null'] },
+                  subscription_product_id: { type: ['string', 'null'] },
                   createdAt: { type: 'string' },
                   updatedAt: { type: 'string' },
                 },
@@ -149,15 +170,7 @@ export function register(app: App, fastify: FastifyInstance) {
         app.logger.info({ userId, sessionId }, 'Session created');
 
         return reply.code(200).send({
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            emailVerified: user.emailVerified,
-            image: user.image,
-            createdAt: user.createdAt.toISOString(),
-            updatedAt: user.updatedAt.toISOString(),
-          },
+          user: formatUserResponse(user),
           session: {
             id: session.id,
             token: session.token,
@@ -200,6 +213,9 @@ export function register(app: App, fastify: FastifyInstance) {
                   name: { type: 'string' },
                   emailVerified: { type: 'boolean' },
                   image: { type: ['string', 'null'] },
+                  subscription_status: { type: 'string' },
+                  subscription_expires_at: { type: ['string', 'null'] },
+                  subscription_product_id: { type: ['string', 'null'] },
                   createdAt: { type: 'string' },
                   updatedAt: { type: 'string' },
                 },
@@ -285,15 +301,7 @@ export function register(app: App, fastify: FastifyInstance) {
         app.logger.info({ email, sessionId }, 'Session created');
 
         return reply.code(200).send({
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            emailVerified: user.emailVerified,
-            image: user.image,
-            createdAt: user.createdAt.toISOString(),
-            updatedAt: user.updatedAt.toISOString(),
-          },
+          user: formatUserResponse(user),
           session: {
             id: session.id,
             token: session.token,
@@ -336,6 +344,9 @@ export function register(app: App, fastify: FastifyInstance) {
                   name: { type: 'string' },
                   emailVerified: { type: 'boolean' },
                   image: { type: ['string', 'null'] },
+                  subscription_status: { type: 'string' },
+                  subscription_expires_at: { type: ['string', 'null'] },
+                  subscription_product_id: { type: ['string', 'null'] },
                   createdAt: { type: 'string' },
                   updatedAt: { type: 'string' },
                 },
@@ -600,15 +611,7 @@ export function register(app: App, fastify: FastifyInstance) {
         );
 
         return reply.code(200).send({
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            emailVerified: user.emailVerified,
-            image: user.image,
-            createdAt: user.createdAt.toISOString(),
-            updatedAt: user.updatedAt.toISOString(),
-          },
+          user: formatUserResponse(user),
           session: {
             id: session.id,
             token: session.token,
@@ -644,6 +647,9 @@ export function register(app: App, fastify: FastifyInstance) {
                   name: { type: 'string' },
                   emailVerified: { type: 'boolean' },
                   image: { type: ['string', 'null'] },
+                  subscription_status: { type: 'string' },
+                  subscription_expires_at: { type: ['string', 'null'] },
+                  subscription_product_id: { type: ['string', 'null'] },
                   createdAt: { type: 'string' },
                   updatedAt: { type: 'string' },
                 },
@@ -710,15 +716,7 @@ export function register(app: App, fastify: FastifyInstance) {
         app.logger.info({ userId: user.id, email: user.email }, 'User profile retrieved');
 
         return reply.code(200).send({
-          user: {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            emailVerified: user.emailVerified,
-            image: user.image,
-            createdAt: user.createdAt.toISOString(),
-            updatedAt: user.updatedAt.toISOString(),
-          },
+          user: formatUserResponse(user),
         });
       } catch (error) {
         app.logger.error({ err: error }, 'Error retrieving user profile');
