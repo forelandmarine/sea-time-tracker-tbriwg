@@ -336,6 +336,22 @@ export function register(app: App, fastify: FastifyInstance) {
       'Creating new vessel'
     );
 
+    // Check user subscription status
+    const users = await app.db
+      .select()
+      .from(authSchema.user)
+      .where(eq(authSchema.user.id, userId));
+
+    if (users.length > 0) {
+      const user = users[0];
+      const subscriptionStatus = user.subscription_status || 'inactive';
+
+      if (subscriptionStatus !== 'active') {
+        app.logger.warn({ userId }, 'Vessel creation attempted with inactive subscription');
+        return reply.code(403).send({ error: 'Subscription required to create vessels. Please subscribe.' });
+      }
+    }
+
     // Check if MMSI already exists for THIS USER (allow other users to track the same vessel)
     const existing = await app.db
       .select()
