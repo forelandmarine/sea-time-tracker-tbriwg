@@ -49,16 +49,28 @@ export default function Index() {
 
   // Check subscription status - redirect to paywall if inactive
   if (!hasActiveSubscription) {
-    console.log('[Index] User does not have active subscription, redirecting to paywall');
+    console.log('[Index] ========== PAYWALL REDIRECT ==========');
+    console.log('[Index] User does not have active subscription');
+    console.log('[Index] hasActiveSubscription:', hasActiveSubscription);
+    console.log('[Index] Redirecting to paywall...');
+    console.log('[Index] ==========================================');
     return <Redirect href="/subscription-paywall" />;
   }
+
+  console.log('[Index] ========== ACCESS GRANTED ==========');
+  console.log('[Index] User has active subscription');
+  console.log('[Index] hasActiveSubscription:', hasActiveSubscription);
+  console.log('[Index] ==========================================');
 
   if (!hasDepartment) {
     console.log('[Index] User has not selected pathway, redirecting to pathway selection');
     return <Redirect href="/select-pathway" />;
   }
 
-  console.log('[Index] User authenticated with active subscription and has pathway, redirecting to home');
+  console.log('[Index] ========== ROUTING TO HOME ==========');
+  console.log('[Index] User authenticated with active subscription and has pathway');
+  console.log('[Index] Redirecting to home...');
+  console.log('[Index] ==========================================');
   return <Redirect href="/(tabs)" />;
 }
 

@@ -167,15 +167,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           if (response.ok) {
             const data = await response.json();
+            console.log('[Auth] ========== AUTH CHECK SUCCESS ==========');
             console.log('[Auth] User authenticated:', data.user?.email || 'unknown');
-            console.log('[Auth] Subscription status from auth check:', data.user?.subscription_status);
+            console.log('[Auth] User ID:', data.user?.id);
+            console.log('[Auth] Subscription status:', data.user?.subscription_status);
+            console.log('[Auth] Subscription expires at:', data.user?.subscription_expires_at);
+            console.log('[Auth] Subscription product ID:', data.user?.subscription_product_id);
+            console.log('[Auth] ==========================================');
             
             // Store user with subscription data
-            setUser({
+            const userData = {
               ...data.user,
               subscription_status: data.user?.subscription_status || 'inactive',
               subscription_expires_at: data.user?.subscription_expires_at || null,
               subscription_product_id: data.user?.subscription_product_id || null,
+            };
+            
+            setUser(userData);
+            
+            // Log final stored user data
+            console.log('[Auth] Final stored user data:', {
+              email: userData.email,
+              subscription_status: userData.subscription_status,
+              subscription_expires_at: userData.subscription_expires_at,
+              subscription_product_id: userData.subscription_product_id,
             });
             
             setLoading(false);
@@ -253,9 +268,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      console.log('[Auth] Sign in response received');
-      console.log('[Auth] User:', data.user?.email);
+      console.log('[Auth] ========== SIGN IN SUCCESS ==========');
+      console.log('[Auth] User email:', data.user?.email);
+      console.log('[Auth] User ID:', data.user?.id);
       console.log('[Auth] Subscription status:', data.user?.subscription_status);
+      console.log('[Auth] Subscription expires at:', data.user?.subscription_expires_at);
+      console.log('[Auth] Subscription product ID:', data.user?.subscription_product_id);
+      console.log('[Auth] ==========================================');
 
       if (!data.session || !data.session.token) {
         console.error('[Auth] Missing session or token');
@@ -265,11 +284,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await tokenStorage.setToken(data.session.token);
       
       // Store user with subscription data
-      setUser({
+      const userData = {
         ...data.user,
         subscription_status: data.user?.subscription_status || 'inactive',
         subscription_expires_at: data.user?.subscription_expires_at || null,
         subscription_product_id: data.user?.subscription_product_id || null,
+      };
+      
+      setUser(userData);
+      
+      // Log final stored user data
+      console.log('[Auth] Final stored user data:', {
+        email: userData.email,
+        subscription_status: userData.subscription_status,
+        subscription_expires_at: userData.subscription_expires_at,
+        subscription_product_id: userData.subscription_product_id,
       });
       
       console.log('[Auth] Sign in successful, user state updated with subscription data');
@@ -314,9 +343,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      console.log('[Auth] Sign up response received');
-      console.log('[Auth] User:', data.user?.email);
+      console.log('[Auth] ========== SIGN UP SUCCESS ==========');
+      console.log('[Auth] User email:', data.user?.email);
+      console.log('[Auth] User ID:', data.user?.id);
       console.log('[Auth] Subscription status:', data.user?.subscription_status);
+      console.log('[Auth] Subscription expires at:', data.user?.subscription_expires_at);
+      console.log('[Auth] Subscription product ID:', data.user?.subscription_product_id);
+      console.log('[Auth] ==========================================');
 
       if (!data.session || !data.session.token) {
         console.error('[Auth] Missing session or token');
@@ -326,11 +359,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await tokenStorage.setToken(data.session.token);
       
       // Store user with subscription data (defaults to inactive for new users)
-      setUser({
+      const userData = {
         ...data.user,
         subscription_status: data.user?.subscription_status || 'inactive',
         subscription_expires_at: data.user?.subscription_expires_at || null,
         subscription_product_id: data.user?.subscription_product_id || null,
+      };
+      
+      setUser(userData);
+      
+      // Log final stored user data
+      console.log('[Auth] Final stored user data:', {
+        email: userData.email,
+        subscription_status: userData.subscription_status,
+        subscription_expires_at: userData.subscription_expires_at,
+        subscription_product_id: userData.subscription_product_id,
       });
       
       console.log('[Auth] Sign up successful with subscription data');
@@ -393,9 +436,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      console.log('[Auth] Apple sign in response received');
+      console.log('[Auth] ========== APPLE SIGN IN SUCCESS ==========');
       console.log('[Auth] Is new user:', data.isNewUser);
+      console.log('[Auth] User email:', data.user?.email);
+      console.log('[Auth] User ID:', data.user?.id);
       console.log('[Auth] Subscription status:', data.user?.subscription_status);
+      console.log('[Auth] Subscription expires at:', data.user?.subscription_expires_at);
+      console.log('[Auth] Subscription product ID:', data.user?.subscription_product_id);
+      console.log('[Auth] ==========================================');
 
       if (!data.session || !data.session.token) {
         console.error('[Auth] Missing session or token');
@@ -405,11 +453,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await tokenStorage.setToken(data.session.token);
       
       // Store user with subscription data
-      setUser({
+      const userData = {
         ...data.user,
         subscription_status: data.user?.subscription_status || 'inactive',
         subscription_expires_at: data.user?.subscription_expires_at || null,
         subscription_product_id: data.user?.subscription_product_id || null,
+      };
+      
+      setUser(userData);
+      
+      // Log final stored user data
+      console.log('[Auth] Final stored user data:', {
+        email: userData.email,
+        subscription_status: userData.subscription_status,
+        subscription_expires_at: userData.subscription_expires_at,
+        subscription_product_id: userData.subscription_product_id,
       });
       
       console.log('[Auth] Apple sign in successful, user:', data.user.email, 'with subscription data');

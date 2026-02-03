@@ -13,7 +13,7 @@ export default function TabLayout() {
   const isDark = colorScheme === 'dark';
   const router = useRouter();
   const { user, loading, triggerRefresh } = useAuth();
-  const { hasActiveSubscription, loading: subscriptionLoading } = useSubscription();
+  const { hasActiveSubscription, subscriptionStatus, loading: subscriptionLoading } = useSubscription();
   const pathname = usePathname();
 
   // Trigger refresh when navigating between tabs (simulates back button behavior)
@@ -25,28 +25,57 @@ export default function TabLayout() {
 
   // Redirect to paywall if subscription is inactive
   useEffect(() => {
+    console.log('[TabLayout] ========== SUBSCRIPTION CHECK ==========');
+    console.log('[TabLayout] Loading states:', { loading, subscriptionLoading });
+    console.log('[TabLayout] User:', {
+      hasUser: !!user,
+      email: user?.email,
+      subscription_status: user?.subscription_status,
+    });
+    console.log('[TabLayout] Context:', {
+      subscriptionStatus: subscriptionStatus?.status,
+      hasActiveSubscription,
+    });
+    console.log('[TabLayout] ==========================================');
+
     if (!loading && !subscriptionLoading && user && !hasActiveSubscription) {
-      console.log('[TabLayout] User does not have active subscription, redirecting to paywall');
+      console.log('[TabLayout] ========== PAYWALL REDIRECT ==========');
+      console.log('[TabLayout] ❌ User does not have active subscription');
+      console.log('[TabLayout] User subscription_status:', user.subscription_status);
+      console.log('[TabLayout] Context subscription status:', subscriptionStatus?.status);
+      console.log('[TabLayout] Redirecting to paywall...');
+      console.log('[TabLayout] ==========================================');
       router.replace('/subscription-paywall');
+    } else if (!loading && !subscriptionLoading && user && hasActiveSubscription) {
+      console.log('[TabLayout] ========== ACCESS GRANTED ==========');
+      console.log('[TabLayout] ✅ User has active subscription');
+      console.log('[TabLayout] Allowing access to tabs');
+      console.log('[TabLayout] ==========================================');
     }
-  }, [user, hasActiveSubscription, loading, subscriptionLoading, router]);
+  }, [user, hasActiveSubscription, subscriptionStatus, loading, subscriptionLoading, router]);
 
   // Show loading state while checking auth or subscription
   if (loading || subscriptionLoading) {
+    console.log('[TabLayout] Loading state:', { loading, subscriptionLoading });
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? colors.background : colors.backgroundLight }}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={{ fontSize: 14, color: isDark ? '#999' : '#666', marginTop: 12 }}>Loading...</Text>
+        <Text style={{ fontSize: 14, color: isDark ? '#999' : '#666', marginTop: 12 }}>
+          {loading ? 'Checking authentication...' : 'Checking subscription...'}
+        </Text>
       </View>
     );
   }
 
   // If no user or no active subscription, show a blank screen - redirects will handle navigation
   if (!user || !hasActiveSubscription) {
+    console.log('[TabLayout] No user or no active subscription, showing blank screen');
     return (
       <View style={{ flex: 1, backgroundColor: isDark ? colors.background : colors.backgroundLight }} />
     );
   }
+
+  console.log('[TabLayout] Rendering tabs for authenticated user with active subscription');
 
   return (
     <Tabs
