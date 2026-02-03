@@ -57,30 +57,15 @@ export default function SubscriptionPaywallScreen() {
   const isDark = colorScheme === 'dark';
   const [loading, setLoading] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
-  const [showInstructions, setShowInstructions] = useState(false);
-  const [productInfo, setProductInfo] = useState<any>(null);
-  const [loadingPrice, setLoadingPrice] = useState(true);
   const { subscriptionStatus, checkSubscription, loading: subscriptionLoading } = useSubscription();
   const { signOut } = useAuth();
 
-  const initializeAndFetchProduct = useCallback(async () => {
+  const initializeStoreKit = useCallback(async () => {
     try {
       console.log('[SubscriptionPaywall] Initializing StoreKit');
       await StoreKitUtils.initializeStoreKit();
-      
-      console.log('[SubscriptionPaywall] Fetching product info (no hardcoded prices)');
-      const info = await StoreKitUtils.getProductInfo();
-      
-      if (info) {
-        console.log('[SubscriptionPaywall] Product info fetched:', info);
-        setProductInfo(info);
-      } else {
-        console.log('[SubscriptionPaywall] Product info not available - user will view pricing in App Store');
-      }
     } catch (error: any) {
-      console.error('[SubscriptionPaywall] Error fetching product info:', error);
-    } finally {
-      setLoadingPrice(false);
+      console.error('[SubscriptionPaywall] Error initializing StoreKit:', error);
     }
   }, []);
 
@@ -88,13 +73,11 @@ export default function SubscriptionPaywallScreen() {
     console.log('[SubscriptionPaywall] Screen mounted');
     console.log('[SubscriptionPaywall] Current subscription status:', subscriptionStatus?.status);
     
-    // Initialize StoreKit and fetch product info
+    // Initialize StoreKit
     if (Platform.OS === 'ios') {
-      initializeAndFetchProduct();
-    } else {
-      setLoadingPrice(false);
+      initializeStoreKit();
     }
-  }, [initializeAndFetchProduct, subscriptionStatus?.status]);
+  }, [initializeStoreKit, subscriptionStatus?.status]);
 
   const handleSubscribe = async () => {
     if (Platform.OS !== 'ios') {
@@ -106,12 +89,9 @@ export default function SubscriptionPaywallScreen() {
     }
 
     try {
-      console.log('[SubscriptionPaywall] User tapped Subscribe button');
+      console.log('[SubscriptionPaywall] User tapped Subscribe button - opening App Store directly');
       
-      // Show instructions first
-      setShowInstructions(true);
-      
-      // Open App Store
+      // Open App Store directly
       await StoreKitUtils.openAppStoreSubscription();
       
       console.log('[SubscriptionPaywall] Opened App Store for subscription');
@@ -189,11 +169,6 @@ export default function SubscriptionPaywallScreen() {
   const statusText = 'Subscription Required';
   const messageText = 'SeaTime Tracker requires an active subscription to access the app. Subscribe now to start tracking your sea time and generating MCA-compliant reports.';
 
-  // Format price display
-  const priceDisplay = productInfo 
-    ? `${productInfo.priceLocale.currencySymbol}${productInfo.price}`
-    : 'View in App Store';
-
   return (
     <>
       <Stack.Screen
@@ -267,22 +242,6 @@ export default function SubscriptionPaywallScreen() {
             />
             <Text style={styles.featureText}>Priority support</Text>
           </View>
-        </View>
-
-        <View style={styles.pricingContainer}>
-          <Text style={styles.pricingTitle}>Monthly Subscription</Text>
-          {loadingPrice ? (
-            <ActivityIndicator size="large" color={colors.primary} style={styles.priceLoader} />
-          ) : (
-            <>
-              <Text style={styles.price}>{priceDisplay}</Text>
-              {productInfo && <Text style={styles.pricingSubtitle}>per month</Text>}
-              {!productInfo && Platform.OS === 'ios' && (
-                <Text style={styles.pricingNote}>Tap Subscribe to view pricing in your currency</Text>
-              )}
-            </>
-          )}
-          <Text style={styles.pricingNote}>Cancel anytime • No trial period</Text>
         </View>
 
         <View style={styles.buttonContainer}>
@@ -366,39 +325,6 @@ export default function SubscriptionPaywallScreen() {
           </Text>
         </View>
       </ScrollView>
-
-      {/* Instructions Modal */}
-      <Modal
-        visible={showInstructions}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowInstructions(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <IconSymbol
-              ios_icon_name="info.circle.fill"
-              android_material_icon_name="info"
-              size={48}
-              color={colors.primary}
-            />
-            <Text style={styles.modalTitle}>Subscribe in App Store</Text>
-            <Text style={styles.modalMessage}>
-              1. View pricing and complete your subscription in the App Store{'\n\n'}
-              2. Return to SeaTime Tracker{'\n\n'}
-              3. Tap &quot;Check Subscription Status&quot;{'\n\n'}
-              Your subscription is managed through your Apple ID and will automatically renew each month.{'\n\n'}
-              Pricing is displayed in your local currency in the App Store.
-            </Text>
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalConfirmButton]}
-              onPress={() => setShowInstructions(false)}
-            >
-              <Text style={styles.modalConfirmText}>Got it</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
 
       {/* Sign Out Modal */}
       <Modal
@@ -493,41 +419,6 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.text : colors.textLight,
       marginLeft: 12,
       flex: 1,
-    },
-    pricingContainer: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 16,
-      padding: 24,
-      marginBottom: 24,
-      alignItems: 'center',
-      borderWidth: 2,
-      borderColor: colors.primary,
-    },
-    pricingTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 8,
-    },
-    priceLoader: {
-      marginVertical: 20,
-    },
-    price: {
-      fontSize: 36,
-      fontWeight: 'bold',
-      color: colors.primary,
-      marginBottom: 4,
-    },
-    pricingSubtitle: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 8,
-    },
-    pricingNote: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      textAlign: 'center',
-      marginTop: 4,
     },
     buttonContainer: {
       marginBottom: 24,
