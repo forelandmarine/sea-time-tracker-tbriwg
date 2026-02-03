@@ -793,6 +793,15 @@ async function handleSeaTimeEntries(
         totalDistance = calculateDistanceNauticalMiles(startLat, startLng, currentLat, currentLng);
       }
 
+      // VALIDATION: Check if vessel has traveled meaningful distance (at least 0.5 nm)
+      if (totalDistance < 0.5) {
+        app.logger.debug(
+          { vesselId, mmsi, totalDistance, minimumThreshold: 0.5, entryId: existingEntryForDay.id },
+          `Skipping entry extension for vessel ${vessel_name}: total distance too small (${totalDistance} nm < 0.5 nm minimum). Entry ID: ${existingEntryForDay.id}`
+        );
+        return;
+      }
+
       // VALIDATION: Check if vessel has traveled meaningful distance
       const isStationary = totalDistance < 0.5;
 
