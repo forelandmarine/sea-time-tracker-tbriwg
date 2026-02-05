@@ -86,30 +86,35 @@ export default function SeaTimeScreen() {
   }, []);
 
   const loadActiveVesselLocation = useCallback(async (vesselId: string, forceRefresh: boolean = false) => {
+    // Don't block UI - load location in background
+    setLocationLoading(true);
+    console.log('[Home] Loading location for vessel:', vesselId);
+    
     try {
-      setLocationLoading(true);
-      console.log('[Home] Loading location for vessel:', vesselId);
-      
       const locationData = await seaTimeApi.getVesselAISLocation(vesselId, false);
       setActiveVesselLocation({
         latitude: locationData.latitude,
         longitude: locationData.longitude,
         timestamp: locationData.timestamp,
       });
+      console.log('[Home] Location loaded');
       
+      // Background refresh if stale or forced
       if (forceRefresh || isLocationStale(locationData.timestamp)) {
         console.log('[Home] Data is stale, triggering fresh AIS check');
-        try {
-          await seaTimeApi.checkVesselAIS(vesselId, true);
-          const freshLocationData = await seaTimeApi.getVesselAISLocation(vesselId, false);
-          setActiveVesselLocation({
-            latitude: freshLocationData.latitude,
-            longitude: freshLocationData.longitude,
-            timestamp: freshLocationData.timestamp,
+        seaTimeApi.checkVesselAIS(vesselId, true)
+          .then(() => seaTimeApi.getVesselAISLocation(vesselId, false))
+          .then(freshLocationData => {
+            setActiveVesselLocation({
+              latitude: freshLocationData.latitude,
+              longitude: freshLocationData.longitude,
+              timestamp: freshLocationData.timestamp,
+            });
+            console.log('[Home] Fresh location loaded in background');
+          })
+          .catch(aisError => {
+            console.error('[Home] Background AIS check failed:', aisError);
           });
-        } catch (aisError: any) {
-          console.error('[Home] Failed to get fresh AIS data:', aisError);
-        }
       }
     } catch (error: any) {
       console.error('[Home] Failed to load vessel location:', error);
@@ -121,19 +126,23 @@ export default function SeaTimeScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      console.log('[Home] ========== LOADING DATA ==========');
+      console.log('[Home] ========== LOADING VESSELS ==========');
       const startTime = Date.now();
       
+      // NO TIMEOUT - let the API layer handle caching and timeouts
       const vesselsData = await seaTimeApi.getVessels();
       setVessels(vesselsData);
       
       const loadTime = Date.now() - startTime;
       console.log(`[Home] ========== VESSELS LOADED IN ${loadTime}ms ==========`);
       
+      // Load location in background - don't block UI
       const newActiveVessel = vesselsData.find(v => v.is_active);
       if (newActiveVessel) {
-        console.log('[Home] Found active vessel, loading location');
-        await loadActiveVesselLocation(newActiveVessel.id, false);
+        console.log('[Home] Found active vessel, loading location in background');
+        loadActiveVesselLocation(newActiveVessel.id, false).catch(error => {
+          console.error('[Home] Background location load failed:', error);
+        });
       } else {
         setActiveVesselLocation(null);
       }

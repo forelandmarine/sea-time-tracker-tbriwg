@@ -87,24 +87,18 @@ export default function SeaTimeScreen() {
   }, []);
 
   const loadActiveVesselLocation = useCallback(async (vesselId: string, forceRefresh: boolean = false) => {
+    // Don't block UI - load location in background
+    setLocationLoading(true);
+    console.log('[Home iOS] Loading location for vessel:', vesselId);
+    
     try {
-      setLocationLoading(true);
-      console.log('[Home iOS] Loading location for vessel:', vesselId, 'forceRefresh:', forceRefresh);
-      
-      // REDUCED timeout to 1 second for faster loading
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Location load timeout')), 1000) // REDUCED to 1s
-      );
-      
-      const locationPromise = seaTimeApi.getVesselAISLocation(vesselId, false);
-      const locationData = await Promise.race([locationPromise, timeoutPromise]);
-      
+      const locationData = await seaTimeApi.getVesselAISLocation(vesselId, false);
       setActiveVesselLocation({
         latitude: locationData.latitude,
         longitude: locationData.longitude,
         timestamp: locationData.timestamp,
       });
-      console.log('[Home iOS] Location loaded:', locationData.latitude, locationData.longitude);
+      console.log('[Home iOS] Location loaded');
       
       // Background refresh if stale or forced
       if (forceRefresh || isLocationStale(locationData.timestamp)) {
@@ -133,18 +127,15 @@ export default function SeaTimeScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      console.log('[Home iOS] Loading vessels...');
+      console.log('[Home iOS] ========== LOADING VESSELS ==========');
+      const startTime = Date.now();
       
-      // REDUCED timeout to 1 second for faster loading
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Vessels load timeout')), 1000) // REDUCED to 1s
-      );
-      
-      const vesselsPromise = seaTimeApi.getVessels();
-      const vesselsData = await Promise.race([vesselsPromise, timeoutPromise]);
-      
+      // NO TIMEOUT - let the API layer handle caching and timeouts
+      const vesselsData = await seaTimeApi.getVessels();
       setVessels(vesselsData);
-      console.log('[Home iOS] Vessels loaded - Active:', vesselsData.filter(v => v.is_active).length, 'Historic:', vesselsData.filter(v => !v.is_active).length);
+      
+      const loadTime = Date.now() - startTime;
+      console.log(`[Home iOS] ========== VESSELS LOADED IN ${loadTime}ms ==========`);
       
       // Load location in background - don't block UI
       const newActiveVessel = vesselsData.find(v => v.is_active);
@@ -174,6 +165,7 @@ export default function SeaTimeScreen() {
   const onRefresh = async () => {
     console.log('[Home iOS] User triggered manual refresh');
     setRefreshing(true);
+    seaTimeApi.clearCache();
     
     const vesselsData = await seaTimeApi.getVessels();
     setVessels(vesselsData);

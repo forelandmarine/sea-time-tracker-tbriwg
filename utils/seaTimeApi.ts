@@ -9,8 +9,10 @@ export const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || '';
 const VESSEL_QUERY_INTERVAL = 5 * 60 * 1000; // 5 minutes
 const LAST_QUERY_TIME_PREFIX = 'last_query_time_';
 
-// ========== DATA CACHE ==========
-// Aggressive caching to prevent redundant API calls
+// ========== PERSISTENT CACHE (AsyncStorage for instant loading) ==========
+const PERSISTENT_CACHE_PREFIX = 'seatime_cache_';
+
+// ========== IN-MEMORY CACHE ==========
 const DATA_CACHE: {
   vessels?: { data: any; timestamp: number };
   profile?: { data: any; timestamp: number };
@@ -18,16 +20,54 @@ const DATA_CACHE: {
   entries?: { data: any; timestamp: number };
 } = {};
 
-const CACHE_DURATION = 60 * 1000; // 60 seconds cache - increased for better performance
+const CACHE_DURATION = 60 * 1000; // 60 seconds cache
 
 // ========== REQUEST DEDUPLICATION ==========
-// Prevent duplicate simultaneous requests
 const PENDING_REQUESTS: Map<string, Promise<any>> = new Map();
+
+// ========== PERSISTENT CACHE HELPERS ==========
+async function getPersistentCache(key: string): Promise<any | null> {
+  try {
+    const cacheKey = `${PERSISTENT_CACHE_PREFIX}${key}`;
+    const cached = Platform.OS === 'web'
+      ? localStorage.getItem(cacheKey)
+      : await AsyncStorage.getItem(cacheKey);
+    
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      console.log(`[seaTimeApi] Loaded ${key} from persistent cache (age: ${Math.floor((Date.now() - parsed.timestamp) / 1000)}s)`);
+      return parsed.data;
+    }
+    return null;
+  } catch (error) {
+    console.error(`[seaTimeApi] Failed to get persistent cache for ${key}:`, error);
+    return null;
+  }
+}
+
+async function setPersistentCache(key: string, data: any): Promise<void> {
+  try {
+    const cacheKey = `${PERSISTENT_CACHE_PREFIX}${key}`;
+    const cacheData = JSON.stringify({
+      data,
+      timestamp: Date.now(),
+    });
+    
+    if (Platform.OS === 'web') {
+      localStorage.setItem(cacheKey, cacheData);
+    } else {
+      await AsyncStorage.setItem(cacheKey, cacheData);
+    }
+    console.log(`[seaTimeApi] Saved ${key} to persistent cache`);
+  } catch (error) {
+    console.error(`[seaTimeApi] Failed to set persistent cache for ${key}:`, error);
+  }
+}
 
 function getCachedData(key: string): any | null {
   const cached = DATA_CACHE[key as keyof typeof DATA_CACHE];
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    console.log(`[seaTimeApi] Using cached ${key} (age: ${Math.floor((Date.now() - cached.timestamp) / 1000)}s)`);
+    console.log(`[seaTimeApi] Using in-memory cached ${key} (age: ${Math.floor((Date.now() - cached.timestamp) / 1000)}s)`);
     return cached.data;
   }
   return null;
@@ -38,14 +78,14 @@ function setCachedData(key: string, data: any): void {
     data,
     timestamp: Date.now(),
   };
-  console.log(`[seaTimeApi] Cached ${key} for ${CACHE_DURATION / 1000}s`);
+  console.log(`[seaTimeApi] Cached ${key} in memory for ${CACHE_DURATION / 1000}s`);
 }
 
 export function clearCache(): void {
   Object.keys(DATA_CACHE).forEach(key => {
     delete DATA_CACHE[key as keyof typeof DATA_CACHE];
   });
-  console.log('[seaTimeApi] Cache cleared');
+  console.log('[seaTimeApi] In-memory cache cleared');
 }
 
 function normalizeVessel(vessel: any) {
@@ -143,64 +183,111 @@ function getFetchOptions(method: string = 'GET'): RequestInit {
   };
 }
 
-// ========== OPTIMIZED API CALLS WITH CACHING & DEDUPLICATION ==========
+// ========== OPTIMIZED API CALLS WITH INSTANT CACHE + BACKGROUND REFRESH ==========
 
 export async function getVessels(): Promise<any[]> {
   const cacheKey = 'vessels';
   
-  // Check cache first
-  const cached = getCachedData(cacheKey);
-  if (cached) return cached;
+  // 1. Check in-memory cache first (fastest)
+  const memCached = getCachedData(cacheKey);
+  if (memCached) return memCached;
   
-  // Check for pending request
+  // 2. Check persistent cache (instant load from disk)
+  const persistentCached = await getPersistentCache(cacheKey);
+  if (persistentCached) {
+    // Return cached data immediately
+    setCachedData(cacheKey, persistentCached);
+    
+    // Refresh in background (don't await)
+    refreshVesselsInBackground(cacheKey).catch(error => {
+      console.error('[seaTimeApi] Background vessels refresh failed:', error);
+    });
+    
+    return persistentCached;
+  }
+  
+  // 3. Check for pending request
   if (PENDING_REQUESTS.has(cacheKey)) {
     console.log('[seaTimeApi] Deduplicating vessels request');
     return PENDING_REQUESTS.get(cacheKey)!;
   }
   
-  const requestPromise = (async () => {
-    try {
-      console.log('[seaTimeApi] Fetching vessels from API');
-      const headers = await getApiHeaders();
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5s timeout - reduced for faster loading
-      
-      const response = await fetch(`${API_BASE_URL}/api/vessels`, {
-        headers,
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch vessels');
-      }
-      
-      const data = await response.json();
-      const vessels = data.map(normalizeVessel);
-      
-      setCachedData(cacheKey, vessels);
-      return vessels;
-    } catch (error: any) {
-      console.error('[seaTimeApi] Failed to fetch vessels:', error.message);
-      throw error;
-    } finally {
-      PENDING_REQUESTS.delete(cacheKey);
-    }
-  })();
-  
+  // 4. Fetch from API (first load)
+  const requestPromise = fetchVesselsFromAPI(cacheKey);
   PENDING_REQUESTS.set(cacheKey, requestPromise);
   return requestPromise;
+}
+
+async function refreshVesselsInBackground(cacheKey: string): Promise<void> {
+  console.log('[seaTimeApi] Refreshing vessels in background');
+  try {
+    const vessels = await fetchVesselsFromAPI(cacheKey, true);
+    console.log('[seaTimeApi] Background refresh complete');
+  } catch (error) {
+    console.error('[seaTimeApi] Background refresh failed:', error);
+  }
+}
+
+async function fetchVesselsFromAPI(cacheKey: string, isBackground: boolean = false): Promise<any[]> {
+  try {
+    if (!isBackground) {
+      console.log('[seaTimeApi] Fetching vessels from API');
+    }
+    const headers = await getApiHeaders();
+    
+    const controller = new AbortController();
+    // INCREASED timeout to 5 seconds for more reliable loading
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    
+    const response = await fetch(`${API_BASE_URL}/api/vessels`, {
+      headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch vessels');
+    }
+    
+    const data = await response.json();
+    const vessels = data.map(normalizeVessel);
+    
+    // Save to both caches
+    setCachedData(cacheKey, vessels);
+    await setPersistentCache(cacheKey, vessels);
+    
+    return vessels;
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to fetch vessels:', error.message);
+    throw error;
+  } finally {
+    if (!isBackground) {
+      PENDING_REQUESTS.delete(cacheKey);
+    }
+  }
 }
 
 export async function getUserProfile(): Promise<any> {
   const cacheKey = 'profile';
   
-  // Check cache first
-  const cached = getCachedData(cacheKey);
-  if (cached) return cached;
+  // Check in-memory cache first
+  const memCached = getCachedData(cacheKey);
+  if (memCached) return memCached;
+  
+  // Check persistent cache
+  const persistentCached = await getPersistentCache(cacheKey);
+  if (persistentCached) {
+    setCachedData(cacheKey, persistentCached);
+    
+    // Refresh in background
+    refreshProfileInBackground(cacheKey).catch(error => {
+      console.error('[seaTimeApi] Background profile refresh failed:', error);
+    });
+    
+    return persistentCached;
+  }
   
   // Check for pending request
   if (PENDING_REQUESTS.has(cacheKey)) {
@@ -208,135 +295,189 @@ export async function getUserProfile(): Promise<any> {
     return PENDING_REQUESTS.get(cacheKey)!;
   }
   
-  const requestPromise = (async () => {
-    try {
-      console.log('[seaTimeApi] Fetching user profile from API');
-      const headers = await getApiHeaders();
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
-      
-      const response = await fetch(`${API_BASE_URL}/api/profile`, {
-        headers,
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch profile');
-      }
-      
-      const data = await response.json();
-      setCachedData(cacheKey, data);
-      return data;
-    } catch (error: any) {
-      console.error('[seaTimeApi] Failed to fetch profile:', error.message);
-      throw error;
-    } finally {
-      PENDING_REQUESTS.delete(cacheKey);
-    }
-  })();
-  
+  const requestPromise = fetchProfileFromAPI(cacheKey);
   PENDING_REQUESTS.set(cacheKey, requestPromise);
   return requestPromise;
+}
+
+async function refreshProfileInBackground(cacheKey: string): Promise<void> {
+  console.log('[seaTimeApi] Refreshing profile in background');
+  try {
+    await fetchProfileFromAPI(cacheKey, true);
+    console.log('[seaTimeApi] Background profile refresh complete');
+  } catch (error) {
+    console.error('[seaTimeApi] Background profile refresh failed:', error);
+  }
+}
+
+async function fetchProfileFromAPI(cacheKey: string, isBackground: boolean = false): Promise<any> {
+  try {
+    if (!isBackground) {
+      console.log('[seaTimeApi] Fetching user profile from API');
+    }
+    const headers = await getApiHeaders();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    const response = await fetch(`${API_BASE_URL}/api/profile`, {
+      headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch profile');
+    }
+    
+    const data = await response.json();
+    setCachedData(cacheKey, data);
+    await setPersistentCache(cacheKey, data);
+    return data;
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to fetch profile:', error.message);
+    throw error;
+  } finally {
+    if (!isBackground) {
+      PENDING_REQUESTS.delete(cacheKey);
+    }
+  }
 }
 
 export async function getReportSummary(): Promise<any> {
   const cacheKey = 'summary';
   
-  // Check cache first
-  const cached = getCachedData(cacheKey);
-  if (cached) return cached;
+  const memCached = getCachedData(cacheKey);
+  if (memCached) return memCached;
   
-  // Check for pending request
+  const persistentCached = await getPersistentCache(cacheKey);
+  if (persistentCached) {
+    setCachedData(cacheKey, persistentCached);
+    refreshSummaryInBackground(cacheKey).catch(() => {});
+    return persistentCached;
+  }
+  
   if (PENDING_REQUESTS.has(cacheKey)) {
     console.log('[seaTimeApi] Deduplicating summary request');
     return PENDING_REQUESTS.get(cacheKey)!;
   }
   
-  const requestPromise = (async () => {
-    try {
-      console.log('[seaTimeApi] Fetching report summary from API');
-      const headers = await getApiHeaders();
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
-      
-      const response = await fetch(`${API_BASE_URL}/api/reports/summary`, {
-        headers,
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch summary');
-      }
-      
-      const data = await response.json();
-      setCachedData(cacheKey, data);
-      return data;
-    } catch (error: any) {
-      console.error('[seaTimeApi] Failed to fetch summary:', error.message);
-      throw error;
-    } finally {
-      PENDING_REQUESTS.delete(cacheKey);
-    }
-  })();
-  
+  const requestPromise = fetchSummaryFromAPI(cacheKey);
   PENDING_REQUESTS.set(cacheKey, requestPromise);
   return requestPromise;
+}
+
+async function refreshSummaryInBackground(cacheKey: string): Promise<void> {
+  try {
+    await fetchSummaryFromAPI(cacheKey, true);
+  } catch (error) {
+    console.error('[seaTimeApi] Background summary refresh failed:', error);
+  }
+}
+
+async function fetchSummaryFromAPI(cacheKey: string, isBackground: boolean = false): Promise<any> {
+  try {
+    if (!isBackground) {
+      console.log('[seaTimeApi] Fetching report summary from API');
+    }
+    const headers = await getApiHeaders();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    const response = await fetch(`${API_BASE_URL}/api/reports/summary`, {
+      headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch summary');
+    }
+    
+    const data = await response.json();
+    setCachedData(cacheKey, data);
+    await setPersistentCache(cacheKey, data);
+    return data;
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to fetch summary:', error.message);
+    throw error;
+  } finally {
+    if (!isBackground) {
+      PENDING_REQUESTS.delete(cacheKey);
+    }
+  }
 }
 
 export async function getSeaTimeEntries(): Promise<any[]> {
   const cacheKey = 'entries';
   
-  // Check cache first
-  const cached = getCachedData(cacheKey);
-  if (cached) return cached;
+  const memCached = getCachedData(cacheKey);
+  if (memCached) return memCached;
   
-  // Check for pending request
+  const persistentCached = await getPersistentCache(cacheKey);
+  if (persistentCached) {
+    setCachedData(cacheKey, persistentCached);
+    refreshEntriesInBackground(cacheKey).catch(() => {});
+    return persistentCached;
+  }
+  
   if (PENDING_REQUESTS.has(cacheKey)) {
     console.log('[seaTimeApi] Deduplicating entries request');
     return PENDING_REQUESTS.get(cacheKey)!;
   }
   
-  const requestPromise = (async () => {
-    try {
-      console.log('[seaTimeApi] Fetching sea time entries from API');
-      const headers = await getApiHeaders();
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
-      
-      const response = await fetch(`${API_BASE_URL}/api/sea-time`, {
-        headers,
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch entries');
-      }
-      
-      const data = await response.json();
-      setCachedData(cacheKey, data);
-      return data;
-    } catch (error: any) {
-      console.error('[seaTimeApi] Failed to fetch entries:', error.message);
-      throw error;
-    } finally {
-      PENDING_REQUESTS.delete(cacheKey);
-    }
-  })();
-  
+  const requestPromise = fetchEntriesFromAPI(cacheKey);
   PENDING_REQUESTS.set(cacheKey, requestPromise);
   return requestPromise;
+}
+
+async function refreshEntriesInBackground(cacheKey: string): Promise<void> {
+  try {
+    await fetchEntriesFromAPI(cacheKey, true);
+  } catch (error) {
+    console.error('[seaTimeApi] Background entries refresh failed:', error);
+  }
+}
+
+async function fetchEntriesFromAPI(cacheKey: string, isBackground: boolean = false): Promise<any[]> {
+  try {
+    if (!isBackground) {
+      console.log('[seaTimeApi] Fetching sea time entries from API');
+    }
+    const headers = await getApiHeaders();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    const response = await fetch(`${API_BASE_URL}/api/sea-time`, {
+      headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch entries');
+    }
+    
+    const data = await response.json();
+    setCachedData(cacheKey, data);
+    await setPersistentCache(cacheKey, data);
+    return data;
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to fetch entries:', error.message);
+    throw error;
+  } finally {
+    if (!isBackground) {
+      PENDING_REQUESTS.delete(cacheKey);
+    }
+  }
 }
 
 // ========== NON-CACHED API CALLS (mutations) ==========
@@ -445,7 +586,7 @@ export async function getVesselAISLocation(vesselId: string, extended: boolean =
     const headers = await getApiHeaders();
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout for AIS
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout for AIS
     
     const response = await fetch(`${API_BASE_URL}/api/ais/vessel/${vesselId}?extended=${extended}`, {
       headers,
@@ -479,7 +620,7 @@ export async function checkVesselAIS(vesselId: string, forceRefresh: boolean = f
     const headers = await getApiHeaders();
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout for AIS check
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8s timeout for AIS check
     
     const response = await fetch(`${API_BASE_URL}/api/ais/check/${vesselId}`, {
       method: 'POST',
@@ -551,7 +692,7 @@ export async function getPendingEntries(): Promise<any[]> {
     const headers = await getApiHeaders();
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
     
     const response = await fetch(`${API_BASE_URL}/api/sea-time/pending`, {
       headers,
@@ -582,7 +723,7 @@ export async function getNewSeaTimeEntries(since?: string): Promise<any> {
       : `${API_BASE_URL}/api/sea-time/new-entries`;
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
     
     const response = await fetch(url, {
       headers,
@@ -742,7 +883,7 @@ export async function getSeaTimeEntry(entryId: string): Promise<any> {
     const headers = await getApiHeaders();
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
     
     // Get all entries and find the specific one
     const response = await fetch(`${API_BASE_URL}/api/sea-time`, {
@@ -779,7 +920,7 @@ export async function getVesselSeaTime(vesselId: string): Promise<any[]> {
     const headers = await getApiHeaders();
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
     
     const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}/sea-time`, {
       headers,
@@ -911,7 +1052,7 @@ export async function getNotificationSchedule(): Promise<any> {
     const headers = await getApiHeaders();
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
     
     const response = await fetch(`${API_BASE_URL}/api/notifications/schedule`, {
       headers,
@@ -967,7 +1108,7 @@ export async function getScheduledTasks(): Promise<any[]> {
     const headers = await getApiHeaders();
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
     
     const response = await fetch(`${API_BASE_URL}/api/ais/scheduled-tasks`, {
       headers,
@@ -1019,7 +1160,7 @@ export async function getAISDebugLogs(vesselId: string, limit: number = 50): Pro
     const headers = await getApiHeaders();
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     
     const response = await fetch(`${API_BASE_URL}/api/ais/debug/${vesselId}?limit=${limit}`, {
       headers,
