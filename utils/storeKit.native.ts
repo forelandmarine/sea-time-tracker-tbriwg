@@ -39,6 +39,8 @@ let isInitialized = false;
 
 /**
  * Initialize StoreKit connection
+ * IMPORTANT: This should only be called when needed (e.g., on subscription screen)
+ * NOT during app startup to avoid blocking authentication
  */
 export async function initializeStoreKit(): Promise<boolean> {
   if (Platform.OS !== 'ios') {
@@ -53,16 +55,26 @@ export async function initializeStoreKit(): Promise<boolean> {
 
   try {
     console.log('[StoreKit] Initializing connection to App Store');
-    await RNIap.initConnection();
     
-    // Clear any pending transactions
-    await RNIap.flushFailedPurchasesCachedAsPendingAndroid();
+    // Add timeout to prevent blocking
+    const initPromise = RNIap.initConnection();
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('StoreKit initialization timeout')), 5000)
+    );
+    
+    await Promise.race([initPromise, timeoutPromise]);
+    
+    // Clear any pending transactions (non-blocking)
+    RNIap.flushFailedPurchasesCachedAsPendingAndroid().catch((err) => {
+      console.warn('[StoreKit] Failed to flush pending purchases:', err);
+    });
     
     isInitialized = true;
     console.log('[StoreKit] Successfully initialized');
     return true;
   } catch (error: any) {
     console.error('[StoreKit] Initialization error:', error);
+    // Don't throw - allow app to continue without StoreKit
     return false;
   }
 }
@@ -88,10 +100,20 @@ export async function getProductInfo(): Promise<{
     console.log('[StoreKit] Fetching product info from App Store');
     
     if (!isInitialized) {
-      await initializeStoreKit();
+      const initialized = await initializeStoreKit();
+      if (!initialized) {
+        console.warn('[StoreKit] Failed to initialize, cannot get product info');
+        return null;
+      }
     }
 
-    const products = await RNIap.getSubscriptions({ skus: subscriptionSkus as string[] });
+    // Add timeout to prevent blocking
+    const productsPromise = RNIap.getSubscriptions({ skus: subscriptionSkus as string[] });
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error('Product fetch timeout')), 5000)
+    );
+    
+    const products = await Promise.race([productsPromise, timeoutPromise]);
     
     if (products.length === 0) {
       console.warn('[StoreKit] No products found');

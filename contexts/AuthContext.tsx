@@ -391,9 +391,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithApple = async (identityToken: string, appleUser?: any) => {
     try {
-      console.log('[Auth] Signing in with Apple');
+      console.log('[Auth] ========== APPLE SIGN IN STARTED ==========');
       console.log('[Auth] Identity token length:', identityToken?.length);
       console.log('[Auth] API URL:', API_URL);
+      console.log('[Auth] Apple user data:', appleUser);
 
       if (!API_URL) {
         throw new Error('Backend URL is not configured. Please check app.json extra.backendUrl');
@@ -410,69 +411,104 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const url = `${API_URL}/api/auth/sign-in/apple`;
       console.log('[Auth] Full request URL:', url);
+      console.log('[Auth] Request body:', JSON.stringify(requestBody, null, 2));
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.error('[Auth] Apple sign in request timeout');
+        controller.abort();
+      }, 15000); // 15 second timeout for Apple sign in
 
-      console.log('[Auth] Apple sign in response status:', response.status);
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[Auth] Apple sign in failed. Status:', response.status);
+        clearTimeout(timeoutId);
+
+        console.log('[Auth] Apple sign in response status:', response.status);
+        console.log('[Auth] Apple sign in response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[Auth] Apple sign in failed. Status:', response.status);
+          console.error('[Auth] Error response body:', errorText);
+          
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch (e) {
+            throw new Error(`Apple sign in failed with status ${response.status}: ${errorText}`);
+          }
+          
+          throw new Error(errorData.error || 'Apple sign in failed');
+        }
+
+        const data = await response.json();
+        console.log('[Auth] ========== APPLE SIGN IN SUCCESS ==========');
+        console.log('[Auth] Is new user:', data.isNewUser);
+        console.log('[Auth] User email:', data.user?.email);
+        console.log('[Auth] User ID:', data.user?.id);
+        console.log('[Auth] Has session:', !!data.session);
+        console.log('[Auth] Has token:', !!data.session?.token);
+        console.log('[Auth] Subscription status:', data.user?.subscription_status);
+        console.log('[Auth] Subscription expires at:', data.user?.subscription_expires_at);
+        console.log('[Auth] Subscription product ID:', data.user?.subscription_product_id);
+        console.log('[Auth] ==========================================');
+
+        if (!data.session || !data.session.token) {
+          console.error('[Auth] Missing session or token in response');
+          console.error('[Auth] Full response data:', JSON.stringify(data, null, 2));
+          throw new Error('No session token received from server');
+        }
+
+        console.log('[Auth] Storing token...');
+        await tokenStorage.setToken(data.session.token);
+        console.log('[Auth] Token stored successfully');
         
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch (e) {
-          throw new Error(`Apple sign in failed with status ${response.status}`);
+        // Store user with subscription data
+        const userData = {
+          ...data.user,
+          subscription_status: data.user?.subscription_status || 'inactive',
+          subscription_expires_at: data.user?.subscription_expires_at || null,
+          subscription_product_id: data.user?.subscription_product_id || null,
+        };
+        
+        console.log('[Auth] Setting user state...');
+        setUser(userData);
+        console.log('[Auth] User state set successfully');
+        
+        // Log final stored user data
+        console.log('[Auth] Final stored user data:', {
+          email: userData.email,
+          subscription_status: userData.subscription_status,
+          subscription_expires_at: userData.subscription_expires_at,
+          subscription_product_id: userData.subscription_product_id,
+        });
+        
+        console.log('[Auth] ========== APPLE SIGN IN COMPLETED ==========');
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          console.error('[Auth] Apple sign in request timed out');
+          throw new Error('Sign in request timed out. Please check your internet connection and try again.');
         }
         
-        throw new Error(errorData.error || 'Apple sign in failed');
+        throw fetchError;
       }
-
-      const data = await response.json();
-      console.log('[Auth] ========== APPLE SIGN IN SUCCESS ==========');
-      console.log('[Auth] Is new user:', data.isNewUser);
-      console.log('[Auth] User email:', data.user?.email);
-      console.log('[Auth] User ID:', data.user?.id);
-      console.log('[Auth] Subscription status:', data.user?.subscription_status);
-      console.log('[Auth] Subscription expires at:', data.user?.subscription_expires_at);
-      console.log('[Auth] Subscription product ID:', data.user?.subscription_product_id);
-      console.log('[Auth] ==========================================');
-
-      if (!data.session || !data.session.token) {
-        console.error('[Auth] Missing session or token');
-        throw new Error('No session token received from server');
-      }
-
-      await tokenStorage.setToken(data.session.token);
-      
-      // Store user with subscription data
-      const userData = {
-        ...data.user,
-        subscription_status: data.user?.subscription_status || 'inactive',
-        subscription_expires_at: data.user?.subscription_expires_at || null,
-        subscription_product_id: data.user?.subscription_product_id || null,
-      };
-      
-      setUser(userData);
-      
-      // Log final stored user data
-      console.log('[Auth] Final stored user data:', {
-        email: userData.email,
-        subscription_status: userData.subscription_status,
-        subscription_expires_at: userData.subscription_expires_at,
-        subscription_product_id: userData.subscription_product_id,
-      });
-      
-      console.log('[Auth] Apple sign in successful, user:', data.user.email, 'with subscription data');
     } catch (error: any) {
-      console.error('[Auth] Apple sign in failed:', error?.message);
+      console.error('[Auth] ========== APPLE SIGN IN FAILED ==========');
+      console.error('[Auth] Error type:', error?.name);
+      console.error('[Auth] Error message:', error?.message);
+      console.error('[Auth] Error stack:', error?.stack);
+      console.error('[Auth] ==========================================');
       
       // Provide more helpful error messages
       if (error.message === 'Network request failed' || error.name === 'TypeError') {

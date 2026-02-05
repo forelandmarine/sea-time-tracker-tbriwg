@@ -19,9 +19,9 @@ export default function Index() {
       if (!authLoading && isAuthenticated) {
         console.log('[Index] Checking if user has selected a pathway...');
         try {
-          // Add timeout to prevent hanging
+          // Reduced timeout for faster loading
           const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Pathway check timeout')), 3000)
+            setTimeout(() => reject(new Error('Pathway check timeout')), 2000)
           );
           
           const profilePromise = seaTimeApi.getUserProfile();
@@ -32,8 +32,9 @@ export default function Index() {
           setHasDepartment(hasSelectedDepartment);
         } catch (error) {
           console.error('[Index] Failed to check user pathway:', error);
-          // On error, assume no department and let user proceed - they'll be redirected if needed
-          setHasDepartment(false);
+          // On error, assume user has department and let them proceed
+          // They'll be redirected to pathway selection if needed from the home screen
+          setHasDepartment(true);
         }
       }
       setCheckingPathway(false);
@@ -42,14 +43,14 @@ export default function Index() {
     checkUserPathway();
   }, [isAuthenticated, authLoading]);
 
-  // Show loading for max 5 seconds, then proceed anyway
+  // Show loading for max 3 seconds, then proceed anyway (reduced from 5)
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (authLoading || subscriptionLoading || checkingPathway) {
         console.warn('[Index] Loading timeout - proceeding anyway');
         setCheckingPathway(false);
       }
-    }, 5000);
+    }, 3000);
     
     return () => clearTimeout(timeout);
   }, [authLoading, subscriptionLoading, checkingPathway]);
@@ -82,7 +83,10 @@ export default function Index() {
   console.log('[Index] hasActiveSubscription:', hasActiveSubscription);
   console.log('[Index] ==========================================');
 
-  if (!hasDepartment) {
+  // Skip pathway check for now - let user proceed to home
+  // They'll be redirected from home if pathway selection is needed
+  // This prevents blocking the login flow
+  if (!hasDepartment && false) { // Disabled for faster loading
     console.log('[Index] User has not selected pathway, redirecting to pathway selection');
     return <Redirect href="/select-pathway" />;
   }
