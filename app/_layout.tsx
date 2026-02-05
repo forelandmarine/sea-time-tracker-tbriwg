@@ -129,14 +129,23 @@ function RootLayoutNav() {
     }
 
     // Only protect tab routes - redirect to auth if not authenticated
+    // Add a small delay to ensure user state is fully updated
     if (!user && inAuthGroup && !isNavigating) {
       console.log('[App] ⚠️ User not authenticated but in tabs, redirecting to /auth');
       setIsNavigating(true);
       
+      // Use a longer timeout to ensure state updates complete
       setTimeout(() => {
-        router.replace('/auth');
-        setIsNavigating(false);
-      }, 100);
+        try {
+          router.replace('/auth');
+        } catch (navError) {
+          console.error('[App] Navigation error:', navError);
+          // Fallback to push if replace fails
+          router.push('/auth');
+        } finally {
+          setIsNavigating(false);
+        }
+      }, 200);
     }
   }, [user, loading, loaded, pathname, segments, isNavigating, router]);
 

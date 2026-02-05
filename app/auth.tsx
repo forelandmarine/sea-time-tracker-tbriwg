@@ -93,7 +93,10 @@ export default function AuthScreen() {
   };
 
   const handleEmailAuth = async () => {
+    console.log('[AuthScreen] handleEmailAuth called');
+    
     if (!BACKEND_URL) {
+      console.error('[AuthScreen] Backend URL not configured');
       Alert.alert(
         'Backend Not Configured',
         'The app backend is not configured. Please ensure the backend URL is set in app.json.',
@@ -103,36 +106,67 @@ export default function AuthScreen() {
     }
 
     if (!email || !password) {
+      console.warn('[AuthScreen] Email or password missing');
       Alert.alert('Error', 'Please enter email and password');
       return;
     }
 
     if (isSignUp && password.length < 6) {
+      console.warn('[AuthScreen] Password too short');
       Alert.alert('Error', 'Password must be at least 6 characters');
       return;
     }
 
+    console.log('[AuthScreen] Starting authentication...');
     setLoading(true);
+    
     try {
       if (isSignUp) {
         console.log('[AuthScreen] User tapped Sign Up button');
+        console.log('[AuthScreen] Calling signUp with email:', email);
         await signUp(email, password, name || 'User');
+        console.log('[AuthScreen] Sign up successful');
       } else {
         console.log('[AuthScreen] User tapped Sign In button');
+        console.log('[AuthScreen] Calling signIn with email:', email);
         await signIn(email, password);
+        console.log('[AuthScreen] Sign in successful');
       }
 
       // Save credentials if remember me is checked
       if (rememberMe && !isSignUp) {
         console.log('[AuthScreen] Saving credentials for biometric authentication');
-        await saveBiometricCredentials(email, password);
-        setHasSavedCredentials(true);
+        try {
+          await saveBiometricCredentials(email, password);
+          setHasSavedCredentials(true);
+          console.log('[AuthScreen] Credentials saved successfully');
+        } catch (bioError) {
+          console.error('[AuthScreen] Failed to save biometric credentials:', bioError);
+          // Don't block login if biometric save fails
+        }
       }
 
       console.log('[AuthScreen] Authentication successful, navigating to home');
-      router.replace('/(tabs)');
+      
+      // Use setTimeout to ensure state updates complete before navigation
+      setTimeout(() => {
+        console.log('[AuthScreen] Executing navigation to /(tabs)');
+        try {
+          router.replace('/(tabs)');
+          console.log('[AuthScreen] Navigation completed');
+        } catch (navError) {
+          console.error('[AuthScreen] Navigation error:', navError);
+          // Fallback navigation
+          router.push('/(tabs)');
+        }
+      }, 100);
     } catch (error: any) {
       console.error('[AuthScreen] Authentication failed:', error);
+      console.error('[AuthScreen] Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+      });
       
       // Provide more helpful error messages
       let errorMessage = error.message || 'Authentication failed';
@@ -143,6 +177,7 @@ export default function AuthScreen() {
       Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
+      console.log('[AuthScreen] Authentication flow completed');
     }
   };
 
@@ -178,6 +213,7 @@ export default function AuthScreen() {
         hasIdentityToken: !!credential.identityToken,
         hasEmail: !!credential.email,
         hasFullName: !!credential.fullName,
+        fullName: credential.fullName,
         user: credential.user,
       });
 
@@ -190,55 +226,50 @@ export default function AuthScreen() {
 
       console.log('[AuthScreen] Sending Apple credentials to backend...');
       
-      try {
-        await signInWithApple(credential.identityToken, {
-          email: credential.email,
-          name: credential.fullName,
-        });
-        
-        console.log('[AuthScreen] Apple sign in successful, navigating to home');
-        router.replace('/(tabs)');
-      } catch (backendError: any) {
-        console.error('[AuthScreen] Backend Apple sign in failed:', backendError);
-        
-        // Provide helpful error messages
-        let errorMessage = 'Unable to sign in with Apple. ';
-        if (backendError.message?.includes('Network') || backendError.message?.includes('fetch')) {
-          errorMessage += 'Please check your internet connection and try again.';
-        } else if (backendError.message?.includes('token')) {
-          errorMessage += 'Authentication token is invalid. Please try again.';
-        } else {
-          errorMessage += backendError.message || 'Please try again later.';
-        }
-        
-        Alert.alert('Sign In Failed', errorMessage, [
-          { text: 'Try Again', onPress: handleAppleSignIn },
-          { text: 'Cancel', style: 'cancel' }
-        ]);
-      }
+      // Format the user data properly for the backend
+      const appleUserData = {
+        email: credential.email || undefined,
+        name: credential.fullName ? {
+          givenName: credential.fullName.givenName || undefined,
+          familyName: credential.fullName.familyName || undefined,
+        } : undefined,
+      };
+      
+      console.log('[AuthScreen] Formatted Apple user data:', appleUserData);
+      
+      await signInWithApple(credential.identityToken, appleUserData);
+      
+      console.log('[AuthScreen] Apple sign in successful, navigating to home');
+      router.replace('/(tabs)');
     } catch (error: any) {
+      console.error('[AuthScreen] Apple sign in error:', {
+        code: error.code,
+        message: error.message,
+        name: error.name,
+      });
+      
+      // Don't show error for user cancellation
       if (error.code === 'ERR_CANCELED' || error.code === 'ERR_REQUEST_CANCELED') {
         console.log('[AuthScreen] User cancelled Apple sign in');
-      } else if (error.code === 'ERR_INVALID_RESPONSE') {
-        console.error('[AuthScreen] Invalid response from Apple:', error);
-        Alert.alert(
-          'Sign In Error',
-          'Received an invalid response from Apple. Please try again.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        console.error('[AuthScreen] Apple sign in failed:', {
-          code: error.code,
-          message: error.message,
-          error: error,
-        });
-        
-        Alert.alert(
-          'Sign In Error',
-          `Unable to sign in with Apple: ${error.message || 'Unknown error'}. Please try again or use email and password.`,
-          [{ text: 'OK' }]
-        );
+        return;
       }
+      
+      // Show helpful error messages for other errors
+      let errorMessage = 'Unable to sign in with Apple. ';
+      
+      if (error.code === 'ERR_INVALID_RESPONSE') {
+        errorMessage = 'Received an invalid response from Apple. Please try again.';
+      } else if (error.message?.includes('Network') || error.message?.includes('fetch') || error.message?.includes('timed out')) {
+        errorMessage = 'Cannot connect to server. Please check your internet connection and try again.';
+      } else if (error.message?.includes('token')) {
+        errorMessage = 'Authentication token is invalid. Please try again.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      } else {
+        errorMessage = 'An unknown error occurred. Please try again or use email and password.';
+      }
+      
+      Alert.alert('Sign In Error', errorMessage, [{ text: 'OK' }]);
     } finally {
       setLoading(false);
     }

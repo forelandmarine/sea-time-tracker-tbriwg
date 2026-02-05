@@ -16,12 +16,14 @@ export default function TabLayout() {
   // Trigger refresh when navigating between tabs (simulates back button behavior)
   useEffect(() => {
     console.log('[TabLayout] Navigation detected to:', pathname);
+    console.log('[TabLayout] User authenticated:', !!user);
     console.log('[TabLayout] Triggering global refresh');
     triggerRefresh();
-  }, [pathname, triggerRefresh]);
+  }, [pathname, triggerRefresh, user]);
 
   // Show loading state while checking auth
   if (loading) {
+    console.log('[TabLayout] Showing loading state');
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? colors.background : colors.backgroundLight }}>
         <Text style={{ fontSize: 14, color: isDark ? '#999' : '#666' }}>Loading...</Text>
@@ -31,10 +33,17 @@ export default function TabLayout() {
 
   // If no user, show a blank screen - the root layout will handle redirect
   if (!user) {
+    console.log('[TabLayout] No user found, showing blank screen (root layout will redirect)');
     return (
-      <View style={{ flex: 1, backgroundColor: isDark ? colors.background : colors.backgroundLight }} />
+      <View style={{ flex: 1, backgroundColor: isDark ? colors.background : colors.backgroundLight }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ fontSize: 14, color: isDark ? '#999' : '#666' }}>Redirecting to login...</Text>
+        </View>
+      </View>
     );
   }
+
+  console.log('[TabLayout] Rendering tabs for user:', user.email);
 
   return (
     <Tabs

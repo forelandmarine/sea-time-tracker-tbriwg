@@ -191,7 +191,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     try {
-      console.log('[Auth] Signing in:', email);
+      console.log('[Auth] ========== SIGN IN STARTED ==========');
+      console.log('[Auth] Email:', email);
       console.log('[Auth] API URL:', API_URL);
       
       if (!API_URL) {
@@ -201,36 +202,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const url = `${API_URL}/api/auth/sign-in/email`;
       console.log('[Auth] Full request URL:', url);
       
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      // Add timeout for fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, password }),
+          signal: controller.signal,
+        });
 
-      console.log('[Auth] Sign in response status:', response.status);
+        clearTimeout(timeoutId);
+        console.log('[Auth] Sign in response status:', response.status);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('[Auth] Sign in failed with error:', errorData);
-        throw new Error(errorData.error || 'Login failed');
+        if (!response.ok) {
+          let errorData;
+          try {
+            errorData = await response.json();
+          } catch (e) {
+            throw new Error(`Login failed with status ${response.status}`);
+          }
+          console.error('[Auth] Sign in failed with error:', errorData);
+          throw new Error(errorData.error || 'Login failed');
+        }
+
+        const data = await response.json();
+        console.log('[Auth] Sign in response received');
+        console.log('[Auth] User:', data.user?.email);
+        console.log('[Auth] Has session:', !!data.session);
+        console.log('[Auth] Has token:', !!data.session?.token);
+
+        if (!data.session || !data.session.token) {
+          console.error('[Auth] Missing session or token in response');
+          throw new Error('No session token received from server');
+        }
+
+        console.log('[Auth] Storing token...');
+        await tokenStorage.setToken(data.session.token);
+        console.log('[Auth] Token stored successfully');
+        
+        console.log('[Auth] Setting user state...');
+        setUser(data.user);
+        console.log('[Auth] User state updated successfully');
+        console.log('[Auth] ========== SIGN IN COMPLETED ==========');
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Sign in timed out. Please check your internet connection and try again.');
+        }
+        
+        throw fetchError;
       }
-
-      const data = await response.json();
-      console.log('[Auth] Sign in response received');
-      console.log('[Auth] User:', data.user?.email);
-
-      if (!data.session || !data.session.token) {
-        console.error('[Auth] Missing session or token');
-        throw new Error('No session token received from server');
-      }
-
-      await tokenStorage.setToken(data.session.token);
-      setUser(data.user);
-      console.log('[Auth] Sign in successful, user state updated');
     } catch (error: any) {
-      console.error('[Auth] Sign in failed:', error?.message);
+      console.error('[Auth] ========== SIGN IN FAILED ==========');
+      console.error('[Auth] Error message:', error?.message);
+      console.error('[Auth] Error name:', error?.name);
+      console.error('[Auth] Full error:', error);
       
       // Provide more helpful error messages
       if (error.message === 'Network request failed' || error.name === 'TypeError') {
@@ -243,7 +275,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signUp = async (email: string, password: string, name?: string) => {
     try {
-      console.log('[Auth] Signing up:', email);
+      console.log('[Auth] ========== SIGN UP STARTED ==========');
+      console.log('[Auth] Email:', email);
+      console.log('[Auth] Name:', name);
       console.log('[Auth] API URL:', API_URL);
       
       if (!API_URL) {
@@ -253,36 +287,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const url = `${API_URL}/api/auth/sign-up/email`;
       console.log('[Auth] Full request URL:', url);
       
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password, name: name || 'User' }),
-      });
+      // Add timeout for fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ email, password, name: name || 'User' }),
+          signal: controller.signal,
+        });
 
-      console.log('[Auth] Sign up response status:', response.status);
+        clearTimeout(timeoutId);
+        console.log('[Auth] Sign up response status:', response.status);
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('[Auth] Sign up failed with error:', errorData);
-        throw new Error(errorData.error || 'Registration failed');
+        if (!response.ok) {
+          let errorData;
+          try {
+            errorData = await response.json();
+          } catch (e) {
+            throw new Error(`Registration failed with status ${response.status}`);
+          }
+          console.error('[Auth] Sign up failed with error:', errorData);
+          throw new Error(errorData.error || 'Registration failed');
+        }
+
+        const data = await response.json();
+        console.log('[Auth] Sign up response received');
+        console.log('[Auth] User:', data.user?.email);
+        console.log('[Auth] Has session:', !!data.session);
+        console.log('[Auth] Has token:', !!data.session?.token);
+
+        if (!data.session || !data.session.token) {
+          console.error('[Auth] Missing session or token in response');
+          throw new Error('No session token received from server');
+        }
+
+        console.log('[Auth] Storing token...');
+        await tokenStorage.setToken(data.session.token);
+        console.log('[Auth] Token stored successfully');
+        
+        console.log('[Auth] Setting user state...');
+        setUser(data.user);
+        console.log('[Auth] User state updated successfully');
+        console.log('[Auth] ========== SIGN UP COMPLETED ==========');
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Sign up timed out. Please check your internet connection and try again.');
+        }
+        
+        throw fetchError;
       }
-
-      const data = await response.json();
-      console.log('[Auth] Sign up response received');
-      console.log('[Auth] User:', data.user?.email);
-
-      if (!data.session || !data.session.token) {
-        console.error('[Auth] Missing session or token');
-        throw new Error('No session token received from server');
-      }
-
-      await tokenStorage.setToken(data.session.token);
-      setUser(data.user);
-      console.log('[Auth] Sign up successful');
     } catch (error: any) {
-      console.error('[Auth] Sign up failed:', error?.message);
+      console.error('[Auth] ========== SIGN UP FAILED ==========');
+      console.error('[Auth] Error message:', error?.message);
+      console.error('[Auth] Error name:', error?.name);
+      console.error('[Auth] Full error:', error);
       
       // Provide more helpful error messages
       if (error.message === 'Network request failed' || error.name === 'TypeError') {
@@ -297,6 +362,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[Auth] Signing in with Apple');
       console.log('[Auth] Identity token length:', identityToken?.length);
+      console.log('[Auth] Apple user data:', appleUser);
       console.log('[Auth] API URL:', API_URL);
 
       if (!API_URL) {
@@ -307,52 +373,79 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('No identity token provided');
       }
 
+      // Format the request body to match backend expectations
       const requestBody = { 
         identityToken,
-        user: appleUser,
+        user: appleUser ? {
+          email: appleUser.email || undefined,
+          name: appleUser.name ? {
+            firstName: appleUser.name.givenName || undefined,
+            lastName: appleUser.name.familyName || undefined,
+          } : undefined,
+        } : undefined,
       };
 
       const url = `${API_URL}/api/auth/sign-in/apple`;
       console.log('[Auth] Full request URL:', url);
+      console.log('[Auth] Request body:', JSON.stringify(requestBody, null, 2));
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
+      // Add timeout for fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-      console.log('[Auth] Apple sign in response status:', response.status);
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[Auth] Apple sign in failed. Status:', response.status);
+        clearTimeout(timeoutId);
+        console.log('[Auth] Apple sign in response status:', response.status);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[Auth] Apple sign in failed. Status:', response.status);
+          console.error('[Auth] Error response:', errorText);
+          
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch (e) {
+            throw new Error(`Apple sign in failed with status ${response.status}: ${errorText}`);
+          }
+          
+          throw new Error(errorData.error || 'Apple sign in failed');
+        }
+
+        const data = await response.json();
+        console.log('[Auth] Apple sign in response received');
+        console.log('[Auth] Is new user:', data.isNewUser);
+        console.log('[Auth] User email:', data.user?.email);
+
+        if (!data.session || !data.session.token) {
+          console.error('[Auth] Missing session or token in response');
+          throw new Error('No session token received from server');
+        }
+
+        await tokenStorage.setToken(data.session.token);
+        setUser(data.user);
+        console.log('[Auth] Apple sign in successful, user:', data.user.email);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
         
-        let errorData;
-        try {
-          errorData = JSON.parse(errorText);
-        } catch (e) {
-          throw new Error(`Apple sign in failed with status ${response.status}`);
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Apple sign in timed out. Please check your internet connection and try again.');
         }
         
-        throw new Error(errorData.error || 'Apple sign in failed');
+        throw fetchError;
       }
-
-      const data = await response.json();
-      console.log('[Auth] Apple sign in response received');
-      console.log('[Auth] Is new user:', data.isNewUser);
-
-      if (!data.session || !data.session.token) {
-        console.error('[Auth] Missing session or token');
-        throw new Error('No session token received from server');
-      }
-
-      await tokenStorage.setToken(data.session.token);
-      setUser(data.user);
-      console.log('[Auth] Apple sign in successful, user:', data.user.email);
     } catch (error: any) {
       console.error('[Auth] Apple sign in failed:', error?.message);
+      console.error('[Auth] Full error:', error);
       
       // Provide more helpful error messages
       if (error.message === 'Network request failed' || error.name === 'TypeError') {
