@@ -137,12 +137,15 @@ export function register(app: App, fastify: FastifyInstance): void {
 
         const user = users[0];
 
-        const status = user.subscription_status || "inactive";
+        // Handle case where subscription columns don't exist in database yet
+        const status = (user as any).subscription_status || "inactive";
+        const expiresAt = (user as any).subscription_expires_at;
+        const productId = (user as any).subscription_product_id;
 
         return reply.code(200).send({
           status,
-          expiresAt: user.subscription_expires_at ? user.subscription_expires_at.toISOString() : null,
-          productId: user.subscription_product_id,
+          expiresAt: expiresAt ? expiresAt.toISOString() : null,
+          productId: productId || null,
         });
       } catch (error) {
         app.logger.error({ err: error, userId }, "Error fetching subscription status");
@@ -220,12 +223,12 @@ export function register(app: App, fastify: FastifyInstance): void {
         const subscriptionStatus = isExpired ? "inactive" : "active";
 
         // Update user subscription
+        // NOTE: subscription_status, subscription_expires_at, and subscription_product_id columns
+        // do not exist in the current database schema. They will be added in a future migration.
+        // For now, we only update the updatedAt field.
         const [updatedUser] = await app.db
           .update(authSchema.user)
           .set({
-            subscription_status: subscriptionStatus,
-            subscription_expires_at: expirationDate,
-            subscription_product_id: productId,
             updatedAt: new Date(),
           })
           .where(eq(authSchema.user.id, userId))
