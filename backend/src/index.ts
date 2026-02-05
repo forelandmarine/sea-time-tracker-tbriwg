@@ -38,6 +38,7 @@ import * as authRoutes from './routes/auth.js';
 import * as profileRoutes from './routes/profile.js';
 import * as adminRoutes from './routes/admin.js';
 import * as notificationsRoutes from './routes/notifications.js';
+import * as subscriptionRoutes from './routes/subscription.js';
 
 // Import scheduler service
 import { startScheduler } from './services/scheduler.js';
@@ -108,6 +109,7 @@ authRoutes.register(app, app.fastify);
 profileRoutes.register(app, app.fastify);
 adminRoutes.register(app, app.fastify);
 notificationsRoutes.register(app, app.fastify);
+subscriptionRoutes.register(app, app.fastify);
 
 // Log API configuration status
 const aisApiKey = process.env.MYSHIPTRACKING_API_KEY;
