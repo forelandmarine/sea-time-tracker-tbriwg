@@ -92,8 +92,15 @@ export default function SeaTimeScreen() {
       setLocationLoading(true);
       console.log('[Home iOS] Loading location for vessel:', vesselId, 'forceRefresh:', forceRefresh);
       
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Location load timeout')), 4000)
+      );
+      
       // First, get the current cached location
-      const locationData = await seaTimeApi.getVesselAISLocation(vesselId, false);
+      const locationPromise = seaTimeApi.getVesselAISLocation(vesselId, false);
+      const locationData = await Promise.race([locationPromise, timeoutPromise]);
+      
       setActiveVesselLocation({
         latitude: locationData.latitude,
         longitude: locationData.longitude,
@@ -102,24 +109,24 @@ export default function SeaTimeScreen() {
       console.log('[Home iOS] Location loaded:', locationData.latitude, locationData.longitude, 'timestamp:', locationData.timestamp);
       
       // If forceRefresh is true OR data is stale (>2 hours), trigger a fresh AIS check
+      // BUT do it in the background without blocking the UI
       if (forceRefresh || isLocationStale(locationData.timestamp)) {
-        console.log('[Home iOS] Data is stale or refresh requested, triggering fresh AIS check');
-        try {
-          // This will trigger a fresh API call to MyShipTracking
-          await seaTimeApi.checkVesselAIS(vesselId, true);
-          
-          // Reload the location after the fresh check
-          const freshLocationData = await seaTimeApi.getVesselAISLocation(vesselId, false);
-          setActiveVesselLocation({
-            latitude: freshLocationData.latitude,
-            longitude: freshLocationData.longitude,
-            timestamp: freshLocationData.timestamp,
+        console.log('[Home iOS] Data is stale or refresh requested, triggering background AIS check');
+        // Don't await - let it run in background
+        seaTimeApi.checkVesselAIS(vesselId, true)
+          .then(() => seaTimeApi.getVesselAISLocation(vesselId, false))
+          .then(freshLocationData => {
+            setActiveVesselLocation({
+              latitude: freshLocationData.latitude,
+              longitude: freshLocationData.longitude,
+              timestamp: freshLocationData.timestamp,
+            });
+            console.log('[Home iOS] Fresh location loaded in background:', freshLocationData.latitude, freshLocationData.longitude);
+          })
+          .catch(aisError => {
+            console.error('[Home iOS] Background AIS check failed:', aisError);
+            // Keep the cached data
           });
-          console.log('[Home iOS] Fresh location loaded:', freshLocationData.latitude, freshLocationData.longitude, 'timestamp:', freshLocationData.timestamp);
-        } catch (aisError: any) {
-          console.error('[Home iOS] Failed to get fresh AIS data:', aisError);
-          // Keep the cached data, just log the error
-        }
       }
     } catch (error: any) {
       console.error('[Home iOS] Failed to load vessel location:', error);
@@ -133,15 +140,26 @@ export default function SeaTimeScreen() {
   const loadData = useCallback(async () => {
     try {
       console.log('[Home iOS] Loading vessels...');
-      const vesselsData = await seaTimeApi.getVessels();
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Vessels load timeout')), 4000)
+      );
+      
+      const vesselsPromise = seaTimeApi.getVessels();
+      const vesselsData = await Promise.race([vesselsPromise, timeoutPromise]);
+      
       setVessels(vesselsData);
       console.log('[Home iOS] Vessels loaded - Active:', vesselsData.filter(v => v.is_active).length, 'Historic:', vesselsData.filter(v => !v.is_active).length);
       
       // Load location for the active vessel - auto-refresh if stale
+      // Don't await - let it load in background
       const newActiveVessel = vesselsData.find(v => v.is_active);
       if (newActiveVessel) {
-        console.log('[Home iOS] Found active vessel, loading location with auto-refresh:', newActiveVessel.vessel_name);
-        await loadActiveVesselLocation(newActiveVessel.id, false);
+        console.log('[Home iOS] Found active vessel, loading location in background:', newActiveVessel.vessel_name);
+        loadActiveVesselLocation(newActiveVessel.id, false).catch(error => {
+          console.error('[Home iOS] Background location load failed:', error);
+        });
       } else {
         console.log('[Home iOS] No active vessel found, clearing location');
         setActiveVesselLocation(null);

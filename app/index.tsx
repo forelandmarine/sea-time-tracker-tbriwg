@@ -19,12 +19,20 @@ export default function Index() {
       if (!authLoading && isAuthenticated) {
         console.log('[Index] Checking if user has selected a pathway...');
         try {
-          const profile = await seaTimeApi.getUserProfile();
+          // Add timeout to prevent hanging
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Pathway check timeout')), 3000)
+          );
+          
+          const profilePromise = seaTimeApi.getUserProfile();
+          
+          const profile = await Promise.race([profilePromise, timeoutPromise]);
           const hasSelectedDepartment = !!profile.department;
           console.log('[Index] User has department:', hasSelectedDepartment, profile.department);
           setHasDepartment(hasSelectedDepartment);
         } catch (error) {
           console.error('[Index] Failed to check user pathway:', error);
+          // On error, assume no department and let user proceed - they'll be redirected if needed
           setHasDepartment(false);
         }
       }
@@ -33,6 +41,18 @@ export default function Index() {
 
     checkUserPathway();
   }, [isAuthenticated, authLoading]);
+
+  // Show loading for max 5 seconds, then proceed anyway
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (authLoading || subscriptionLoading || checkingPathway) {
+        console.warn('[Index] Loading timeout - proceeding anyway');
+        setCheckingPathway(false);
+      }
+    }, 5000);
+    
+    return () => clearTimeout(timeout);
+  }, [authLoading, subscriptionLoading, checkingPathway]);
 
   if (authLoading || subscriptionLoading || checkingPathway) {
     return (

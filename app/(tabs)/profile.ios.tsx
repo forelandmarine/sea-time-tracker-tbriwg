@@ -477,19 +477,26 @@ export default function ProfileScreen() {
   console.log('ProfileScreen rendered (iOS)');
 
   const loadProfile = useCallback(async (retryCount = 0) => {
-    const maxRetries = 2;
+    const maxRetries = 1; // Reduced from 2 to 1 for faster loading
     console.log(`Loading user profile (attempt ${retryCount + 1}/${maxRetries + 1})`);
     
     try {
-      const data = await seaTimeApi.getUserProfile();
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile load timeout')), 4000)
+      );
+      
+      const profilePromise = seaTimeApi.getUserProfile();
+      const data = await Promise.race([profilePromise, timeoutPromise]);
+      
       console.log('User profile loaded successfully:', data?.email);
       setProfile(data);
       setLoading(false);
     } catch (error: any) {
       console.error(`Failed to load profile (attempt ${retryCount + 1}):`, error?.message);
       
-      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
-        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch') || error?.message?.includes('timeout'))) {
+        const waitTime = 1000; // Fixed 1s wait instead of exponential backoff
         console.log(`Retrying profile load in ${waitTime}ms...`);
         setTimeout(() => loadProfile(retryCount + 1), waitTime);
       } else {
@@ -507,54 +514,59 @@ export default function ProfileScreen() {
   }, []);
 
   const loadSummary = useCallback(async (retryCount = 0) => {
-    const maxRetries = 2;
+    const maxRetries = 0; // No retries for summary - it's not critical
     console.log(`Loading sea time summary (attempt ${retryCount + 1}/${maxRetries + 1})`);
     
     try {
-      const data = await seaTimeApi.getReportSummary();
+      // Add timeout
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Summary load timeout')), 3000)
+      );
+      
+      const summaryPromise = seaTimeApi.getReportSummary();
+      const data = await Promise.race([summaryPromise, timeoutPromise]);
+      
       console.log('Sea time summary loaded successfully');
       setSummary(data);
       setLoadingSummary(false);
     } catch (error: any) {
       console.error(`Failed to load sea time summary (attempt ${retryCount + 1}):`, error?.message);
-      
-      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
-        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
-        console.log(`Retrying summary load in ${waitTime}ms...`);
-        setTimeout(() => loadSummary(retryCount + 1), waitTime);
-      } else {
-        setLoadingSummary(false);
-        console.warn('Summary load failed after retries, continuing without summary');
-      }
+      setLoadingSummary(false);
+      console.warn('Summary load failed, continuing without summary');
     }
   }, []);
 
   const loadVessels = useCallback(async (retryCount = 0) => {
-    const maxRetries = 2;
+    const maxRetries = 0; // No retries for vessels - not critical for profile screen
     console.log(`Loading vessels (attempt ${retryCount + 1}/${maxRetries + 1})`);
     
     try {
-      const data = await seaTimeApi.getVessels();
+      // Add timeout
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Vessels load timeout')), 3000)
+      );
+      
+      const vesselsPromise = seaTimeApi.getVessels();
+      const data = await Promise.race([vesselsPromise, timeoutPromise]);
+      
       console.log('Vessels loaded successfully:', data?.length);
       setVessels(data);
     } catch (error: any) {
       console.error(`Failed to load vessels (attempt ${retryCount + 1}):`, error?.message);
-      
-      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
-        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
-        console.log(`Retrying vessels load in ${waitTime}ms...`);
-        setTimeout(() => loadVessels(retryCount + 1), waitTime);
-      } else {
-        console.warn('Vessels load failed after retries, continuing without vessels');
-      }
+      console.warn('Vessels load failed, continuing without vessels');
     }
   }, []);
 
   useEffect(() => {
-    console.log('ProfileScreen (iOS): Initial mount, loading data');
-    loadProfile();
-    loadSummary();
-    loadVessels();
+    console.log('ProfileScreen (iOS): Initial mount, loading data in parallel');
+    // Load all data in parallel instead of sequentially
+    Promise.all([
+      loadProfile(),
+      loadSummary(),
+      loadVessels(),
+    ]).catch(error => {
+      console.error('ProfileScreen (iOS): Error loading data:', error);
+    });
   }, [loadProfile, loadSummary, loadVessels]);
 
   useEffect(() => {

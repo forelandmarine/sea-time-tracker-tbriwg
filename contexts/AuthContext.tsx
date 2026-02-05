@@ -118,13 +118,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.warn('[Auth] Auth check timeout - stopping loading state');
         setLoading(false);
       }
-    }, 8000); // 8 second timeout (increased for slower connections)
+    }, 5000); // 5 second timeout (reduced for faster loading)
     
     return () => clearTimeout(timeout);
   }, [loading]);
 
   const checkAuth = async () => {
-    const maxRetries = 2;
+    const maxRetries = 1; // Reduced from 2 to 1 for faster loading
     let retryCount = 0;
     
     while (retryCount <= maxRetries) {
@@ -151,9 +151,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         console.log('[Auth] Token found, verifying with backend...');
         
-        // Add timeout for fetch request - increased for iOS
+        // Add timeout for fetch request - reduced for faster loading
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout (reduced from 5)
         
         try {
           const response = await fetch(`${API_URL}/api/auth/user`, {
@@ -224,8 +224,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             return;
           }
           
-          // Wait before retrying (exponential backoff)
-          const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+          // Wait before retrying - fixed 1s instead of exponential backoff
+          const waitTime = 1000;
           console.log(`[Auth] Waiting ${waitTime}ms before retry...`);
           await new Promise(resolve => setTimeout(resolve, waitTime));
           retryCount++;
