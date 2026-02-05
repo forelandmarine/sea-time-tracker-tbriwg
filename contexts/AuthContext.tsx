@@ -384,6 +384,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     console.log('[Auth] ========== SIGN OUT STARTED ==========');
+    
+    // CRITICAL: Use finally block to ALWAYS clear local state
+    // This ensures user is signed out even if backend call fails
+    let backendCallSucceeded = false;
+    
     try {
       const token = await tokenStorage.getToken();
       console.log('[Auth] Retrieved token for sign out, has token:', !!token);
@@ -391,6 +396,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (token && API_URL) {
         console.log('[Auth] Calling backend sign-out endpoint...');
         try {
+          // Add timeout to prevent hanging
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+          
           const response = await fetch(`${API_URL}/api/auth/sign-out`, {
             method: 'POST',
             headers: {
@@ -398,46 +407,61 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({}),
+            signal: controller.signal,
           });
           
+          clearTimeout(timeoutId);
           console.log('[Auth] Backend sign-out response status:', response.status);
           
           if (response.ok) {
             const data = await response.json();
             console.log('[Auth] Backend sign-out successful:', data);
+            backendCallSucceeded = true;
           } else {
             const errorText = await response.text();
             console.warn('[Auth] Backend sign-out failed:', response.status, errorText);
           }
-        } catch (fetchError) {
-          console.error('[Auth] Backend sign-out request failed:', fetchError);
+        } catch (fetchError: any) {
+          if (fetchError.name === 'AbortError') {
+            console.warn('[Auth] Backend sign-out timed out after 3 seconds');
+          } else {
+            console.error('[Auth] Backend sign-out request failed:', fetchError);
+          }
           // Continue with local sign-out even if backend call fails
         }
       } else {
         console.log('[Auth] No token or API URL, skipping backend call');
       }
-
-      console.log('[Auth] Clearing local token and user state...');
-      await tokenStorage.removeToken();
-      
-      // Clear biometric credentials on sign out
-      console.log('[Auth] Clearing biometric credentials...');
-      await clearBiometricCredentials();
-      
-      setUser(null);
-      console.log('[Auth] ========== SIGN OUT COMPLETED ==========');
     } catch (error) {
-      console.error('[Auth] Sign out error:', error);
-      // Still clear local state even if there's an error
+      console.error('[Auth] Sign out error during backend call:', error);
+      // Continue to finally block to clear local state
+    } finally {
+      // ALWAYS clear local state, regardless of backend success
+      console.log('[Auth] Clearing local token and user state (finally block)...');
+      
       try {
         await tokenStorage.removeToken();
-        await clearBiometricCredentials();
-        setUser(null);
-        console.log('[Auth] Local state cleared despite error');
-      } catch (clearError) {
-        console.error('[Auth] Failed to clear local state:', clearError);
+        console.log('[Auth] Token removed successfully');
+      } catch (tokenError) {
+        console.error('[Auth] Failed to remove token:', tokenError);
+        // Continue anyway
       }
-      throw error;
+      
+      try {
+        // Clear biometric credentials on sign out
+        console.log('[Auth] Clearing biometric credentials...');
+        await clearBiometricCredentials();
+        console.log('[Auth] Biometric credentials cleared');
+      } catch (bioError) {
+        console.error('[Auth] Failed to clear biometric credentials:', bioError);
+        // Continue anyway
+      }
+      
+      // ALWAYS set user to null - this is the critical step
+      setUser(null);
+      console.log('[Auth] User state cleared');
+      console.log('[Auth] ========== SIGN OUT COMPLETED ==========');
+      console.log('[Auth] Backend call succeeded:', backendCallSucceeded);
     }
   };
 
