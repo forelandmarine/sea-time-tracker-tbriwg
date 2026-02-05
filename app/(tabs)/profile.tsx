@@ -458,6 +458,56 @@ const createStyles = (isDark: boolean) =>
       color: isDark ? colors.text : colors.textLight,
       lineHeight: 20,
     },
+    confirmModalContent: {
+      backgroundColor: isDark ? '#1c1c1e' : '#ffffff',
+      borderRadius: 16,
+      padding: 24,
+      width: '100%',
+      maxWidth: 340,
+    },
+    confirmModalTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: isDark ? '#ffffff' : '#000000',
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    confirmModalMessage: {
+      fontSize: 15,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 24,
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    confirmModalButtons: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    confirmModalButton: {
+      flex: 1,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      borderRadius: 10,
+      alignItems: 'center',
+    },
+    confirmModalCancelButton: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
+    },
+    confirmModalConfirmButton: {
+      backgroundColor: '#ff4444',
+    },
+    confirmModalButtonText: {
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    confirmModalCancelText: {
+      color: isDark ? colors.text : colors.textLight,
+    },
+    confirmModalConfirmText: {
+      color: '#ffffff',
+    },
   });
 
 export default function ProfileScreen() {
@@ -470,6 +520,8 @@ export default function ProfileScreen() {
   const [downloadingCSV, setDownloadingCSV] = useState(false);
   const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
   const [showVesselModal, setShowVesselModal] = useState(false);
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
   const [biometricType, setBiometricType] = useState('Biometric');
@@ -807,32 +859,30 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleSignOut = async () => {
-    console.log('User tapped Sign Out');
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            console.log('User confirmed sign out');
-            try {
-              await signOut();
-              console.log('Sign out successful');
-            } catch (error) {
-              console.error('Sign out error:', error);
-              Alert.alert('Error', 'Failed to sign out');
-            }
-          },
-        },
-      ]
-    );
+  const handleSignOut = () => {
+    console.log('User tapped Sign Out button');
+    setShowSignOutModal(true);
+  };
+
+  const confirmSignOut = async () => {
+    console.log('User confirmed sign out in modal');
+    setSigningOut(true);
+    try {
+      await signOut();
+      console.log('Sign out successful');
+      setShowSignOutModal(false);
+    } catch (error) {
+      console.error('Sign out error:', error);
+      setShowSignOutModal(false);
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
+  const cancelSignOut = () => {
+    console.log('User cancelled sign out');
+    setShowSignOutModal(false);
   };
 
   const getInitials = (name: string | null | undefined) => {
@@ -1279,6 +1329,46 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={showSignOutModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelSignOut}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.confirmModalContent}>
+            <Text style={styles.confirmModalTitle}>Sign Out</Text>
+            <Text style={styles.confirmModalMessage}>
+              Are you sure you want to sign out?
+            </Text>
+            <View style={styles.confirmModalButtons}>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.confirmModalCancelButton]}
+                onPress={cancelSignOut}
+                disabled={signingOut}
+              >
+                <Text style={[styles.confirmModalButtonText, styles.confirmModalCancelText]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmModalButton, styles.confirmModalConfirmButton]}
+                onPress={confirmSignOut}
+                disabled={signingOut}
+              >
+                {signingOut ? (
+                  <ActivityIndicator color="#ffffff" size="small" />
+                ) : (
+                  <Text style={[styles.confirmModalButtonText, styles.confirmModalConfirmText]}>
+                    Sign Out
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </View>
   );
