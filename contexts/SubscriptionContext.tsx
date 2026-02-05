@@ -42,19 +42,30 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       console.log('[Subscription] Fetching subscription status from backend');
       setLoading(true);
 
-      const data = await authenticatedGet<SubscriptionStatus>('/api/subscription/status');
+      // Add timeout to prevent blocking app startup
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+
+      const data = await authenticatedGet<SubscriptionStatus>('/api/subscription/status', {
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
       console.log('[Subscription] Subscription status:', data.status);
       setSubscriptionStatus(data);
     } catch (error: any) {
       console.error('[Subscription] Error checking subscription:', error);
       
-      if (error.message?.includes('401')) {
+      if (error.name === 'AbortError') {
+        console.warn('[Subscription] Subscription check timed out, defaulting to inactive');
+      } else if (error.message?.includes('401')) {
         console.log('[Subscription] User not authenticated, setting to inactive');
-        setSubscriptionStatus({ status: 'inactive', expiresAt: null, productId: null });
       } else {
         console.warn('[Subscription] Defaulting to inactive due to error');
-        setSubscriptionStatus({ status: 'inactive', expiresAt: null, productId: null });
       }
+      
+      // Always set a default status to prevent blocking
+      setSubscriptionStatus({ status: 'inactive', expiresAt: null, productId: null });
     } finally {
       setLoading(false);
     }

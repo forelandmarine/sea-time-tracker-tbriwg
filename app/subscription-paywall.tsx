@@ -18,6 +18,11 @@
  * - Proper error handling for all scenarios
  * - User-friendly messaging for all states
  * 
+ * ✅ PERFORMANCE OPTIMIZATION:
+ * - StoreKit initialization is DEFERRED until screen is visible
+ * - Does NOT block app startup or authentication
+ * - Graceful fallback if StoreKit fails to initialize
+ * 
  * Features:
  * - Display subscription features (NO HARDCODED PRICES - fetched from App Store)
  * - Native StoreKit purchase flow (opens iOS payment sheet)
@@ -68,21 +73,29 @@ export default function SubscriptionPaywallScreen() {
   const [loadingPrice, setLoadingPrice] = useState(true);
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [storeKitInitialized, setStoreKitInitialized] = useState(false);
   const { subscriptionStatus, checkSubscription, loading: subscriptionLoading } = useSubscription();
   const { signOut } = useAuth();
 
   const initializeAndFetchProduct = useCallback(async () => {
+    if (Platform.OS !== 'ios') {
+      setLoadingPrice(false);
+      return;
+    }
+
     setLoadingPrice(true);
     setError(null);
     
     try {
-      // Defer initialization slightly to prevent blocking UI
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // CRITICAL: Defer initialization to prevent blocking app startup
+      // Wait for screen to be fully rendered before initializing StoreKit
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      console.log('[SubscriptionPaywall] Initializing StoreKit');
+      console.log('[SubscriptionPaywall] Initializing StoreKit (deferred)');
       const initialized = await StoreKitUtils.initializeStoreKit();
       
       if (initialized) {
+        setStoreKitInitialized(true);
         console.log('[SubscriptionPaywall] Fetching product info (no hardcoded prices)');
         const info = await StoreKitUtils.getProductInfo();
         
@@ -91,15 +104,15 @@ export default function SubscriptionPaywallScreen() {
           setProductInfo(info);
         } else {
           console.log('[SubscriptionPaywall] Product info not available - user will view pricing in App Store');
-          setError('Unable to load pricing. Please check your connection.');
+          setError('Unable to load pricing. You can still subscribe - pricing will be shown in the App Store.');
         }
       } else {
         console.log('[SubscriptionPaywall] StoreKit not initialized');
-        setError('StoreKit not initialized. Please check your connection.');
+        setError('Unable to connect to App Store. Please check your connection and try again.');
       }
     } catch (error: any) {
-      console.error('[SubscriptionPaywall] Error fetching product info:', error);
-      setError('Unable to load pricing. Please check your connection.');
+      console.error('[SubscriptionPaywall] Error initializing StoreKit:', error);
+      setError('Unable to load pricing. You can still subscribe - pricing will be shown in the App Store.');
     } finally {
       setLoadingPrice(false);
     }
@@ -109,11 +122,11 @@ export default function SubscriptionPaywallScreen() {
     console.log('[SubscriptionPaywall] Screen mounted');
     console.log('[SubscriptionPaywall] Current subscription status:', subscriptionStatus?.status);
     
-    // Initialize StoreKit and fetch product info
-    if (Platform.OS === 'ios') {
-      initializeAndFetchProduct();
+    // Initialize StoreKit and fetch product info (deferred)
+    initializeAndFetchProduct();
 
-      // Setup purchase listeners
+    // Setup purchase listeners (only if on iOS)
+    if (Platform.OS === 'ios') {
       StoreKitUtils.setupPurchaseListeners(
         // On purchase success
         async (purchase) => {
@@ -181,10 +194,8 @@ export default function SubscriptionPaywallScreen() {
         console.log('[SubscriptionPaywall] Cleaning up purchase listeners');
         StoreKitUtils.removePurchaseListeners();
       };
-    } else {
-      setLoadingPrice(false);
     }
-  }, [initializeAndFetchProduct, checkSubscription, router, subscriptionStatus?.status]);
+  }, [initializeAndFetchProduct, checkSubscription, router]);
 
   const handleSubscribe = async () => {
     if (Platform.OS !== 'ios') {
@@ -198,6 +209,34 @@ export default function SubscriptionPaywallScreen() {
     if (purchaseInProgress) {
       console.log('[SubscriptionPaywall] Purchase already in progress, ignoring tap');
       return;
+    }
+
+    // Check if StoreKit is initialized
+    if (!storeKitInitialized) {
+      console.log('[SubscriptionPaywall] StoreKit not initialized, attempting to initialize now');
+      Alert.alert(
+        'Connecting to App Store',
+        'Please wait while we connect to the App Store...',
+        [{ text: 'OK' }]
+      );
+      
+      try {
+        const initialized = await StoreKitUtils.initializeStoreKit();
+        if (!initialized) {
+          Alert.alert(
+            'Connection Error',
+            'Unable to connect to the App Store. Please check your internet connection and try again.'
+          );
+          return;
+        }
+        setStoreKitInitialized(true);
+      } catch (error: any) {
+        Alert.alert(
+          'Connection Error',
+          'Unable to connect to the App Store. Please check your internet connection and try again.'
+        );
+        return;
+      }
     }
 
     try {
@@ -265,6 +304,28 @@ export default function SubscriptionPaywallScreen() {
         'Restore purchases is only available on iOS.'
       );
       return;
+    }
+
+    // Check if StoreKit is initialized
+    if (!storeKitInitialized) {
+      console.log('[SubscriptionPaywall] StoreKit not initialized for restore, attempting to initialize now');
+      try {
+        const initialized = await StoreKitUtils.initializeStoreKit();
+        if (!initialized) {
+          Alert.alert(
+            'Connection Error',
+            'Unable to connect to the App Store. Please check your internet connection and try again.'
+          );
+          return;
+        }
+        setStoreKitInitialized(true);
+      } catch (error: any) {
+        Alert.alert(
+          'Connection Error',
+          'Unable to connect to the App Store. Please check your internet connection and try again.'
+        );
+        return;
+      }
     }
 
     try {
@@ -423,7 +484,10 @@ export default function SubscriptionPaywallScreen() {
         <View style={styles.pricingContainer}>
           <Text style={styles.pricingTitle}>Monthly Subscription</Text>
           {loadingPrice ? (
-            <ActivityIndicator size="large" color={colors.primary} style={styles.priceLoader} />
+            <View style={styles.priceLoaderContainer}>
+              <ActivityIndicator size="large" color={colors.primary} />
+              <Text style={styles.loadingText}>Connecting to App Store...</Text>
+            </View>
           ) : (
             <>
               <Text style={styles.price}>{priceDisplay}</Text>
@@ -646,8 +710,14 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.text : colors.textLight,
       marginBottom: 8,
     },
-    priceLoader: {
+    priceLoaderContainer: {
       marginVertical: 20,
+      alignItems: 'center',
+    },
+    loadingText: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 12,
     },
     price: {
       fontSize: 36,
