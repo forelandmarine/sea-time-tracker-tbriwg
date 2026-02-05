@@ -128,7 +128,7 @@ export default function SeaTimeScreen() {
     } finally {
       setLocationLoading(false);
     }
-  }, [isLocationStale]);
+  }, []);
 
   const loadData = useCallback(async () => {
     try {

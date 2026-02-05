@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -333,12 +333,7 @@ export default function EditSeaTimeScreen() {
   const [voyageFrom, setVoyageFrom] = useState('');
   const [voyageTo, setVoyageTo] = useState('');
 
-  useEffect(() => {
-    console.log('[EditSeaTimeScreen] Component mounted, loading entry:', entryId);
-    loadEntry();
-  }, [entryId, loadEntry]);
-
-  const loadEntry = async () => {
+  const loadEntry = useCallback(async () => {
     try {
       console.log('[EditSeaTimeScreen] Fetching entry details');
       setLoading(true);
@@ -393,7 +388,12 @@ export default function EditSeaTimeScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [entryId, router]);
+
+  useEffect(() => {
+    console.log('[EditSeaTimeScreen] Component mounted, loading entry:', entryId);
+    loadEntry();
+  }, [entryId, loadEntry]);
 
   const handleViewMCARequirements = async () => {
     console.log('[EditSeaTimeScreen] User tapped View MCA Requirements');

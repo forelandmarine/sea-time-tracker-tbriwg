@@ -3,40 +3,45 @@
  * StoreKit Integration for iOS In-App Purchases (NATIVE ONLY)
  * 
  * ✅ APPLE GUIDELINE 3.1.1 COMPLIANCE - NATIVE IN-APP PURCHASES
+ * ✅ STOREKIT 2 BEST PRACTICES from RevenueCat Guide
  * 
  * This module handles iOS App Store subscriptions using react-native-iap.
  * This file is used ONLY on iOS/Android (via .native.ts extension).
  * 
- * Product ID: com.forelandmarine.seatimetracker.monthly
+ * Product ID: com.forelandmarine.seatime.monthly
  * App ID: 6758010893
  * 
  * IMPORTANT: This implements NATIVE in-app purchases to comply with Apple's
  * Guideline 3.1.1. Users can purchase subscriptions directly within the app
  * using the native iOS payment sheet (NOT external links).
  * 
- * Flow:
- * 1. User taps "Subscribe" button → Native iOS purchase sheet appears
- * 2. User completes purchase via StoreKit (Apple's native payment system)
- * 3. App receives receipt from StoreKit automatically
- * 4. App sends receipt to backend for verification
- * 5. Backend verifies with Apple servers using APPLE_APP_SECRET
- * 6. Backend updates user subscription status
- * 7. App checks subscription status and grants access
+ * Flow (Based on StoreKit 2 Best Practices):
+ * 1. Initialize connection to App Store
+ * 2. Fetch product information (price, currency, description)
+ * 3. User taps "Subscribe" → Native iOS purchase sheet appears
+ * 4. User completes purchase via StoreKit (Apple's native payment system)
+ * 5. Purchase listener receives transaction automatically
+ * 6. App sends receipt to backend for verification
+ * 7. Backend verifies with Apple servers using APPLE_APP_SECRET
+ * 8. Backend updates user subscription status
+ * 9. App finishes transaction (CRITICAL - tells Apple we processed it)
+ * 10. App checks subscription status and grants access
  * 
  * Performance Optimization:
  * - Initialization has 2-second timeout to prevent blocking
- * - Product fetch has 2-second timeout
+ * - Product fetch has 3-second timeout
+ * - Purchase listeners handle async updates
  * - Does NOT block app authentication or navigation
- * - User can still purchase even if price fetch times out
  * 
  * Required Configuration:
  * - app.json: ios.entitlements["com.apple.developer.in-app-payments"] = []
- * - App Store Connect: Product configured with ID com.forelandmarine.seatimetracker.monthly
+ * - App Store Connect: Product configured with ID com.forelandmarine.seatime.monthly
  * - Backend: APPLE_APP_SECRET environment variable for receipt verification
  */
 
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, EmitterSubscription } from 'react-native';
 import * as RNIap from 'react-native-iap';
+import type { Product, Purchase, PurchaseError, SubscriptionPurchase } from 'react-native-iap';
 import { authenticatedPost } from './api';
 
 // Product ID configured in App Store Connect
@@ -50,6 +55,8 @@ const subscriptionSkus = Platform.select({
 });
 
 let isInitialized = false;
+let purchaseUpdateSubscription: EmitterSubscription | null = null;
+let purchaseErrorSubscription: EmitterSubscription | null = null;
 
 /**
  * Initialize StoreKit connection
@@ -71,24 +78,23 @@ export async function initializeStoreKit(): Promise<boolean> {
     console.log('[StoreKit] Initializing connection to App Store');
     console.log('[StoreKit] Platform:', Platform.OS);
     console.log('[StoreKit] RNIap available:', typeof RNIap !== 'undefined');
-    console.log('[StoreKit] RNIap.initConnection available:', typeof RNIap.initConnection === 'function');
     
-    // REDUCED timeout to 2 seconds to prevent blocking
+    // Initialize connection with timeout
     const initPromise = RNIap.initConnection();
     const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('StoreKit initialization timeout after 2 seconds')), 2000) // REDUCED from 5s to 2s
+      setTimeout(() => reject(new Error('StoreKit initialization timeout after 2 seconds')), 2000)
     );
     
-    const result = await Promise.race([initPromise, timeoutPromise]);
-    console.log('[StoreKit] initConnection result:', result);
+    await Promise.race([initPromise, timeoutPromise]);
+    console.log('[StoreKit] Connection initialized successfully');
     
     // Clear any pending transactions (non-blocking)
+    // This is important for handling interrupted purchases
     RNIap.flushFailedPurchasesCachedAsPendingAndroid().catch((err) => {
       console.warn('[StoreKit] Failed to flush pending purchases:', err);
     });
     
     isInitialized = true;
-    console.log('[StoreKit] Successfully initialized');
     return true;
   } catch (error: any) {
     console.error('[StoreKit] Initialization error:', error);
@@ -96,7 +102,6 @@ export async function initializeStoreKit(): Promise<boolean> {
       message: error.message,
       code: error.code,
       name: error.name,
-      stack: error.stack,
     });
     // Don't throw - allow app to continue without StoreKit
     return false;
@@ -106,6 +111,14 @@ export async function initializeStoreKit(): Promise<boolean> {
 /**
  * Get product information from App Store
  * Fetches real-time pricing in user's local currency
+ * 
+ * Returns product details including:
+ * - productId: The SKU identifier
+ * - price: Numeric price value
+ * - localizedPrice: Formatted price string (e.g., "$9.99")
+ * - currency: Currency code (e.g., "USD")
+ * - title: Product title from App Store Connect
+ * - description: Product description from App Store Connect
  */
 export async function getProductInfo(): Promise<{
   productId: string;
@@ -123,7 +136,6 @@ export async function getProductInfo(): Promise<{
   try {
     console.log('[StoreKit] Fetching product info from App Store');
     console.log('[StoreKit] Product ID:', SUBSCRIPTION_PRODUCT_ID);
-    console.log('[StoreKit] Subscription SKUs:', subscriptionSkus);
     
     if (!isInitialized) {
       console.log('[StoreKit] Not initialized, initializing now...');
@@ -136,10 +148,10 @@ export async function getProductInfo(): Promise<{
 
     console.log('[StoreKit] Calling RNIap.getSubscriptions with SKUs:', subscriptionSkus);
     
-    // REDUCED timeout to 2 seconds to prevent blocking
+    // Fetch products with timeout
     const productsPromise = RNIap.getSubscriptions({ skus: subscriptionSkus as string[] });
     const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('Product fetch timeout after 2 seconds')), 2000) // REDUCED from 5s to 2s
+      setTimeout(() => reject(new Error('Product fetch timeout after 3 seconds')), 3000)
     );
     
     const products = await Promise.race([productsPromise, timeoutPromise]);
@@ -177,111 +189,142 @@ export async function getProductInfo(): Promise<{
       message: error.message,
       code: error.code,
       name: error.name,
-      stack: error.stack,
     });
     return null;
   }
 }
 
 /**
+ * Setup purchase listeners
+ * CRITICAL: Must be called before making purchases
+ * Handles purchase updates and errors asynchronously
+ * 
+ * @param onPurchaseUpdate - Callback when purchase succeeds
+ * @param onPurchaseError - Callback when purchase fails
+ */
+export function setupPurchaseListeners(
+  onPurchaseUpdate: (purchase: Purchase) => void,
+  onPurchaseError: (error: PurchaseError) => void
+): void {
+  if (Platform.OS !== 'ios') {
+    console.log('[StoreKit] Not on iOS, skipping purchase listeners');
+    return;
+  }
+
+  console.log('[StoreKit] Setting up purchase listeners');
+
+  // Remove existing listeners if any
+  removePurchaseListeners();
+
+  // Listen for purchase updates
+  purchaseUpdateSubscription = RNIap.purchaseUpdatedListener((purchase: Purchase) => {
+    console.log('[StoreKit] Purchase updated:', {
+      productId: purchase.productId,
+      transactionId: purchase.transactionId,
+      transactionDate: purchase.transactionDate,
+    });
+    onPurchaseUpdate(purchase);
+  });
+
+  // Listen for purchase errors
+  purchaseErrorSubscription = RNIap.purchaseErrorListener((error: PurchaseError) => {
+    console.error('[StoreKit] Purchase error:', {
+      code: error.code,
+      message: error.message,
+    });
+    onPurchaseError(error);
+  });
+
+  console.log('[StoreKit] Purchase listeners setup complete');
+}
+
+/**
+ * Remove purchase listeners
+ * IMPORTANT: Call this when component unmounts to prevent memory leaks
+ */
+export function removePurchaseListeners(): void {
+  console.log('[StoreKit] Removing purchase listeners');
+
+  if (purchaseUpdateSubscription) {
+    purchaseUpdateSubscription.remove();
+    purchaseUpdateSubscription = null;
+  }
+
+  if (purchaseErrorSubscription) {
+    purchaseErrorSubscription.remove();
+    purchaseErrorSubscription = null;
+  }
+}
+
+/**
  * Purchase subscription using native StoreKit
  * This opens the native iOS purchase sheet
+ * 
+ * IMPORTANT: Setup purchase listeners BEFORE calling this function
+ * The actual purchase result will come through the listener callbacks
  */
-export async function purchaseSubscription(): Promise<{
-  success: boolean;
-  receipt?: string;
-  transactionId?: string;
-  error?: string;
-}> {
+export async function purchaseSubscription(): Promise<void> {
   if (Platform.OS !== 'ios') {
-    return {
-      success: false,
-      error: 'Subscriptions are only available on iOS',
-    };
+    throw new Error('Subscriptions are only available on iOS');
   }
 
   try {
     console.log('[StoreKit] Starting subscription purchase');
     
     if (!isInitialized) {
-      await initializeStoreKit();
+      const initialized = await initializeStoreKit();
+      if (!initialized) {
+        throw new Error('Failed to initialize StoreKit');
+      }
     }
 
     // Request the purchase - this opens the native iOS payment sheet
-    const purchase = await RNIap.requestSubscription({
+    // The result will come through purchaseUpdatedListener
+    console.log('[StoreKit] Requesting subscription for product:', SUBSCRIPTION_PRODUCT_ID);
+    await RNIap.requestSubscription({
       sku: SUBSCRIPTION_PRODUCT_ID,
     });
 
-    console.log('[StoreKit] Purchase successful:', {
-      transactionId: purchase.transactionId,
-      productId: purchase.productId,
-    });
-
-    // Get the receipt
-    const receipt = purchase.transactionReceipt;
-    
-    if (!receipt) {
-      console.error('[StoreKit] No receipt received from purchase');
-      return {
-        success: false,
-        error: 'No receipt received from App Store',
-      };
-    }
-
-    return {
-      success: true,
-      receipt,
-      transactionId: purchase.transactionId,
-    };
+    console.log('[StoreKit] Purchase request sent, waiting for listener callback');
   } catch (error: any) {
     console.error('[StoreKit] Purchase error:', error);
     
     // Handle user cancellation gracefully
     if (error.code === 'E_USER_CANCELLED') {
-      return {
-        success: false,
-        error: 'Purchase cancelled',
-      };
+      throw new Error('Purchase cancelled');
     }
     
-    return {
-      success: false,
-      error: error.message || 'Purchase failed',
-    };
+    throw new Error(error.message || 'Purchase failed');
   }
 }
 
 /**
  * Restore previous purchases
  * Required by Apple for subscription apps
+ * 
+ * Returns the most recent subscription purchase if found
  */
-export async function restorePurchases(): Promise<{
-  success: boolean;
-  receipt?: string;
-  error?: string;
-}> {
+export async function restorePurchases(): Promise<Purchase | null> {
   if (Platform.OS !== 'ios') {
-    return {
-      success: false,
-      error: 'Restore is only available on iOS',
-    };
+    throw new Error('Restore is only available on iOS');
   }
 
   try {
     console.log('[StoreKit] Restoring purchases');
     
     if (!isInitialized) {
-      await initializeStoreKit();
+      const initialized = await initializeStoreKit();
+      if (!initialized) {
+        throw new Error('Failed to initialize StoreKit');
+      }
     }
 
     const purchases = await RNIap.getAvailablePurchases();
+    console.log('[StoreKit] Found purchases:', purchases.length);
     
     if (purchases.length === 0) {
       console.log('[StoreKit] No purchases to restore');
-      return {
-        success: false,
-        error: 'No previous purchases found',
-      };
+      return null;
     }
 
     // Find the subscription purchase
@@ -291,10 +334,7 @@ export async function restorePurchases(): Promise<{
 
     if (!subscriptionPurchase) {
       console.log('[StoreKit] No subscription purchase found');
-      return {
-        success: false,
-        error: 'No subscription found to restore',
-      };
+      return null;
     }
 
     console.log('[StoreKit] Found subscription to restore:', {
@@ -302,30 +342,19 @@ export async function restorePurchases(): Promise<{
       productId: subscriptionPurchase.productId,
     });
 
-    const receipt = subscriptionPurchase.transactionReceipt;
-    
-    if (!receipt) {
-      return {
-        success: false,
-        error: 'No receipt found for subscription',
-      };
-    }
-
-    return {
-      success: true,
-      receipt,
-    };
+    return subscriptionPurchase;
   } catch (error: any) {
     console.error('[StoreKit] Restore error:', error);
-    return {
-      success: false,
-      error: error.message || 'Restore failed',
-    };
+    throw new Error(error.message || 'Restore failed');
   }
 }
 
 /**
  * Verify receipt with backend
+ * Sends the App Store receipt to backend for verification with Apple
+ * 
+ * @param receipt - Base64 encoded receipt from purchase
+ * @param isSandbox - Whether to use sandbox environment (default: __DEV__)
  */
 export async function verifyReceiptWithBackend(
   receipt: string,
@@ -366,39 +395,68 @@ export async function verifyReceiptWithBackend(
 }
 
 /**
- * Complete purchase flow: purchase + verify
+ * Finish a transaction
+ * CRITICAL: Must be called after successfully processing a purchase
+ * This tells Apple that we've delivered the content and they can close the transaction
+ * 
+ * If you don't call this, the purchase will remain "pending" and Apple will
+ * keep trying to deliver it, which can cause duplicate purchases
  */
-export async function completePurchaseFlow(): Promise<{
+export async function finishTransaction(purchase: Purchase): Promise<void> {
+  try {
+    console.log('[StoreKit] Finishing transaction:', purchase.transactionId);
+    
+    await RNIap.finishTransaction({
+      purchase,
+      isConsumable: false, // Subscriptions are NOT consumable
+    });
+    
+    console.log('[StoreKit] Transaction finished successfully');
+  } catch (error: any) {
+    console.error('[StoreKit] Error finishing transaction:', error);
+    // Don't throw - we still want to continue even if finish fails
+  }
+}
+
+/**
+ * Process a purchase
+ * Complete flow: verify receipt + finish transaction
+ * 
+ * @param purchase - Purchase object from listener
+ * @returns Verification result
+ */
+export async function processPurchase(purchase: Purchase): Promise<{
   success: boolean;
   status?: 'active' | 'inactive';
   error?: string;
 }> {
-  console.log('[StoreKit] Starting complete purchase flow');
+  console.log('[StoreKit] Processing purchase:', purchase.transactionId);
 
-  // Step 1: Purchase subscription
-  const purchaseResult = await purchaseSubscription();
+  const receipt = purchase.transactionReceipt;
   
-  if (!purchaseResult.success || !purchaseResult.receipt) {
+  if (!receipt) {
+    console.error('[StoreKit] No receipt in purchase object');
     return {
       success: false,
-      error: purchaseResult.error || 'Purchase failed',
+      error: 'No receipt received from App Store',
     };
   }
 
-  // Step 2: Verify receipt with backend
-  const verifyResult = await verifyReceiptWithBackend(
-    purchaseResult.receipt,
-    __DEV__ // Use sandbox in development
-  );
+  // Step 1: Verify receipt with backend
+  const verifyResult = await verifyReceiptWithBackend(receipt, __DEV__);
 
   if (!verifyResult.success) {
+    console.error('[StoreKit] Receipt verification failed:', verifyResult.error);
     return {
       success: false,
       error: verifyResult.error || 'Verification failed',
     };
   }
 
-  console.log('[StoreKit] Purchase flow completed successfully');
+  // Step 2: Finish the transaction (tell Apple we processed it)
+  await finishTransaction(purchase);
+
+  console.log('[StoreKit] Purchase processed successfully');
   
   return {
     success: true,
@@ -407,7 +465,7 @@ export async function completePurchaseFlow(): Promise<{
 }
 
 /**
- * Complete restore flow: restore + verify
+ * Complete restore flow: restore + verify + finish
  */
 export async function completeRestoreFlow(): Promise<{
   success: boolean;
@@ -416,47 +474,27 @@ export async function completeRestoreFlow(): Promise<{
 }> {
   console.log('[StoreKit] Starting complete restore flow');
 
-  // Step 1: Restore purchases
-  const restoreResult = await restorePurchases();
-  
-  if (!restoreResult.success || !restoreResult.receipt) {
-    return {
-      success: false,
-      error: restoreResult.error || 'No purchases to restore',
-    };
-  }
-
-  // Step 2: Verify receipt with backend
-  const verifyResult = await verifyReceiptWithBackend(
-    restoreResult.receipt,
-    __DEV__ // Use sandbox in development
-  );
-
-  if (!verifyResult.success) {
-    return {
-      success: false,
-      error: verifyResult.error || 'Verification failed',
-    };
-  }
-
-  console.log('[StoreKit] Restore flow completed successfully');
-  
-  return {
-    success: true,
-    status: verifyResult.status,
-  };
-}
-
-/**
- * Finish a transaction (required by Apple)
- * Call this after successfully processing a purchase
- */
-export async function finishTransaction(purchase: RNIap.Purchase): Promise<void> {
   try {
-    await RNIap.finishTransaction({ purchase, isConsumable: false });
-    console.log('[StoreKit] Transaction finished:', purchase.transactionId);
+    // Step 1: Restore purchases
+    const purchase = await restorePurchases();
+    
+    if (!purchase) {
+      return {
+        success: false,
+        error: 'No purchases to restore',
+      };
+    }
+
+    // Step 2: Process the restored purchase
+    const result = await processPurchase(purchase);
+    
+    return result;
   } catch (error: any) {
-    console.error('[StoreKit] Error finishing transaction:', error);
+    console.error('[StoreKit] Restore flow error:', error);
+    return {
+      success: false,
+      error: error.message || 'Restore failed',
+    };
   }
 }
 
@@ -466,8 +504,15 @@ export async function finishTransaction(purchase: RNIap.Purchase): Promise<void>
  */
 export async function disconnectStoreKit(): Promise<void> {
   try {
+    console.log('[StoreKit] Cleaning up StoreKit connection');
+    
+    // Remove listeners first
+    removePurchaseListeners();
+    
+    // End connection
     await RNIap.endConnection();
     isInitialized = false;
+    
     console.log('[StoreKit] Connection closed');
   } catch (error: any) {
     console.error('[StoreKit] Error closing connection:', error);
@@ -509,11 +554,12 @@ export async function openSubscriptionManagement(): Promise<void> {
     console.log('[StoreKit] Opening subscription management');
     
     // Try to open iOS Settings app to Subscriptions
+    const { Linking } = await import('react-native');
     const settingsUrl = 'app-settings:';
-    const canOpen = await import('react-native').then(rn => rn.Linking.canOpenURL(settingsUrl));
+    const canOpen = await Linking.canOpenURL(settingsUrl);
     
     if (canOpen) {
-      await import('react-native').then(rn => rn.Linking.openURL(settingsUrl));
+      await Linking.openURL(settingsUrl);
       console.log('[StoreKit] Opened iOS Settings');
     } else {
       throw new Error('Cannot open Settings');

@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   View,
@@ -81,7 +81,7 @@ export default function VesselDiagnosticScreen() {
     setShowModal(true);
   };
 
-  const loadDiagnostics = async () => {
+  const loadDiagnostics = useCallback(async () => {
     console.log('[VesselDiagnostic] Loading diagnostics for MMSI:', mmsi);
     
     try {
@@ -108,11 +108,11 @@ export default function VesselDiagnosticScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [mmsi]);
 
   useEffect(() => {
     loadDiagnostics();
-  }, [mmsi, loadDiagnostics]);
+  }, [loadDiagnostics]);
 
   const handleRefresh = () => {
     setRefreshing(true);
