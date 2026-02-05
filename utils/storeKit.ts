@@ -305,13 +305,12 @@ export async function completeRestoreFlow(): Promise<{
 export function showSubscriptionInstructions(): void {
   Alert.alert(
     'How to Subscribe',
-    'SeaTime Tracker uses App Store subscriptions:\n\n' +
-    '1. Tap "Subscribe Now" to open the App Store\n' +
-    '2. View pricing and complete your subscription\n' +
-    '3. Return to the app\n' +
-    '4. Tap "Check Subscription Status"\n\n' +
+    'SeaTime Tracker uses native in-app purchases on iOS:\n\n' +
+    '1. Tap "Subscribe Now" to see pricing in your local currency\n' +
+    '2. Complete your purchase using Apple Pay or your Apple ID\n' +
+    '3. Your subscription will be active immediately\n\n' +
     'Your subscription is managed through your Apple ID and will automatically renew each month.\n\n' +
-    'Note: Pricing is displayed in the App Store in your local currency.',
+    'You can manage or cancel your subscription anytime in:\nSettings → Apple ID → Subscriptions',
     [{ text: 'Got it' }]
   );
 }

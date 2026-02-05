@@ -2,14 +2,17 @@
 /**
  * StoreKit Integration for iOS In-App Purchases (NATIVE ONLY)
  * 
+ * ✅ APPLE GUIDELINE 3.1.1 COMPLIANCE - NATIVE IN-APP PURCHASES
+ * 
  * This module handles iOS App Store subscriptions using react-native-iap.
  * This file is used ONLY on iOS/Android (via .native.ts extension).
  * 
- * Product ID: com.forelandmarine.seatime.monthly
+ * Product ID: com.forelandmarine.seatimetracker.monthly
  * App ID: 6758010893
  * 
  * IMPORTANT: This implements NATIVE in-app purchases to comply with Apple's
- * Guideline 3.1.1. Users can purchase subscriptions directly within the app.
+ * Guideline 3.1.1. Users can purchase subscriptions directly within the app
+ * using the native iOS payment sheet (NOT external links).
  * 
  * Flow:
  * 1. User taps "Subscribe" button → Native iOS purchase sheet appears
@@ -19,6 +22,17 @@
  * 5. Backend verifies with Apple servers using APPLE_APP_SECRET
  * 6. Backend updates user subscription status
  * 7. App checks subscription status and grants access
+ * 
+ * Performance Optimization:
+ * - Initialization has 2-second timeout to prevent blocking
+ * - Product fetch has 2-second timeout
+ * - Does NOT block app authentication or navigation
+ * - User can still purchase even if price fetch times out
+ * 
+ * Required Configuration:
+ * - app.json: ios.entitlements["com.apple.developer.in-app-payments"] = []
+ * - App Store Connect: Product configured with ID com.forelandmarine.seatimetracker.monthly
+ * - Backend: APPLE_APP_SECRET environment variable for receipt verification
  */
 
 import { Platform, Alert } from 'react-native';
@@ -467,11 +481,50 @@ export function showSubscriptionInstructions(): void {
   Alert.alert(
     'How to Subscribe',
     'SeaTime Tracker uses native in-app purchases:\n\n' +
-    '1. Tap "Subscribe Now" to see pricing\n' +
-    '2. Complete your subscription using Apple Pay or your Apple ID\n' +
+    '1. Tap "Subscribe Now" to see pricing in your local currency\n' +
+    '2. Complete your purchase using Apple Pay or your Apple ID\n' +
     '3. Your subscription will be active immediately\n\n' +
     'Your subscription is managed through your Apple ID and will automatically renew each month.\n\n' +
     'You can manage or cancel your subscription anytime in:\nSettings → Apple ID → Subscriptions',
     [{ text: 'Got it' }]
   );
+}
+
+/**
+ * Open iOS Settings to manage subscriptions
+ * This is required by Apple for subscription apps
+ */
+export async function openSubscriptionManagement(): Promise<void> {
+  if (Platform.OS !== 'ios') {
+    console.warn('[StoreKit] Subscription management is iOS-only');
+    Alert.alert(
+      'iOS Only',
+      'Subscription management is only available on iOS devices.',
+      [{ text: 'OK' }]
+    );
+    return;
+  }
+
+  try {
+    console.log('[StoreKit] Opening subscription management');
+    
+    // Try to open iOS Settings app to Subscriptions
+    const settingsUrl = 'app-settings:';
+    const canOpen = await import('react-native').then(rn => rn.Linking.canOpenURL(settingsUrl));
+    
+    if (canOpen) {
+      await import('react-native').then(rn => rn.Linking.openURL(settingsUrl));
+      console.log('[StoreKit] Opened iOS Settings');
+    } else {
+      throw new Error('Cannot open Settings');
+    }
+  } catch (error: any) {
+    console.error('[StoreKit] Error opening subscription management:', error);
+    
+    Alert.alert(
+      'Manage Subscription',
+      'To manage your subscription:\n\n1. Open Settings\n2. Tap your name at the top\n3. Tap "Subscriptions"\n4. Select "SeaTime Tracker"',
+      [{ text: 'OK' }]
+    );
+  }
 }

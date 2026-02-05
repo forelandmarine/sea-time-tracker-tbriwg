@@ -2,11 +2,19 @@
 /**
  * Subscription Paywall Screen
  * 
- * This screen displays subscription information and handles native iOS StoreKit purchases.
+ * This screen displays subscription information and handles NATIVE iOS StoreKit purchases.
+ * 
+ * ✅ APPLE GUIDELINE 3.1.1 COMPLIANCE:
+ * - Uses NATIVE in-app purchases via react-native-iap
+ * - Purchases happen WITHIN the app (not external links)
+ * - Pricing is fetched from App Store in real-time (never hardcoded)
+ * - Users complete purchase using Apple Pay or Apple ID
+ * - Receipt verification happens automatically with backend
  * 
  * Features:
  * - Display subscription features (NO HARDCODED PRICES - fetched from App Store)
- * - Direct users to App Store for subscription purchase
+ * - Native StoreKit purchase flow (opens iOS payment sheet)
+ * - Restore previous purchases
  * - Check subscription status with backend
  * - Manage subscription via iOS Settings
  * - Sign out option
@@ -18,7 +26,7 @@
  * - Status: 'active' or 'inactive'
  * 
  * CRITICAL: Prices are NEVER hardcoded per Apple StoreKit guidelines.
- * Users view pricing in the App Store where it's displayed in their local currency.
+ * Pricing is fetched from App Store and displayed in user's local currency.
  * 
  * Backend Integration:
  * - GET /api/subscription/status - Get current subscription status
@@ -26,9 +34,16 @@
  * - PATCH /api/subscription/pause-tracking - Pause tracking when subscription expires
  * 
  * StoreKit Integration:
- * - Product ID: com.forelandmarine.seatime.monthly
- * - Uses App Store links for subscription management
+ * - Product ID: com.forelandmarine.seatimetracker.monthly
+ * - Uses react-native-iap for native purchases
  * - Backend handles receipt verification with Apple servers
+ * - Non-blocking initialization (2-second timeout) to prevent slow loading
+ * 
+ * Performance Optimization:
+ * - StoreKit initialization deferred until screen loads
+ * - Product info fetch has 2-second timeout
+ * - User can still purchase even if price fetch times out
+ * - Does NOT block app authentication or navigation
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -106,21 +121,45 @@ export default function SubscriptionPaywallScreen() {
     }
 
     try {
-      console.log('[SubscriptionPaywall] User tapped Subscribe button');
+      console.log('[SubscriptionPaywall] User tapped Subscribe button - initiating native purchase');
+      setLoading(true);
       
-      // Show instructions first
-      setShowInstructions(true);
+      // Use native StoreKit purchase flow
+      const result = await StoreKitUtils.completePurchaseFlow();
       
-      // Open App Store
-      await StoreKitUtils.openAppStoreSubscription();
-      
-      console.log('[SubscriptionPaywall] Opened App Store for subscription');
+      if (result.success) {
+        console.log('[SubscriptionPaywall] Purchase successful, checking subscription status');
+        await checkSubscription();
+        
+        Alert.alert(
+          'Subscription Active',
+          'Your subscription is now active! Welcome to SeaTime Tracker.',
+          [
+            {
+              text: 'Continue',
+              onPress: () => router.replace('/(tabs)'),
+            },
+          ]
+        );
+      } else {
+        console.log('[SubscriptionPaywall] Purchase failed or cancelled:', result.error);
+        
+        // Don't show error for user cancellation
+        if (result.error && !result.error.includes('cancelled')) {
+          Alert.alert(
+            'Purchase Failed',
+            result.error || 'Unable to complete purchase. Please try again.'
+          );
+        }
+      }
     } catch (error: any) {
       console.error('[SubscriptionPaywall] Subscription error:', error);
       Alert.alert(
         'Error',
-        'Unable to open App Store. Please try again or subscribe manually via the App Store app.'
+        'Unable to complete purchase. Please try again or contact support at info@forelandmarine.com'
       );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -154,6 +193,57 @@ export default function SubscriptionPaywallScreen() {
       Alert.alert(
         'Error',
         'Unable to check subscription status. Please check your internet connection and try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRestorePurchases = async () => {
+    if (Platform.OS !== 'ios') {
+      Alert.alert(
+        'iOS Only',
+        'Restore purchases is only available on iOS.'
+      );
+      return;
+    }
+
+    try {
+      console.log('[SubscriptionPaywall] User tapped Restore Purchases button');
+      setLoading(true);
+      
+      const result = await StoreKitUtils.completeRestoreFlow();
+      
+      if (result.success) {
+        console.log('[SubscriptionPaywall] Restore successful, checking subscription status');
+        await checkSubscription();
+        
+        Alert.alert(
+          'Restore Successful',
+          'Your subscription has been restored!',
+          [
+            {
+              text: 'Continue',
+              onPress: () => {
+                if (subscriptionStatus?.status === 'active') {
+                  router.replace('/(tabs)');
+                }
+              },
+            },
+          ]
+        );
+      } else {
+        console.log('[SubscriptionPaywall] Restore failed:', result.error);
+        Alert.alert(
+          'No Purchases Found',
+          result.error || 'No previous purchases found to restore.'
+        );
+      }
+    } catch (error: any) {
+      console.error('[SubscriptionPaywall] Restore error:', error);
+      Alert.alert(
+        'Error',
+        'Unable to restore purchases. Please try again or contact support at info@forelandmarine.com'
       );
     } finally {
       setLoading(false);
@@ -297,7 +387,7 @@ export default function SubscriptionPaywallScreen() {
               <>
                 <Text style={styles.buttonText}>Subscribe Now</Text>
                 {Platform.OS === 'ios' && (
-                  <Text style={styles.buttonSubtext}>Opens App Store</Text>
+                  <Text style={styles.buttonSubtext}>Native In-App Purchase</Text>
                 )}
               </>
             )}
@@ -312,6 +402,18 @@ export default function SubscriptionPaywallScreen() {
               <ActivityIndicator color={isDark ? colors.text : colors.textLight} />
             ) : (
               <Text style={styles.secondaryButtonText}>Check Subscription Status</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.secondaryButton]}
+            onPress={handleRestorePurchases}
+            disabled={loading || subscriptionLoading}
+          >
+            {loading || subscriptionLoading ? (
+              <ActivityIndicator color={isDark ? colors.text : colors.textLight} />
+            ) : (
+              <Text style={styles.secondaryButtonText}>Restore Purchases</Text>
             )}
           </TouchableOpacity>
 
@@ -359,7 +461,10 @@ export default function SubscriptionPaywallScreen() {
             Manage your subscription in iOS Settings → Apple ID → Subscriptions
           </Text>
           <Text style={styles.footerText}>
-            Pricing is displayed in the App Store in your local currency.
+            Pricing is displayed in your local currency via the App Store.
+          </Text>
+          <Text style={styles.footerText}>
+            Payment will be charged to your Apple ID account at confirmation of purchase.
           </Text>
           <Text style={styles.footerText}>
             Need help? Contact info@forelandmarine.com
@@ -384,11 +489,11 @@ export default function SubscriptionPaywallScreen() {
             />
             <Text style={styles.modalTitle}>Subscribe in App Store</Text>
             <Text style={styles.modalMessage}>
-              1. View pricing and complete your subscription in the App Store{'\n\n'}
-              2. Return to SeaTime Tracker{'\n\n'}
-              3. Tap &quot;Check Subscription Status&quot;{'\n\n'}
+              1. Tap &quot;Subscribe Now&quot; to see pricing{'\n\n'}
+              2. Complete your purchase using Apple Pay or your Apple ID{'\n\n'}
+              3. Your subscription will be active immediately{'\n\n'}
               Your subscription is managed through your Apple ID and will automatically renew each month.{'\n\n'}
-              Pricing is displayed in your local currency in the App Store.
+              Pricing is displayed in your local currency.
             </Text>
             <TouchableOpacity
               style={[styles.modalButton, styles.modalConfirmButton]}
