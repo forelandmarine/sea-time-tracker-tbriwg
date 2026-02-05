@@ -81,11 +81,18 @@ export default function SubscriptionPaywallScreen() {
           console.log('[SubscriptionPaywall] Product info loaded:', product);
           setProductInfo(product);
         } else {
-          console.warn('[SubscriptionPaywall] Failed to load product info');
+          console.warn('[SubscriptionPaywall] Failed to load product info - product is null');
         }
+      } else {
+        console.warn('[SubscriptionPaywall] StoreKit initialization failed');
       }
     } catch (error: any) {
       console.error('[SubscriptionPaywall] Error initializing StoreKit:', error);
+      console.error('[SubscriptionPaywall] Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+      });
     } finally {
       setLoadingProduct(false);
     }
@@ -122,6 +129,12 @@ export default function SubscriptionPaywallScreen() {
     try {
       console.log('[SubscriptionPaywall] User tapped Subscribe button - starting native purchase');
       
+      // Check if completePurchaseFlow exists
+      if (typeof StoreKitUtils.completePurchaseFlow !== 'function') {
+        console.error('[SubscriptionPaywall] completePurchaseFlow is not a function');
+        throw new Error('Purchase function not available. Please restart the app and try again.');
+      }
+      
       // Complete the purchase flow (purchase + verify)
       const result = await StoreKitUtils.completePurchaseFlow();
       
@@ -154,9 +167,14 @@ export default function SubscriptionPaywallScreen() {
       }
     } catch (error: any) {
       console.error('[SubscriptionPaywall] Subscription error:', error);
+      console.error('[SubscriptionPaywall] Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+      });
       Alert.alert(
         'Error',
-        'Unable to process subscription. Please try again or contact support.'
+        error.message || 'Unable to process subscription. Please try again or contact support.'
       );
     } finally {
       setLoading(false);
@@ -175,6 +193,12 @@ export default function SubscriptionPaywallScreen() {
     setLoading(true);
     try {
       console.log('[SubscriptionPaywall] User tapped Restore button');
+      
+      // Check if completeRestoreFlow exists
+      if (typeof StoreKitUtils.completeRestoreFlow !== 'function') {
+        console.error('[SubscriptionPaywall] completeRestoreFlow is not a function');
+        throw new Error('Restore function not available. Please restart the app and try again.');
+      }
       
       // Complete the restore flow (restore + verify)
       const result = await StoreKitUtils.completeRestoreFlow();
@@ -204,9 +228,14 @@ export default function SubscriptionPaywallScreen() {
       }
     } catch (error: any) {
       console.error('[SubscriptionPaywall] Restore error:', error);
+      console.error('[SubscriptionPaywall] Error details:', {
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+      });
       Alert.alert(
         'Error',
-        'Unable to restore purchases. Please try again or contact support.'
+        error.message || 'Unable to restore purchases. Please try again or contact support.'
       );
     } finally {
       setLoading(false);
@@ -250,7 +279,29 @@ export default function SubscriptionPaywallScreen() {
   };
 
   const handleShowInstructions = () => {
-    StoreKitUtils.showSubscriptionInstructions();
+    try {
+      console.log('[SubscriptionPaywall] Showing subscription instructions');
+      if (typeof StoreKitUtils.showSubscriptionInstructions === 'function') {
+        StoreKitUtils.showSubscriptionInstructions();
+      } else {
+        console.error('[SubscriptionPaywall] showSubscriptionInstructions is not a function');
+        Alert.alert(
+          'How to Subscribe',
+          'SeaTime Tracker uses native in-app purchases:\n\n' +
+          '1. Tap "Subscribe Now" to see pricing\n' +
+          '2. Complete your subscription using Apple Pay or your Apple ID\n' +
+          '3. Your subscription will be active immediately\n\n' +
+          'Your subscription is managed through your Apple ID and will automatically renew each month.\n\n' +
+          'You can manage or cancel your subscription anytime in:\nSettings → Apple ID → Subscriptions'
+        );
+      }
+    } catch (error: any) {
+      console.error('[SubscriptionPaywall] Error showing instructions:', error);
+      Alert.alert(
+        'Error',
+        'Unable to show instructions. Please contact support if you need help subscribing.'
+      );
+    }
   };
 
   const handleSignOut = async () => {

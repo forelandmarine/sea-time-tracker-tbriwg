@@ -55,14 +55,18 @@ export async function initializeStoreKit(): Promise<boolean> {
 
   try {
     console.log('[StoreKit] Initializing connection to App Store');
+    console.log('[StoreKit] Platform:', Platform.OS);
+    console.log('[StoreKit] RNIap available:', typeof RNIap !== 'undefined');
+    console.log('[StoreKit] RNIap.initConnection available:', typeof RNIap.initConnection === 'function');
     
     // Add timeout to prevent blocking
     const initPromise = RNIap.initConnection();
     const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('StoreKit initialization timeout')), 5000)
+      setTimeout(() => reject(new Error('StoreKit initialization timeout after 5 seconds')), 5000)
     );
     
-    await Promise.race([initPromise, timeoutPromise]);
+    const result = await Promise.race([initPromise, timeoutPromise]);
+    console.log('[StoreKit] initConnection result:', result);
     
     // Clear any pending transactions (non-blocking)
     RNIap.flushFailedPurchasesCachedAsPendingAndroid().catch((err) => {
@@ -74,6 +78,12 @@ export async function initializeStoreKit(): Promise<boolean> {
     return true;
   } catch (error: any) {
     console.error('[StoreKit] Initialization error:', error);
+    console.error('[StoreKit] Error details:', {
+      message: error.message,
+      code: error.code,
+      name: error.name,
+      stack: error.stack,
+    });
     // Don't throw - allow app to continue without StoreKit
     return false;
   }
@@ -98,8 +108,11 @@ export async function getProductInfo(): Promise<{
 
   try {
     console.log('[StoreKit] Fetching product info from App Store');
+    console.log('[StoreKit] Product ID:', SUBSCRIPTION_PRODUCT_ID);
+    console.log('[StoreKit] Subscription SKUs:', subscriptionSkus);
     
     if (!isInitialized) {
+      console.log('[StoreKit] Not initialized, initializing now...');
       const initialized = await initializeStoreKit();
       if (!initialized) {
         console.warn('[StoreKit] Failed to initialize, cannot get product info');
@@ -107,26 +120,33 @@ export async function getProductInfo(): Promise<{
       }
     }
 
+    console.log('[StoreKit] Calling RNIap.getSubscriptions with SKUs:', subscriptionSkus);
+    
     // Add timeout to prevent blocking
     const productsPromise = RNIap.getSubscriptions({ skus: subscriptionSkus as string[] });
     const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('Product fetch timeout')), 5000)
+      setTimeout(() => reject(new Error('Product fetch timeout after 5 seconds')), 5000)
     );
     
     const products = await Promise.race([productsPromise, timeoutPromise]);
     
+    console.log('[StoreKit] Received products from App Store:', products.length);
+    
     if (products.length === 0) {
-      console.warn('[StoreKit] No products found');
+      console.warn('[StoreKit] No products found for SKUs:', subscriptionSkus);
+      console.warn('[StoreKit] Make sure the product is configured in App Store Connect');
+      console.warn('[StoreKit] Product ID should be:', SUBSCRIPTION_PRODUCT_ID);
       return null;
     }
 
     const product = products[0];
-    console.log('[StoreKit] Product info:', {
+    console.log('[StoreKit] Product info received:', {
       productId: product.productId,
       price: product.price,
       localizedPrice: product.localizedPrice,
       currency: product.currency,
       title: product.title,
+      description: product.description,
     });
 
     return {
@@ -139,6 +159,12 @@ export async function getProductInfo(): Promise<{
     };
   } catch (error: any) {
     console.error('[StoreKit] Error fetching product info:', error);
+    console.error('[StoreKit] Error details:', {
+      message: error.message,
+      code: error.code,
+      name: error.name,
+      stack: error.stack,
+    });
     return null;
   }
 }
