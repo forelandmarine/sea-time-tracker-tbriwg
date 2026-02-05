@@ -59,10 +59,10 @@ export async function initializeStoreKit(): Promise<boolean> {
     console.log('[StoreKit] RNIap available:', typeof RNIap !== 'undefined');
     console.log('[StoreKit] RNIap.initConnection available:', typeof RNIap.initConnection === 'function');
     
-    // Add timeout to prevent blocking
+    // REDUCED timeout to 2 seconds to prevent blocking
     const initPromise = RNIap.initConnection();
     const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('StoreKit initialization timeout after 5 seconds')), 5000)
+      setTimeout(() => reject(new Error('StoreKit initialization timeout after 2 seconds')), 2000) // REDUCED from 5s to 2s
     );
     
     const result = await Promise.race([initPromise, timeoutPromise]);
@@ -122,10 +122,10 @@ export async function getProductInfo(): Promise<{
 
     console.log('[StoreKit] Calling RNIap.getSubscriptions with SKUs:', subscriptionSkus);
     
-    // Add timeout to prevent blocking
+    // REDUCED timeout to 2 seconds to prevent blocking
     const productsPromise = RNIap.getSubscriptions({ skus: subscriptionSkus as string[] });
     const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('Product fetch timeout after 5 seconds')), 5000)
+      setTimeout(() => reject(new Error('Product fetch timeout after 2 seconds')), 2000) // REDUCED from 5s to 2s
     );
     
     const products = await Promise.race([productsPromise, timeoutPromise]);

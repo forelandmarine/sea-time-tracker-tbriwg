@@ -91,9 +91,9 @@ export default function SeaTimeScreen() {
       setLocationLoading(true);
       console.log('[Home iOS] Loading location for vessel:', vesselId, 'forceRefresh:', forceRefresh);
       
-      // REDUCED timeout to 2 seconds for faster loading
+      // REDUCED timeout to 1 second for faster loading
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Location load timeout')), 2000) // REDUCED from 4s to 2s
+        setTimeout(() => reject(new Error('Location load timeout')), 1000) // REDUCED to 1s
       );
       
       const locationPromise = seaTimeApi.getVesselAISLocation(vesselId, false);
@@ -135,9 +135,9 @@ export default function SeaTimeScreen() {
     try {
       console.log('[Home iOS] Loading vessels...');
       
-      // REDUCED timeout to 2 seconds for faster loading
+      // REDUCED timeout to 1 second for faster loading
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Vessels load timeout')), 2000) // REDUCED from 4s to 2s
+        setTimeout(() => reject(new Error('Vessels load timeout')), 1000) // REDUCED to 1s
       );
       
       const vesselsPromise = seaTimeApi.getVessels();
@@ -164,10 +164,12 @@ export default function SeaTimeScreen() {
     }
   }, [loadActiveVesselLocation]);
 
+  // FIX: Only run once on mount, not when loadData changes
   useEffect(() => {
     console.log('[Home iOS] Initial data load');
     loadData();
-  }, [loadData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array - only run once on mount
 
   const onRefresh = async () => {
     console.log('[Home iOS] User triggered manual refresh');
