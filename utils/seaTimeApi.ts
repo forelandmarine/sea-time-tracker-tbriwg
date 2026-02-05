@@ -1,982 +1,1041 @@
 
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Platform } from 'react-native';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
-export const API_BASE_URL =
-  Constants.expoConfig?.extra?.backendUrl || 'http://localhost:3000';
-export const TOKEN_KEY = 'seatime_auth_token';
-export const BIOMETRIC_CREDENTIALS_KEY = 'seatime_biometric_credentials';
+export const API_BASE_URL = Constants.expoConfig?.extra?.backendUrl || '';
 
-// Rate limiting constants
-const VESSEL_QUERY_INTERVAL = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
-const LAST_QUERY_TIME_PREFIX = 'vessel_last_query_time_';
+const VESSEL_QUERY_INTERVAL = 5 * 60 * 1000; // 5 minutes
+const LAST_QUERY_TIME_PREFIX = 'last_query_time_';
 
-// Helper to normalize vessel data from API
-const normalizeVessel = (vessel: any) => {
-  if (!vessel) return null;
-  return {
-    ...vessel,
-    vessel_type: vessel.vessel_type || vessel.type,
+// ========== DATA CACHE ==========
+// Aggressive caching to prevent redundant API calls
+const DATA_CACHE: {
+  vessels?: { data: any; timestamp: number };
+  profile?: { data: any; timestamp: number };
+  summary?: { data: any; timestamp: number };
+  entries?: { data: any; timestamp: number };
+} = {};
+
+const CACHE_DURATION = 30 * 1000; // 30 seconds cache
+
+// ========== REQUEST DEDUPLICATION ==========
+// Prevent duplicate simultaneous requests
+const PENDING_REQUESTS: Map<string, Promise<any>> = new Map();
+
+function getCachedData(key: string): any | null {
+  const cached = DATA_CACHE[key as keyof typeof DATA_CACHE];
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    console.log(`[seaTimeApi] Using cached ${key} (age: ${Math.floor((Date.now() - cached.timestamp) / 1000)}s)`);
+    return cached.data;
+  }
+  return null;
+}
+
+function setCachedData(key: string, data: any): void {
+  DATA_CACHE[key as keyof typeof DATA_CACHE] = {
+    data,
+    timestamp: Date.now(),
   };
-};
+  console.log(`[seaTimeApi] Cached ${key} for ${CACHE_DURATION / 1000}s`);
+}
 
-// Rate limiting helpers
-const getLastQueryTime = async (vesselId: string): Promise<Date | null> => {
+export function clearCache(): void {
+  Object.keys(DATA_CACHE).forEach(key => {
+    delete DATA_CACHE[key as keyof typeof DATA_CACHE];
+  });
+  console.log('[seaTimeApi] Cache cleared');
+}
+
+function normalizeVessel(vessel: any) {
+  return {
+    id: vessel.id,
+    mmsi: vessel.mmsi,
+    vessel_name: vessel.vessel_name,
+    is_active: vessel.is_active,
+    created_at: vessel.created_at,
+    flag: vessel.flag || undefined,
+    official_number: vessel.official_number || undefined,
+    vessel_type: vessel.vessel_type || undefined,
+    length_metres: vessel.length_metres || undefined,
+    gross_tonnes: vessel.gross_tonnes || undefined,
+    callsign: vessel.callsign || undefined,
+    engine_kilowatts: vessel.engine_kilowatts || undefined,
+    engine_type: vessel.engine_type || undefined,
+  };
+}
+
+async function getLastQueryTime(vesselId: string): Promise<Date | null> {
   try {
-    const timeString = await AsyncStorage.getItem(`${LAST_QUERY_TIME_PREFIX}${vesselId}`);
-    return timeString ? new Date(timeString) : null;
+    const key = `${LAST_QUERY_TIME_PREFIX}${vesselId}`;
+    const timeStr = Platform.OS === 'web'
+      ? localStorage.getItem(key)
+      : await AsyncStorage.getItem(key);
+    
+    return timeStr ? new Date(timeStr) : null;
   } catch (error) {
-    console.error('[seaTimeApi] Error getting last query time:', error);
+    console.error('[seaTimeApi] Failed to get last query time:', error);
     return null;
   }
-};
+}
 
-const setLastQueryTime = async (vesselId: string, time: Date): Promise<void> => {
+async function setLastQueryTime(vesselId: string, time: Date): Promise<void> {
   try {
-    await AsyncStorage.setItem(`${LAST_QUERY_TIME_PREFIX}${vesselId}`, time.toISOString());
-    console.log('[seaTimeApi] Set last query time for vessel:', vesselId, 'at', time.toISOString());
+    const key = `${LAST_QUERY_TIME_PREFIX}${vesselId}`;
+    const timeStr = time.toISOString();
+    
+    if (Platform.OS === 'web') {
+      localStorage.setItem(key, timeStr);
+    } else {
+      await AsyncStorage.setItem(key, timeStr);
+    }
   } catch (error) {
-    console.error('[seaTimeApi] Error setting last query time:', error);
+    console.error('[seaTimeApi] Failed to set last query time:', error);
   }
-};
+}
 
-const shouldQueryVessel = async (vesselId: string, forceRefresh: boolean = false): Promise<boolean> => {
+async function shouldQueryVessel(vesselId: string, forceRefresh: boolean): Promise<boolean> {
   if (forceRefresh) {
-    console.log('[seaTimeApi] Force refresh requested for vessel:', vesselId);
     return true;
   }
-
+  
   const lastQueryTime = await getLastQueryTime(vesselId);
   if (!lastQueryTime) {
-    console.log('[seaTimeApi] No previous query time found for vessel:', vesselId, '- allowing query');
     return true;
   }
+  
+  const timeSinceLastQuery = Date.now() - lastQueryTime.getTime();
+  return timeSinceLastQuery >= VESSEL_QUERY_INTERVAL;
+}
 
-  const now = new Date();
-  const timeSinceLastQuery = now.getTime() - lastQueryTime.getTime();
-  const shouldQuery = timeSinceLastQuery > VESSEL_QUERY_INTERVAL;
-
-  if (shouldQuery) {
-    console.log('[seaTimeApi] Last query was', Math.floor(timeSinceLastQuery / 1000 / 60), 'minutes ago - allowing query');
-  } else {
-    const minutesRemaining = Math.ceil((VESSEL_QUERY_INTERVAL - timeSinceLastQuery) / 1000 / 60);
-    console.log('[seaTimeApi] Rate limit active - last query was', Math.floor(timeSinceLastQuery / 1000 / 60), 'minutes ago. Next query allowed in', minutesRemaining, 'minutes');
-  }
-
-  return shouldQuery;
-};
-
-// Check if backend is configured
-export const checkBackendConfigured = () => {
-  const isConfigured = API_BASE_URL !== 'http://localhost:3000';
-  console.log('[seaTimeApi] Backend configured:', isConfigured, 'URL:', API_BASE_URL);
-  return isConfigured;
-};
-
-// Get auth token from secure storage
-const getAuthToken = async (): Promise<string | null> => {
+async function getAuthToken(): Promise<string | null> {
   try {
     if (Platform.OS === 'web') {
-      return localStorage.getItem(TOKEN_KEY);
+      return localStorage.getItem('seatime_auth_token');
     }
-    return await SecureStore.getItemAsync(TOKEN_KEY);
+    return await SecureStore.getItemAsync('seatime_auth_token');
   } catch (error) {
-    console.error('[seaTimeApi] Error getting auth token:', error);
+    console.error('[seaTimeApi] Failed to get auth token:', error);
     return null;
   }
-};
+}
 
-// Get headers with auth token
-const getApiHeaders = async () => {
+async function getApiHeaders(): Promise<HeadersInit> {
   const token = await getAuthToken();
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
   };
+  
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+  
   return headers;
-};
+}
 
-// Helper to get fetch options with auth
-const getFetchOptions = async (method: string = 'GET') => {
-  const headers = await getApiHeaders();
+function getFetchOptions(method: string = 'GET'): RequestInit {
   return {
     method,
-    headers,
-  };
-};
-
-// Get user profile
-export const getUserProfile = async () => {
-  console.log('[seaTimeApi] Fetching user profile from /api/profile');
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/profile`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch user profile:', response.status, errorText);
-    throw new Error(`Failed to fetch user profile: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] User profile fetched successfully with all fields');
-  
-  // Backend returns the profile object directly
-  return data;
-};
-
-// Update user profile
-export const updateUserProfile = async (updates: { 
-  name?: string; 
-  email?: string;
-  address?: string | null;
-  tel_no?: string | null;
-  date_of_birth?: string | null;
-  srb_no?: string | null;
-  nationality?: string | null;
-  pya_membership_no?: string | null;
-  department?: string | null;
-}) => {
-  console.log('[seaTimeApi] Updating user profile');
-  const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/profile`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(updates),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to update user profile:', response.status, errorText);
-    throw new Error(`Failed to update user profile: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] User profile updated successfully');
-  return data;
-};
-
-// Upload profile image
-export const uploadProfileImage = async (imageUri: string) => {
-  console.log('[seaTimeApi] Uploading profile image to /api/profile/upload-image');
-  const token = await getAuthToken();
-  
-  const formData = new FormData();
-  formData.append('image', {
-    uri: imageUri,
-    type: 'image/jpeg',
-    name: 'profile.jpg',
-  } as any);
-
-  const response = await fetch(`${API_BASE_URL}/api/profile/upload-image`, {
-    method: 'POST',
     headers: {
-      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
     },
-    body: formData,
-  });
+  };
+}
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to upload profile image:', response.status, errorText);
-    throw new Error(`Failed to upload profile image: ${response.status}`);
+// ========== OPTIMIZED API CALLS WITH CACHING & DEDUPLICATION ==========
+
+export async function getVessels(): Promise<any[]> {
+  const cacheKey = 'vessels';
+  
+  // Check cache first
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+  
+  // Check for pending request
+  if (PENDING_REQUESTS.has(cacheKey)) {
+    console.log('[seaTimeApi] Deduplicating vessels request');
+    return PENDING_REQUESTS.get(cacheKey)!;
   }
+  
+  const requestPromise = (async () => {
+    try {
+      console.log('[seaTimeApi] Fetching vessels from API');
+      const headers = await getApiHeaders();
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
+      
+      const response = await fetch(`${API_BASE_URL}/api/vessels`, {
+        headers,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch vessels');
+      }
+      
+      const data = await response.json();
+      const vessels = data.map(normalizeVessel);
+      
+      setCachedData(cacheKey, vessels);
+      return vessels;
+    } catch (error: any) {
+      console.error('[seaTimeApi] Failed to fetch vessels:', error.message);
+      throw error;
+    } finally {
+      PENDING_REQUESTS.delete(cacheKey);
+    }
+  })();
+  
+  PENDING_REQUESTS.set(cacheKey, requestPromise);
+  return requestPromise;
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Profile image uploaded successfully');
-  return data;
-};
-
-// Get all vessels
-export const getVessels = async () => {
-  console.log('[seaTimeApi] Fetching vessels');
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/vessels`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch vessels:', response.status, errorText);
-    throw new Error(`Failed to fetch vessels: ${response.status}`);
+export async function getUserProfile(): Promise<any> {
+  const cacheKey = 'profile';
+  
+  // Check cache first
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+  
+  // Check for pending request
+  if (PENDING_REQUESTS.has(cacheKey)) {
+    console.log('[seaTimeApi] Deduplicating profile request');
+    return PENDING_REQUESTS.get(cacheKey)!;
   }
+  
+  const requestPromise = (async () => {
+    try {
+      console.log('[seaTimeApi] Fetching user profile from API');
+      const headers = await getApiHeaders();
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
+      
+      const response = await fetch(`${API_BASE_URL}/api/profile`, {
+        headers,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch profile');
+      }
+      
+      const data = await response.json();
+      setCachedData(cacheKey, data);
+      return data;
+    } catch (error: any) {
+      console.error('[seaTimeApi] Failed to fetch profile:', error.message);
+      throw error;
+    } finally {
+      PENDING_REQUESTS.delete(cacheKey);
+    }
+  })();
+  
+  PENDING_REQUESTS.set(cacheKey, requestPromise);
+  return requestPromise;
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Vessels fetched successfully:', data.length);
-  return data.map(normalizeVessel);
-};
+export async function getReportSummary(): Promise<any> {
+  const cacheKey = 'summary';
+  
+  // Check cache first
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+  
+  // Check for pending request
+  if (PENDING_REQUESTS.has(cacheKey)) {
+    console.log('[seaTimeApi] Deduplicating summary request');
+    return PENDING_REQUESTS.get(cacheKey)!;
+  }
+  
+  const requestPromise = (async () => {
+    try {
+      console.log('[seaTimeApi] Fetching report summary from API');
+      const headers = await getApiHeaders();
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
+      
+      const response = await fetch(`${API_BASE_URL}/api/reports/summary`, {
+        headers,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch summary');
+      }
+      
+      const data = await response.json();
+      setCachedData(cacheKey, data);
+      return data;
+    } catch (error: any) {
+      console.error('[seaTimeApi] Failed to fetch summary:', error.message);
+      throw error;
+    } finally {
+      PENDING_REQUESTS.delete(cacheKey);
+    }
+  })();
+  
+  PENDING_REQUESTS.set(cacheKey, requestPromise);
+  return requestPromise;
+}
 
-// Create a new vessel
-export const createVessel = async (
-  mmsi: string, 
-  vessel_name: string, 
+export async function getSeaTimeEntries(): Promise<any[]> {
+  const cacheKey = 'entries';
+  
+  // Check cache first
+  const cached = getCachedData(cacheKey);
+  if (cached) return cached;
+  
+  // Check for pending request
+  if (PENDING_REQUESTS.has(cacheKey)) {
+    console.log('[seaTimeApi] Deduplicating entries request');
+    return PENDING_REQUESTS.get(cacheKey)!;
+  }
+  
+  const requestPromise = (async () => {
+    try {
+      console.log('[seaTimeApi] Fetching sea time entries from API');
+      const headers = await getApiHeaders();
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
+      
+      const response = await fetch(`${API_BASE_URL}/api/sea-time`, {
+        headers,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch entries');
+      }
+      
+      const data = await response.json();
+      setCachedData(cacheKey, data);
+      return data;
+    } catch (error: any) {
+      console.error('[seaTimeApi] Failed to fetch entries:', error.message);
+      throw error;
+    } finally {
+      PENDING_REQUESTS.delete(cacheKey);
+    }
+  })();
+  
+  PENDING_REQUESTS.set(cacheKey, requestPromise);
+  return requestPromise;
+}
+
+// ========== NON-CACHED API CALLS (mutations) ==========
+
+export async function createVessel(
+  mmsi: string,
+  vessel_name: string,
   is_active: boolean = false,
   flag?: string,
   official_number?: string,
-  type?: string,
+  vessel_type?: string,
   length_metres?: number,
   gross_tonnes?: number,
   callsign?: string,
   engine_kilowatts?: number,
   engine_type?: string
-) => {
-  console.log('[seaTimeApi] Creating vessel:', { 
-    mmsi, 
-    vessel_name, 
-    is_active,
-    flag,
-    official_number,
-    type,
-    length_metres,
-    gross_tonnes,
-    callsign,
-    engine_kilowatts,
-    engine_type
-  });
-  
-  const body: any = { mmsi, vessel_name, is_active };
-  if (flag) body.flag = flag;
-  if (official_number) body.official_number = official_number;
-  if (type) body.type = type;
-  if (length_metres !== undefined) body.length_metres = length_metres;
-  if (gross_tonnes !== undefined) body.gross_tonnes = gross_tonnes;
-  if (callsign) body.callsign = callsign;
-  if (engine_kilowatts !== undefined) body.engine_kilowatts = engine_kilowatts;
-  if (engine_type) body.engine_type = engine_type;
-  
-  const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/vessels`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to create vessel:', response.status, errorText);
+): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Creating vessel:', vessel_name);
+    const headers = await getApiHeaders();
     
-    // Try to parse error response for better error messages
-    let errorMessage = `Failed to create vessel (${response.status})`;
-    try {
-      const errorData = JSON.parse(errorText);
-      if (errorData.error) {
-        errorMessage = errorData.error;
-      }
-    } catch (parseError) {
-      console.error('[seaTimeApi] Could not parse error response:', parseError);
+    const response = await fetch(`${API_BASE_URL}/api/vessels`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        mmsi,
+        vessel_name,
+        is_active,
+        flag,
+        official_number,
+        vessel_type,
+        length_metres,
+        gross_tonnes,
+        callsign,
+        engine_kilowatts,
+        engine_type,
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to create vessel');
     }
     
-    // Provide user-friendly error messages based on status code
-    if (response.status === 409) {
-      errorMessage = 'You already have a vessel with this MMSI. Please use a different MMSI or edit your existing vessel.';
-    } else if (response.status === 500) {
-      errorMessage = 'Server error while creating vessel. Please try again or contact support if the issue persists.';
-    } else if (response.status === 401) {
-      errorMessage = 'Authentication required. Please sign in again.';
+    const data = await response.json();
+    clearCache(); // Clear cache after mutation
+    return normalizeVessel(data);
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to create vessel:', error.message);
+    throw error;
+  }
+}
+
+export async function activateVessel(vesselId: string): Promise<void> {
+  try {
+    console.log('[seaTimeApi] Activating vessel:', vesselId);
+    const headers = await getApiHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}/activate`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to activate vessel');
     }
     
-    throw new Error(errorMessage);
+    clearCache(); // Clear cache after mutation
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to activate vessel:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Vessel created successfully:', data.id);
-  return normalizeVessel(data);
-};
-
-// Update vessel particulars
-export const updateVesselParticulars = async (
-  vesselId: string,
-  updates: {
-    vessel_name?: string;
-    flag?: string;
-    official_number?: string;
-    type?: string;
-    length_metres?: number;
-    gross_tonnes?: number;
-    callsign?: string;
-  }
-) => {
-  console.log('[seaTimeApi] Updating vessel particulars:', vesselId);
-  const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}/particulars`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(updates),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to update vessel particulars:', response.status, errorText);
-    throw new Error(`Failed to update vessel particulars: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Vessel particulars updated successfully');
-  return normalizeVessel(data);
-};
-
-// Activate a vessel
-export const activateVessel = async (vesselId: string) => {
-  console.log('[seaTimeApi] Activating vessel:', vesselId);
-  const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}/activate`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({}),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to activate vessel:', response.status, errorText);
-    throw new Error(`Failed to activate vessel: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Vessel activated successfully');
-  return normalizeVessel(data);
-};
-
-// Delete a vessel
-export const deleteVessel = async (vesselId: string) => {
-  console.log('[seaTimeApi] Deleting vessel:', vesselId);
-  const token = await getAuthToken();
-  const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}`, {
-    method: 'DELETE',
-    headers: {
-      'Authorization': token ? `Bearer ${token}` : '',
-    },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to delete vessel:', response.status, errorText);
-    throw new Error(`Failed to delete vessel: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Vessel deleted successfully');
-  return data;
-};
-
-// Get sea time entries for a vessel
-export const getVesselSeaTime = async (vesselId: string) => {
-  console.log('[seaTimeApi] Fetching sea time for vessel:', vesselId);
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}/sea-time`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch vessel sea time:', response.status, errorText);
-    throw new Error(`Failed to fetch vessel sea time: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Vessel sea time fetched successfully:', data.length);
-  return data.map((entry: any) => ({
-    ...entry,
-    vessel: normalizeVessel(entry.vessel),
-  }));
-};
-
-// Check AIS for a vessel with rate limiting
-// The backend now handles rate limiting (2-hour interval per vessel)
-// Pass forceRefresh=true to bypass rate limiting for manual user checks
-export const checkVesselAIS = async (vesselId: string, forceRefresh: boolean = false) => {
-  console.log('[seaTimeApi] Checking AIS for vessel:', vesselId, 'forceRefresh:', forceRefresh);
-  
-  const headers = await getApiHeaders();
-  
-  // Add forceRefresh as query parameter if true
-  const url = forceRefresh 
-    ? `${API_BASE_URL}/api/ais/check/${vesselId}?forceRefresh=true`
-    : `${API_BASE_URL}/api/ais/check/${vesselId}`;
-  
-  console.log('[seaTimeApi] POST request to:', url);
-  
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({}),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to check vessel AIS:', response.status, errorText);
+export async function deleteVessel(vesselId: string): Promise<void> {
+  try {
+    console.log('[seaTimeApi] Deleting vessel:', vesselId);
+    const headers = await getApiHeaders();
     
-    // Handle 429 rate limit error from backend
-    if (response.status === 429) {
-      try {
-        const errorData = JSON.parse(errorText);
-        // Backend returns error message with time remaining
-        throw new Error(errorData.error || 'Rate limit exceeded. Please try again later.');
-      } catch (parseError) {
-        throw new Error('Rate limit: Please wait before checking AIS again. This helps conserve API credits.');
-      }
+    // Remove Content-Type for DELETE requests
+    const headersWithoutContentType: any = { ...headers };
+    delete headersWithoutContentType['Content-Type'];
+    
+    const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}`, {
+      method: 'DELETE',
+      headers: headersWithoutContentType,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to delete vessel');
     }
     
-    throw new Error(`Failed to check vessel AIS: ${response.status} - ${errorText}`);
+    clearCache(); // Clear cache after mutation
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to delete vessel:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  
-  // Update last query time on successful check for client-side tracking
-  await setLastQueryTime(vesselId, new Date());
-  
-  console.log('[seaTimeApi] Vessel AIS checked successfully');
-  return data;
-};
-
-// Get AIS status for a vessel
-export const getVesselAISStatus = async (vesselId: string) => {
-  console.log('[seaTimeApi] Fetching AIS status for vessel:', vesselId);
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/ais/status/${vesselId}`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch vessel AIS status:', response.status, errorText);
-    throw new Error(`Failed to fetch vessel AIS status: ${response.status}`);
+export async function getVesselAISLocation(vesselId: string, extended: boolean = false): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Fetching AIS location for vessel:', vesselId);
+    const headers = await getApiHeaders();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout for AIS
+    
+    const response = await fetch(`${API_BASE_URL}/api/ais/vessel/${vesselId}?extended=${extended}`, {
+      headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch AIS location');
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to fetch AIS location:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Vessel AIS status fetched successfully');
-  return data;
-};
-
-// Get AIS location for a vessel - FIXED: Use correct endpoint
-// This is a read-only operation that doesn't trigger a new API query, so no rate limiting
-export const getVesselAISLocation = async (vesselId: string, extended: boolean = false) => {
-  console.log('[seaTimeApi] Fetching AIS location for vessel:', vesselId, 'extended:', extended);
-  const options = await getFetchOptions('GET');
-  const url = `${API_BASE_URL}/api/ais/check/${vesselId}${extended ? '?extended=true' : ''}`;
-  const response = await fetch(url, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch vessel AIS location:', response.status, errorText);
-    throw new Error(`Failed to fetch vessel AIS location: ${response.status}`);
+export async function checkVesselAIS(vesselId: string, forceRefresh: boolean = false): Promise<any> {
+  try {
+    const shouldQuery = await shouldQueryVessel(vesselId, forceRefresh);
+    
+    if (!shouldQuery) {
+      console.log('[seaTimeApi] Skipping AIS check - queried recently');
+      return null;
+    }
+    
+    console.log('[seaTimeApi] Checking vessel AIS:', vesselId);
+    const headers = await getApiHeaders();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5s timeout for AIS check
+    
+    const response = await fetch(`${API_BASE_URL}/api/ais/check/${vesselId}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to check AIS');
+    }
+    
+    await setLastQueryTime(vesselId, new Date());
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to check AIS:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Vessel AIS location fetched successfully');
-  return data;
-};
-
-// Get the time remaining until next AIS check is allowed
-export const getTimeUntilNextAISCheck = async (vesselId: string): Promise<{ canCheck: boolean; minutesRemaining: number }> => {
-  const lastQueryTime = await getLastQueryTime(vesselId);
-  
-  if (!lastQueryTime) {
-    return { canCheck: true, minutesRemaining: 0 };
+export async function downloadPDFReport(): Promise<Blob> {
+  try {
+    console.log('[seaTimeApi] Downloading PDF report');
+    const headers = await getApiHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/api/reports/pdf`, {
+      headers,
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to download PDF report');
+    }
+    
+    return await response.blob();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to download PDF:', error.message);
+    throw error;
   }
+}
 
-  const now = new Date();
-  const timeSinceLastQuery = now.getTime() - lastQueryTime.getTime();
-  const canCheck = timeSinceLastQuery > VESSEL_QUERY_INTERVAL;
-  const minutesRemaining = canCheck ? 0 : Math.ceil((VESSEL_QUERY_INTERVAL - timeSinceLastQuery) / 1000 / 60);
-
-  return { canCheck, minutesRemaining };
-};
-
-// Schedule AIS checks for a vessel
-export const scheduleAISChecks = async (vesselId: string, intervalHours: number) => {
-  console.log('[seaTimeApi] Scheduling AIS checks for vessel:', vesselId, 'interval:', intervalHours);
-  const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/ais/schedule/${vesselId}`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ interval_hours: intervalHours }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to schedule AIS checks:', response.status, errorText);
-    throw new Error(`Failed to schedule AIS checks: ${response.status}`);
+export async function downloadCSVReport(): Promise<string> {
+  try {
+    console.log('[seaTimeApi] Downloading CSV report');
+    const headers = await getApiHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/api/reports/csv`, {
+      headers,
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to download CSV report');
+    }
+    
+    return await response.text();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to download CSV:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] AIS checks scheduled successfully');
-  return data;
-};
+// ========== SEA TIME ENTRY MANAGEMENT ==========
 
-// Get scheduled tasks
-export const getScheduledTasks = async () => {
-  console.log('[seaTimeApi] Fetching scheduled tasks');
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/ais/scheduled-tasks`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch scheduled tasks:', response.status, errorText);
-    throw new Error(`Failed to fetch scheduled tasks: ${response.status}`);
+export async function getPendingEntries(): Promise<any[]> {
+  try {
+    console.log('[seaTimeApi] Fetching pending entries');
+    const headers = await getApiHeaders();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    
+    const response = await fetch(`${API_BASE_URL}/api/sea-time/pending`, {
+      headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch pending entries');
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to fetch pending entries:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Scheduled tasks fetched successfully:', data.length);
-  return data;
-};
-
-// Toggle scheduled task - FIXED: Use correct endpoint without /toggle
-export const toggleScheduledTask = async (taskId: string, isActive: boolean) => {
-  console.log('[seaTimeApi] Toggling scheduled task:', taskId, 'active:', isActive);
-  const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/ais/scheduled-tasks/${taskId}`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({ is_active: isActive }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to toggle scheduled task:', response.status, errorText);
-    throw new Error(`Failed to toggle scheduled task: ${response.status}`);
+export async function getNewSeaTimeEntries(since?: string): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Fetching new sea time entries');
+    const headers = await getApiHeaders();
+    
+    const url = since 
+      ? `${API_BASE_URL}/api/sea-time/new-entries?since=${encodeURIComponent(since)}`
+      : `${API_BASE_URL}/api/sea-time/new-entries`;
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    
+    const response = await fetch(url, {
+      headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch new entries');
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to fetch new entries:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Scheduled task toggled successfully');
-  return data;
-};
-
-// Get AIS debug logs for a vessel
-export const getAISDebugLogs = async (vesselId: string) => {
-  console.log('[seaTimeApi] Fetching AIS debug logs for vessel:', vesselId);
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/ais/debug/${vesselId}`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch AIS debug logs:', response.status, errorText);
-    throw new Error(`Failed to fetch AIS debug logs: ${response.status}`);
+export async function confirmSeaTimeEntry(entryId: string, notes?: string, serviceType?: string): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Confirming sea time entry:', entryId);
+    const headers = await getApiHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}/confirm`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ notes, service_type: serviceType }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to confirm entry');
+    }
+    
+    clearCache(); // Clear cache after mutation
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to confirm entry:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] AIS debug logs fetched successfully:', data.length);
-  return data;
-};
-
-// Get all sea time entries
-export const getSeaTimeEntries = async () => {
-  console.log('[seaTimeApi] Fetching sea time entries');
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/sea-time`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch sea time entries:', response.status, errorText);
-    throw new Error(`Failed to fetch sea time entries: ${response.status}`);
+export async function rejectSeaTimeEntry(entryId: string, notes?: string): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Rejecting sea time entry:', entryId);
+    const headers = await getApiHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}/reject`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ notes }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to reject entry');
+    }
+    
+    clearCache(); // Clear cache after mutation
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to reject entry:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Sea time entries fetched successfully:', data.length);
-  return data.map((entry: any) => ({
-    ...entry,
-    vessel: normalizeVessel(entry.vessel),
-  }));
-};
-
-// Get pending sea time entries
-export const getPendingEntries = async () => {
-  console.log('[seaTimeApi] Fetching pending sea time entries');
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/sea-time/pending`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch pending entries:', response.status, errorText);
-    throw new Error(`Failed to fetch pending entries: ${response.status}`);
+export async function updateSeaTimeEntry(entryId: string, updates: { sea_days?: number; notes?: string; service_type?: string }): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Updating sea time entry:', entryId);
+    const headers = await getApiHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(updates),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to update entry');
+    }
+    
+    clearCache(); // Clear cache after mutation
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to update entry:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Pending entries fetched successfully:', data.length);
-  return data.map((entry: any) => ({
-    ...entry,
-    vessel: normalizeVessel(entry.vessel),
-  }));
-};
-
-// Confirm sea time entry with service type
-export const confirmSeaTimeEntry = async (entryId: string, serviceType?: string) => {
-  console.log('[seaTimeApi] Confirming sea time entry:', entryId, 'service type:', serviceType);
-  const headers = await getApiHeaders();
-  const body: any = {};
-  if (serviceType) {
-    body.service_type = serviceType;
+export async function deleteSeaTimeEntry(entryId: string): Promise<void> {
+  try {
+    console.log('[seaTimeApi] Deleting sea time entry:', entryId);
+    const headers = await getApiHeaders();
+    
+    // Remove Content-Type for DELETE requests
+    const headersWithoutContentType: any = { ...headers };
+    delete headersWithoutContentType['Content-Type'];
+    
+    const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}`, {
+      method: 'DELETE',
+      headers: headersWithoutContentType,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to delete entry');
+    }
+    
+    clearCache(); // Clear cache after mutation
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to delete entry:', error.message);
+    throw error;
   }
-  
-  const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}/confirm`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(body),
-  });
+}
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to confirm sea time entry:', response.status, errorText);
-    throw new Error(`Failed to confirm sea time entry: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Sea time entry confirmed successfully');
-  return data;
-};
-
-// Reject sea time entry
-export const rejectSeaTimeEntry = async (entryId: string) => {
-  console.log('[seaTimeApi] Rejecting sea time entry:', entryId);
-  console.log('[seaTimeApi] API URL:', `${API_BASE_URL}/api/sea-time/${entryId}/reject`);
-  const headers = await getApiHeaders();
-  console.log('[seaTimeApi] Request headers:', headers);
-  
-  const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}/reject`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({}),
-  });
-
-  console.log('[seaTimeApi] Response status:', response.status);
-  
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to reject sea time entry:', response.status, errorText);
-    throw new Error(`Failed to reject sea time entry: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Sea time entry rejected successfully:', data);
-  return data;
-};
-
-// Update sea time entry
-export const updateSeaTimeEntry = async (
-  entryId: string,
-  updates: {
-    service_capacity?: string | null;
-    vessel_category?: string | null;
-    actual_days_at_sea?: number | null;
-    standby_service_days?: number | null;
-    shipyard_service_days?: number | null;
-    watchkeeping_days?: number | null;
-    leave_days?: number | null;
-    duties_and_tasks?: string | null;
-    area_cruised?: string | null;
-    notes?: string | null;
-    status?: string;
-    service_type?: string | null;
-  }
-) => {
-  console.log('[seaTimeApi] Updating sea time entry:', entryId);
-  const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(updates),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to update sea time entry:', response.status, errorText);
-    throw new Error(`Failed to update sea time entry: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Sea time entry updated successfully');
-  return data;
-};
-
-// Delete sea time entry - FIXED: Don't send Content-Type header for DELETE
-export const deleteSeaTimeEntry = async (entryId: string) => {
-  console.log('[seaTimeApi] Deleting sea time entry:', entryId);
-  const token = await getAuthToken();
-  
-  // For DELETE requests, don't send Content-Type: application/json header
-  // This prevents 400 errors when there's no body
-  const response = await fetch(`${API_BASE_URL}/api/sea-time/${entryId}`, {
-    method: 'DELETE',
-    headers: {
-      'Authorization': token ? `Bearer ${token}` : '',
-    },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to delete sea time entry:', response.status, errorText);
-    throw new Error(`Failed to delete sea time entry: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Sea time entry deleted successfully');
-  return data;
-};
-
-// Get report summary
-export const getReportSummary = async () => {
-  console.log('[seaTimeApi] Fetching report summary');
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/reports/summary`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch report summary:', response.status, errorText);
-    throw new Error(`Failed to fetch report summary: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Report summary fetched successfully');
-  return data;
-};
-
-// Download CSV report
-export const downloadCSVReport = async () => {
-  console.log('[seaTimeApi] Downloading CSV report');
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/reports/csv`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to download CSV report:', response.status, errorText);
-    throw new Error(`Failed to download CSV report: ${response.status}`);
-  }
-
-  const data = await response.text();
-  console.log('[seaTimeApi] CSV report downloaded successfully');
-  return data;
-};
-
-// Download PDF report
-export const downloadPDFReport = async () => {
-  console.log('[seaTimeApi] Downloading PDF report');
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/reports/pdf`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to download PDF report:', response.status, errorText);
-    throw new Error(`Failed to download PDF report: ${response.status}`);
-  }
-
-  const blob = await response.blob();
-  console.log('[seaTimeApi] PDF report downloaded successfully');
-  return blob;
-};
-
-// Create test sea day entry
-export const createTestSeaDayEntry = async () => {
-  console.log('[seaTimeApi] Creating test sea day entry');
-  const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/sea-time/test-entry`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({}),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to create test sea day entry:', response.status, errorText);
-    throw new Error(`Failed to create test sea day entry: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Test sea day entry created successfully');
-  return data;
-};
-
-// Generate sample sea time entries
-export const generateSampleSeaTimeEntries = async () => {
-  console.log('[seaTimeApi] Generating sample sea time entries');
-  const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/sea-time/generate-samples`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({}),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to generate sample entries:', response.status, errorText);
-    throw new Error(`Failed to generate sample entries: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Sample sea time entries generated successfully');
-  return data;
-};
-
-// Create manual sea time entry
-export const createManualSeaTimeEntry = async (entry: {
+export async function createManualSeaTimeEntry(data: {
   vessel_id: string;
   start_time: string;
-  end_time?: string | null;
-  notes?: string | null;
-  start_latitude?: number | null;
-  start_longitude?: number | null;
-  end_latitude?: number | null;
-  end_longitude?: number | null;
-  service_type?: string | null;
-}) => {
-  console.log('[seaTimeApi] Creating manual sea time entry');
-  const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/logbook/manual-entry`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(entry),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to create manual sea time entry:', response.status, errorText);
-    throw new Error(`Failed to create manual sea time entry: ${response.status}`);
+  end_time?: string;
+  sea_days?: number;
+  service_type?: string;
+  notes?: string;
+  start_latitude?: number;
+  start_longitude?: number;
+  end_latitude?: number;
+  end_longitude?: number;
+}): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Creating manual sea time entry');
+    const headers = await getApiHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/api/logbook/manual-entry`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to create entry');
+    }
+    
+    clearCache(); // Clear cache after mutation
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to create manual entry:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Manual sea time entry created successfully');
-  return {
-    ...data,
-    vessel: normalizeVessel(data.vessel),
-  };
-};
-
-// Get new sea time entries
-export const getNewSeaTimeEntries = async () => {
-  console.log('[seaTimeApi] Fetching new sea time entries');
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/sea-time/new-entries`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch new sea time entries:', response.status, errorText);
-    throw new Error(`Failed to fetch new sea time entries: ${response.status}`);
+export async function getSeaTimeEntry(entryId: string): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Fetching sea time entry:', entryId);
+    const headers = await getApiHeaders();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    
+    // Get all entries and find the specific one
+    const response = await fetch(`${API_BASE_URL}/api/sea-time`, {
+      headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch entry');
+    }
+    
+    const entries = await response.json();
+    const entry = entries.find((e: any) => e.id === entryId);
+    
+    if (!entry) {
+      throw new Error('Entry not found');
+    }
+    
+    return entry;
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to fetch entry:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] New sea time entries fetched successfully');
-  return {
-    newEntries: data.entries?.map((entry: any) => ({
-      ...entry,
-      vessel_name: entry.vessel?.vessel_name,
-      duration_hours: entry.duration_hours,
-    })) || [],
-    count: data.count || 0,
-  };
-};
+// ========== VESSEL MANAGEMENT ==========
 
-// Get notification schedule
-export const getNotificationSchedule = async () => {
-  console.log('[seaTimeApi] Fetching notification schedule');
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/notifications/schedule`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch notification schedule:', response.status, errorText);
-    throw new Error(`Failed to fetch notification schedule: ${response.status}`);
+export async function getVesselSeaTime(vesselId: string): Promise<any[]> {
+  try {
+    console.log('[seaTimeApi] Fetching sea time for vessel:', vesselId);
+    const headers = await getApiHeaders();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    
+    const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}/sea-time`, {
+      headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch vessel sea time');
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to fetch vessel sea time:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Notification schedule fetched successfully:', data);
-  return data;
-};
+export async function updateVesselParticulars(vesselId: string, updates: {
+  vessel_name?: string;
+  callsign?: string;
+  flag?: string;
+  official_number?: string;
+  type?: 'Motor' | 'Sail';
+  length_metres?: number;
+  gross_tonnes?: number;
+  engine_kilowatts?: number;
+  engine_type?: string;
+}): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Updating vessel particulars:', vesselId);
+    const headers = await getApiHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/api/vessels/${vesselId}/particulars`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(updates),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to update vessel particulars');
+    }
+    
+    clearCache(); // Clear cache after mutation
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to update vessel particulars:', error.message);
+    throw error;
+  }
+}
 
-// Update notification schedule
-export const updateNotificationSchedule = async (updates: {
+// ========== USER PROFILE ==========
+
+export async function updateUserProfile(updates: {
+  name?: string;
+  email?: string;
+  address?: string;
+  tel_no?: string;
+  date_of_birth?: string;
+  srb_no?: string;
+  nationality?: string;
+  pya_membership_no?: string;
+  department?: 'deck' | 'engineering';
+}): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Updating user profile');
+    const headers = await getApiHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/api/profile`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(updates),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to update profile');
+    }
+    
+    clearCache(); // Clear cache after mutation
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to update profile:', error.message);
+    throw error;
+  }
+}
+
+export async function uploadProfileImage(imageUri: string): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Uploading profile image');
+    const token = await getAuthToken();
+    
+    const formData = new FormData();
+    formData.append('image', {
+      uri: imageUri,
+      type: 'image/jpeg',
+      name: 'profile.jpg',
+    } as any);
+    
+    const response = await fetch(`${API_BASE_URL}/api/profile/upload-image`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to upload image');
+    }
+    
+    clearCache(); // Clear cache after mutation
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to upload image:', error.message);
+    throw error;
+  }
+}
+
+// ========== NOTIFICATIONS ==========
+
+export async function getNotificationSchedule(): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Fetching notification schedule');
+    const headers = await getApiHeaders();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    
+    const response = await fetch(`${API_BASE_URL}/api/notifications/schedule`, {
+      headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch notification schedule');
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to fetch notification schedule:', error.message);
+    throw error;
+  }
+}
+
+export async function updateNotificationSchedule(updates: {
   scheduled_time?: string;
   timezone?: string;
   is_active?: boolean;
-}) => {
-  console.log('[seaTimeApi] Updating notification schedule:', updates);
-  const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/notifications/schedule`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(updates),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to update notification schedule:', response.status, errorText);
-    throw new Error(`Failed to update notification schedule: ${response.status}`);
+}): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Updating notification schedule');
+    const headers = await getApiHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/api/notifications/schedule`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify(updates),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to update notification schedule');
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to update notification schedule:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Notification schedule updated successfully:', data);
-  return data;
-};
+// ========== SCHEDULED TASKS ==========
 
-// Check if notification is due
-export const checkNotificationDue = async () => {
-  console.log('[seaTimeApi] Checking if notification is due');
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/notifications/check-due`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to check notification due:', response.status, errorText);
-    throw new Error(`Failed to check notification due: ${response.status}`);
+export async function getScheduledTasks(): Promise<any[]> {
+  try {
+    console.log('[seaTimeApi] Fetching scheduled tasks');
+    const headers = await getApiHeaders();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    
+    const response = await fetch(`${API_BASE_URL}/api/ais/scheduled-tasks`, {
+      headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch scheduled tasks');
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to fetch scheduled tasks:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Notification due check completed:', data);
-  return data;
-};
-
-// Verify vessel tasks - ensures all active vessels have scheduled tasks
-export const verifyVesselTasks = async () => {
-  console.log('[seaTimeApi] Verifying vessel tasks');
-  const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/admin/verify-vessel-tasks`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({}),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to verify vessel tasks:', response.status, errorText);
-    throw new Error(`Failed to verify vessel tasks: ${response.status}`);
+export async function toggleScheduledTask(taskId: string, isActive: boolean): Promise<any> {
+  try {
+    console.log('[seaTimeApi] Toggling scheduled task:', taskId, isActive);
+    const headers = await getApiHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/api/ais/scheduled-tasks/${taskId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ is_active: isActive }),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to toggle task');
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to toggle task:', error.message);
+    throw error;
   }
+}
 
-  const data = await response.json();
-  console.log('[seaTimeApi] Vessel tasks verification completed:', data);
-  return data;
-};
+// ========== DEBUG ==========
 
-// Get vessel diagnostic status - detailed sea time detection analysis
-export const getVesselDiagnosticStatus = async (mmsi: string) => {
-  console.log('[seaTimeApi] Fetching vessel diagnostic status for MMSI:', mmsi);
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/admin/vessel-status/${mmsi}`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch vessel diagnostic status:', response.status, errorText);
-    throw new Error(`Failed to fetch vessel diagnostic status: ${response.status}`);
+export async function getAISDebugLogs(vesselId: string, limit: number = 50): Promise<any[]> {
+  try {
+    console.log('[seaTimeApi] Fetching AIS debug logs for vessel:', vesselId);
+    const headers = await getApiHeaders();
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
+    
+    const response = await fetch(`${API_BASE_URL}/api/ais/debug/${vesselId}?limit=${limit}`, {
+      headers,
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to fetch debug logs');
+    }
+    
+    return await response.json();
+  } catch (error: any) {
+    console.error('[seaTimeApi] Failed to fetch debug logs:', error.message);
+    throw error;
   }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Vessel diagnostic status fetched successfully');
-  return data;
-};
-
-// Generate demo sea time entries for a user (admin endpoint)
-export const generateDemoEntries = async (email: string, count: number = 43) => {
-  console.log('[seaTimeApi] Generating demo entries for user:', email, 'count:', count);
-  const headers = await getApiHeaders();
-  const response = await fetch(`${API_BASE_URL}/api/admin/generate-demo-entries`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ email, count }),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to generate demo entries:', response.status, errorText);
-    throw new Error(`Failed to generate demo entries: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] Demo entries generated successfully:', data.entriesCreated);
-  return data;
-};
-
-// Export getAuthToken and getApiHeaders for use in other components
-export { getAuthToken, getApiHeaders };
+}
