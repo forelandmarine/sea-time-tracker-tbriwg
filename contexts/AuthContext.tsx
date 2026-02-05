@@ -111,7 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.warn('[Auth] Auth check timeout - stopping loading state');
         setLoading(false);
       }
-    }, 3000); // 3 second timeout (reduced from 8s for fail-fast)
+    }, 2000); // 2 second timeout (reduced from 3s for instant access on good connections)
     
     return () => clearTimeout(timeout);
   }, [loading]);

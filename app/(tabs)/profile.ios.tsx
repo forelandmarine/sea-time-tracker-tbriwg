@@ -527,7 +527,7 @@ export default function ProfileScreen() {
   console.log('ProfileScreen rendered (iOS)');
 
   const loadProfile = useCallback(async (retryCount = 0) => {
-    const maxRetries = 2;
+    const maxRetries = 1; // Reduced from 2 for faster failure on good connections
     console.log(`Loading user profile (attempt ${retryCount + 1}/${maxRetries + 1})`);
     
     try {
@@ -539,7 +539,8 @@ export default function ProfileScreen() {
       console.error(`Failed to load profile (attempt ${retryCount + 1}):`, error?.message);
       
       if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
-        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        // Reduced wait time from exponential backoff to fixed 500ms for instant retry on good connections
+        const waitTime = 500;
         console.log(`Retrying profile load in ${waitTime}ms...`);
         setTimeout(() => loadProfile(retryCount + 1), waitTime);
       } else {
@@ -557,7 +558,7 @@ export default function ProfileScreen() {
   }, []);
 
   const loadSummary = useCallback(async (retryCount = 0) => {
-    const maxRetries = 2;
+    const maxRetries = 1; // Reduced from 2 for faster failure on good connections
     console.log(`Loading sea time summary (attempt ${retryCount + 1}/${maxRetries + 1})`);
     
     try {
@@ -569,7 +570,8 @@ export default function ProfileScreen() {
       console.error(`Failed to load sea time summary (attempt ${retryCount + 1}):`, error?.message);
       
       if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
-        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        // Reduced wait time from exponential backoff to fixed 500ms for instant retry on good connections
+        const waitTime = 500;
         console.log(`Retrying summary load in ${waitTime}ms...`);
         setTimeout(() => loadSummary(retryCount + 1), waitTime);
       } else {
@@ -580,7 +582,7 @@ export default function ProfileScreen() {
   }, []);
 
   const loadVessels = useCallback(async (retryCount = 0) => {
-    const maxRetries = 2;
+    const maxRetries = 1; // Reduced from 2 for faster failure on good connections
     console.log(`Loading vessels (attempt ${retryCount + 1}/${maxRetries + 1})`);
     
     try {
@@ -591,7 +593,8 @@ export default function ProfileScreen() {
       console.error(`Failed to load vessels (attempt ${retryCount + 1}):`, error?.message);
       
       if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
-        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        // Reduced wait time from exponential backoff to fixed 500ms for instant retry on good connections
+        const waitTime = 500;
         console.log(`Retrying vessels load in ${waitTime}ms...`);
         setTimeout(() => loadVessels(retryCount + 1), waitTime);
       } else {
@@ -601,18 +604,28 @@ export default function ProfileScreen() {
   }, []);
 
   useEffect(() => {
-    console.log('ProfileScreen (iOS): Initial mount, loading data');
-    loadProfile();
-    loadSummary();
-    loadVessels();
+    console.log('ProfileScreen (iOS): Initial mount, loading data in parallel');
+    // Load all data in parallel for instant access
+    Promise.all([
+      loadProfile(),
+      loadSummary(),
+      loadVessels(),
+    ]).catch(error => {
+      console.error('Failed to load profile data:', error);
+    });
   }, [loadProfile, loadSummary, loadVessels]);
 
   useEffect(() => {
     if (refreshTrigger > 0) {
-      console.log('ProfileScreen (iOS): Global refresh triggered, reloading profile data');
-      loadProfile();
-      loadSummary();
-      loadVessels();
+      console.log('ProfileScreen (iOS): Global refresh triggered, reloading profile data in parallel');
+      // Load all data in parallel for instant access
+      Promise.all([
+        loadProfile(),
+        loadSummary(),
+        loadVessels(),
+      ]).catch(error => {
+        console.error('Failed to refresh profile data:', error);
+      });
     }
   }, [refreshTrigger, loadProfile, loadSummary, loadVessels]);
 

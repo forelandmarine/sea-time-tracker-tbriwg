@@ -101,9 +101,9 @@ export default function SeaTimeScreen() {
       });
       console.log('[Home] Location loaded:', locationData.latitude, locationData.longitude, 'timestamp:', locationData.timestamp);
       
-      // If forceRefresh is true OR data is stale (>2 hours), trigger a fresh AIS check
-      if (forceRefresh || isLocationStale(locationData.timestamp)) {
-        console.log('[Home] Data is stale or refresh requested, triggering fresh AIS check');
+      // If forceRefresh is true, trigger a fresh AIS check (no stale check - always fresh on good connection)
+      if (forceRefresh) {
+        console.log('[Home] Force refresh requested, triggering fresh AIS check for instant data');
         try {
           // This will trigger a fresh API call to MyShipTracking
           await seaTimeApi.checkVesselAIS(vesselId, true);
@@ -137,11 +137,12 @@ export default function SeaTimeScreen() {
       setVessels(vesselsData);
       console.log('[Home] Vessels loaded - Active:', vesselsData.filter(v => v.is_active).length, 'Historic:', vesselsData.filter(v => !v.is_active).length);
       
-      // Load location for the active vessel - auto-refresh if stale
+      // Load location for the active vessel - ALWAYS force refresh for instant fresh data
       const newActiveVessel = vesselsData.find(v => v.is_active);
       if (newActiveVessel) {
-        console.log('[Home] Found active vessel, loading location with auto-refresh:', newActiveVessel.vessel_name);
-        await loadActiveVesselLocation(newActiveVessel.id, false);
+        console.log('[Home] Found active vessel, loading location with FORCE refresh for instant fresh data:', newActiveVessel.vessel_name);
+        // Force refresh to ensure user always gets fresh data on good connection
+        await loadActiveVesselLocation(newActiveVessel.id, true);
       } else {
         console.log('[Home] No active vessel found, clearing location');
         setActiveVesselLocation(null);
