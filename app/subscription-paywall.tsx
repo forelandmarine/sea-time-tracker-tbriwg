@@ -89,7 +89,7 @@ export default function SubscriptionPaywallScreen() {
     try {
       // CRITICAL: Defer initialization to prevent blocking app startup
       // Wait for screen to be fully rendered before initializing StoreKit
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Increased to 1 second
       
       console.log('[SubscriptionPaywall] Initializing StoreKit (deferred)');
       const initialized = await StoreKitUtils.initializeStoreKit();
@@ -127,67 +127,72 @@ export default function SubscriptionPaywallScreen() {
 
     // Setup purchase listeners (only if on iOS)
     if (Platform.OS === 'ios') {
-      StoreKitUtils.setupPurchaseListeners(
-        // On purchase success
-        async (purchase) => {
-          console.log('[SubscriptionPaywall] Purchase listener triggered:', purchase.transactionId);
-          setPurchaseInProgress(true);
-          
-          try {
-            // Process the purchase (verify + finish transaction)
-            const result = await StoreKitUtils.processPurchase(purchase);
+      // Wrap in async function to handle promise
+      const setupListeners = async () => {
+        await StoreKitUtils.setupPurchaseListeners(
+          // On purchase success
+          async (purchase) => {
+            console.log('[SubscriptionPaywall] Purchase listener triggered:', purchase.transactionId);
+            setPurchaseInProgress(true);
             
-            if (result.success) {
-              console.log('[SubscriptionPaywall] Purchase processed successfully');
+            try {
+              // Process the purchase (verify + finish transaction)
+              const result = await StoreKitUtils.processPurchase(purchase);
               
-              // Refresh subscription status
-              await checkSubscription();
-              
-              setPurchaseInProgress(false);
-              
-              Alert.alert(
-                'Subscription Active',
-                'Your subscription is now active! Welcome to SeaTime Tracker.',
-                [
-                  {
-                    text: 'Continue',
-                    onPress: () => router.replace('/(tabs)'),
-                  },
-                ]
-              );
-            } else {
-              console.error('[SubscriptionPaywall] Purchase processing failed:', result.error);
+              if (result.success) {
+                console.log('[SubscriptionPaywall] Purchase processed successfully');
+                
+                // Refresh subscription status
+                await checkSubscription();
+                
+                setPurchaseInProgress(false);
+                
+                Alert.alert(
+                  'Subscription Active',
+                  'Your subscription is now active! Welcome to SeaTime Tracker.',
+                  [
+                    {
+                      text: 'Continue',
+                      onPress: () => router.replace('/(tabs)'),
+                    },
+                  ]
+                );
+              } else {
+                console.error('[SubscriptionPaywall] Purchase processing failed:', result.error);
+                setPurchaseInProgress(false);
+                
+                Alert.alert(
+                  'Purchase Error',
+                  result.error || 'Unable to verify purchase. Please contact support.'
+                );
+              }
+            } catch (error: any) {
+              console.error('[SubscriptionPaywall] Error processing purchase:', error);
               setPurchaseInProgress(false);
               
               Alert.alert(
                 'Purchase Error',
-                result.error || 'Unable to verify purchase. Please contact support.'
+                'Unable to complete purchase. Please try again or contact support.'
               );
             }
-          } catch (error: any) {
-            console.error('[SubscriptionPaywall] Error processing purchase:', error);
+          },
+          // On purchase error
+          (error) => {
+            console.error('[SubscriptionPaywall] Purchase error listener triggered:', error);
             setPurchaseInProgress(false);
             
-            Alert.alert(
-              'Purchase Error',
-              'Unable to complete purchase. Please try again or contact support.'
-            );
+            // Don't show alert for user cancellation
+            if (error.code !== 'E_USER_CANCELLED') {
+              Alert.alert(
+                'Purchase Failed',
+                error.message || 'Unable to complete purchase. Please try again.'
+              );
+            }
           }
-        },
-        // On purchase error
-        (error) => {
-          console.error('[SubscriptionPaywall] Purchase error listener triggered:', error);
-          setPurchaseInProgress(false);
-          
-          // Don't show alert for user cancellation
-          if (error.code !== 'E_USER_CANCELLED') {
-            Alert.alert(
-              'Purchase Failed',
-              error.message || 'Unable to complete purchase. Please try again.'
-            );
-          }
-        }
-      );
+        );
+      };
+
+      setupListeners();
 
       // Cleanup listeners on unmount
       return () => {

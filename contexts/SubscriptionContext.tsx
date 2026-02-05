@@ -21,15 +21,18 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(u
 
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Changed from true to false - don't block on mount
   const { user, isAuthenticated } = useAuth();
 
   const hasActiveSubscription = subscriptionStatus?.status === 'active';
 
   useEffect(() => {
     if (isAuthenticated && user) {
-      console.log('[Subscription] User authenticated, checking subscription status');
-      checkSubscription();
+      console.log('[Subscription] User authenticated, checking subscription status (non-blocking)');
+      // Don't await - let it run in background
+      checkSubscription().catch((error) => {
+        console.error('[Subscription] Background subscription check failed:', error);
+      });
     } else {
       console.log('[Subscription] User not authenticated, clearing subscription status');
       setSubscriptionStatus(null);
@@ -42,9 +45,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       console.log('[Subscription] Fetching subscription status from backend');
       setLoading(true);
 
-      // Add timeout to prevent blocking app startup
+      // Add timeout to prevent blocking app startup - reduced to 2 seconds
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
 
       const data = await authenticatedGet<SubscriptionStatus>('/api/subscription/status', {
         signal: controller.signal,

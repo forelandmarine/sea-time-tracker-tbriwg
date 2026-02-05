@@ -28,8 +28,8 @@
  * 10. App checks subscription status and grants access
  * 
  * Performance Optimization:
- * - Initialization has 2-second timeout to prevent blocking
- * - Product fetch has 3-second timeout
+ * - Initialization has 3-second timeout to prevent blocking
+ * - Product fetch has 5-second timeout
  * - Purchase listeners handle async updates
  * - Does NOT block app authentication or navigation
  * 
@@ -40,9 +40,11 @@
  */
 
 import { Platform, Alert, EmitterSubscription } from 'react-native';
-import * as RNIap from 'react-native-iap';
 import type { Product, Purchase, PurchaseError, SubscriptionPurchase } from 'react-native-iap';
 import { authenticatedPost } from './api';
+
+// Lazy import RNIap to prevent crashes if module is not available
+let RNIap: any = null;
 
 // Product ID configured in App Store Connect
 export const SUBSCRIPTION_PRODUCT_ID = 'com.forelandmarine.seatime.monthly';
@@ -57,6 +59,26 @@ const subscriptionSkus = Platform.select({
 let isInitialized = false;
 let purchaseUpdateSubscription: EmitterSubscription | null = null;
 let purchaseErrorSubscription: EmitterSubscription | null = null;
+
+/**
+ * Lazy load RNIap module
+ * This prevents crashes if the module is not available
+ */
+async function loadRNIap(): Promise<boolean> {
+  if (RNIap) {
+    return true;
+  }
+
+  try {
+    console.log('[StoreKit] Loading react-native-iap module...');
+    RNIap = await import('react-native-iap');
+    console.log('[StoreKit] react-native-iap loaded successfully');
+    return true;
+  } catch (error: any) {
+    console.error('[StoreKit] Failed to load react-native-iap:', error);
+    return false;
+  }
+}
 
 /**
  * Initialize StoreKit connection
@@ -75,14 +97,21 @@ export async function initializeStoreKit(): Promise<boolean> {
   }
 
   try {
+    // Load RNIap module first
+    const loaded = await loadRNIap();
+    if (!loaded) {
+      console.error('[StoreKit] RNIap module not available');
+      return false;
+    }
+
     console.log('[StoreKit] Initializing connection to App Store');
     console.log('[StoreKit] Platform:', Platform.OS);
     console.log('[StoreKit] RNIap available:', typeof RNIap !== 'undefined');
     
-    // Initialize connection with timeout
+    // Initialize connection with timeout - increased to 3 seconds
     const initPromise = RNIap.initConnection();
     const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('StoreKit initialization timeout after 2 seconds')), 2000)
+      setTimeout(() => reject(new Error('StoreKit initialization timeout after 3 seconds')), 3000)
     );
     
     await Promise.race([initPromise, timeoutPromise]);
@@ -90,7 +119,7 @@ export async function initializeStoreKit(): Promise<boolean> {
     
     // Clear any pending transactions (non-blocking)
     // This is important for handling interrupted purchases
-    RNIap.flushFailedPurchasesCachedAsPendingAndroid().catch((err) => {
+    RNIap.flushFailedPurchasesCachedAsPendingAndroid().catch((err: any) => {
       console.warn('[StoreKit] Failed to flush pending purchases:', err);
     });
     
@@ -134,6 +163,13 @@ export async function getProductInfo(): Promise<{
   }
 
   try {
+    // Load RNIap module first
+    const loaded = await loadRNIap();
+    if (!loaded) {
+      console.error('[StoreKit] RNIap module not available');
+      return null;
+    }
+
     console.log('[StoreKit] Fetching product info from App Store');
     console.log('[StoreKit] Product ID:', SUBSCRIPTION_PRODUCT_ID);
     
@@ -148,10 +184,10 @@ export async function getProductInfo(): Promise<{
 
     console.log('[StoreKit] Calling RNIap.getSubscriptions with SKUs:', subscriptionSkus);
     
-    // Fetch products with timeout
+    // Fetch products with timeout - increased to 5 seconds
     const productsPromise = RNIap.getSubscriptions({ skus: subscriptionSkus as string[] });
     const timeoutPromise = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error('Product fetch timeout after 3 seconds')), 3000)
+      setTimeout(() => reject(new Error('Product fetch timeout after 5 seconds')), 5000)
     );
     
     const products = await Promise.race([productsPromise, timeoutPromise]);
@@ -202,12 +238,19 @@ export async function getProductInfo(): Promise<{
  * @param onPurchaseUpdate - Callback when purchase succeeds
  * @param onPurchaseError - Callback when purchase fails
  */
-export function setupPurchaseListeners(
+export async function setupPurchaseListeners(
   onPurchaseUpdate: (purchase: Purchase) => void,
   onPurchaseError: (error: PurchaseError) => void
-): void {
+): Promise<void> {
   if (Platform.OS !== 'ios') {
     console.log('[StoreKit] Not on iOS, skipping purchase listeners');
+    return;
+  }
+
+  // Load RNIap module first
+  const loaded = await loadRNIap();
+  if (!loaded) {
+    console.error('[StoreKit] RNIap module not available');
     return;
   }
 
@@ -269,6 +312,12 @@ export async function purchaseSubscription(): Promise<void> {
   }
 
   try {
+    // Load RNIap module first
+    const loaded = await loadRNIap();
+    if (!loaded) {
+      throw new Error('StoreKit module not available');
+    }
+
     console.log('[StoreKit] Starting subscription purchase');
     
     if (!isInitialized) {
@@ -310,6 +359,12 @@ export async function restorePurchases(): Promise<Purchase | null> {
   }
 
   try {
+    // Load RNIap module first
+    const loaded = await loadRNIap();
+    if (!loaded) {
+      throw new Error('StoreKit module not available');
+    }
+
     console.log('[StoreKit] Restoring purchases');
     
     if (!isInitialized) {
@@ -329,7 +384,7 @@ export async function restorePurchases(): Promise<Purchase | null> {
 
     // Find the subscription purchase
     const subscriptionPurchase = purchases.find(
-      p => p.productId === SUBSCRIPTION_PRODUCT_ID
+      (p: Purchase) => p.productId === SUBSCRIPTION_PRODUCT_ID
     );
 
     if (!subscriptionPurchase) {
@@ -404,6 +459,13 @@ export async function verifyReceiptWithBackend(
  */
 export async function finishTransaction(purchase: Purchase): Promise<void> {
   try {
+    // Load RNIap module first
+    const loaded = await loadRNIap();
+    if (!loaded) {
+      console.error('[StoreKit] RNIap module not available');
+      return;
+    }
+
     console.log('[StoreKit] Finishing transaction:', purchase.transactionId);
     
     await RNIap.finishTransaction({
@@ -504,6 +566,13 @@ export async function completeRestoreFlow(): Promise<{
  */
 export async function disconnectStoreKit(): Promise<void> {
   try {
+    // Load RNIap module first
+    const loaded = await loadRNIap();
+    if (!loaded) {
+      console.error('[StoreKit] RNIap module not available');
+      return;
+    }
+
     console.log('[StoreKit] Cleaning up StoreKit connection');
     
     // Remove listeners first

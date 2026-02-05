@@ -105,13 +105,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Safety timeout - if auth check takes too long, stop loading
+  // CRITICAL: Increased to 5 seconds to give more time for slow connections
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (loading) {
-        console.warn('[Auth] Auth check timeout - stopping loading state');
+        console.warn('[Auth] Auth check timeout (5s) - stopping loading state');
         setLoading(false);
       }
-    }, 2000); // 2 second timeout (reduced from 3s for instant access on good connections)
+    }, 5000); // 5 second timeout
     
     return () => clearTimeout(timeout);
   }, [loading]);
@@ -140,9 +141,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       console.log('[Auth] Token found, verifying with backend...');
       
-      // Add timeout for fetch request - reduced to 2s for fail-fast
+      // Add timeout for fetch request - increased to 4s for better reliability
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 second timeout
       
       try {
         const response = await fetch(`${API_URL}/api/auth/user`, {
@@ -167,7 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         clearTimeout(timeoutId);
         
         if (fetchError.name === 'AbortError') {
-          console.warn('[Auth] Auth check timed out after 2 seconds');
+          console.warn('[Auth] Auth check timed out after 4 seconds');
         } else {
           console.error('[Auth] Fetch error:', fetchError);
         }
