@@ -111,14 +111,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuth();
   }, []);
 
-  // Safety timeout - REDUCED to 2 seconds for faster loading
+  // Safety timeout - REDUCED to 1 second for instant loading
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (loading) {
         console.warn('[Auth] Auth check timeout - stopping loading state');
         setLoading(false);
       }
-    }, 2000); // REDUCED from 5s to 2s
+    }, 1000); // REDUCED from 2s to 1s for instant loading
     
     return () => clearTimeout(timeout);
   }, [loading]);
@@ -147,9 +147,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       console.log('[Auth] Token found, verifying with backend...');
       
-      // REDUCED timeout to 2 seconds for faster loading
+      // REDUCED timeout to 1 second for instant loading
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000); // REDUCED from 3s to 2s
+      const timeoutId = setTimeout(() => controller.abort(), 1000); // REDUCED from 2s to 1s
       
       try {
         const response = await fetch(`${API_URL}/api/auth/user`, {

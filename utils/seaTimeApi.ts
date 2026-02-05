@@ -18,7 +18,7 @@ const DATA_CACHE: {
   entries?: { data: any; timestamp: number };
 } = {};
 
-const CACHE_DURATION = 30 * 1000; // 30 seconds cache
+const CACHE_DURATION = 60 * 1000; // 60 seconds cache - increased for better performance
 
 // ========== REQUEST DEDUPLICATION ==========
 // Prevent duplicate simultaneous requests
@@ -164,7 +164,7 @@ export async function getVessels(): Promise<any[]> {
       const headers = await getApiHeaders();
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 1500); // 1.5s timeout - reduced for faster loading
       
       const response = await fetch(`${API_BASE_URL}/api/vessels`, {
         headers,

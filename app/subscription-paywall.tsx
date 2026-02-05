@@ -71,7 +71,7 @@ export default function SubscriptionPaywallScreen() {
 
   const initializeStoreKit = useCallback(async () => {
     try {
-      console.log('[SubscriptionPaywall] Initializing StoreKit');
+      console.log('[SubscriptionPaywall] Initializing StoreKit in background');
       const initialized = await StoreKitUtils.initializeStoreKit();
       
       if (initialized) {
@@ -95,9 +95,15 @@ export default function SubscriptionPaywallScreen() {
     console.log('[SubscriptionPaywall] Screen mounted');
     console.log('[SubscriptionPaywall] Current subscription status:', subscriptionStatus?.status);
     
-    // Initialize StoreKit and fetch product info
+    // Initialize StoreKit in background - don't block UI
+    // Show screen immediately with loading state for pricing
+    setLoadingProduct(true);
+    
     if (Platform.OS === 'ios') {
-      initializeStoreKit();
+      // Defer StoreKit initialization to not block rendering
+      setTimeout(() => {
+        initializeStoreKit();
+      }, 100);
     } else {
       setLoadingProduct(false);
     }

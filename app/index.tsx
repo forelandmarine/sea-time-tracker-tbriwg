@@ -12,14 +12,14 @@ export default function Index() {
   const { hasActiveSubscription, loading: subscriptionLoading } = useSubscription();
   const [timeoutReached, setTimeoutReached] = useState(false);
 
-  // REDUCED timeout to 1.5 seconds for faster loading
+  // REDUCED timeout to 500ms for instant loading
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (authLoading || subscriptionLoading) {
         console.warn('[Index] Loading timeout - proceeding anyway');
         setTimeoutReached(true);
       }
-    }, 1500); // REDUCED from 3s to 1.5s
+    }, 500); // REDUCED from 1.5s to 500ms for instant loading
     
     return () => clearTimeout(timeout);
   }, [authLoading, subscriptionLoading]);
