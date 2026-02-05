@@ -67,25 +67,39 @@ export default function SubscriptionPaywallScreen() {
   const [productInfo, setProductInfo] = useState<any>(null);
   const [loadingPrice, setLoadingPrice] = useState(true);
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const { subscriptionStatus, checkSubscription, loading: subscriptionLoading } = useSubscription();
   const { signOut } = useAuth();
 
   const initializeAndFetchProduct = useCallback(async () => {
+    setLoadingPrice(true);
+    setError(null);
+    
     try {
+      // Defer initialization slightly to prevent blocking UI
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       console.log('[SubscriptionPaywall] Initializing StoreKit');
-      await StoreKitUtils.initializeStoreKit();
+      const initialized = await StoreKitUtils.initializeStoreKit();
       
-      console.log('[SubscriptionPaywall] Fetching product info (no hardcoded prices)');
-      const info = await StoreKitUtils.getProductInfo();
-      
-      if (info) {
-        console.log('[SubscriptionPaywall] Product info fetched:', info);
-        setProductInfo(info);
+      if (initialized) {
+        console.log('[SubscriptionPaywall] Fetching product info (no hardcoded prices)');
+        const info = await StoreKitUtils.getProductInfo();
+        
+        if (info) {
+          console.log('[SubscriptionPaywall] Product info fetched:', info);
+          setProductInfo(info);
+        } else {
+          console.log('[SubscriptionPaywall] Product info not available - user will view pricing in App Store');
+          setError('Unable to load pricing. Please check your connection.');
+        }
       } else {
-        console.log('[SubscriptionPaywall] Product info not available - user will view pricing in App Store');
+        console.log('[SubscriptionPaywall] StoreKit not initialized');
+        setError('StoreKit not initialized. Please check your connection.');
       }
     } catch (error: any) {
       console.error('[SubscriptionPaywall] Error fetching product info:', error);
+      setError('Unable to load pricing. Please check your connection.');
     } finally {
       setLoadingPrice(false);
     }
@@ -170,7 +184,7 @@ export default function SubscriptionPaywallScreen() {
     } else {
       setLoadingPrice(false);
     }
-  }, [initializeAndFetchProduct, checkSubscription, router]);
+  }, [initializeAndFetchProduct, checkSubscription, router, subscriptionStatus?.status]);
 
   const handleSubscribe = async () => {
     if (Platform.OS !== 'ios') {

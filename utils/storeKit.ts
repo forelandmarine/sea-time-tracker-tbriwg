@@ -38,14 +38,7 @@ export async function initializeStoreKit(): Promise<boolean> {
  * CRITICAL: Never hardcode prices - always fetch from App Store
  * Returns null because we direct users to App Store for pricing
  */
-export async function getProductInfo(): Promise<{
-  productIdentifier: string;
-  price: string;
-  priceLocale: { currencySymbol: string; currencyCode: string };
-  localizedTitle: string;
-  localizedDescription: string;
-  localizedPrice?: string;
-} | null> {
+export async function getProductInfo(): Promise<any | null> {
   if (Platform.OS !== 'ios') {
     console.log('[StoreKit] Not on iOS, cannot get product info');
     return null;
