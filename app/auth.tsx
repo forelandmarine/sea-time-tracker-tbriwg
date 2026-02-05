@@ -136,11 +136,28 @@ export default function AuthScreen() {
       
       // Provide more helpful error messages
       let errorMessage = error.message || 'Authentication failed';
+      
+      // Check for specific error cases
       if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
         errorMessage = 'Cannot connect to server. Please check your internet connection.';
+        Alert.alert('Error', errorMessage);
+      } else if (errorMessage.toLowerCase().includes('invalid email or password')) {
+        // This could be either wrong password OR account created via Apple Sign In without password
+        if (Platform.OS === 'web') {
+          Alert.alert(
+            'Sign In Failed',
+            'If you created your account using "Sign in with Apple" on the mobile app, you need to set a password first. Tap "Forgot Password?" below to set one.',
+            [
+              { text: 'Set Password', onPress: () => router.push('/forgot-password') },
+              { text: 'Cancel', style: 'cancel' }
+            ]
+          );
+        } else {
+          Alert.alert('Error', 'Invalid email or password. Please try again.');
+        }
+      } else {
+        Alert.alert('Error', errorMessage);
       }
-      
-      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -261,6 +278,14 @@ export default function AuthScreen() {
           <View style={styles.warningBanner}>
             <Text style={styles.warningText}>
               ⚠️ Backend not configured. Authentication may not work.
+            </Text>
+          </View>
+        )}
+        
+        {Platform.OS === 'web' && !isSignUp && (
+          <View style={styles.infoBanner}>
+            <Text style={styles.infoText}>
+              💡 If you signed up with Apple on the mobile app, use "Forgot Password?" to set a password for web access.
             </Text>
           </View>
         )}
@@ -584,6 +609,21 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       textAlign: 'center',
       fontWeight: '500',
+    },
+    infoBanner: {
+      backgroundColor: isDark ? '#1E3A5F' : '#E3F2FD',
+      borderRadius: 8,
+      padding: 12,
+      marginTop: 16,
+      borderWidth: 1,
+      borderColor: isDark ? '#2196F3' : '#90CAF9',
+    },
+    infoText: {
+      color: isDark ? '#90CAF9' : '#1565C0',
+      fontSize: 13,
+      textAlign: 'center',
+      fontWeight: '500',
+      lineHeight: 18,
     },
   });
 }
