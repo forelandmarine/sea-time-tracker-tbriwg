@@ -819,32 +819,32 @@ export default function ProfileScreen() {
     }
   };
 
-  const handleSignOut = async () => {
+  const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = () => {
     console.log('User tapped Sign Out');
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            console.log('User confirmed sign out');
-            try {
-              await signOut();
-              console.log('Sign out successful');
-            } catch (error) {
-              console.error('Sign out error:', error);
-              Alert.alert('Error', 'Failed to sign out');
-            }
-          },
-        },
-      ]
-    );
+    setShowSignOutModal(true);
+  };
+
+  const confirmSignOut = async () => {
+    console.log('User confirmed sign out');
+    setSigningOut(true);
+    try {
+      await signOut();
+      console.log('Sign out successful - user will be redirected to auth screen');
+      // No need to manually navigate - the AuthContext will trigger a redirect
+    } catch (error) {
+      console.error('Sign out error:', error);
+      setSigningOut(false);
+      setShowSignOutModal(false);
+      Alert.alert('Error', 'Failed to sign out. Please try again.');
+    }
+  };
+
+  const cancelSignOut = () => {
+    console.log('User cancelled sign out');
+    setShowSignOutModal(false);
   };
 
   const getInitials = (name: string | null | undefined) => {
@@ -1291,6 +1291,62 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
+      </Modal>
+
+      {/* Sign Out Confirmation Modal */}
+      <Modal
+        visible={showSignOutModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={cancelSignOut}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxHeight: 'auto' }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Sign Out</Text>
+            </View>
+            
+            <View style={{ paddingVertical: 20 }}>
+              <Text style={{ 
+                fontSize: 16, 
+                color: isDark ? colors.text : colors.textLight,
+                textAlign: 'center',
+                lineHeight: 24,
+              }}>
+                Are you sure you want to sign out?
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                style={[styles.reportButton, { 
+                  flex: 1, 
+                  backgroundColor: isDark ? colors.cardBackground : colors.card,
+                  borderWidth: 1,
+                  borderColor: colors.primary,
+                }]}
+                onPress={cancelSignOut}
+                disabled={signingOut}
+              >
+                <Text style={[styles.reportButtonText, { color: colors.primary }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.signOutButton, { flex: 1, marginTop: 0 }]}
+                onPress={confirmSignOut}
+                disabled={signingOut}
+              >
+                {signingOut ? (
+                  <ActivityIndicator color="#ffffff" />
+                ) : (
+                  <Text style={styles.signOutButtonText}>Sign Out</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </Modal>
     </View>
   );

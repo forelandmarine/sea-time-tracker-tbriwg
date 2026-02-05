@@ -485,6 +485,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     console.log('[Auth] ========== SIGN OUT STARTED ==========');
+    
+    // CRITICAL: Clear local state FIRST in a finally block to ensure it always happens
+    // This prevents the app from staying logged in if there's any error
     try {
       const token = await tokenStorage.getToken();
       console.log('[Auth] Retrieved token for sign out, has token:', !!token);
@@ -517,28 +520,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         console.log('[Auth] No token or API URL, skipping backend call');
       }
-
-      console.log('[Auth] Clearing local token and user state...');
-      await tokenStorage.removeToken();
-      
-      // Clear biometric credentials on sign out
-      console.log('[Auth] Clearing biometric credentials...');
-      await clearBiometricCredentials();
-      
-      setUser(null);
-      console.log('[Auth] ========== SIGN OUT COMPLETED ==========');
     } catch (error) {
       console.error('[Auth] Sign out error:', error);
-      // Still clear local state even if there's an error
+      // Don't throw - we still want to clear local state
+    } finally {
+      // ALWAYS clear local state, even if backend call fails
+      console.log('[Auth] Clearing local token and user state...');
       try {
         await tokenStorage.removeToken();
-        await clearBiometricCredentials();
-        setUser(null);
-        console.log('[Auth] Local state cleared despite error');
-      } catch (clearError) {
-        console.error('[Auth] Failed to clear local state:', clearError);
+        console.log('[Auth] Token removed successfully');
+      } catch (tokenError) {
+        console.error('[Auth] Failed to remove token:', tokenError);
       }
-      throw error;
+      
+      // Clear biometric credentials on sign out
+      try {
+        console.log('[Auth] Clearing biometric credentials...');
+        await clearBiometricCredentials();
+        console.log('[Auth] Biometric credentials cleared');
+      } catch (bioError) {
+        console.error('[Auth] Failed to clear biometric credentials:', bioError);
+      }
+      
+      // Set user to null - this triggers the routing logic to redirect to auth
+      setUser(null);
+      console.log('[Auth] User state cleared - user is now logged out');
+      console.log('[Auth] ========== SIGN OUT COMPLETED ==========');
     }
   };
 
