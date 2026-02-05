@@ -476,107 +476,62 @@ export default function ProfileScreen() {
 
   console.log('ProfileScreen rendered (iOS)');
 
-  const loadProfile = useCallback(async (retryCount = 0) => {
-    const maxRetries = 1; // Reduced from 2 to 1 for faster loading
-    console.log(`Loading user profile (attempt ${retryCount + 1}/${maxRetries + 1})`);
+  // OPTIMIZED: Load all data in parallel with reduced timeouts
+  const loadAllData = useCallback(async () => {
+    console.log('ProfileScreen (iOS): Loading all data in parallel');
     
-    try {
-      // Add timeout to prevent hanging
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile load timeout')), 4000)
+    // Create timeout promises for each request - REDUCED to 2 seconds
+    const createTimeoutPromise = (name: string) => 
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`${name} timeout`)), 2000) // REDUCED from 3-4s to 2s
       );
-      
-      const profilePromise = seaTimeApi.getUserProfile();
-      const data = await Promise.race([profilePromise, timeoutPromise]);
-      
-      console.log('User profile loaded successfully:', data?.email);
-      setProfile(data);
-      setLoading(false);
-    } catch (error: any) {
-      console.error(`Failed to load profile (attempt ${retryCount + 1}):`, error?.message);
-      
-      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch') || error?.message?.includes('timeout'))) {
-        const waitTime = 1000; // Fixed 1s wait instead of exponential backoff
-        console.log(`Retrying profile load in ${waitTime}ms...`);
-        setTimeout(() => loadProfile(retryCount + 1), waitTime);
-      } else {
-        setLoading(false);
-        Alert.alert(
-          'Profile Load Error',
-          'Unable to load your profile. Please check your internet connection and try again.',
-          [
-            { text: 'Retry', onPress: () => loadProfile(0) },
-            { text: 'Cancel', style: 'cancel' }
-          ]
-        );
-      }
-    }
-  }, []);
-
-  const loadSummary = useCallback(async (retryCount = 0) => {
-    const maxRetries = 0; // No retries for summary - it's not critical
-    console.log(`Loading sea time summary (attempt ${retryCount + 1}/${maxRetries + 1})`);
     
-    try {
-      // Add timeout
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Summary load timeout')), 3000)
-      );
-      
-      const summaryPromise = seaTimeApi.getReportSummary();
-      const data = await Promise.race([summaryPromise, timeoutPromise]);
-      
-      console.log('Sea time summary loaded successfully');
-      setSummary(data);
-      setLoadingSummary(false);
-    } catch (error: any) {
-      console.error(`Failed to load sea time summary (attempt ${retryCount + 1}):`, error?.message);
-      setLoadingSummary(false);
-      console.warn('Summary load failed, continuing without summary');
-    }
-  }, []);
-
-  const loadVessels = useCallback(async (retryCount = 0) => {
-    const maxRetries = 0; // No retries for vessels - not critical for profile screen
-    console.log(`Loading vessels (attempt ${retryCount + 1}/${maxRetries + 1})`);
+    // Load all data in parallel
+    const results = await Promise.allSettled([
+      Promise.race([seaTimeApi.getUserProfile(), createTimeoutPromise('Profile')]),
+      Promise.race([seaTimeApi.getReportSummary(), createTimeoutPromise('Summary')]),
+      Promise.race([seaTimeApi.getVessels(), createTimeoutPromise('Vessels')]),
+    ]);
     
-    try {
-      // Add timeout
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Vessels load timeout')), 3000)
-      );
-      
-      const vesselsPromise = seaTimeApi.getVessels();
-      const data = await Promise.race([vesselsPromise, timeoutPromise]);
-      
-      console.log('Vessels loaded successfully:', data?.length);
-      setVessels(data);
-    } catch (error: any) {
-      console.error(`Failed to load vessels (attempt ${retryCount + 1}):`, error?.message);
-      console.warn('Vessels load failed, continuing without vessels');
+    // Process profile result
+    if (results[0].status === 'fulfilled') {
+      console.log('Profile loaded successfully');
+      setProfile(results[0].value);
+    } else {
+      console.error('Profile load failed:', results[0].reason);
     }
+    
+    // Process summary result
+    if (results[1].status === 'fulfilled') {
+      console.log('Summary loaded successfully');
+      setSummary(results[1].value);
+    } else {
+      console.warn('Summary load failed:', results[1].reason);
+    }
+    setLoadingSummary(false);
+    
+    // Process vessels result
+    if (results[2].status === 'fulfilled') {
+      console.log('Vessels loaded successfully');
+      setVessels(results[2].value);
+    } else {
+      console.warn('Vessels load failed:', results[2].reason);
+    }
+    
+    setLoading(false);
   }, []);
 
   useEffect(() => {
-    console.log('ProfileScreen (iOS): Initial mount, loading data in parallel');
-    // Load all data in parallel instead of sequentially
-    Promise.all([
-      loadProfile(),
-      loadSummary(),
-      loadVessels(),
-    ]).catch(error => {
-      console.error('ProfileScreen (iOS): Error loading data:', error);
-    });
-  }, [loadProfile, loadSummary, loadVessels]);
+    console.log('ProfileScreen (iOS): Initial mount, loading data');
+    loadAllData();
+  }, [loadAllData]);
 
   useEffect(() => {
     if (refreshTrigger > 0) {
-      console.log('ProfileScreen (iOS): Global refresh triggered, reloading profile data');
-      loadProfile();
-      loadSummary();
-      loadVessels();
+      console.log('ProfileScreen (iOS): Global refresh triggered, reloading data');
+      loadAllData();
     }
-  }, [refreshTrigger, loadProfile, loadSummary, loadVessels]);
+  }, [refreshTrigger, loadAllData]);
 
   const handleEditProfile = () => {
     console.log('User tapped Edit Profile');
@@ -641,17 +596,8 @@ export default function ProfileScreen() {
   const handleRefresh = async () => {
     console.log('User pulled to refresh profile');
     setRefreshing(true);
-    try {
-      await Promise.all([
-        loadProfile(0),
-        loadSummary(0),
-        loadVessels(0),
-      ]);
-    } catch (error) {
-      console.error('Refresh failed:', error);
-    } finally {
-      setRefreshing(false);
-    }
+    await loadAllData();
+    setRefreshing(false);
   };
 
   const formatServiceType = (serviceType: string): string => {
@@ -786,7 +732,6 @@ export default function ProfileScreen() {
     try {
       await signOut();
       console.log('Sign out successful - user will be redirected to auth screen');
-      // No need to manually navigate - the AuthContext will trigger a redirect
     } catch (error) {
       console.error('Sign out error:', error);
       setSigningOut(false);
@@ -819,9 +764,6 @@ export default function ProfileScreen() {
         <Text style={{ color: isDark ? colors.text : colors.textLight, marginTop: 16, fontSize: 16 }}>
           Loading your profile...
         </Text>
-        <Text style={{ color: isDark ? colors.textSecondary : colors.textSecondaryLight, marginTop: 8, fontSize: 14, textAlign: 'center' }}>
-          This may take a moment on slower connections
-        </Text>
       </View>
     );
   }
@@ -845,9 +787,7 @@ export default function ProfileScreen() {
           style={[styles.reportButton, { marginTop: 20, width: 200 }]}
           onPress={() => {
             setLoading(true);
-            loadProfile(0);
-            loadSummary(0);
-            loadVessels(0);
+            loadAllData();
           }}
         >
           <IconSymbol
@@ -873,9 +813,6 @@ export default function ProfileScreen() {
   );
 
   const allServiceTypes = getAllServiceTypesWithHours();
-
-  console.log('Profile image URL:', imageUrl);
-  console.log('User department:', userDepartment, '- Showing', filteredDefinitions.length, 'definitions');
 
   return (
     <View style={styles.container}>
@@ -1231,7 +1168,6 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Sign Out Confirmation Modal */}
       <Modal
         visible={showSignOutModal}
         transparent={true}
