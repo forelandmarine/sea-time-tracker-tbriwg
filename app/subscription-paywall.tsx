@@ -5,29 +5,29 @@
  * This screen displays subscription information and handles native iOS StoreKit purchases.
  * 
  * Features:
- * - Display subscription features with real-time pricing from App Store
- * - Native in-app purchase using StoreKit (complies with Apple Guideline 3.1.1)
- * - Restore previous purchases
+ * - Display subscription features (NO HARDCODED PRICES - fetched from App Store)
+ * - Direct users to App Store for subscription purchase
  * - Check subscription status with backend
+ * - Manage subscription via iOS Settings
  * - Sign out option
  * 
  * Subscription Model:
- * - Monthly subscription (price fetched from App Store in user's local currency)
+ * - Monthly subscription (price fetched from App Store)
  * - No free trial period
  * - Users must subscribe to access the app
  * - Status: 'active' or 'inactive'
  * 
- * CRITICAL: Uses native in-app purchase to comply with Apple's Guideline 3.1.1.
- * Pricing is fetched from App Store and displayed in user's local currency.
+ * CRITICAL: Prices are NEVER hardcoded per Apple StoreKit guidelines.
+ * Users view pricing in the App Store where it's displayed in their local currency.
  * 
  * Backend Integration:
  * - GET /api/subscription/status - Get current subscription status
- * - POST /api/subscription/verify - Verify App Store receipt
+ * - POST /api/subscription/verify - Verify App Store receipt (automatic)
  * - PATCH /api/subscription/pause-tracking - Pause tracking when subscription expires
  * 
  * StoreKit Integration:
  * - Product ID: com.forelandmarine.seatime.monthly
- * - Uses react-native-iap for native in-app purchases
+ * - Uses App Store links for subscription management
  * - Backend handles receipt verification with Apple servers
  */
 
@@ -57,44 +57,30 @@ export default function SubscriptionPaywallScreen() {
   const isDark = colorScheme === 'dark';
   const [loading, setLoading] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
-  const [productInfo, setProductInfo] = useState<{
-    productId: string;
-    price: string;
-    localizedPrice: string;
-    currency: string;
-    title: string;
-    description: string;
-  } | null>(null);
-  const [loadingProduct, setLoadingProduct] = useState(true);
+  const [showInstructions, setShowInstructions] = useState(false);
+  const [productInfo, setProductInfo] = useState<any>(null);
+  const [loadingPrice, setLoadingPrice] = useState(true);
   const { subscriptionStatus, checkSubscription, loading: subscriptionLoading } = useSubscription();
   const { signOut } = useAuth();
 
-  const initializeStoreKit = useCallback(async () => {
+  const initializeAndFetchProduct = useCallback(async () => {
     try {
-      console.log('[SubscriptionPaywall] Initializing StoreKit in background');
-      const initialized = await StoreKitUtils.initializeStoreKit();
+      console.log('[SubscriptionPaywall] Initializing StoreKit');
+      await StoreKitUtils.initializeStoreKit();
       
-      if (initialized) {
-        // Fetch product info to display pricing
-        const product = await StoreKitUtils.getProductInfo();
-        if (product) {
-          console.log('[SubscriptionPaywall] Product info loaded:', product);
-          setProductInfo(product);
-        } else {
-          console.warn('[SubscriptionPaywall] Failed to load product info - product is null');
-        }
+      console.log('[SubscriptionPaywall] Fetching product info (no hardcoded prices)');
+      const info = await StoreKitUtils.getProductInfo();
+      
+      if (info) {
+        console.log('[SubscriptionPaywall] Product info fetched:', info);
+        setProductInfo(info);
       } else {
-        console.warn('[SubscriptionPaywall] StoreKit initialization failed');
+        console.log('[SubscriptionPaywall] Product info not available - user will view pricing in App Store');
       }
     } catch (error: any) {
-      console.error('[SubscriptionPaywall] Error initializing StoreKit:', error);
-      console.error('[SubscriptionPaywall] Error details:', {
-        message: error.message,
-        code: error.code,
-        stack: error.stack,
-      });
+      console.error('[SubscriptionPaywall] Error fetching product info:', error);
     } finally {
-      setLoadingProduct(false);
+      setLoadingPrice(false);
     }
   }, []);
 
@@ -102,143 +88,39 @@ export default function SubscriptionPaywallScreen() {
     console.log('[SubscriptionPaywall] Screen mounted');
     console.log('[SubscriptionPaywall] Current subscription status:', subscriptionStatus?.status);
     
-    // Initialize StoreKit in background - don't block UI
-    // Show screen immediately with loading state for pricing
-    setLoadingProduct(true);
-    
+    // Initialize StoreKit and fetch product info
     if (Platform.OS === 'ios') {
-      // Defer StoreKit initialization to not block rendering
-      setTimeout(() => {
-        initializeStoreKit();
-      }, 100);
+      initializeAndFetchProduct();
     } else {
-      setLoadingProduct(false);
+      setLoadingPrice(false);
     }
-  }, [initializeStoreKit, subscriptionStatus?.status]);
+  }, [initializeAndFetchProduct, subscriptionStatus?.status]);
 
   const handleSubscribe = async () => {
     if (Platform.OS !== 'ios') {
       Alert.alert(
         'iOS Only',
-        'Subscriptions are currently only available on iOS.\n\nFor information about Android subscriptions, please contact info@forelandmarine.com'
+        'Subscriptions are currently only available on iOS via the App Store.\n\nFor information about Android subscriptions, please contact info@forelandmarine.com'
       );
       return;
     }
 
-    setLoading(true);
     try {
-      console.log('[SubscriptionPaywall] User tapped Subscribe button - starting native purchase');
+      console.log('[SubscriptionPaywall] User tapped Subscribe button');
       
-      // Check if completePurchaseFlow exists
-      if (typeof StoreKitUtils.completePurchaseFlow !== 'function') {
-        console.error('[SubscriptionPaywall] completePurchaseFlow is not a function');
-        throw new Error('Purchase function not available. Please restart the app and try again.');
-      }
+      // Show instructions first
+      setShowInstructions(true);
       
-      // Complete the purchase flow (purchase + verify)
-      const result = await StoreKitUtils.completePurchaseFlow();
+      // Open App Store
+      await StoreKitUtils.openAppStoreSubscription();
       
-      if (result.success) {
-        console.log('[SubscriptionPaywall] Purchase successful, subscription active');
-        
-        // Refresh subscription status
-        await checkSubscription();
-        
-        Alert.alert(
-          'Subscription Active!',
-          'Welcome to SeaTime Tracker! Your subscription is now active.',
-          [
-            {
-              text: 'Continue',
-              onPress: () => router.replace('/(tabs)'),
-            },
-          ]
-        );
-      } else {
-        console.error('[SubscriptionPaywall] Purchase failed:', result.error);
-        
-        // Don't show error for user cancellation
-        if (result.error !== 'Purchase cancelled') {
-          Alert.alert(
-            'Purchase Failed',
-            result.error || 'Unable to complete purchase. Please try again.'
-          );
-        }
-      }
+      console.log('[SubscriptionPaywall] Opened App Store for subscription');
     } catch (error: any) {
       console.error('[SubscriptionPaywall] Subscription error:', error);
-      console.error('[SubscriptionPaywall] Error details:', {
-        message: error.message,
-        code: error.code,
-        stack: error.stack,
-      });
       Alert.alert(
         'Error',
-        error.message || 'Unable to process subscription. Please try again or contact support.'
+        'Unable to open App Store. Please try again or subscribe manually via the App Store app.'
       );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRestore = async () => {
-    if (Platform.OS !== 'ios') {
-      Alert.alert(
-        'iOS Only',
-        'Restore purchases is only available on iOS.'
-      );
-      return;
-    }
-
-    setLoading(true);
-    try {
-      console.log('[SubscriptionPaywall] User tapped Restore button');
-      
-      // Check if completeRestoreFlow exists
-      if (typeof StoreKitUtils.completeRestoreFlow !== 'function') {
-        console.error('[SubscriptionPaywall] completeRestoreFlow is not a function');
-        throw new Error('Restore function not available. Please restart the app and try again.');
-      }
-      
-      // Complete the restore flow (restore + verify)
-      const result = await StoreKitUtils.completeRestoreFlow();
-      
-      if (result.success) {
-        console.log('[SubscriptionPaywall] Restore successful, subscription active');
-        
-        // Refresh subscription status
-        await checkSubscription();
-        
-        Alert.alert(
-          'Subscription Restored!',
-          'Your subscription has been restored successfully.',
-          [
-            {
-              text: 'Continue',
-              onPress: () => router.replace('/(tabs)'),
-            },
-          ]
-        );
-      } else {
-        console.log('[SubscriptionPaywall] Restore failed:', result.error);
-        Alert.alert(
-          'No Subscription Found',
-          result.error || 'No previous subscription found to restore. If you just subscribed, please wait a moment and try again.'
-        );
-      }
-    } catch (error: any) {
-      console.error('[SubscriptionPaywall] Restore error:', error);
-      console.error('[SubscriptionPaywall] Error details:', {
-        message: error.message,
-        code: error.code,
-        stack: error.stack,
-      });
-      Alert.alert(
-        'Error',
-        error.message || 'Unable to restore purchases. Please try again or contact support.'
-      );
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -264,7 +146,7 @@ export default function SubscriptionPaywallScreen() {
         console.log('[SubscriptionPaywall] No active subscription found');
         Alert.alert(
           'No Active Subscription',
-          'No active subscription was found. Please subscribe or restore your previous purchase.'
+          'No active subscription was found. If you just subscribed, please wait a moment for Apple to process your purchase, then try again.\n\nIf you continue to have issues, please contact info@forelandmarine.com'
         );
       }
     } catch (error: any) {
@@ -278,30 +160,17 @@ export default function SubscriptionPaywallScreen() {
     }
   };
 
-  const handleShowInstructions = () => {
+  const handleManageSubscription = async () => {
     try {
-      console.log('[SubscriptionPaywall] Showing subscription instructions');
-      if (typeof StoreKitUtils.showSubscriptionInstructions === 'function') {
-        StoreKitUtils.showSubscriptionInstructions();
-      } else {
-        console.error('[SubscriptionPaywall] showSubscriptionInstructions is not a function');
-        Alert.alert(
-          'How to Subscribe',
-          'SeaTime Tracker uses native in-app purchases:\n\n' +
-          '1. Tap "Subscribe Now" to see pricing\n' +
-          '2. Complete your subscription using Apple Pay or your Apple ID\n' +
-          '3. Your subscription will be active immediately\n\n' +
-          'Your subscription is managed through your Apple ID and will automatically renew each month.\n\n' +
-          'You can manage or cancel your subscription anytime in:\nSettings → Apple ID → Subscriptions'
-        );
-      }
+      console.log('[SubscriptionPaywall] User tapped Manage Subscription button');
+      await StoreKitUtils.openSubscriptionManagement();
     } catch (error: any) {
-      console.error('[SubscriptionPaywall] Error showing instructions:', error);
-      Alert.alert(
-        'Error',
-        'Unable to show instructions. Please contact support if you need help subscribing.'
-      );
+      console.error('[SubscriptionPaywall] Manage subscription error:', error);
     }
+  };
+
+  const handleShowInstructions = () => {
+    StoreKitUtils.showSubscriptionInstructions();
   };
 
   const handleSignOut = async () => {
@@ -318,10 +187,12 @@ export default function SubscriptionPaywallScreen() {
   const styles = createStyles(isDark);
 
   const statusText = 'Subscription Required';
-  const messageText = 'SeaTime Tracker requires an active subscription to access the app. Subscribe now to start tracking your sea time and generating MCA-compliant reports.';
+  const messageText = 'SeaTime Tracker requires an active subscription to track your sea time and generate MCA-compliant reports.';
 
-  const priceText = productInfo ? productInfo.localizedPrice : 'Loading...';
-  const priceSubtext = productInfo ? `${priceText} per month` : 'Fetching pricing...';
+  // Format price display
+  const priceDisplay = productInfo 
+    ? `${productInfo.priceLocale.currencySymbol}${productInfo.price}`
+    : 'View in App Store';
 
   return (
     <>
@@ -343,28 +214,6 @@ export default function SubscriptionPaywallScreen() {
           <Text style={styles.title}>{statusText}</Text>
           <Text style={styles.subtitle}>{messageText}</Text>
         </View>
-
-        {/* Pricing Card */}
-        {Platform.OS === 'ios' && (
-          <View style={styles.pricingCard}>
-            {loadingProduct ? (
-              <ActivityIndicator size="large" color={colors.primary} />
-            ) : productInfo ? (
-              <>
-                <Text style={styles.pricingTitle}>Monthly Subscription</Text>
-                <Text style={styles.pricingPrice}>{priceText}</Text>
-                <Text style={styles.pricingSubtext}>per month</Text>
-                <Text style={styles.pricingDescription}>
-                  Billed monthly. Cancel anytime.
-                </Text>
-              </>
-            ) : (
-              <Text style={styles.pricingError}>
-                Unable to load pricing. Please check your connection.
-              </Text>
-            )}
-          </View>
-        )}
 
         <View style={styles.featuresContainer}>
           <Text style={styles.featuresTitle}>Premium Features</Text>
@@ -420,37 +269,39 @@ export default function SubscriptionPaywallScreen() {
           </View>
         </View>
 
+        <View style={styles.pricingContainer}>
+          <Text style={styles.pricingTitle}>Monthly Subscription</Text>
+          {loadingPrice ? (
+            <ActivityIndicator size="large" color={colors.primary} style={styles.priceLoader} />
+          ) : (
+            <>
+              <Text style={styles.price}>{priceDisplay}</Text>
+              {productInfo && <Text style={styles.pricingSubtitle}>per month</Text>}
+              {!productInfo && Platform.OS === 'ios' && (
+                <Text style={styles.pricingNote}>Tap Subscribe to view pricing in your currency</Text>
+              )}
+            </>
+          )}
+          <Text style={styles.pricingNote}>Cancel anytime • No trial period</Text>
+        </View>
+
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[styles.button, styles.primaryButton]}
             onPress={handleSubscribe}
-            disabled={loading || subscriptionLoading || loadingProduct}
+            disabled={loading || subscriptionLoading}
           >
             {loading || subscriptionLoading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <>
                 <Text style={styles.buttonText}>Subscribe Now</Text>
-                {Platform.OS === 'ios' && productInfo && (
-                  <Text style={styles.buttonSubtext}>{priceSubtext}</Text>
+                {Platform.OS === 'ios' && (
+                  <Text style={styles.buttonSubtext}>Opens App Store</Text>
                 )}
               </>
             )}
           </TouchableOpacity>
-
-          {Platform.OS === 'ios' && (
-            <TouchableOpacity
-              style={[styles.button, styles.secondaryButton]}
-              onPress={handleRestore}
-              disabled={loading || subscriptionLoading}
-            >
-              {loading || subscriptionLoading ? (
-                <ActivityIndicator color={isDark ? colors.text : colors.textLight} />
-              ) : (
-                <Text style={styles.secondaryButtonText}>Restore Purchase</Text>
-              )}
-            </TouchableOpacity>
-          )}
 
           <TouchableOpacity
             style={[styles.button, styles.secondaryButton]}
@@ -465,18 +316,28 @@ export default function SubscriptionPaywallScreen() {
           </TouchableOpacity>
 
           {Platform.OS === 'ios' && (
-            <TouchableOpacity
-              style={[styles.button, styles.tertiaryButton]}
-              onPress={handleShowInstructions}
-            >
-              <IconSymbol
-                ios_icon_name="questionmark.circle"
-                android_material_icon_name="help"
-                size={20}
-                color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-              />
-              <Text style={styles.tertiaryButtonText}>How to Subscribe</Text>
-            </TouchableOpacity>
+            <>
+              <TouchableOpacity
+                style={[styles.button, styles.secondaryButton]}
+                onPress={handleManageSubscription}
+                disabled={loading || subscriptionLoading}
+              >
+                <Text style={styles.secondaryButtonText}>Manage Subscription</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.button, styles.tertiaryButton]}
+                onPress={handleShowInstructions}
+              >
+                <IconSymbol
+                  ios_icon_name="questionmark.circle"
+                  android_material_icon_name="help"
+                  size={20}
+                  color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+                />
+                <Text style={styles.tertiaryButtonText}>How to Subscribe</Text>
+              </TouchableOpacity>
+            </>
           )}
 
           <TouchableOpacity
@@ -498,13 +359,46 @@ export default function SubscriptionPaywallScreen() {
             Manage your subscription in iOS Settings → Apple ID → Subscriptions
           </Text>
           <Text style={styles.footerText}>
-            Payment will be charged to your Apple ID account at confirmation of purchase.
+            Pricing is displayed in the App Store in your local currency.
           </Text>
           <Text style={styles.footerText}>
             Need help? Contact info@forelandmarine.com
           </Text>
         </View>
       </ScrollView>
+
+      {/* Instructions Modal */}
+      <Modal
+        visible={showInstructions}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowInstructions(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <IconSymbol
+              ios_icon_name="info.circle.fill"
+              android_material_icon_name="info"
+              size={48}
+              color={colors.primary}
+            />
+            <Text style={styles.modalTitle}>Subscribe in App Store</Text>
+            <Text style={styles.modalMessage}>
+              1. View pricing and complete your subscription in the App Store{'\n\n'}
+              2. Return to SeaTime Tracker{'\n\n'}
+              3. Tap &quot;Check Subscription Status&quot;{'\n\n'}
+              Your subscription is managed through your Apple ID and will automatically renew each month.{'\n\n'}
+              Pricing is displayed in your local currency in the App Store.
+            </Text>
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalConfirmButton]}
+              onPress={() => setShowInstructions(false)}
+            >
+              <Text style={styles.modalConfirmText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Sign Out Modal */}
       <Modal
@@ -552,7 +446,7 @@ function createStyles(isDark: boolean) {
     },
     header: {
       alignItems: 'center',
-      marginBottom: 32,
+      marginBottom: 40,
     },
     iconContainer: {
       width: 120,
@@ -577,42 +471,6 @@ function createStyles(isDark: boolean) {
       lineHeight: 24,
       paddingHorizontal: 20,
     },
-    pricingCard: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 16,
-      padding: 24,
-      marginBottom: 24,
-      alignItems: 'center',
-      borderWidth: 2,
-      borderColor: colors.primary,
-    },
-    pricingTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 12,
-    },
-    pricingPrice: {
-      fontSize: 48,
-      fontWeight: 'bold',
-      color: colors.primary,
-      marginBottom: 4,
-    },
-    pricingSubtext: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 12,
-    },
-    pricingDescription: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      textAlign: 'center',
-    },
-    pricingError: {
-      fontSize: 14,
-      color: colors.error,
-      textAlign: 'center',
-    },
     featuresContainer: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 16,
@@ -635,6 +493,41 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.text : colors.textLight,
       marginLeft: 12,
       flex: 1,
+    },
+    pricingContainer: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 16,
+      padding: 24,
+      marginBottom: 24,
+      alignItems: 'center',
+      borderWidth: 2,
+      borderColor: colors.primary,
+    },
+    pricingTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 8,
+    },
+    priceLoader: {
+      marginVertical: 20,
+    },
+    price: {
+      fontSize: 36,
+      fontWeight: 'bold',
+      color: colors.primary,
+      marginBottom: 4,
+    },
+    pricingSubtitle: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 8,
+    },
+    pricingNote: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      textAlign: 'center',
+      marginTop: 4,
     },
     buttonContainer: {
       marginBottom: 24,

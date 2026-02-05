@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { eq, desc, and, gte, isNotNull, lt } from "drizzle-orm";
 import * as schema from "../db/schema.js";
-import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
 import { extractUserIdFromRequest } from "../middleware/auth.js";
 
@@ -1042,7 +1041,6 @@ export function register(app: App, fastify: FastifyInstance) {
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
-        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
         429: { type: 'object', properties: { error: { type: 'string' }, nextQueryTime: { type: 'number' } } },
         502: { type: 'object', properties: { error: { type: 'string' } } },
@@ -1073,25 +1071,6 @@ export function register(app: App, fastify: FastifyInstance) {
     if (!vessel[0].is_active) {
       app.logger.warn(`Cannot track inactive vessel: ${vesselId}`);
       return reply.code(400).send({ error: 'Vessel is not active. Please activate the vessel first.' });
-    }
-
-    // Check user subscription status
-    const vesselUserId = vessel[0].user_id;
-    if (vesselUserId) {
-      const users = await app.db
-        .select()
-        .from(authSchema.user)
-        .where(eq(authSchema.user.id, vesselUserId));
-
-      if (users.length > 0) {
-        const user = users[0];
-        const subscriptionStatus = user.subscription_status || 'inactive';
-
-        if (subscriptionStatus !== 'active') {
-          app.logger.warn({ userId: vesselUserId, vesselId }, 'AIS check attempted with inactive subscription');
-          return reply.code(403).send({ error: 'Subscription required for vessel tracking. Please subscribe.' });
-        }
-      }
     }
 
     // Rate limiting check (2-hour interval per vessel)

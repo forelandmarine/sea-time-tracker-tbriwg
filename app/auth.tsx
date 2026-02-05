@@ -136,28 +136,11 @@ export default function AuthScreen() {
       
       // Provide more helpful error messages
       let errorMessage = error.message || 'Authentication failed';
-      
-      // Check for specific error cases
       if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
         errorMessage = 'Cannot connect to server. Please check your internet connection.';
-        Alert.alert('Error', errorMessage);
-      } else if (errorMessage.toLowerCase().includes('invalid email or password')) {
-        // This could be either wrong password OR account created via Apple Sign In without password
-        if (Platform.OS === 'web') {
-          Alert.alert(
-            'Sign In Failed',
-            'If you created your account using "Sign in with Apple" on the mobile app, you need to set a password first. Tap "Forgot Password?" below to set one.',
-            [
-              { text: 'Set Password', onPress: () => router.push('/forgot-password') },
-              { text: 'Cancel', style: 'cancel' }
-            ]
-          );
-        } else {
-          Alert.alert('Error', 'Invalid email or password. Please try again.');
-        }
-      } else {
-        Alert.alert('Error', errorMessage);
       }
+      
+      Alert.alert('Error', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -165,7 +148,6 @@ export default function AuthScreen() {
 
   const handleAppleSignIn = async () => {
     try {
-      console.log('[AuthScreen] ========== APPLE SIGN IN FLOW STARTED ==========');
       console.log('[AuthScreen] User tapped Sign in with Apple button');
       console.log('[AuthScreen] Checking Apple Authentication availability...');
       
@@ -174,7 +156,6 @@ export default function AuthScreen() {
       console.log('[AuthScreen] Apple Authentication available:', isAvailable);
       
       if (!isAvailable) {
-        console.warn('[AuthScreen] Apple Authentication not available on this device');
         Alert.alert(
           'Not Available',
           'Sign in with Apple is not available on this device. Please use email and password instead.',
@@ -184,7 +165,7 @@ export default function AuthScreen() {
       }
 
       setLoading(true);
-      console.log('[AuthScreen] Requesting Apple credentials from user...');
+      console.log('[AuthScreen] Requesting Apple credentials...');
       
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
@@ -193,18 +174,15 @@ export default function AuthScreen() {
         ],
       });
 
-      console.log('[AuthScreen] ========== APPLE CREDENTIAL RECEIVED ==========');
-      console.log('[AuthScreen] Has identity token:', !!credential.identityToken);
-      console.log('[AuthScreen] Identity token length:', credential.identityToken?.length);
-      console.log('[AuthScreen] Has email:', !!credential.email);
-      console.log('[AuthScreen] Email:', credential.email);
-      console.log('[AuthScreen] Has full name:', !!credential.fullName);
-      console.log('[AuthScreen] Full name:', credential.fullName);
-      console.log('[AuthScreen] User ID:', credential.user);
-      console.log('[AuthScreen] ==========================================');
+      console.log('[AuthScreen] Apple credential received:', {
+        hasIdentityToken: !!credential.identityToken,
+        hasEmail: !!credential.email,
+        hasFullName: !!credential.fullName,
+        user: credential.user,
+      });
 
       if (!credential.identityToken) {
-        console.error('[AuthScreen] ❌ No identity token received from Apple');
+        console.error('[AuthScreen] No identity token received from Apple');
         Alert.alert('Error', 'Failed to get Apple authentication token. Please try again.');
         setLoading(false);
         return;
@@ -218,27 +196,19 @@ export default function AuthScreen() {
           name: credential.fullName,
         });
         
-        console.log('[AuthScreen] ✅ Apple sign in successful, navigating to home');
+        console.log('[AuthScreen] Apple sign in successful, navigating to home');
         router.replace('/(tabs)');
       } catch (backendError: any) {
-        console.error('[AuthScreen] ❌ Backend Apple sign in failed');
-        console.error('[AuthScreen] Error type:', backendError?.name);
-        console.error('[AuthScreen] Error message:', backendError?.message);
-        console.error('[AuthScreen] Error stack:', backendError?.stack);
+        console.error('[AuthScreen] Backend Apple sign in failed:', backendError);
         
         // Provide helpful error messages
-        let errorMessage = 'Unable to sign in with Apple.\n\n';
-        
-        if (backendError.message?.includes('timeout') || backendError.message?.includes('timed out')) {
-          errorMessage += 'The request timed out. Please check your internet connection and try again.';
-        } else if (backendError.message?.includes('Network') || backendError.message?.includes('fetch')) {
-          errorMessage += 'Cannot connect to server. Please check your internet connection and try again.';
+        let errorMessage = 'Unable to sign in with Apple. ';
+        if (backendError.message?.includes('Network') || backendError.message?.includes('fetch')) {
+          errorMessage += 'Please check your internet connection and try again.';
         } else if (backendError.message?.includes('token')) {
           errorMessage += 'Authentication token is invalid. Please try again.';
-        } else if (backendError.message?.includes('Backend URL')) {
-          errorMessage += 'Backend is not configured. Please contact support.';
         } else {
-          errorMessage += backendError.message || 'An unknown error occurred. Please try again later.';
+          errorMessage += backendError.message || 'Please try again later.';
         }
         
         Alert.alert('Sign In Failed', errorMessage, [
@@ -247,34 +217,30 @@ export default function AuthScreen() {
         ]);
       }
     } catch (error: any) {
-      console.error('[AuthScreen] ========== APPLE SIGN IN ERROR ==========');
-      console.error('[AuthScreen] Error code:', error.code);
-      console.error('[AuthScreen] Error message:', error.message);
-      console.error('[AuthScreen] Full error:', error);
-      console.error('[AuthScreen] ==========================================');
-      
       if (error.code === 'ERR_CANCELED' || error.code === 'ERR_REQUEST_CANCELED') {
         console.log('[AuthScreen] User cancelled Apple sign in');
-        // Don't show alert for user cancellation
       } else if (error.code === 'ERR_INVALID_RESPONSE') {
-        console.error('[AuthScreen] Invalid response from Apple');
+        console.error('[AuthScreen] Invalid response from Apple:', error);
         Alert.alert(
           'Sign In Error',
-          'Received an invalid response from Apple. This may be a temporary issue. Please try again.',
+          'Received an invalid response from Apple. Please try again.',
           [{ text: 'OK' }]
         );
       } else {
-        console.error('[AuthScreen] Unexpected Apple sign in error');
+        console.error('[AuthScreen] Apple sign in failed:', {
+          code: error.code,
+          message: error.message,
+          error: error,
+        });
         
         Alert.alert(
           'Sign In Error',
-          `Unable to sign in with Apple: ${error.message || 'Unknown error'}.\n\nPlease try again or use email and password.`,
+          `Unable to sign in with Apple: ${error.message || 'Unknown error'}. Please try again or use email and password.`,
           [{ text: 'OK' }]
         );
       }
     } finally {
       setLoading(false);
-      console.log('[AuthScreen] ========== APPLE SIGN IN FLOW ENDED ==========');
     }
   };
 
@@ -295,14 +261,6 @@ export default function AuthScreen() {
           <View style={styles.warningBanner}>
             <Text style={styles.warningText}>
               ⚠️ Backend not configured. Authentication may not work.
-            </Text>
-          </View>
-        )}
-        
-        {Platform.OS === 'web' && !isSignUp && (
-          <View style={styles.infoBanner}>
-            <Text style={styles.infoText}>
-              💡 If you signed up with Apple on the mobile app, use "Forgot Password?" to set a password for web access.
             </Text>
           </View>
         )}
@@ -626,21 +584,6 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       textAlign: 'center',
       fontWeight: '500',
-    },
-    infoBanner: {
-      backgroundColor: isDark ? '#1E3A5F' : '#E3F2FD',
-      borderRadius: 8,
-      padding: 12,
-      marginTop: 16,
-      borderWidth: 1,
-      borderColor: isDark ? '#2196F3' : '#90CAF9',
-    },
-    infoText: {
-      color: isDark ? '#90CAF9' : '#1565C0',
-      fontSize: 13,
-      textAlign: 'center',
-      fontWeight: '500',
-      lineHeight: 18,
     },
   });
 }

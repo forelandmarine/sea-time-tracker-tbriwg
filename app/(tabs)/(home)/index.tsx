@@ -70,6 +70,7 @@ export default function SeaTimeScreen() {
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
 
+  // Separate vessels into active and historic
   const activeVessel = vessels.find(v => v.is_active);
   const historicVessels = vessels.filter(v => !v.is_active);
 
@@ -79,6 +80,7 @@ export default function SeaTimeScreen() {
       const date = new Date(timestamp);
       const now = new Date();
       const hoursSinceUpdate = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
+      // Consider data stale if it's more than 2 hours old (matching the AIS check interval)
       return hoursSinceUpdate > 2;
     } catch (e) {
       return false;
@@ -86,38 +88,42 @@ export default function SeaTimeScreen() {
   }, []);
 
   const loadActiveVesselLocation = useCallback(async (vesselId: string, forceRefresh: boolean = false) => {
-    // Don't block UI - load location in background
-    setLocationLoading(true);
-    console.log('[Home] Loading location for vessel:', vesselId);
-    
     try {
+      setLocationLoading(true);
+      console.log('[Home] Loading location for vessel:', vesselId, 'forceRefresh:', forceRefresh);
+      
+      // First, get the current cached location
       const locationData = await seaTimeApi.getVesselAISLocation(vesselId, false);
       setActiveVesselLocation({
         latitude: locationData.latitude,
         longitude: locationData.longitude,
         timestamp: locationData.timestamp,
       });
-      console.log('[Home] Location loaded');
+      console.log('[Home] Location loaded:', locationData.latitude, locationData.longitude, 'timestamp:', locationData.timestamp);
       
-      // Background refresh if stale or forced
+      // If forceRefresh is true OR data is stale (>2 hours), trigger a fresh AIS check
       if (forceRefresh || isLocationStale(locationData.timestamp)) {
-        console.log('[Home] Data is stale, triggering fresh AIS check');
-        seaTimeApi.checkVesselAIS(vesselId, true)
-          .then(() => seaTimeApi.getVesselAISLocation(vesselId, false))
-          .then(freshLocationData => {
-            setActiveVesselLocation({
-              latitude: freshLocationData.latitude,
-              longitude: freshLocationData.longitude,
-              timestamp: freshLocationData.timestamp,
-            });
-            console.log('[Home] Fresh location loaded in background');
-          })
-          .catch(aisError => {
-            console.error('[Home] Background AIS check failed:', aisError);
+        console.log('[Home] Data is stale or refresh requested, triggering fresh AIS check');
+        try {
+          // This will trigger a fresh API call to MyShipTracking
+          await seaTimeApi.checkVesselAIS(vesselId, true);
+          
+          // Reload the location after the fresh check
+          const freshLocationData = await seaTimeApi.getVesselAISLocation(vesselId, false);
+          setActiveVesselLocation({
+            latitude: freshLocationData.latitude,
+            longitude: freshLocationData.longitude,
+            timestamp: freshLocationData.timestamp,
           });
+          console.log('[Home] Fresh location loaded:', freshLocationData.latitude, freshLocationData.longitude, 'timestamp:', freshLocationData.timestamp);
+        } catch (aisError: any) {
+          console.error('[Home] Failed to get fresh AIS data:', aisError);
+          // Keep the cached data, just log the error
+        }
       }
     } catch (error: any) {
       console.error('[Home] Failed to load vessel location:', error);
+      // Don't show alert for location errors, just log them
       setActiveVesselLocation(null);
     } finally {
       setLocationLoading(false);
@@ -126,24 +132,18 @@ export default function SeaTimeScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      console.log('[Home] ========== LOADING VESSELS ==========');
-      const startTime = Date.now();
-      
-      // NO TIMEOUT - let the API layer handle caching and timeouts
+      console.log('[Home] Loading vessels...');
       const vesselsData = await seaTimeApi.getVessels();
       setVessels(vesselsData);
+      console.log('[Home] Vessels loaded - Active:', vesselsData.filter(v => v.is_active).length, 'Historic:', vesselsData.filter(v => !v.is_active).length);
       
-      const loadTime = Date.now() - startTime;
-      console.log(`[Home] ========== VESSELS LOADED IN ${loadTime}ms ==========`);
-      
-      // Load location in background - don't block UI
+      // Load location for the active vessel - auto-refresh if stale
       const newActiveVessel = vesselsData.find(v => v.is_active);
       if (newActiveVessel) {
-        console.log('[Home] Found active vessel, loading location in background');
-        loadActiveVesselLocation(newActiveVessel.id, false).catch(error => {
-          console.error('[Home] Background location load failed:', error);
-        });
+        console.log('[Home] Found active vessel, loading location with auto-refresh:', newActiveVessel.vessel_name);
+        await loadActiveVesselLocation(newActiveVessel.id, false);
       } else {
+        console.log('[Home] No active vessel found, clearing location');
         setActiveVesselLocation(null);
       }
     } catch (error: any) {
@@ -154,15 +154,16 @@ export default function SeaTimeScreen() {
     }
   }, [loadActiveVesselLocation]);
 
+  // Initial data load - MUST come AFTER loadData is defined
   useEffect(() => {
-    console.log('[Home] Initial data load');
+    console.log('[Home] Initial data load - will auto-refresh if stale');
     loadData();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loadData]);
 
+  // Listen for global refresh trigger - MUST come AFTER loadData is defined
   useEffect(() => {
     if (refreshTrigger > 0) {
-      console.log('[Home] Global refresh triggered');
-      seaTimeApi.clearCache();
+      console.log('[Home] Global refresh triggered, reloading data');
       loadData();
     }
   }, [refreshTrigger, loadData]);
@@ -170,15 +171,18 @@ export default function SeaTimeScreen() {
   const onRefresh = async () => {
     console.log('[Home] User triggered manual refresh');
     setRefreshing(true);
-    seaTimeApi.clearCache();
     
+    // Reload vessels first
     const vesselsData = await seaTimeApi.getVessels();
     setVessels(vesselsData);
     
+    // Load location for the active vessel with force refresh
     const newActiveVessel = vesselsData.find(v => v.is_active);
     if (newActiveVessel) {
+      console.log('[Home] Found active vessel, loading location with force refresh:', newActiveVessel.vessel_name);
       await loadActiveVesselLocation(newActiveVessel.id, true);
     } else {
+      console.log('[Home] No active vessel found, clearing location');
       setActiveVesselLocation(null);
     }
     
@@ -193,9 +197,24 @@ export default function SeaTimeScreen() {
 
     try {
       const vesselNameTrimmed = newVesselName.trim();
-      console.log('[Home] Creating new vessel:', vesselNameTrimmed);
+      console.log('[Home] User action: Creating new vessel:', { 
+        mmsi: newMMSI, 
+        name: vesselNameTrimmed,
+        callsign: newCallSign,
+        flag: newFlag,
+        official_number: newOfficialNumber,
+        vessel_type: newVesselType,
+        length_metres: newLengthMetres,
+        gross_tonnes: newGrossTonnes,
+        engine_kilowatts: newEngineKilowatts,
+        engine_type: newEngineType
+      });
       
+      // ALWAYS activate new vessels - this ensures they become the active tracked vessel
+      // with an attributed scheduled task created automatically by the backend
       const shouldActivate = true;
+      
+      console.log('[Home] New vessel will be automatically activated and tracked');
       
       const createdVessel = await seaTimeApi.createVessel(
         newMMSI.trim(), 
@@ -211,12 +230,17 @@ export default function SeaTimeScreen() {
         newEngineType.trim() || undefined
       );
       
-      console.log('[Home] Vessel created successfully');
+      console.log('[Home] Vessel created successfully:', createdVessel.id);
       
+      // Immediately capture the vessel's position by triggering an AIS check
+      console.log('[Home] Capturing initial position for new vessel...');
       try {
         await seaTimeApi.checkVesselAIS(createdVessel.id, true);
+        console.log('[Home] Initial position captured successfully');
       } catch (aisError: any) {
         console.error('[Home] Failed to capture initial position:', aisError);
+        // Don't fail the whole operation if AIS check fails
+        // The scheduled task will pick it up on the next run
       }
       
       setModalVisible(false);
@@ -235,6 +259,7 @@ export default function SeaTimeScreen() {
       Alert.alert('Success', `${vesselNameTrimmed} has been added and is now being tracked`);
     } catch (error: any) {
       console.error('[Home] Failed to add vessel:', error);
+      // Display the error message from the API (which now includes user-friendly messages)
       Alert.alert('Error', error.message || 'Failed to add vessel. Please try again.');
     }
   };
@@ -253,7 +278,7 @@ export default function SeaTimeScreen() {
           text: 'Activate',
           onPress: async () => {
             try {
-              console.log('[Home] Activating vessel:', vesselId);
+              console.log('[Home] User action: Activating vessel:', vesselId, '(will deactivate others)');
               await seaTimeApi.activateVessel(vesselId);
               await loadData();
               Alert.alert('Success', `${vesselName} is now being tracked`);
@@ -278,7 +303,7 @@ export default function SeaTimeScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('[Home] Deleting vessel:', vesselId);
+              console.log('[Home] User action: Deleting vessel:', vesselId);
               await seaTimeApi.deleteVessel(vesselId);
               await loadData();
               Alert.alert('Success', 'Vessel deleted');
@@ -298,7 +323,7 @@ export default function SeaTimeScreen() {
   };
 
   const handleUserAccountPress = () => {
-    console.log('[Home] Navigating to user profile');
+    console.log('[Home] User tapped account button, navigating to user profile');
     router.push('/user-profile');
   };
 
@@ -360,6 +385,7 @@ export default function SeaTimeScreen() {
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
+        {/* Header - matching Logbook light header color */}
         <View style={styles.header}>
           <View style={styles.headerTitleContainer}>
             <Image
@@ -387,6 +413,7 @@ export default function SeaTimeScreen() {
           </View>
         </View>
 
+        {/* Active Vessel Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Active Vessel</Text>
@@ -429,6 +456,7 @@ export default function SeaTimeScreen() {
                 <Text style={styles.vesselName}>{activeVessel.vessel_name}</Text>
                 <Text style={styles.vesselMmsi}>MMSI: {activeVessel.mmsi}</Text>
                 
+                {/* Vessel Particulars in 2-column grid - now includes call sign */}
                 <View style={styles.vesselParticularsGrid}>
                   {activeVessel.callsign && (
                     <View style={styles.particularItem}>
@@ -468,6 +496,7 @@ export default function SeaTimeScreen() {
                   )}
                 </View>
 
+                {/* Location in DMS format with timestamp */}
                 {locationLoading ? (
                   <View style={styles.locationSection}>
                     <Text style={styles.locationSectionTitle}>Position</Text>
@@ -515,6 +544,7 @@ export default function SeaTimeScreen() {
                 ) : null}
               </TouchableOpacity>
 
+              {/* Map showing vessel location - always show if we have any location data */}
               {activeVesselLocation && 
                activeVesselLocation.latitude !== null && 
                activeVesselLocation.longitude !== null ? (
@@ -545,6 +575,7 @@ export default function SeaTimeScreen() {
           )}
         </View>
 
+        {/* Historic Vessels Section - Always show */}
         <View style={styles.section}>
           <View style={styles.historicHeader}>
             <Text style={styles.sectionTitle}>Historic Vessels</Text>
@@ -579,6 +610,7 @@ export default function SeaTimeScreen() {
                       <Text style={styles.vesselName}>{vessel.vessel_name}</Text>
                       <Text style={styles.vesselMmsi}>MMSI: {vessel.mmsi}</Text>
                       
+                      {/* Vessel Particulars for historic vessels */}
                       <View style={styles.vesselParticulars}>
                         {vessel.callsign && (
                           <Text style={styles.vesselDetail}>Call Sign: {vessel.callsign}</Text>
@@ -614,6 +646,7 @@ export default function SeaTimeScreen() {
         </View>
       </ScrollView>
 
+      {/* Add Vessel Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalOverlay}>
           <TouchableOpacity 
@@ -645,6 +678,7 @@ export default function SeaTimeScreen() {
                 showsVerticalScrollIndicator={true}
                 bounces={false}
               >
+                {/* Auto-fill info banner */}
                 <View style={styles.autoFillBanner}>
                   <IconSymbol
                     ios_icon_name="info.circle.fill"

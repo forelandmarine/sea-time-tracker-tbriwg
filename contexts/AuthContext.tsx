@@ -12,13 +12,6 @@ interface User {
   id: string;
   email: string;
   name?: string;
-  emailVerified?: boolean;
-  image?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-  subscription_status?: 'active' | 'inactive';
-  subscription_expires_at?: string | null;
-  subscription_product_id?: string | null;
 }
 
 interface AuthContextType {
@@ -111,106 +104,107 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuth();
   }, []);
 
-  // Safety timeout - REDUCED to 1 second for instant loading
+  // Safety timeout - if auth check takes too long, stop loading
   useEffect(() => {
     const timeout = setTimeout(() => {
       if (loading) {
         console.warn('[Auth] Auth check timeout - stopping loading state');
         setLoading(false);
       }
-    }, 1000); // REDUCED from 2s to 1s for instant loading
+    }, 8000); // 8 second timeout (increased for slower connections)
     
     return () => clearTimeout(timeout);
   }, [loading]);
 
   const checkAuth = async () => {
-    try {
-      console.log('[Auth] Checking authentication status...');
-      console.log('[Auth] API URL:', API_URL);
-      console.log('[Auth] Platform:', Platform.OS);
-      
-      if (!API_URL) {
-        console.warn('[Auth] Backend URL not configured, skipping auth check');
-        setLoading(false);
-        setUser(null);
-        return;
-      }
-
-      const token = await tokenStorage.getToken();
-      
-      if (!token) {
-        console.log('[Auth] No token found');
-        setLoading(false);
-        setUser(null);
-        return;
-      }
-
-      console.log('[Auth] Token found, verifying with backend...');
-      
-      // REDUCED timeout to 1 second for instant loading
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 1000); // REDUCED from 2s to 1s
-      
+    const maxRetries = 2;
+    let retryCount = 0;
+    
+    while (retryCount <= maxRetries) {
       try {
-        const response = await fetch(`${API_URL}/api/auth/user`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeoutId);
-
-        if (response.ok) {
-          const data = await response.json();
-          console.log('[Auth] ========== AUTH CHECK SUCCESS ==========');
-          console.log('[Auth] User authenticated:', data.user?.email || 'unknown');
-          console.log('[Auth] User ID:', data.user?.id);
-          console.log('[Auth] Subscription status:', data.user?.subscription_status);
-          console.log('[Auth] ==========================================');
-          
-          // Store user with subscription data
-          const userData = {
-            ...data.user,
-            subscription_status: data.user?.subscription_status || 'inactive',
-            subscription_expires_at: data.user?.subscription_expires_at || null,
-            subscription_product_id: data.user?.subscription_product_id || null,
-          };
-          
-          setUser(userData);
+        console.log(`[Auth] Checking authentication status... (attempt ${retryCount + 1}/${maxRetries + 1})`);
+        console.log('[Auth] API URL:', API_URL);
+        console.log('[Auth] Platform:', Platform.OS);
+        
+        if (!API_URL) {
+          console.warn('[Auth] Backend URL not configured, skipping auth check');
           setLoading(false);
-          return;
-        } else {
-          console.log('[Auth] Token invalid, clearing... Status:', response.status);
-          await tokenStorage.removeToken();
           setUser(null);
-          setLoading(false);
           return;
         }
-      } catch (fetchError: any) {
-        clearTimeout(timeoutId);
+
+        const token = await tokenStorage.getToken();
         
-        if (fetchError.name === 'AbortError') {
-          console.warn('[Auth] Auth check timed out');
-        } else {
-          console.error('[Auth] Fetch error:', fetchError);
+        if (!token) {
+          console.log('[Auth] No token found');
+          setLoading(false);
+          setUser(null);
+          return;
         }
+
+        console.log('[Auth] Token found, verifying with backend...');
         
-        // Don't clear token on network errors - might be temporary
-        if (fetchError instanceof TypeError && fetchError.message.includes('Network')) {
-          console.warn('[Auth] Network error during auth check, keeping token for next app launch');
-        } else if (fetchError.name !== 'AbortError') {
-          await tokenStorage.removeToken();
+        // Add timeout for fetch request - increased for iOS
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        try {
+          const response = await fetch(`${API_URL}/api/auth/user`, {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+            signal: controller.signal,
+          });
+
+          clearTimeout(timeoutId);
+
+          if (response.ok) {
+            const data = await response.json();
+            console.log('[Auth] User authenticated:', data.user?.email || 'unknown');
+            setUser(data.user);
+            setLoading(false);
+            return; // Success - exit retry loop
+          } else {
+            console.log('[Auth] Token invalid, clearing... Status:', response.status);
+            await tokenStorage.removeToken();
+            setUser(null);
+            setLoading(false);
+            return; // Invalid token - don't retry
+          }
+        } catch (fetchError: any) {
+          clearTimeout(timeoutId);
+          
+          if (fetchError.name === 'AbortError') {
+            console.warn(`[Auth] Auth check timed out (attempt ${retryCount + 1})`);
+          } else {
+            console.error(`[Auth] Fetch error (attempt ${retryCount + 1}):`, fetchError);
+          }
+          
+          // On last retry, handle the error
+          if (retryCount === maxRetries) {
+            // Don't clear token on network errors - might be temporary
+            if (fetchError instanceof TypeError && fetchError.message.includes('Network')) {
+              console.warn('[Auth] Network error during auth check, keeping token for next app launch');
+            } else if (fetchError.name !== 'AbortError') {
+              await tokenStorage.removeToken();
+            }
+            setUser(null);
+            setLoading(false);
+            return;
+          }
+          
+          // Wait before retrying (exponential backoff)
+          const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+          console.log(`[Auth] Waiting ${waitTime}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          retryCount++;
         }
+      } catch (error) {
+        console.error('[Auth] Check auth failed:', error);
         setUser(null);
         setLoading(false);
         return;
       }
-    } catch (error) {
-      console.error('[Auth] Check auth failed:', error);
-      setUser(null);
-      setLoading(false);
-      return;
     }
   };
 
@@ -243,11 +237,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      console.log('[Auth] ========== SIGN IN SUCCESS ==========');
-      console.log('[Auth] User email:', data.user?.email);
-      console.log('[Auth] User ID:', data.user?.id);
-      console.log('[Auth] Subscription status:', data.user?.subscription_status);
-      console.log('[Auth] ==========================================');
+      console.log('[Auth] Sign in response received');
+      console.log('[Auth] User:', data.user?.email);
 
       if (!data.session || !data.session.token) {
         console.error('[Auth] Missing session or token');
@@ -255,17 +246,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       await tokenStorage.setToken(data.session.token);
-      
-      // Store user with subscription data
-      const userData = {
-        ...data.user,
-        subscription_status: data.user?.subscription_status || 'inactive',
-        subscription_expires_at: data.user?.subscription_expires_at || null,
-        subscription_product_id: data.user?.subscription_product_id || null,
-      };
-      
-      setUser(userData);
-      console.log('[Auth] Sign in successful, user state updated with subscription data');
+      setUser(data.user);
+      console.log('[Auth] Sign in successful, user state updated');
     } catch (error: any) {
       console.error('[Auth] Sign in failed:', error?.message);
       
@@ -307,11 +289,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
-      console.log('[Auth] ========== SIGN UP SUCCESS ==========');
-      console.log('[Auth] User email:', data.user?.email);
-      console.log('[Auth] User ID:', data.user?.id);
-      console.log('[Auth] Subscription status:', data.user?.subscription_status);
-      console.log('[Auth] ==========================================');
+      console.log('[Auth] Sign up response received');
+      console.log('[Auth] User:', data.user?.email);
 
       if (!data.session || !data.session.token) {
         console.error('[Auth] Missing session or token');
@@ -319,17 +298,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       await tokenStorage.setToken(data.session.token);
-      
-      // Store user with subscription data (defaults to inactive for new users)
-      const userData = {
-        ...data.user,
-        subscription_status: data.user?.subscription_status || 'inactive',
-        subscription_expires_at: data.user?.subscription_expires_at || null,
-        subscription_product_id: data.user?.subscription_product_id || null,
-      };
-      
-      setUser(userData);
-      console.log('[Auth] Sign up successful with subscription data');
+      setUser(data.user);
+      console.log('[Auth] Sign up successful');
     } catch (error: any) {
       console.error('[Auth] Sign up failed:', error?.message);
       
@@ -344,7 +314,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithApple = async (identityToken: string, appleUser?: any) => {
     try {
-      console.log('[Auth] ========== APPLE SIGN IN STARTED ==========');
+      console.log('[Auth] Signing in with Apple');
       console.log('[Auth] Identity token length:', identityToken?.length);
       console.log('[Auth] API URL:', API_URL);
 
@@ -364,84 +334,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const url = `${API_URL}/api/auth/sign-in/apple`;
       console.log('[Auth] Full request URL:', url);
 
-      // REDUCED timeout to 10 seconds for faster loading
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.error('[Auth] Apple sign in request timeout');
-        controller.abort();
-      }, 10000); // REDUCED from 15s to 10s
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal,
-        });
+      console.log('[Auth] Apple sign in response status:', response.status);
 
-        clearTimeout(timeoutId);
-
-        console.log('[Auth] Apple sign in response status:', response.status);
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('[Auth] Apple sign in failed. Status:', response.status);
-          console.error('[Auth] Error response body:', errorText);
-          
-          let errorData;
-          try {
-            errorData = JSON.parse(errorText);
-          } catch (e) {
-            throw new Error(`Apple sign in failed with status ${response.status}: ${errorText}`);
-          }
-          
-          throw new Error(errorData.error || 'Apple sign in failed');
-        }
-
-        const data = await response.json();
-        console.log('[Auth] ========== APPLE SIGN IN SUCCESS ==========');
-        console.log('[Auth] User email:', data.user?.email);
-        console.log('[Auth] User ID:', data.user?.id);
-        console.log('[Auth] Subscription status:', data.user?.subscription_status);
-        console.log('[Auth] ==========================================');
-
-        if (!data.session || !data.session.token) {
-          console.error('[Auth] Missing session or token in response');
-          throw new Error('No session token received from server');
-        }
-
-        console.log('[Auth] Storing token...');
-        await tokenStorage.setToken(data.session.token);
-        console.log('[Auth] Token stored successfully');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('[Auth] Apple sign in failed. Status:', response.status);
         
-        // Store user with subscription data
-        const userData = {
-          ...data.user,
-          subscription_status: data.user?.subscription_status || 'inactive',
-          subscription_expires_at: data.user?.subscription_expires_at || null,
-          subscription_product_id: data.user?.subscription_product_id || null,
-        };
-        
-        console.log('[Auth] Setting user state...');
-        setUser(userData);
-        console.log('[Auth] ========== APPLE SIGN IN COMPLETED ==========');
-      } catch (fetchError: any) {
-        clearTimeout(timeoutId);
-        
-        if (fetchError.name === 'AbortError') {
-          console.error('[Auth] Apple sign in request timed out');
-          throw new Error('Sign in request timed out. Please check your internet connection and try again.');
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          throw new Error(`Apple sign in failed with status ${response.status}`);
         }
         
-        throw fetchError;
+        throw new Error(errorData.error || 'Apple sign in failed');
       }
+
+      const data = await response.json();
+      console.log('[Auth] Apple sign in response received');
+      console.log('[Auth] Is new user:', data.isNewUser);
+
+      if (!data.session || !data.session.token) {
+        console.error('[Auth] Missing session or token');
+        throw new Error('No session token received from server');
+      }
+
+      await tokenStorage.setToken(data.session.token);
+      setUser(data.user);
+      console.log('[Auth] Apple sign in successful, user:', data.user.email);
     } catch (error: any) {
-      console.error('[Auth] ========== APPLE SIGN IN FAILED ==========');
-      console.error('[Auth] Error type:', error?.name);
-      console.error('[Auth] Error message:', error?.message);
-      console.error('[Auth] ==========================================');
+      console.error('[Auth] Apple sign in failed:', error?.message);
       
       // Provide more helpful error messages
       if (error.message === 'Network request failed' || error.name === 'TypeError') {
@@ -454,7 +384,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = async () => {
     console.log('[Auth] ========== SIGN OUT STARTED ==========');
-    
     try {
       const token = await tokenStorage.getToken();
       console.log('[Auth] Retrieved token for sign out, has token:', !!token);
@@ -487,32 +416,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         console.log('[Auth] No token or API URL, skipping backend call');
       }
-    } catch (error) {
-      console.error('[Auth] Sign out error:', error);
-      // Don't throw - we still want to clear local state
-    } finally {
-      // ALWAYS clear local state, even if backend call fails
+
       console.log('[Auth] Clearing local token and user state...');
-      try {
-        await tokenStorage.removeToken();
-        console.log('[Auth] Token removed successfully');
-      } catch (tokenError) {
-        console.error('[Auth] Failed to remove token:', tokenError);
-      }
+      await tokenStorage.removeToken();
       
       // Clear biometric credentials on sign out
-      try {
-        console.log('[Auth] Clearing biometric credentials...');
-        await clearBiometricCredentials();
-        console.log('[Auth] Biometric credentials cleared');
-      } catch (bioError) {
-        console.error('[Auth] Failed to clear biometric credentials:', bioError);
-      }
+      console.log('[Auth] Clearing biometric credentials...');
+      await clearBiometricCredentials();
       
-      // Set user to null - this triggers the routing logic to redirect to auth
       setUser(null);
-      console.log('[Auth] User state cleared - user is now logged out');
       console.log('[Auth] ========== SIGN OUT COMPLETED ==========');
+    } catch (error) {
+      console.error('[Auth] Sign out error:', error);
+      // Still clear local state even if there's an error
+      try {
+        await tokenStorage.removeToken();
+        await clearBiometricCredentials();
+        setUser(null);
+        console.log('[Auth] Local state cleared despite error');
+      } catch (clearError) {
+        console.error('[Auth] Failed to clear local state:', clearError);
+      }
+      throw error;
     }
   };
 

@@ -25,14 +25,7 @@ export default function TestLoginScreen() {
       setTestResult(prev => prev + `\n✓ Step 3: User authenticated: ${user?.email || 'checking...'}`);
       setTestResult(prev => prev + `\n✓ Step 4: Auth status: ${isAuthenticated ? 'AUTHENTICATED' : 'NOT AUTHENTICATED'}`);
       
-      // Wait a moment for user state to update
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      setTestResult(prev => prev + `\n✓ Step 5: Subscription status: ${user?.subscription_status || 'checking...'}`);
-      setTestResult(prev => prev + `\n✓ Step 6: Subscription expires: ${user?.subscription_expires_at || 'N/A'}`);
-      setTestResult(prev => prev + `\n✓ Step 7: Product ID: ${user?.subscription_product_id || 'N/A'}`);
-      
-      setTestResult(prev => prev + '\n\n🎉 LOGIN TEST PASSED! Authentication with subscription data is working correctly.');
+      setTestResult(prev => prev + '\n\n🎉 LOGIN TEST PASSED! Authentication is working correctly.');
     } catch (error: any) {
       setTestResult(prev => prev + `\n\n❌ LOGIN TEST FAILED: ${error.message || 'Unknown error'}`);
       console.error('[TestLogin] Error:', error);
@@ -86,24 +79,6 @@ export default function TestLoginScreen() {
                 <Text style={styles.statusValue}>{user.email}</Text>
                 <Text style={styles.statusLabel}>User Name:</Text>
                 <Text style={styles.statusValue}>{user.name || 'N/A'}</Text>
-                <Text style={styles.statusLabel}>Subscription Status:</Text>
-                <Text style={styles.statusValue}>
-                  {user.subscription_status === 'active' ? '✅ ACTIVE' : '❌ INACTIVE'}
-                </Text>
-                {user.subscription_expires_at && (
-                  <>
-                    <Text style={styles.statusLabel}>Expires At:</Text>
-                    <Text style={styles.statusValue}>
-                      {new Date(user.subscription_expires_at).toLocaleDateString()}
-                    </Text>
-                  </>
-                )}
-                {user.subscription_product_id && (
-                  <>
-                    <Text style={styles.statusLabel}>Product ID:</Text>
-                    <Text style={styles.statusValue}>{user.subscription_product_id}</Text>
-                  </>
-                )}
               </>
             )}
           </View>

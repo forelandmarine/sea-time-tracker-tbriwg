@@ -465,6 +465,7 @@ export default function ProfileScreen() {
   const [summary, setSummary] = useState<SeaTimeSummary | null>(null);
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingSummary, setLoadingSummary] = useState(true);
   const [downloadingPDF, setDownloadingPDF] = useState(false);
   const [downloadingCSV, setDownloadingCSV] = useState(false);
   const [selectedVessel, setSelectedVessel] = useState<Vessel | null>(null);
@@ -478,100 +479,128 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { signOut, refreshTrigger } = useAuth();
 
-  console.log('[ProfileScreen] Rendered');
+  console.log('ProfileScreen rendered');
 
-  // ========== OPTIMIZED: Load all data in parallel ==========
-  const loadAllData = useCallback(async () => {
-    console.log('[ProfileScreen] ========== LOADING ALL DATA IN PARALLEL ==========');
-    const startTime = Date.now();
-    
+  const checkBiometricStatus = useCallback(async () => {
     try {
-      // Load everything in parallel - no sequential blocking
-      const results = await Promise.allSettled([
-        seaTimeApi.getUserProfile(),
-        seaTimeApi.getReportSummary(),
-        seaTimeApi.getVessels(),
-        isBiometricAvailable(),
-      ]);
+      const available = await isBiometricAvailable();
+      setBiometricAvailable(available);
       
-      const loadTime = Date.now() - startTime;
-      console.log(`[ProfileScreen] ========== DATA LOADED IN ${loadTime}ms ==========`);
-      
-      // Process profile
-      if (results[0].status === 'fulfilled') {
-        setProfile(results[0].value);
-        console.log('[ProfileScreen] ✅ Profile loaded');
-      } else {
-        console.error('[ProfileScreen] ❌ Profile failed:', results[0].reason?.message);
-      }
-      
-      // Process summary
-      if (results[1].status === 'fulfilled') {
-        setSummary(results[1].value);
-        console.log('[ProfileScreen] ✅ Summary loaded');
-      } else {
-        console.warn('[ProfileScreen] ⚠️ Summary failed (non-critical):', results[1].reason?.message);
-      }
-      
-      // Process vessels
-      if (results[2].status === 'fulfilled') {
-        setVessels(results[2].value);
-        console.log('[ProfileScreen] ✅ Vessels loaded:', results[2].value.length);
-      } else {
-        console.warn('[ProfileScreen] ⚠️ Vessels failed (non-critical):', results[2].reason?.message);
-      }
-      
-      // Process biometric
-      if (results[3].status === 'fulfilled') {
-        const available = results[3].value;
-        setBiometricAvailable(available);
+      if (available) {
+        const type = await getBiometricType();
+        setBiometricType(type);
         
-        if (available) {
-          const [type, credentials] = await Promise.all([
-            getBiometricType(),
-            getBiometricCredentials(),
-          ]);
-          setBiometricType(type);
-          setHasSavedCredentials(!!credentials);
-        }
-        console.log('[ProfileScreen] ✅ Biometric checked');
+        const credentials = await getBiometricCredentials();
+        setHasSavedCredentials(!!credentials);
       }
-      
     } catch (error) {
-      console.error('[ProfileScreen] ❌ Unexpected error loading data:', error);
-    } finally {
-      setLoading(false);
-      console.log('[ProfileScreen] ========== LOADING COMPLETE ==========');
+      console.error('Error checking biometric status:', error);
     }
   }, []);
 
-  // Initial load
-  useEffect(() => {
-    console.log('[ProfileScreen] Initial mount - loading all data');
-    loadAllData();
-  }, [loadAllData]);
+  const loadProfile = useCallback(async (retryCount = 0) => {
+    const maxRetries = 2;
+    console.log(`Loading user profile (attempt ${retryCount + 1}/${maxRetries + 1})`);
+    
+    try {
+      const data = await seaTimeApi.getUserProfile();
+      console.log('User profile loaded successfully:', data?.email);
+      setProfile(data);
+      setLoading(false);
+    } catch (error: any) {
+      console.error(`Failed to load profile (attempt ${retryCount + 1}):`, error?.message);
+      
+      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
+        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        console.log(`Retrying profile load in ${waitTime}ms...`);
+        setTimeout(() => loadProfile(retryCount + 1), waitTime);
+      } else {
+        setLoading(false);
+        Alert.alert(
+          'Profile Load Error',
+          'Unable to load your profile. Please check your internet connection and try again.',
+          [
+            { text: 'Retry', onPress: () => loadProfile(0) },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+      }
+    }
+  }, []);
 
-  // Refresh trigger
+  const loadSummary = useCallback(async (retryCount = 0) => {
+    const maxRetries = 2;
+    console.log(`Loading sea time summary (attempt ${retryCount + 1}/${maxRetries + 1})`);
+    
+    try {
+      const data = await seaTimeApi.getReportSummary();
+      console.log('Sea time summary loaded successfully');
+      setSummary(data);
+      setLoadingSummary(false);
+    } catch (error: any) {
+      console.error(`Failed to load sea time summary (attempt ${retryCount + 1}):`, error?.message);
+      
+      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
+        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        console.log(`Retrying summary load in ${waitTime}ms...`);
+        setTimeout(() => loadSummary(retryCount + 1), waitTime);
+      } else {
+        setLoadingSummary(false);
+        console.warn('Summary load failed after retries, continuing without summary');
+      }
+    }
+  }, []);
+
+  const loadVessels = useCallback(async (retryCount = 0) => {
+    const maxRetries = 2;
+    console.log(`Loading vessels (attempt ${retryCount + 1}/${maxRetries + 1})`);
+    
+    try {
+      const data = await seaTimeApi.getVessels();
+      console.log('Vessels loaded successfully:', data?.length);
+      setVessels(data);
+    } catch (error: any) {
+      console.error(`Failed to load vessels (attempt ${retryCount + 1}):`, error?.message);
+      
+      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
+        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        console.log(`Retrying vessels load in ${waitTime}ms...`);
+        setTimeout(() => loadVessels(retryCount + 1), waitTime);
+      } else {
+        console.warn('Vessels load failed after retries, continuing without vessels');
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    console.log('ProfileScreen: Initial mount, loading data');
+    loadProfile();
+    loadSummary();
+    loadVessels();
+    checkBiometricStatus();
+  }, [loadProfile, loadSummary, loadVessels, checkBiometricStatus]);
+
   useEffect(() => {
     if (refreshTrigger > 0) {
-      console.log('[ProfileScreen] Global refresh triggered');
-      seaTimeApi.clearCache(); // Clear cache on refresh
-      loadAllData();
+      console.log('ProfileScreen: Global refresh triggered, reloading profile data');
+      loadProfile();
+      loadSummary();
+      loadVessels();
     }
-  }, [refreshTrigger, loadAllData]);
+  }, [refreshTrigger, loadProfile, loadSummary, loadVessels]);
 
   const handleEditProfile = () => {
-    console.log('[ProfileScreen] User tapped Edit Profile');
+    console.log('User tapped Edit Profile');
     router.push('/user-profile');
   };
 
   const handleScheduledTasks = () => {
-    console.log('[ProfileScreen] User tapped Scheduled Tasks');
+    console.log('User tapped Scheduled Tasks');
     router.push('/scheduled-tasks');
   };
 
   const handleSupport = async () => {
-    console.log('[ProfileScreen] User tapped Support button');
+    console.log('User tapped Support button');
     const supportEmail = 'info@forelandmarine.com';
     const subject = 'SeaTime Tracker Support Request';
     const body = 'Hello,\n\nI need assistance with:\n\n';
@@ -582,27 +611,31 @@ export default function ProfileScreen() {
       const canOpen = await Linking.canOpenURL(mailtoUrl);
       if (canOpen) {
         await Linking.openURL(mailtoUrl);
-        console.log('[ProfileScreen] Support email opened successfully');
+        console.log('Support email opened successfully');
       } else {
-        console.log('[ProfileScreen] Cannot open email client, showing alert');
+        console.log('Cannot open email client, showing alert with email address');
         Alert.alert(
           'Contact Support',
           `Please email us at:\n${supportEmail}`,
-          [{ text: 'OK', style: 'default' }]
+          [
+            { text: 'OK', style: 'default' }
+          ]
         );
       }
     } catch (error) {
-      console.error('[ProfileScreen] Failed to open email client:', error);
+      console.error('Failed to open email client:', error);
       Alert.alert(
         'Contact Support',
         `Please email us at:\n${supportEmail}`,
-        [{ text: 'OK', style: 'default' }]
+        [
+          { text: 'OK', style: 'default' }
+        ]
       );
     }
   };
 
   const handleVesselPress = (vesselName: string) => {
-    console.log('[ProfileScreen] User tapped vessel:', vesselName);
+    console.log('User tapped vessel:', vesselName);
     const vessel = vessels.find((v) => v.vessel_name === vesselName);
     if (vessel) {
       setSelectedVessel(vessel);
@@ -611,7 +644,7 @@ export default function ProfileScreen() {
   };
 
   const handleCloseModal = () => {
-    console.log('[ProfileScreen] User closed vessel modal');
+    console.log('User closed vessel modal');
     setShowVesselModal(false);
     setSelectedVessel(null);
   };
@@ -647,11 +680,11 @@ export default function ProfileScreen() {
   };
 
   const handleDownloadPDF = async () => {
-    console.log('[ProfileScreen] User tapped Download PDF Report');
+    console.log('User tapped Download PDF Report');
     setDownloadingPDF(true);
     try {
       const pdfBlob = await seaTimeApi.downloadPDFReport();
-      console.log('[ProfileScreen] PDF report downloaded, blob size:', pdfBlob.size);
+      console.log('PDF report downloaded, blob size:', pdfBlob.size);
 
       if (Platform.OS === 'web') {
         const url = URL.createObjectURL(pdfBlob);
@@ -676,7 +709,7 @@ export default function ProfileScreen() {
             encoding: FileSystem.EncodingType.Base64,
           });
           
-          console.log('[ProfileScreen] PDF saved to:', fileUri);
+          console.log('PDF saved to:', fileUri);
           
           if (await Sharing.isAvailableAsync()) {
             await Sharing.shareAsync(fileUri);
@@ -686,7 +719,7 @@ export default function ProfileScreen() {
         };
       }
     } catch (error) {
-      console.error('[ProfileScreen] Failed to download PDF report:', error);
+      console.error('Failed to download PDF report:', error);
       Alert.alert('Error', 'Failed to download PDF report. Please try again.');
     } finally {
       setDownloadingPDF(false);
@@ -694,11 +727,11 @@ export default function ProfileScreen() {
   };
 
   const handleDownloadCSV = async () => {
-    console.log('[ProfileScreen] User tapped Download CSV Report');
+    console.log('User tapped Download CSV Report');
     setDownloadingCSV(true);
     try {
       const csvData = await seaTimeApi.downloadCSVReport();
-      console.log('[ProfileScreen] CSV report downloaded, size:', csvData.length);
+      console.log('CSV report downloaded, size:', csvData.length);
 
       if (Platform.OS === 'web') {
         const blob = new Blob([csvData], { type: 'text/csv' });
@@ -718,7 +751,7 @@ export default function ProfileScreen() {
           encoding: FileSystem.EncodingType.UTF8,
         });
         
-        console.log('[ProfileScreen] CSV saved to:', fileUri);
+        console.log('CSV saved to:', fileUri);
         
         if (await Sharing.isAvailableAsync()) {
           await Sharing.shareAsync(fileUri);
@@ -727,7 +760,7 @@ export default function ProfileScreen() {
         }
       }
     } catch (error) {
-      console.error('[ProfileScreen] Failed to download CSV report:', error);
+      console.error('Failed to download CSV report:', error);
       Alert.alert('Error', 'Failed to download CSV report. Please try again.');
     } finally {
       setDownloadingCSV(false);
@@ -735,7 +768,7 @@ export default function ProfileScreen() {
   };
 
   const handleManageBiometric = async () => {
-    console.log('[ProfileScreen] User tapped Manage Biometric Authentication');
+    console.log('User tapped Manage Biometric Authentication');
     
     if (!biometricAvailable) {
       Alert.alert(
@@ -758,7 +791,7 @@ export default function ProfileScreen() {
             text: 'Disable',
             style: 'destructive',
             onPress: async () => {
-              console.log('[ProfileScreen] User confirmed disable biometric');
+              console.log('User confirmed disable biometric');
               await clearBiometricCredentials();
               setHasSavedCredentials(false);
               Alert.alert('Success', `${biometricType} sign in has been disabled`);
@@ -774,31 +807,32 @@ export default function ProfileScreen() {
     }
   };
 
-  const [showSignOutModal, setShowSignOutModal] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
-
-  const handleSignOut = () => {
-    console.log('[ProfileScreen] User tapped Sign Out');
-    setShowSignOutModal(true);
-  };
-
-  const confirmSignOut = async () => {
-    console.log('[ProfileScreen] User confirmed sign out');
-    setSigningOut(true);
-    try {
-      await signOut();
-      console.log('[ProfileScreen] Sign out successful');
-    } catch (error) {
-      console.error('[ProfileScreen] Sign out error:', error);
-      setSigningOut(false);
-      setShowSignOutModal(false);
-      Alert.alert('Error', 'Failed to sign out. Please try again.');
-    }
-  };
-
-  const cancelSignOut = () => {
-    console.log('[ProfileScreen] User cancelled sign out');
-    setShowSignOutModal(false);
+  const handleSignOut = async () => {
+    console.log('User tapped Sign Out');
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('User confirmed sign out');
+            try {
+              await signOut();
+              console.log('Sign out successful');
+            } catch (error) {
+              console.error('Sign out error:', error);
+              Alert.alert('Error', 'Failed to sign out');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const getInitials = (name: string | null | undefined) => {
@@ -819,6 +853,9 @@ export default function ProfileScreen() {
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={{ color: isDark ? colors.text : colors.textLight, marginTop: 16, fontSize: 16 }}>
           Loading your profile...
+        </Text>
+        <Text style={{ color: isDark ? colors.textSecondary : colors.textSecondaryLight, marginTop: 8, fontSize: 14, textAlign: 'center' }}>
+          This may take a moment on slower connections
         </Text>
       </View>
     );
@@ -843,8 +880,9 @@ export default function ProfileScreen() {
           style={[styles.reportButton, { marginTop: 20, width: 200 }]}
           onPress={() => {
             setLoading(true);
-            seaTimeApi.clearCache();
-            loadAllData();
+            loadProfile(0);
+            loadSummary(0);
+            loadVessels(0);
           }}
         >
           <IconSymbol
@@ -870,6 +908,9 @@ export default function ProfileScreen() {
   );
 
   const allServiceTypes = getAllServiceTypesWithHours();
+
+  console.log('Profile image URL:', imageUrl);
+  console.log('User department:', userDepartment, '- Showing', filteredDefinitions.length, 'definitions');
 
   return (
     <View style={styles.container}>
@@ -910,7 +951,7 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          {summary && summary.entries_by_vessel.length > 0 && (
+          {!loadingSummary && summary && summary.entries_by_vessel.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Download Reports</Text>
               <View style={styles.card}>
@@ -960,7 +1001,9 @@ export default function ProfileScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Sea Time Summary</Text>
             <View style={styles.card}>
-              {summary ? (
+              {loadingSummary ? (
+                <Text style={styles.loadingText}>Loading summary...</Text>
+              ) : summary ? (
                 <>
                   {summary.entries_by_vessel.length === 0 && (
                     <Text style={styles.loadingText}>No confirmed sea time entries yet</Text>
@@ -981,7 +1024,7 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          {summary && summary.entries_by_vessel.length > 0 && (
+          {!loadingSummary && summary && summary.entries_by_vessel.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Sea Time by Vessel</Text>
               <View style={styles.card}>
@@ -1014,7 +1057,7 @@ export default function ProfileScreen() {
             </View>
           )}
 
-          {summary && (
+          {!loadingSummary && summary && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Sea Time by Service Type</Text>
               <View style={styles.card}>
@@ -1236,61 +1279,6 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
-      </Modal>
-
-      <Modal
-        visible={showSignOutModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={cancelSignOut}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: 'auto' }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Sign Out</Text>
-            </View>
-            
-            <View style={{ paddingVertical: 20 }}>
-              <Text style={{ 
-                fontSize: 16, 
-                color: isDark ? colors.text : colors.textLight,
-                textAlign: 'center',
-                lineHeight: 24,
-              }}>
-                Are you sure you want to sign out?
-              </Text>
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity
-                style={[styles.reportButton, { 
-                  flex: 1, 
-                  backgroundColor: isDark ? colors.cardBackground : colors.card,
-                  borderWidth: 1,
-                  borderColor: colors.primary,
-                }]}
-                onPress={cancelSignOut}
-                disabled={signingOut}
-              >
-                <Text style={[styles.reportButtonText, { color: colors.primary }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.signOutButton, { flex: 1, marginTop: 0 }]}
-                onPress={confirmSignOut}
-                disabled={signingOut}
-              >
-                {signingOut ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <Text style={styles.signOutButtonText}>Sign Out</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
       </Modal>
     </View>
   );

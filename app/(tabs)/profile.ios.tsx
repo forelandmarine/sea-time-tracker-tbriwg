@@ -476,62 +476,95 @@ export default function ProfileScreen() {
 
   console.log('ProfileScreen rendered (iOS)');
 
-  // OPTIMIZED: Load all data in parallel with reduced timeouts
-  const loadAllData = useCallback(async () => {
-    console.log('ProfileScreen (iOS): Loading all data in parallel');
+  const loadProfile = useCallback(async (retryCount = 0) => {
+    const maxRetries = 2;
+    console.log(`Loading user profile (attempt ${retryCount + 1}/${maxRetries + 1})`);
     
-    // Create timeout promises for each request - REDUCED to 2 seconds
-    const createTimeoutPromise = (name: string) => 
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error(`${name} timeout`)), 2000) // REDUCED from 3-4s to 2s
-      );
-    
-    // Load all data in parallel
-    const results = await Promise.allSettled([
-      Promise.race([seaTimeApi.getUserProfile(), createTimeoutPromise('Profile')]),
-      Promise.race([seaTimeApi.getReportSummary(), createTimeoutPromise('Summary')]),
-      Promise.race([seaTimeApi.getVessels(), createTimeoutPromise('Vessels')]),
-    ]);
-    
-    // Process profile result
-    if (results[0].status === 'fulfilled') {
-      console.log('Profile loaded successfully');
-      setProfile(results[0].value);
-    } else {
-      console.error('Profile load failed:', results[0].reason);
+    try {
+      const data = await seaTimeApi.getUserProfile();
+      console.log('User profile loaded successfully:', data?.email);
+      setProfile(data);
+      setLoading(false);
+    } catch (error: any) {
+      console.error(`Failed to load profile (attempt ${retryCount + 1}):`, error?.message);
+      
+      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
+        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        console.log(`Retrying profile load in ${waitTime}ms...`);
+        setTimeout(() => loadProfile(retryCount + 1), waitTime);
+      } else {
+        setLoading(false);
+        Alert.alert(
+          'Profile Load Error',
+          'Unable to load your profile. Please check your internet connection and try again.',
+          [
+            { text: 'Retry', onPress: () => loadProfile(0) },
+            { text: 'Cancel', style: 'cancel' }
+          ]
+        );
+      }
     }
+  }, []);
+
+  const loadSummary = useCallback(async (retryCount = 0) => {
+    const maxRetries = 2;
+    console.log(`Loading sea time summary (attempt ${retryCount + 1}/${maxRetries + 1})`);
     
-    // Process summary result
-    if (results[1].status === 'fulfilled') {
-      console.log('Summary loaded successfully');
-      setSummary(results[1].value);
-    } else {
-      console.warn('Summary load failed:', results[1].reason);
+    try {
+      const data = await seaTimeApi.getReportSummary();
+      console.log('Sea time summary loaded successfully');
+      setSummary(data);
+      setLoadingSummary(false);
+    } catch (error: any) {
+      console.error(`Failed to load sea time summary (attempt ${retryCount + 1}):`, error?.message);
+      
+      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
+        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        console.log(`Retrying summary load in ${waitTime}ms...`);
+        setTimeout(() => loadSummary(retryCount + 1), waitTime);
+      } else {
+        setLoadingSummary(false);
+        console.warn('Summary load failed after retries, continuing without summary');
+      }
     }
-    setLoadingSummary(false);
+  }, []);
+
+  const loadVessels = useCallback(async (retryCount = 0) => {
+    const maxRetries = 2;
+    console.log(`Loading vessels (attempt ${retryCount + 1}/${maxRetries + 1})`);
     
-    // Process vessels result
-    if (results[2].status === 'fulfilled') {
-      console.log('Vessels loaded successfully');
-      setVessels(results[2].value);
-    } else {
-      console.warn('Vessels load failed:', results[2].reason);
+    try {
+      const data = await seaTimeApi.getVessels();
+      console.log('Vessels loaded successfully:', data?.length);
+      setVessels(data);
+    } catch (error: any) {
+      console.error(`Failed to load vessels (attempt ${retryCount + 1}):`, error?.message);
+      
+      if (retryCount < maxRetries && (error?.message?.includes('Network') || error?.message?.includes('fetch'))) {
+        const waitTime = Math.min(1000 * Math.pow(2, retryCount), 3000);
+        console.log(`Retrying vessels load in ${waitTime}ms...`);
+        setTimeout(() => loadVessels(retryCount + 1), waitTime);
+      } else {
+        console.warn('Vessels load failed after retries, continuing without vessels');
+      }
     }
-    
-    setLoading(false);
   }, []);
 
   useEffect(() => {
     console.log('ProfileScreen (iOS): Initial mount, loading data');
-    loadAllData();
-  }, [loadAllData]);
+    loadProfile();
+    loadSummary();
+    loadVessels();
+  }, [loadProfile, loadSummary, loadVessels]);
 
   useEffect(() => {
     if (refreshTrigger > 0) {
-      console.log('ProfileScreen (iOS): Global refresh triggered, reloading data');
-      loadAllData();
+      console.log('ProfileScreen (iOS): Global refresh triggered, reloading profile data');
+      loadProfile();
+      loadSummary();
+      loadVessels();
     }
-  }, [refreshTrigger, loadAllData]);
+  }, [refreshTrigger, loadProfile, loadSummary, loadVessels]);
 
   const handleEditProfile = () => {
     console.log('User tapped Edit Profile');
@@ -596,8 +629,17 @@ export default function ProfileScreen() {
   const handleRefresh = async () => {
     console.log('User pulled to refresh profile');
     setRefreshing(true);
-    await loadAllData();
-    setRefreshing(false);
+    try {
+      await Promise.all([
+        loadProfile(0),
+        loadSummary(0),
+        loadVessels(0),
+      ]);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const formatServiceType = (serviceType: string): string => {
@@ -718,31 +760,32 @@ export default function ProfileScreen() {
     }
   };
 
-  const [showSignOutModal, setShowSignOutModal] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
-
-  const handleSignOut = () => {
+  const handleSignOut = async () => {
     console.log('User tapped Sign Out');
-    setShowSignOutModal(true);
-  };
-
-  const confirmSignOut = async () => {
-    console.log('User confirmed sign out');
-    setSigningOut(true);
-    try {
-      await signOut();
-      console.log('Sign out successful - user will be redirected to auth screen');
-    } catch (error) {
-      console.error('Sign out error:', error);
-      setSigningOut(false);
-      setShowSignOutModal(false);
-      Alert.alert('Error', 'Failed to sign out. Please try again.');
-    }
-  };
-
-  const cancelSignOut = () => {
-    console.log('User cancelled sign out');
-    setShowSignOutModal(false);
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            console.log('User confirmed sign out');
+            try {
+              await signOut();
+              console.log('Sign out successful');
+            } catch (error) {
+              console.error('Sign out error:', error);
+              Alert.alert('Error', 'Failed to sign out');
+            }
+          },
+        },
+      ]
+    );
   };
 
   const getInitials = (name: string | null | undefined) => {
@@ -763,6 +806,9 @@ export default function ProfileScreen() {
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={{ color: isDark ? colors.text : colors.textLight, marginTop: 16, fontSize: 16 }}>
           Loading your profile...
+        </Text>
+        <Text style={{ color: isDark ? colors.textSecondary : colors.textSecondaryLight, marginTop: 8, fontSize: 14, textAlign: 'center' }}>
+          This may take a moment on slower connections
         </Text>
       </View>
     );
@@ -787,7 +833,9 @@ export default function ProfileScreen() {
           style={[styles.reportButton, { marginTop: 20, width: 200 }]}
           onPress={() => {
             setLoading(true);
-            loadAllData();
+            loadProfile(0);
+            loadSummary(0);
+            loadVessels(0);
           }}
         >
           <IconSymbol
@@ -813,6 +861,9 @@ export default function ProfileScreen() {
   );
 
   const allServiceTypes = getAllServiceTypesWithHours();
+
+  console.log('Profile image URL:', imageUrl);
+  console.log('User department:', userDepartment, '- Showing', filteredDefinitions.length, 'definitions');
 
   return (
     <View style={styles.container}>
@@ -1166,61 +1217,6 @@ export default function ProfileScreen() {
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
-      </Modal>
-
-      <Modal
-        visible={showSignOutModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={cancelSignOut}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxHeight: 'auto' }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Sign Out</Text>
-            </View>
-            
-            <View style={{ paddingVertical: 20 }}>
-              <Text style={{ 
-                fontSize: 16, 
-                color: isDark ? colors.text : colors.textLight,
-                textAlign: 'center',
-                lineHeight: 24,
-              }}>
-                Are you sure you want to sign out?
-              </Text>
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity
-                style={[styles.reportButton, { 
-                  flex: 1, 
-                  backgroundColor: isDark ? colors.cardBackground : colors.card,
-                  borderWidth: 1,
-                  borderColor: colors.primary,
-                }]}
-                onPress={cancelSignOut}
-                disabled={signingOut}
-              >
-                <Text style={[styles.reportButtonText, { color: colors.primary }]}>
-                  Cancel
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.signOutButton, { flex: 1, marginTop: 0 }]}
-                onPress={confirmSignOut}
-                disabled={signingOut}
-              >
-                {signingOut ? (
-                  <ActivityIndicator color="#ffffff" />
-                ) : (
-                  <Text style={styles.signOutButtonText}>Sign Out</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
       </Modal>
     </View>
   );

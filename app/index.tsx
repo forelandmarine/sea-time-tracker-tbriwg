@@ -2,30 +2,37 @@
 import 'expo-router/entry';
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { useSubscription } from '@/contexts/SubscriptionContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import React, { useEffect, useState } from 'react';
+import * as seaTimeApi from '@/utils/seaTimeApi';
 
 export default function Index() {
   const { isAuthenticated, loading: authLoading } = useAuth();
-  const { hasActiveSubscription, loading: subscriptionLoading } = useSubscription();
-  const [timeoutReached, setTimeoutReached] = useState(false);
+  const [checkingPathway, setCheckingPathway] = useState(true);
+  const [hasDepartment, setHasDepartment] = useState(false);
 
-  // REDUCED timeout to 500ms for instant loading
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (authLoading || subscriptionLoading) {
-        console.warn('[Index] Loading timeout - proceeding anyway');
-        setTimeoutReached(true);
+    const checkUserPathway = async () => {
+      if (!authLoading && isAuthenticated) {
+        console.log('Checking if user has selected a pathway...');
+        try {
+          const profile = await seaTimeApi.getUserProfile();
+          const hasSelectedDepartment = !!profile.department;
+          console.log('User has department:', hasSelectedDepartment, profile.department);
+          setHasDepartment(hasSelectedDepartment);
+        } catch (error) {
+          console.error('Failed to check user pathway:', error);
+          setHasDepartment(false);
+        }
       }
-    }, 500); // REDUCED from 1.5s to 500ms for instant loading
-    
-    return () => clearTimeout(timeout);
-  }, [authLoading, subscriptionLoading]);
+      setCheckingPathway(false);
+    };
 
-  // Show loading only briefly
-  if ((authLoading || subscriptionLoading) && !timeoutReached) {
+    checkUserPathway();
+  }, [isAuthenticated, authLoading]);
+
+  if (authLoading || checkingPathway) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -34,31 +41,16 @@ export default function Index() {
   }
 
   if (!isAuthenticated) {
-    console.log('[Index] User not authenticated, redirecting to auth screen');
+    console.log('User not authenticated, redirecting to auth screen');
     return <Redirect href="/auth" />;
   }
 
-  // Check subscription status - redirect to paywall if inactive
-  if (!hasActiveSubscription) {
-    console.log('[Index] ========== PAYWALL REDIRECT ==========');
-    console.log('[Index] User does not have active subscription');
-    console.log('[Index] hasActiveSubscription:', hasActiveSubscription);
-    console.log('[Index] Redirecting to paywall...');
-    console.log('[Index] ==========================================');
-    return <Redirect href="/subscription-paywall" />;
+  if (!hasDepartment) {
+    console.log('User has not selected pathway, redirecting to pathway selection');
+    return <Redirect href="/select-pathway" />;
   }
 
-  console.log('[Index] ========== ACCESS GRANTED ==========');
-  console.log('[Index] User has active subscription');
-  console.log('[Index] hasActiveSubscription:', hasActiveSubscription);
-  console.log('[Index] ==========================================');
-
-  // Skip pathway check - let user proceed to home immediately
-  // They'll be redirected from home if pathway selection is needed
-  console.log('[Index] ========== ROUTING TO HOME ==========');
-  console.log('[Index] User authenticated with active subscription');
-  console.log('[Index] Redirecting to home...');
-  console.log('[Index] ==========================================');
+  console.log('User authenticated and has pathway, redirecting to home');
   return <Redirect href="/(tabs)" />;
 }
 

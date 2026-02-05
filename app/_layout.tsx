@@ -15,7 +15,6 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
-import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { BACKEND_URL } from "@/utils/api";
 import { registerForPushNotificationsAsync } from "@/utils/notifications";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -113,22 +112,12 @@ function RootLayoutNav() {
     const inAuthGroup = segments[0] === '(tabs)';
     const isAuthScreen = pathname === '/auth';
     const isIndexRoute = pathname === '/' || pathname === '';
-    const isProtectedRoute = inAuthGroup || pathname.startsWith('/vessel') || 
-                             pathname.startsWith('/add-sea-time') || 
-                             pathname.startsWith('/edit-sea-time') ||
-                             pathname.startsWith('/user-profile') ||
-                             pathname.startsWith('/scheduled-tasks') ||
-                             pathname.startsWith('/notification-settings') ||
-                             pathname.startsWith('/reports') ||
-                             pathname.startsWith('/select-pathway') ||
-                             pathname.startsWith('/subscription-paywall');
 
     console.log('[App] Auth routing check:', { 
       user: !!user, 
       inAuthGroup,
       isAuthScreen,
       isIndexRoute,
-      isProtectedRoute,
       pathname,
       platform: Platform.OS
     });
@@ -138,11 +127,9 @@ function RootLayoutNav() {
       return;
     }
 
-    // If user is not authenticated and on any protected route, redirect to auth
-    // This handles sign-out from any screen
-    if (!user && isProtectedRoute && !isAuthScreen && !isNavigating) {
-      console.log('[App] ⚠️ User not authenticated but on protected route, redirecting to /auth');
-      console.log('[App] Current pathname:', pathname);
+    // Only protect tab routes - redirect to auth if not authenticated
+    if (!user && inAuthGroup && !isNavigating) {
+      console.log('[App] ⚠️ User not authenticated but in tabs, redirecting to /auth');
       setIsNavigating(true);
       
       setTimeout(() => {
@@ -458,25 +445,6 @@ function RootLayoutNav() {
               }} 
             />
 
-            {/* Subscription paywall screen */}
-            <Stack.Screen 
-              name="subscription-paywall" 
-              options={{ 
-                headerShown: false,
-                presentation: 'card',
-              }} 
-            />
-
-            {/* Admin update subscription screen */}
-            <Stack.Screen 
-              name="admin-update-subscription" 
-              options={{ 
-                headerShown: false,
-                presentation: 'card',
-                headerBackTitle: 'Back',
-              }} 
-            />
-
             {/* Modal Demo Screens */}
             <Stack.Screen
               name="modal"
@@ -554,11 +522,9 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <SubscriptionProvider>
-          <WidgetProvider>
-            <RootLayoutNav />
-          </WidgetProvider>
-        </SubscriptionProvider>
+        <WidgetProvider>
+          <RootLayoutNav />
+        </WidgetProvider>
       </AuthProvider>
     </ErrorBoundary>
   );
