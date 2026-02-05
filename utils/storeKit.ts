@@ -2,40 +2,42 @@
 /**
  * StoreKit Integration for iOS In-App Purchases
  * 
- * This module handles iOS App Store subscriptions using direct App Store links.
+ * This module handles iOS App Store subscriptions using react-native-iap.
  * 
  * Product ID: com.forelandmarine.seatime.monthly
  * App ID: 6758010893
  * 
- * IMPORTANT: Prices are NEVER hardcoded. They are fetched from the App Store
- * to comply with Apple's StoreKit guidelines and ensure accurate pricing.
+ * IMPORTANT: This implements NATIVE in-app purchases to comply with Apple's
+ * Guideline 3.1.1. Users can purchase subscriptions directly within the app.
  * 
  * Flow:
- * 1. User taps "Subscribe" button → Opens App Store subscription page
- * 2. User completes purchase via App Store
- * 3. App receives receipt from StoreKit (automatic via iOS)
+ * 1. User taps "Subscribe" button → Native iOS purchase sheet appears
+ * 2. User completes purchase via StoreKit (Apple's native payment system)
+ * 3. App receives receipt from StoreKit automatically
  * 4. App sends receipt to backend for verification
  * 5. Backend verifies with Apple servers using APPLE_APP_SECRET
  * 6. Backend updates user subscription status
  * 7. App checks subscription status and grants access
- * 
- * Note: We use direct App Store links instead of expo-store-kit because
- * expo-store-kit v0.0.1 is incomplete and causes build failures.
  */
 
-import { Platform, Linking, Alert } from 'react-native';
+import { Platform, Alert } from 'react-native';
+import * as RNIap from 'react-native-iap';
 import { authenticatedPost } from './api';
 
 // Product ID configured in App Store Connect
 export const SUBSCRIPTION_PRODUCT_ID = 'com.forelandmarine.seatime.monthly';
 
-// App Store URLs
-const APP_STORE_SUBSCRIPTION_URL = 'https://apps.apple.com/account/subscriptions';
-const APP_STORE_APP_URL = 'https://apps.apple.com/app/id6758010893';
+// Subscription SKUs
+const subscriptionSkus = Platform.select({
+  ios: [SUBSCRIPTION_PRODUCT_ID],
+  android: [],
+  default: [],
+});
+
+let isInitialized = false;
 
 /**
  * Initialize StoreKit connection
- * Since we're using App Store links, this just validates the platform
  */
 export async function initializeStoreKit(): Promise<boolean> {
   if (Platform.OS !== 'ios') {
@@ -43,120 +45,89 @@ export async function initializeStoreKit(): Promise<boolean> {
     return false;
   }
 
-  console.log('[StoreKit] StoreKit integration ready (using App Store links)');
-  return true;
+  if (isInitialized) {
+    console.log('[StoreKit] Already initialized');
+    return true;
+  }
+
+  try {
+    console.log('[StoreKit] Initializing connection to App Store');
+    await RNIap.initConnection();
+    
+    // Clear any pending transactions
+    await RNIap.flushFailedPurchasesCachedAsPendingAndroid();
+    
+    isInitialized = true;
+    console.log('[StoreKit] Successfully initialized');
+    return true;
+  } catch (error: any) {
+    console.error('[StoreKit] Initialization error:', error);
+    return false;
+  }
 }
 
 /**
  * Get product information from App Store
- * CRITICAL: Never hardcode prices - always fetch from App Store
- * Returns null because we direct users to App Store for pricing
+ * Fetches real-time pricing in user's local currency
  */
 export async function getProductInfo(): Promise<{
-  productIdentifier: string;
+  productId: string;
   price: string;
-  priceLocale: { currencySymbol: string; currencyCode: string };
-  localizedTitle: string;
-  localizedDescription: string;
+  localizedPrice: string;
+  currency: string;
+  title: string;
+  description: string;
 } | null> {
   if (Platform.OS !== 'ios') {
     console.log('[StoreKit] Not on iOS, cannot get product info');
     return null;
   }
 
-  console.log('[StoreKit] Product info must be viewed in App Store (no hardcoded prices)');
-  return null;
-}
-
-/**
- * Open App Store subscription page
- * This is the primary method for users to subscribe and view pricing
- */
-export async function openAppStoreSubscription(): Promise<void> {
-  if (Platform.OS !== 'ios') {
-    console.warn('[StoreKit] App Store subscriptions are iOS-only');
-    Alert.alert(
-      'iOS Only',
-      'Subscriptions are currently only available on iOS devices.',
-      [{ text: 'OK' }]
-    );
-    return;
-  }
-
   try {
-    console.log('[StoreKit] Opening App Store subscription page');
+    console.log('[StoreKit] Fetching product info from App Store');
     
-    // Try to open the app's subscription page directly
-    const appUrl = `${APP_STORE_APP_URL}?action=subscribe`;
-    const canOpenApp = await Linking.canOpenURL(appUrl);
-    
-    if (canOpenApp) {
-      await Linking.openURL(appUrl);
-      console.log('[StoreKit] Opened app subscription page');
-    } else {
-      // Fallback to general subscriptions page
-      const canOpenGeneral = await Linking.canOpenURL(APP_STORE_SUBSCRIPTION_URL);
-      if (canOpenGeneral) {
-        await Linking.openURL(APP_STORE_SUBSCRIPTION_URL);
-        console.log('[StoreKit] Opened general subscriptions page');
-      } else {
-        throw new Error('Cannot open App Store');
-      }
+    if (!isInitialized) {
+      await initializeStoreKit();
     }
-  } catch (error: any) {
-    console.error('[StoreKit] Error opening App Store:', error);
+
+    const products = await RNIap.getSubscriptions({ skus: subscriptionSkus as string[] });
     
-    // Show instructions as fallback
-    Alert.alert(
-      'Subscribe to SeaTime Tracker',
-      'To subscribe:\n\n1. Open the App Store\n2. Search for "SeaTime Tracker"\n3. Tap "Subscribe"\n\nOr manage subscriptions in:\nSettings → Apple ID → Subscriptions',
-      [{ text: 'OK' }]
-    );
+    if (products.length === 0) {
+      console.warn('[StoreKit] No products found');
+      return null;
+    }
+
+    const product = products[0];
+    console.log('[StoreKit] Product info:', {
+      productId: product.productId,
+      price: product.price,
+      localizedPrice: product.localizedPrice,
+      currency: product.currency,
+      title: product.title,
+    });
+
+    return {
+      productId: product.productId,
+      price: product.price,
+      localizedPrice: product.localizedPrice,
+      currency: product.currency,
+      title: product.title,
+      description: product.description || 'Monthly subscription to SeaTime Tracker',
+    };
+  } catch (error: any) {
+    console.error('[StoreKit] Error fetching product info:', error);
+    return null;
   }
 }
 
 /**
- * Open iOS Settings to manage subscriptions
- */
-export async function openSubscriptionManagement(): Promise<void> {
-  if (Platform.OS !== 'ios') {
-    console.warn('[StoreKit] Subscription management is iOS-only');
-    Alert.alert(
-      'iOS Only',
-      'Subscription management is only available on iOS devices.',
-      [{ text: 'OK' }]
-    );
-    return;
-  }
-
-  try {
-    console.log('[StoreKit] Opening subscription management');
-    
-    const canOpen = await Linking.canOpenURL(APP_STORE_SUBSCRIPTION_URL);
-    if (canOpen) {
-      await Linking.openURL(APP_STORE_SUBSCRIPTION_URL);
-      console.log('[StoreKit] Opened subscription management');
-    } else {
-      throw new Error('Cannot open subscription management');
-    }
-  } catch (error: any) {
-    console.error('[StoreKit] Error opening subscription management:', error);
-    
-    Alert.alert(
-      'Manage Subscription',
-      'To manage your subscription:\n\n1. Open Settings\n2. Tap your name at the top\n3. Tap "Subscriptions"\n4. Select "SeaTime Tracker"',
-      [{ text: 'OK' }]
-    );
-  }
-}
-
-/**
- * Purchase subscription
- * Directs user to App Store since we're using direct links
+ * Purchase subscription using native StoreKit
+ * This opens the native iOS purchase sheet
  */
 export async function purchaseSubscription(): Promise<{
   success: boolean;
   receipt?: string;
+  transactionId?: string;
   error?: string;
 }> {
   if (Platform.OS !== 'ios') {
@@ -167,27 +138,59 @@ export async function purchaseSubscription(): Promise<{
   }
 
   try {
-    console.log('[StoreKit] Directing user to App Store for subscription');
+    console.log('[StoreKit] Starting subscription purchase');
     
-    await openAppStoreSubscription();
+    if (!isInitialized) {
+      await initializeStoreKit();
+    }
+
+    // Request the purchase - this opens the native iOS payment sheet
+    const purchase = await RNIap.requestSubscription({
+      sku: SUBSCRIPTION_PRODUCT_ID,
+    });
+
+    console.log('[StoreKit] Purchase successful:', {
+      transactionId: purchase.transactionId,
+      productId: purchase.productId,
+    });
+
+    // Get the receipt
+    const receipt = purchase.transactionReceipt;
     
-    // Return pending status - user needs to complete purchase in App Store
+    if (!receipt) {
+      console.error('[StoreKit] No receipt received from purchase');
+      return {
+        success: false,
+        error: 'No receipt received from App Store',
+      };
+    }
+
     return {
-      success: false,
-      error: 'Please complete your subscription in the App Store, then return here and tap "Check Subscription Status"',
+      success: true,
+      receipt,
+      transactionId: purchase.transactionId,
     };
   } catch (error: any) {
     console.error('[StoreKit] Purchase error:', error);
+    
+    // Handle user cancellation gracefully
+    if (error.code === 'E_USER_CANCELLED') {
+      return {
+        success: false,
+        error: 'Purchase cancelled',
+      };
+    }
+    
     return {
       success: false,
-      error: error.message || 'Unable to open App Store',
+      error: error.message || 'Purchase failed',
     };
   }
 }
 
 /**
  * Restore previous purchases
- * Directs user to check subscription status
+ * Required by Apple for subscription apps
  */
 export async function restorePurchases(): Promise<{
   success: boolean;
@@ -202,26 +205,64 @@ export async function restorePurchases(): Promise<{
   }
 
   try {
-    console.log('[StoreKit] User requested restore - checking subscription status');
+    console.log('[StoreKit] Restoring purchases');
     
-    // User should use "Check Subscription Status" button instead
+    if (!isInitialized) {
+      await initializeStoreKit();
+    }
+
+    const purchases = await RNIap.getAvailablePurchases();
+    
+    if (purchases.length === 0) {
+      console.log('[StoreKit] No purchases to restore');
+      return {
+        success: false,
+        error: 'No previous purchases found',
+      };
+    }
+
+    // Find the subscription purchase
+    const subscriptionPurchase = purchases.find(
+      p => p.productId === SUBSCRIPTION_PRODUCT_ID
+    );
+
+    if (!subscriptionPurchase) {
+      console.log('[StoreKit] No subscription purchase found');
+      return {
+        success: false,
+        error: 'No subscription found to restore',
+      };
+    }
+
+    console.log('[StoreKit] Found subscription to restore:', {
+      transactionId: subscriptionPurchase.transactionId,
+      productId: subscriptionPurchase.productId,
+    });
+
+    const receipt = subscriptionPurchase.transactionReceipt;
+    
+    if (!receipt) {
+      return {
+        success: false,
+        error: 'No receipt found for subscription',
+      };
+    }
+
     return {
-      success: false,
-      error: 'Please tap "Check Subscription Status" to verify your subscription',
+      success: true,
+      receipt,
     };
   } catch (error: any) {
     console.error('[StoreKit] Restore error:', error);
     return {
       success: false,
-      error: error.message || 'Unable to restore purchases',
+      error: error.message || 'Restore failed',
     };
   }
 }
 
 /**
  * Verify receipt with backend
- * Note: In production, iOS automatically sends receipts to the app
- * This function is for manual verification if needed
  */
 export async function verifyReceiptWithBackend(
   receipt: string,
@@ -263,7 +304,6 @@ export async function verifyReceiptWithBackend(
 
 /**
  * Complete purchase flow: purchase + verify
- * Since we're using App Store links, this directs to App Store
  */
 export async function completePurchaseFlow(): Promise<{
   success: boolean;
@@ -272,17 +312,39 @@ export async function completePurchaseFlow(): Promise<{
 }> {
   console.log('[StoreKit] Starting complete purchase flow');
 
+  // Step 1: Purchase subscription
   const purchaseResult = await purchaseSubscription();
   
+  if (!purchaseResult.success || !purchaseResult.receipt) {
+    return {
+      success: false,
+      error: purchaseResult.error || 'Purchase failed',
+    };
+  }
+
+  // Step 2: Verify receipt with backend
+  const verifyResult = await verifyReceiptWithBackend(
+    purchaseResult.receipt,
+    __DEV__ // Use sandbox in development
+  );
+
+  if (!verifyResult.success) {
+    return {
+      success: false,
+      error: verifyResult.error || 'Verification failed',
+    };
+  }
+
+  console.log('[StoreKit] Purchase flow completed successfully');
+  
   return {
-    success: false,
-    error: purchaseResult.error || 'Please complete purchase in App Store',
+    success: true,
+    status: verifyResult.status,
   };
 }
 
 /**
  * Complete restore flow: restore + verify
- * Since we're using App Store links, this checks backend status
  */
 export async function completeRestoreFlow(): Promise<{
   success: boolean;
@@ -291,12 +353,62 @@ export async function completeRestoreFlow(): Promise<{
 }> {
   console.log('[StoreKit] Starting complete restore flow');
 
+  // Step 1: Restore purchases
   const restoreResult = await restorePurchases();
   
+  if (!restoreResult.success || !restoreResult.receipt) {
+    return {
+      success: false,
+      error: restoreResult.error || 'No purchases to restore',
+    };
+  }
+
+  // Step 2: Verify receipt with backend
+  const verifyResult = await verifyReceiptWithBackend(
+    restoreResult.receipt,
+    __DEV__ // Use sandbox in development
+  );
+
+  if (!verifyResult.success) {
+    return {
+      success: false,
+      error: verifyResult.error || 'Verification failed',
+    };
+  }
+
+  console.log('[StoreKit] Restore flow completed successfully');
+  
   return {
-    success: false,
-    error: restoreResult.error || 'Please check subscription status',
+    success: true,
+    status: verifyResult.status,
   };
+}
+
+/**
+ * Finish a transaction (required by Apple)
+ * Call this after successfully processing a purchase
+ */
+export async function finishTransaction(purchase: RNIap.Purchase): Promise<void> {
+  try {
+    await RNIap.finishTransaction({ purchase, isConsumable: false });
+    console.log('[StoreKit] Transaction finished:', purchase.transactionId);
+  } catch (error: any) {
+    console.error('[StoreKit] Error finishing transaction:', error);
+  }
+}
+
+/**
+ * Clean up StoreKit connection
+ * Call this when the app is closing or user logs out
+ */
+export async function disconnectStoreKit(): Promise<void> {
+  try {
+    await RNIap.endConnection();
+    isInitialized = false;
+    console.log('[StoreKit] Connection closed');
+  } catch (error: any) {
+    console.error('[StoreKit] Error closing connection:', error);
+  }
 }
 
 /**
@@ -305,13 +417,12 @@ export async function completeRestoreFlow(): Promise<{
 export function showSubscriptionInstructions(): void {
   Alert.alert(
     'How to Subscribe',
-    'SeaTime Tracker uses App Store subscriptions:\n\n' +
-    '1. Tap "Subscribe Now" to open the App Store\n' +
-    '2. View pricing and complete your subscription\n' +
-    '3. Return to the app\n' +
-    '4. Tap "Check Subscription Status"\n\n' +
+    'SeaTime Tracker uses native in-app purchases:\n\n' +
+    '1. Tap "Subscribe Now" to see pricing\n' +
+    '2. Complete your subscription using Apple Pay or your Apple ID\n' +
+    '3. Your subscription will be active immediately\n\n' +
     'Your subscription is managed through your Apple ID and will automatically renew each month.\n\n' +
-    'Note: Pricing is displayed in the App Store in your local currency.',
+    'You can manage or cancel your subscription anytime in:\nSettings → Apple ID → Subscriptions',
     [{ text: 'Got it' }]
   );
 }
