@@ -1,3 +1,4 @@
+
 // https://docs.expo.dev/guides/using-eslint/
 module.exports = {
   extends: [
@@ -50,6 +51,12 @@ module.exports = {
     },
     {
       files: ['components/Map.web.tsx'],
+      rules: {
+        'import/no-unresolved': 'off'
+      }
+    },
+    {
+      files: ['contexts/WidgetContext.tsx'],
       rules: {
         'import/no-unresolved': 'off'
       }
