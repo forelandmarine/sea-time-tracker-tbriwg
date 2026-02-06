@@ -7,11 +7,11 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
   ActivityIndicator,
   useColorScheme,
   Platform,
   Image,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
@@ -36,6 +36,8 @@ export default function AuthScreen() {
   const [rememberMe, setRememberMe] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
+  const [errorModalVisible, setErrorModalVisible] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const { signIn, signUp, signInWithApple } = useAuth();
   const router = useRouter();
   const colorScheme = useColorScheme();
@@ -63,6 +65,12 @@ export default function AuthScreen() {
     }
   };
 
+  const showError = (message: string) => {
+    console.error('[AuthScreen] Showing error:', message);
+    setErrorMessage(message);
+    setErrorModalVisible(true);
+  };
+
   const handleBiometricSignIn = async () => {
     try {
       console.log('[AuthScreen] User tapped biometric sign in button');
@@ -70,7 +78,7 @@ export default function AuthScreen() {
 
       const credentials = await getBiometricCredentials();
       if (!credentials) {
-        Alert.alert('Error', 'No saved credentials found. Please sign in with email and password first.');
+        showError('No saved credentials found. Please sign in with email and password first.');
         return;
       }
 
@@ -86,7 +94,7 @@ export default function AuthScreen() {
       router.replace('/(tabs)');
     } catch (error: any) {
       console.error('[AuthScreen] Biometric sign in failed:', error);
-      Alert.alert('Error', error.message || 'Biometric sign in failed');
+      showError(error.message || 'Biometric sign in failed');
     } finally {
       setLoading(false);
     }
@@ -97,23 +105,19 @@ export default function AuthScreen() {
     
     if (!BACKEND_URL) {
       console.error('[AuthScreen] Backend URL not configured');
-      Alert.alert(
-        'Backend Not Configured',
-        'The app backend is not configured. Please ensure the backend URL is set in app.json.',
-        [{ text: 'OK' }]
-      );
+      showError('The app backend is not configured. Please ensure the backend URL is set in app.json.');
       return;
     }
 
     if (!email || !password) {
       console.warn('[AuthScreen] Email or password missing');
-      Alert.alert('Error', 'Please enter email and password');
+      showError('Please enter email and password');
       return;
     }
 
     if (isSignUp && password.length < 6) {
       console.warn('[AuthScreen] Password too short');
-      Alert.alert('Error', 'Password must be at least 6 characters');
+      showError('Password must be at least 6 characters');
       return;
     }
 
@@ -169,12 +173,20 @@ export default function AuthScreen() {
       });
       
       // Provide more helpful error messages
-      let errorMessage = error.message || 'Authentication failed';
-      if (errorMessage.includes('Network') || errorMessage.includes('fetch')) {
-        errorMessage = 'Cannot connect to server. Please check your internet connection.';
+      let errorMsg = error.message || 'Authentication failed';
+      
+      // Check if error message contains HTML (indicates server error)
+      if (errorMsg.includes('<!DOCTYPE') || errorMsg.includes('<html')) {
+        errorMsg = 'Server error occurred. Please try again later or contact support.';
+      } else if (errorMsg.includes('Network') || errorMsg.includes('fetch')) {
+        errorMsg = 'Cannot connect to server. Please check your internet connection.';
+      } else if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
+        errorMsg = 'Request timed out. Please check your connection and try again.';
+      } else if (errorMsg.includes('Invalid email or password')) {
+        errorMsg = 'Invalid email or password. Please check your credentials and try again.';
       }
       
-      Alert.alert('Error', errorMessage);
+      showError(errorMsg);
     } finally {
       setLoading(false);
       console.log('[AuthScreen] Authentication flow completed');
@@ -191,11 +203,7 @@ export default function AuthScreen() {
       console.log('[AuthScreen] Apple Authentication available:', isAvailable);
       
       if (!isAvailable) {
-        Alert.alert(
-          'Not Available',
-          'Sign in with Apple is not available on this device. Please use email and password instead.',
-          [{ text: 'OK' }]
-        );
+        showError('Sign in with Apple is not available on this device. Please use email and password instead.');
         return;
       }
 
@@ -219,7 +227,7 @@ export default function AuthScreen() {
 
       if (!credential.identityToken) {
         console.error('[AuthScreen] No identity token received from Apple');
-        Alert.alert('Error', 'Failed to get Apple authentication token. Please try again.');
+        showError('Failed to get Apple authentication token. Please try again.');
         setLoading(false);
         return;
       }
@@ -255,21 +263,23 @@ export default function AuthScreen() {
       }
       
       // Show helpful error messages for other errors
-      let errorMessage = 'Unable to sign in with Apple. ';
+      let errorMsg = 'Unable to sign in with Apple. ';
       
       if (error.code === 'ERR_INVALID_RESPONSE') {
-        errorMessage = 'Received an invalid response from Apple. Please try again.';
+        errorMsg = 'Received an invalid response from Apple. Please try again.';
       } else if (error.message?.includes('Network') || error.message?.includes('fetch') || error.message?.includes('timed out')) {
-        errorMessage = 'Cannot connect to server. Please check your internet connection and try again.';
+        errorMsg = 'Cannot connect to server. Please check your internet connection and try again.';
       } else if (error.message?.includes('token')) {
-        errorMessage = 'Authentication token is invalid. Please try again.';
+        errorMsg = 'Authentication token is invalid. Please try again.';
+      } else if (error.message?.includes('<!DOCTYPE') || error.message?.includes('<html')) {
+        errorMsg = 'Server error occurred. Please try again later or contact support.';
       } else if (error.message) {
-        errorMessage = error.message;
+        errorMsg = error.message;
       } else {
-        errorMessage = 'An unknown error occurred. Please try again or use email and password.';
+        errorMsg = 'An unknown error occurred. Please try again or use email and password.';
       }
       
-      Alert.alert('Sign In Error', errorMessage, [{ text: 'OK' }]);
+      showError(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -442,6 +452,27 @@ export default function AuthScreen() {
           Compliant with iOS data handling regulations.
         </Text>
       </View>
+
+      {/* Error Modal */}
+      <Modal
+        visible={errorModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setErrorModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Sign In Error</Text>
+            <Text style={styles.modalMessage}>{errorMessage}</Text>
+            <TouchableOpacity
+              style={styles.modalButton}
+              onPress={() => setErrorModalVisible(false)}
+            >
+              <Text style={styles.modalButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -615,6 +646,50 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       textAlign: 'center',
       fontWeight: '500',
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+    },
+    modalContent: {
+      backgroundColor: isDark ? colors.cardBackground : '#FFFFFF',
+      borderRadius: 16,
+      padding: 24,
+      width: '100%',
+      maxWidth: 400,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+      elevation: 5,
+    },
+    modalTitle: {
+      fontSize: 20,
+      fontWeight: 'bold',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 12,
+      textAlign: 'center',
+    },
+    modalMessage: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 24,
+      textAlign: 'center',
+      lineHeight: 24,
+    },
+    modalButton: {
+      backgroundColor: colors.primary,
+      borderRadius: 12,
+      padding: 16,
+      alignItems: 'center',
+    },
+    modalButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
     },
   });
 }
