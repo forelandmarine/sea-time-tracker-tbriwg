@@ -112,20 +112,33 @@ const getFetchOptions = async (method: string = 'GET') => {
 // Get user profile
 export const getUserProfile = async () => {
   console.log('[seaTimeApi] Fetching user profile from /api/profile');
-  const options = await getFetchOptions('GET');
-  const response = await fetch(`${API_BASE_URL}/api/profile`, options);
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[seaTimeApi] Failed to fetch user profile:', response.status, errorText);
-    throw new Error(`Failed to fetch user profile: ${response.status}`);
-  }
-
-  const data = await response.json();
-  console.log('[seaTimeApi] User profile fetched successfully with all fields');
+  console.log('[seaTimeApi] API_BASE_URL:', API_BASE_URL);
+  console.log('[seaTimeApi] Platform:', Platform.OS);
   
-  // Backend returns the profile object directly
-  return data;
+  try {
+    const options = await getFetchOptions('GET');
+    console.log('[seaTimeApi] Fetch options prepared, making request...');
+    
+    const response = await fetch(`${API_BASE_URL}/api/profile`, options);
+    console.log('[seaTimeApi] Response received:', response.status, response.statusText);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('[seaTimeApi] Failed to fetch user profile:', response.status, errorText);
+      throw new Error(`Failed to fetch user profile: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('[seaTimeApi] User profile fetched successfully');
+    console.log('[seaTimeApi] Profile data:', JSON.stringify(data, null, 2));
+    
+    // Backend returns the profile object directly
+    return data;
+  } catch (error: any) {
+    console.error('[seaTimeApi] getUserProfile error:', error);
+    console.error('[seaTimeApi] Error details:', error.message, error.name);
+    throw error;
+  }
 };
 
 // Update user profile

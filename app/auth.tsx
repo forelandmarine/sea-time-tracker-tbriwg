@@ -196,13 +196,22 @@ export default function AuthScreen() {
   const handleAppleSignIn = async () => {
     try {
       console.log('[AuthScreen] User tapped Sign in with Apple button');
+      console.log('[AuthScreen] Platform:', Platform.OS);
       console.log('[AuthScreen] Checking Apple Authentication availability...');
       
       // Check if Apple Authentication is available
-      const isAvailable = await AppleAuthentication.isAvailableAsync();
-      console.log('[AuthScreen] Apple Authentication available:', isAvailable);
+      let isAvailable = false;
+      try {
+        isAvailable = await AppleAuthentication.isAvailableAsync();
+        console.log('[AuthScreen] Apple Authentication available:', isAvailable);
+      } catch (availError: any) {
+        console.error('[AuthScreen] Error checking Apple Authentication availability:', availError);
+        showError('Sign in with Apple is not available on this device. Please use email and password instead.');
+        return;
+      }
       
       if (!isAvailable) {
+        console.log('[AuthScreen] Apple Authentication not available');
         showError('Sign in with Apple is not available on this device. Please use email and password instead.');
         return;
       }
@@ -248,12 +257,25 @@ export default function AuthScreen() {
       await signInWithApple(credential.identityToken, appleUserData);
       
       console.log('[AuthScreen] Apple sign in successful, navigating to home');
-      router.replace('/(tabs)');
+      
+      // Use setTimeout to ensure state updates complete before navigation
+      setTimeout(() => {
+        console.log('[AuthScreen] Executing navigation to /(tabs)');
+        try {
+          router.replace('/(tabs)');
+          console.log('[AuthScreen] Navigation completed');
+        } catch (navError) {
+          console.error('[AuthScreen] Navigation error:', navError);
+          // Fallback navigation
+          router.push('/(tabs)');
+        }
+      }, 100);
     } catch (error: any) {
       console.error('[AuthScreen] Apple sign in error:', {
         code: error.code,
         message: error.message,
         name: error.name,
+        stack: error.stack,
       });
       
       // Don't show error for user cancellation

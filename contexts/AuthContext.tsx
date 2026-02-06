@@ -40,50 +40,70 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const tokenStorage = {
   async getToken(): Promise<string | null> {
     try {
+      console.log('[Auth] Getting token from storage, Platform:', Platform.OS);
+      
       if (Platform.OS === 'web') {
         try {
-          return localStorage.getItem(TOKEN_KEY);
-        } catch {
+          const token = localStorage.getItem(TOKEN_KEY);
+          console.log('[Auth] Web token retrieved:', token ? 'YES (length: ' + token.length + ')' : 'NO');
+          return token;
+        } catch (webError) {
+          console.error('[Auth] Web localStorage error:', webError);
           return null;
         }
       }
-      return await SecureStore.getItemAsync(TOKEN_KEY);
-    } catch (error) {
+      
+      console.log('[Auth] Getting token from SecureStore...');
+      const token = await SecureStore.getItemAsync(TOKEN_KEY);
+      console.log('[Auth] SecureStore token retrieved:', token ? 'YES (length: ' + token.length + ')' : 'NO');
+      return token;
+    } catch (error: any) {
       console.error('[Auth] Error getting token:', error);
+      console.error('[Auth] Error details:', error.message, error.name);
       return null;
     }
   },
   
   async setToken(token: string): Promise<void> {
     try {
+      console.log('[Auth] Storing token, Platform:', Platform.OS, 'token length:', token.length);
+      
       if (Platform.OS === 'web') {
         try {
           localStorage.setItem(TOKEN_KEY, token);
-        } catch (error) {
-          console.warn('[Auth] localStorage not accessible:', error);
+          console.log('[Auth] Token stored in localStorage');
+        } catch (error: any) {
+          console.warn('[Auth] localStorage not accessible:', error.message);
         }
       } else {
         await SecureStore.setItemAsync(TOKEN_KEY, token);
+        console.log('[Auth] Token stored in SecureStore');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Auth] Error storing token:', error);
+      console.error('[Auth] Error details:', error.message, error.name);
       // Don't throw - allow auth to continue even if storage fails
     }
   },
   
   async removeToken(): Promise<void> {
     try {
+      console.log('[Auth] Removing token, Platform:', Platform.OS);
+      
       if (Platform.OS === 'web') {
         try {
           localStorage.removeItem(TOKEN_KEY);
+          console.log('[Auth] Token removed from localStorage');
         } catch {
           // Ignore errors
         }
       } else {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
+        console.log('[Auth] Token removed from SecureStore');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Auth] Error removing token:', error);
+      console.error('[Auth] Error details:', error.message, error.name);
       // Don't throw - we want to continue even if removal fails
     }
   },
@@ -131,34 +151,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       console.log('[Auth] Starting auth check...');
+      console.log('[Auth] Platform:', Platform.OS);
+      console.log('[Auth] API_URL:', API_URL || 'NOT CONFIGURED');
       
       if (!API_URL) {
         console.warn('[Auth] Backend URL not configured');
         setLoading(false);
         setUser(null);
+        authLock.current = false;
         return;
       }
 
+      console.log('[Auth] Getting token from storage...');
       const token = await tokenStorage.getToken();
+      console.log('[Auth] Token retrieved:', token ? 'YES (length: ' + token.length + ')' : 'NO');
       
       if (!token) {
-        console.log('[Auth] No token found');
+        console.log('[Auth] No token found, user not authenticated');
         setLoading(false);
         setUser(null);
+        authLock.current = false;
         return;
       }
 
-      console.log('[Auth] Token found, verifying...');
+      console.log('[Auth] Token found, verifying with backend...');
       
       // CRITICAL: Aggressive timeout with AbortController
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
-        console.warn('[Auth] Auth check timeout, aborting...');
+        console.warn('[Auth] Auth check timeout after', AUTH_CHECK_TIMEOUT, 'ms, aborting...');
         controller.abort();
       }, AUTH_CHECK_TIMEOUT);
       
       try {
-        const response = await fetch(`${API_URL}/api/auth/user`, {
+        const url = `${API_URL}/api/auth/user`;
+        console.log('[Auth] Fetching:', url);
+        
+        const response = await fetch(url, {
           headers: {
             'Authorization': `Bearer ${token}`,
           },
@@ -166,13 +195,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
 
         clearTimeout(timeoutId);
+        console.log('[Auth] Response received:', response.status, response.statusText);
 
         if (response.ok) {
           const data = await response.json();
           console.log('[Auth] ✅ User authenticated:', data.user?.email);
           setUser(data.user);
         } else {
-          console.log('[Auth] Token invalid, clearing...');
+          console.log('[Auth] Token invalid (status:', response.status, '), clearing...');
           await tokenStorage.removeToken();
           setUser(null);
         }
@@ -182,19 +212,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (fetchError.name === 'AbortError') {
           console.warn('[Auth] Auth check aborted due to timeout');
         } else {
-          console.error('[Auth] Auth check error:', fetchError.message);
+          console.error('[Auth] Auth check fetch error:', fetchError.message);
+          console.error('[Auth] Error name:', fetchError.name);
         }
         
         // Keep token on network errors (might be temporary)
         if (!(fetchError instanceof TypeError && fetchError.message.includes('Network'))) {
+          console.log('[Auth] Clearing token due to non-network error');
           await tokenStorage.removeToken();
+        } else {
+          console.log('[Auth] Keeping token (network error, might be temporary)');
         }
         setUser(null);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[Auth] Check auth failed:', error);
+      console.error('[Auth] Error details:', error.message, error.name);
       setUser(null);
     } finally {
+      console.log('[Auth] Auth check complete, setting loading to false');
       setLoading(false);
       authLock.current = false;
     }
