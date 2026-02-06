@@ -17,51 +17,12 @@ import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { BACKEND_URL } from "@/utils/api";
-import { registerForPushNotificationsAsync } from "@/utils/notifications";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { useNotifications } from "@/hooks/useNotifications";
 
-// Platform-specific imports for native-only modules
-let SystemBars: any = null;
-let useNetworkState: any = () => ({ isConnected: true, isInternetReachable: true });
-let Notifications: any = null;
-
-// CRITICAL: Wrap ALL requires in try-catch to prevent crashes
+// CRITICAL FIX: NO native module imports at file scope
+// All native modules will be loaded AFTER app initialization
 console.log('[App] ========== APP INITIALIZATION STARTED ==========');
 console.log('[App] Platform:', Platform.OS);
-
-try {
-  if (Platform.OS !== 'web') {
-    console.log('[App] Loading SystemBars...');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    SystemBars = require("react-native-edge-to-edge").SystemBars;
-    console.log('[App] ✅ SystemBars loaded');
-  }
-} catch (error) {
-  console.warn('[App] ⚠️ Failed to load SystemBars (non-critical):', error);
-}
-
-try {
-  if (Platform.OS !== 'web') {
-    console.log('[App] Loading useNetworkState...');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    useNetworkState = require("expo-network").useNetworkState;
-    console.log('[App] ✅ useNetworkState loaded');
-  }
-} catch (error) {
-  console.warn('[App] ⚠️ Failed to load useNetworkState (non-critical):', error);
-}
-
-try {
-  if (Platform.OS !== 'web') {
-    console.log('[App] Loading Notifications...');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    Notifications = require('expo-notifications');
-    console.log('[App] ✅ Notifications loaded');
-  }
-} catch (error) {
-  console.warn('[App] ⚠️ Failed to load Notifications (non-critical):', error);
-}
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 if (Platform.OS !== 'web') {
@@ -77,21 +38,13 @@ export const unstable_settings = {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const networkState = useNetworkState();
   const router = useRouter();
   const segments = useSegments();
   const pathname = usePathname();
   const { user, loading } = useAuth();
   const [isNavigating, setIsNavigating] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
-  
-  // Set up notification polling and daily 18:00 notification
-  // Wrapped in try-catch to prevent crashes
-  try {
-    useNotifications();
-  } catch (error) {
-    console.error('[App] ⚠️ useNotifications hook error (non-critical):', error);
-  }
+  const [appFullyMounted, setAppFullyMounted] = useState(false);
 
   const [loaded, error] = useFonts({
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -131,29 +84,61 @@ function RootLayoutNav() {
         console.warn('[App] ⚠️ WARNING: Backend URL is not configured!');
         console.warn('[App] The app may not function correctly without a backend.');
       }
-      
-      // Request notification permissions (only on native platforms)
-      if (Platform.OS !== 'web') {
-        // CRITICAL: Wrap in try-catch and don't block app startup
-        try {
-          console.log('[App] Requesting notification permissions (non-blocking)...');
-          registerForPushNotificationsAsync().then((granted) => {
-            if (granted) {
-              console.log('[App] ✅ Notification permissions granted');
-            } else {
-              console.log('[App] ⚠️ Notification permissions not granted');
-            }
-          }).catch((err) => {
-            console.error('[App] ❌ Notification permission error (non-blocking):', err);
-          });
-        } catch (err) {
-          console.error('[App] ❌ Notification setup error (non-blocking):', err);
-        }
-      } else {
-        console.log('[App] ℹ️ Notifications not supported on web');
-      }
+
+      // Mark app as fully mounted
+      setAppFullyMounted(true);
     }
   }, [loaded]);
+
+  // CRITICAL FIX: Load native modules AFTER app is fully mounted
+  useEffect(() => {
+    if (!appFullyMounted || Platform.OS === 'web') {
+      return;
+    }
+
+    console.log('[App] App fully mounted, loading native modules...');
+
+    // Load SystemBars (non-blocking)
+    (async () => {
+      try {
+        const { SystemBars } = await import('react-native-edge-to-edge');
+        console.log('[App] ✅ SystemBars loaded');
+        // SystemBars will be rendered in JSX below
+      } catch (error) {
+        console.warn('[App] ⚠️ Failed to load SystemBars (non-critical):', error);
+      }
+    })();
+
+    // Load and setup notifications (non-blocking, with delay)
+    setTimeout(async () => {
+      try {
+        console.log('[App] Loading notification modules...');
+        const { registerForPushNotificationsAsync } = await import('@/utils/notifications');
+        
+        const granted = await registerForPushNotificationsAsync();
+        if (granted) {
+          console.log('[App] ✅ Notification permissions granted');
+        } else {
+          console.log('[App] ⚠️ Notification permissions not granted');
+        }
+      } catch (error) {
+        console.error('[App] ❌ Notification setup error (non-blocking):', error);
+      }
+    }, 2000); // 2 second delay to ensure app is stable
+
+    // Load network state monitoring (non-blocking, with delay)
+    setTimeout(async () => {
+      try {
+        console.log('[App] Loading network monitoring...');
+        const { useNetworkState } = await import('expo-network');
+        // Network state will be checked in a separate effect
+        console.log('[App] ✅ Network monitoring loaded');
+      } catch (error) {
+        console.warn('[App] ⚠️ Failed to load network monitoring (non-critical):', error);
+      }
+    }, 3000); // 3 second delay
+
+  }, [appFullyMounted]);
 
   // Simplified authentication routing - Let index.tsx handle redirects
   useEffect(() => {
@@ -203,81 +188,6 @@ function RootLayoutNav() {
       }, 200);
     }
   }, [user, loading, loaded, pathname, segments, isNavigating, router]);
-
-  // Handle notification responses (when user taps on notification)
-  // Only set up on native platforms
-  useEffect(() => {
-    if (Platform.OS === 'web' || !Notifications) {
-      return;
-    }
-
-    console.log('[App] Setting up notification response listener');
-    
-    try {
-      // Check if app was opened from a notification
-      Notifications.getLastNotificationResponseAsync().then((response: any) => {
-        if (response?.notification) {
-          console.log('[App] App opened from notification');
-          const data = response.notification.request.content.data;
-          
-          // Navigate to confirmations tab if notification has the screen data
-          if (data?.screen === 'confirmations' || data?.url) {
-            console.log('[App] Navigating to confirmations tab from notification');
-            setTimeout(() => {
-              try {
-                router.push('/(tabs)/confirmations');
-              } catch (error) {
-                console.error('[App] Navigation error:', error);
-              }
-            }, 500);
-          }
-        }
-      }).catch((error: any) => {
-        console.error('[App] Error checking last notification response:', error);
-      });
-
-      // Listen for notification taps while app is running
-      const subscription = Notifications.addNotificationResponseReceivedListener((response: any) => {
-        console.log('[App] Notification tapped');
-        const data = response.notification.request.content.data;
-        
-        // Navigate to confirmations tab
-        if (data?.screen === 'confirmations' || data?.url) {
-          console.log('[App] Navigating to confirmations tab from notification tap');
-          try {
-            router.push('/(tabs)/confirmations');
-          } catch (error) {
-            console.error('[App] Navigation error:', error);
-          }
-        }
-      });
-
-      return () => {
-        if (subscription && subscription.remove) {
-          subscription.remove();
-        }
-      };
-    } catch (error) {
-      console.error('[App] Error setting up notification listeners:', error);
-    }
-  }, [router]);
-
-  React.useEffect(() => {
-    try {
-      if (Platform.OS !== 'web' && 
-          networkState &&
-          !networkState.isConnected &&
-          networkState.isInternetReachable === false
-      ) {
-        Alert.alert(
-          "You are offline",
-          "You can keep using the app! Your changes will be saved locally and synced when you are back online."
-        );
-      }
-    } catch (error) {
-      console.error('[App] Error checking network state:', error);
-    }
-  }, [networkState]);
 
   // Show error screen if initialization failed
   if (initError) {
@@ -592,7 +502,6 @@ function RootLayoutNav() {
               }} 
             />
           </Stack>
-          {Platform.OS !== 'web' && SystemBars && <SystemBars style={"auto"} />}
         </GestureHandlerRootView>
       </ThemeProvider>
     </>

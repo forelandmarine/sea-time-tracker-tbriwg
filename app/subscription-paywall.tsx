@@ -200,7 +200,7 @@ export default function SubscriptionPaywallScreen() {
         StoreKitUtils.removePurchaseListeners();
       };
     }
-  }, [initializeAndFetchProduct, checkSubscription, router]);
+  }, [initializeAndFetchProduct, checkSubscription, router, subscriptionStatus?.status]);
 
   const handleSubscribe = async () => {
     if (Platform.OS !== 'ios') {

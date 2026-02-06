@@ -1,51 +1,41 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import { Platform } from 'react-native';
 import { useAuth } from './AuthContext';
-import { authenticatedGet, authenticatedPatch } from '@/utils/api';
+import { authenticatedGet } from '@/utils/api';
 
-// CRITICAL: Subscription check timeout - very short to prevent blocking
+// CRITICAL: Aggressive timeout to prevent blocking
 const SUBSCRIPTION_CHECK_TIMEOUT = 1500; // 1.5 seconds max
 
 interface SubscriptionStatus {
-  status: 'active' | 'inactive';
+  status: 'active' | 'inactive' | 'pending';
   expiresAt: string | null;
   productId: string | null;
 }
 
 interface SubscriptionContextType {
-  subscriptionStatus: SubscriptionStatus | null;
+  subscriptionStatus: SubscriptionStatus;
   loading: boolean;
-  hasActiveSubscription: boolean;
   checkSubscription: () => Promise<void>;
-  pauseTracking: () => Promise<void>;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus | null>(null);
-  const [loading, setLoading] = useState(false); // CRITICAL: Start as false to not block
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>({
+    status: 'inactive',
+    expiresAt: null,
+    productId: null,
+  });
+  
+  // CRITICAL: Start with loading=false to never block startup
+  const [loading, setLoading] = useState(false);
+  
+  // CRITICAL: Prevent concurrent checks
   const checkInProgress = useRef(false);
 
-  const hasActiveSubscription = subscriptionStatus?.status === 'active';
-
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      console.log('[Subscription] User authenticated, checking subscription (non-blocking)');
-      
-      // CRITICAL: Don't await - run in background
-      checkSubscription().catch((error) => {
-        console.error('[Subscription] Background check failed (ignored):', error);
-      });
-    } else {
-      console.log('[Subscription] User not authenticated, clearing status');
-      setSubscriptionStatus(null);
-      setLoading(false);
-    }
-  }, [isAuthenticated, user]);
-
-  const checkSubscription = async () => {
+  const checkSubscription = useCallback(async () => {
     // Prevent concurrent checks
     if (checkInProgress.current) {
       console.log('[Subscription] Check already in progress, skipping');
@@ -53,11 +43,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
 
     checkInProgress.current = true;
-    
-    try {
-      console.log('[Subscription] Fetching subscription status');
-      setLoading(true);
+    setLoading(true);
 
+    try {
+      console.log('[Subscription] Checking subscription status...');
+      
       // CRITICAL: Aggressive timeout with AbortController
       const controller = new AbortController();
       const timeoutId = setTimeout(() => {
@@ -65,53 +55,76 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         controller.abort();
       }, SUBSCRIPTION_CHECK_TIMEOUT);
 
-      const data = await authenticatedGet<SubscriptionStatus>('/api/subscription/status', {
-        signal: controller.signal,
-      });
-      
-      clearTimeout(timeoutId);
-      console.log('[Subscription] Status:', data.status);
-      setSubscriptionStatus(data);
-    } catch (error: any) {
-      console.error('[Subscription] Check error:', error.message);
-      
-      if (error.name === 'AbortError') {
-        console.warn('[Subscription] Check timed out, defaulting to inactive');
+      try {
+        const response = await authenticatedGet<{ subscription: SubscriptionStatus }>(
+          '/api/subscription',
+          { signal: controller.signal }
+        );
+
+        clearTimeout(timeoutId);
+
+        console.log('[Subscription] ✅ Status received:', response.subscription.status);
+        setSubscriptionStatus(response.subscription);
+      } catch (fetchError: any) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          console.warn('[Subscription] Check aborted due to timeout');
+        } else {
+          console.error('[Subscription] Check error:', fetchError.message);
+        }
+        
+        // Default to inactive on error
+        setSubscriptionStatus({
+          status: 'inactive',
+          expiresAt: null,
+          productId: null,
+        });
       }
-      
-      // CRITICAL: Always set a default status to prevent blocking
-      setSubscriptionStatus({ status: 'inactive', expiresAt: null, productId: null });
+    } catch (error) {
+      console.error('[Subscription] Check failed:', error);
+      setSubscriptionStatus({
+        status: 'inactive',
+        expiresAt: null,
+        productId: null,
+      });
     } finally {
       setLoading(false);
       checkInProgress.current = false;
     }
-  };
+  }, []);
 
-  const pauseTracking = async () => {
-    try {
-      console.log('[Subscription] Pausing tracking');
-
-      const response = await authenticatedPatch<{ success: boolean; vesselsDeactivated: number }>(
-        '/api/subscription/pause-tracking',
-        {}
-      );
-
-      console.log('[Subscription] Tracking paused, vessels deactivated:', response.vesselsDeactivated);
-      return response;
-    } catch (error: any) {
-      console.error('[Subscription] Pause tracking error:', error);
-      throw new Error(error.message || 'Failed to pause tracking');
+  // CRITICAL: Only check subscription AFTER user is authenticated
+  // Use a delay to ensure app is stable
+  useEffect(() => {
+    if (!isAuthenticated) {
+      console.log('[Subscription] User not authenticated, skipping check');
+      setSubscriptionStatus({
+        status: 'inactive',
+        expiresAt: null,
+        productId: null,
+      });
+      return;
     }
-  };
+
+    console.log('[Subscription] User authenticated, scheduling subscription check...');
+    
+    // CRITICAL: Delay subscription check to not block startup
+    const checkTimer = setTimeout(() => {
+      checkSubscription();
+    }, 2000); // 2 second delay
+
+    return () => {
+      clearTimeout(checkTimer);
+    };
+  }, [isAuthenticated, checkSubscription]);
 
   return (
     <SubscriptionContext.Provider
       value={{
         subscriptionStatus,
         loading,
-        hasActiveSubscription,
         checkSubscription,
-        pauseTracking,
       }}
     >
       {children}

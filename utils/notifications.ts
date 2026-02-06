@@ -1,49 +1,31 @@
 
 import { Platform } from 'react-native';
 
-// Platform-specific imports - only load on native platforms
-let Notifications: any = null;
-let Device: any = null;
-
-// CRITICAL: Wrap module loading in try-catch to prevent crashes
-try {
-  if (Platform.OS !== 'web') {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    Notifications = require('expo-notifications');
-    console.log('[Notifications] ✅ expo-notifications loaded');
-  }
-} catch (error) {
-  console.error('[Notifications] ❌ Failed to load expo-notifications:', error);
-}
-
-try {
-  if (Platform.OS !== 'web') {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    Device = require('expo-device');
-    console.log('[Notifications] ✅ expo-device loaded');
-  }
-} catch (error) {
-  console.error('[Notifications] ❌ Failed to load expo-device:', error);
-}
-
 console.log('[Notifications] Notification utility initialized');
 
-// Set the notification handler to show notifications when app is in foreground
-// Only on native platforms - wrapped in try-catch
-if (Platform.OS !== 'web' && Notifications) {
+/**
+ * CRITICAL FIX: Lazy load notification modules
+ * Modules are ONLY loaded when functions are called, not at import time
+ */
+async function loadNotificationModules() {
+  if (Platform.OS === 'web') {
+    return { Notifications: null, Device: null };
+  }
+
   try {
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
-    });
-    console.log('[Notifications] ✅ Notification handler set');
+    const [NotificationsModule, DeviceModule] = await Promise.all([
+      import('expo-notifications'),
+      import('expo-device'),
+    ]);
+
+    console.log('[Notifications] ✅ Modules loaded successfully');
+    return {
+      Notifications: NotificationsModule,
+      Device: DeviceModule,
+    };
   } catch (error) {
-    console.error('[Notifications] ❌ Failed to set notification handler:', error);
+    console.error('[Notifications] ❌ Failed to load modules:', error);
+    return { Notifications: null, Device: null };
   }
 }
 
@@ -59,71 +41,84 @@ export async function registerForPushNotificationsAsync(): Promise<boolean> {
     return false;
   }
 
-  // CRITICAL: Check if modules loaded successfully
-  if (!Notifications || !Device) {
-    console.error('[Notifications] Required modules not loaded');
-    return false;
-  }
-
   console.log('[Notifications] Requesting notification permissions');
   
   try {
+    const { Notifications, Device } = await loadNotificationModules();
+    
+    if (!Notifications || !Device) {
+      console.error('[Notifications] Required modules not loaded');
+      return false;
+    }
+
+    // Set notification handler first
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    console.log('[Notifications] ✅ Notification handler set');
+
     if (!Device.isDevice) {
       console.warn('[Notifications] Must use physical device for notifications');
       return false;
     }
+
+    // Check existing permissions
+    const { status: existingStatus } = await Notifications.getPermissionsAsync();
+    let finalStatus = existingStatus;
+    
+    console.log('[Notifications] Existing permission status:', existingStatus);
+
+    // Request permissions if not already granted
+    if (existingStatus !== 'granted') {
+      const { status } = await Notifications.requestPermissionsAsync({
+        ios: {
+          allowAlert: true,
+          allowBadge: true,
+          allowSound: true,
+          allowDisplayInCarPlay: false,
+          allowCriticalAlerts: false,
+          provideAppNotificationSettings: false,
+          allowProvisional: false,
+          allowAnnouncements: false,
+        },
+      });
+      finalStatus = status;
+      console.log('[Notifications] Permission request result:', status);
+    }
+
+    if (finalStatus !== 'granted') {
+      console.warn('[Notifications] Notification permissions not granted');
+      return false;
+    }
+
+    // Set up notification channel for Android
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('sea-time-entries', {
+        name: 'Sea Time Entries',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#007AFF',
+        sound: 'default',
+        description: 'Notifications for sea time entries that need review',
+        enableVibrate: true,
+        enableLights: true,
+        showBadge: true,
+      });
+      console.log('[Notifications] Android notification channel created');
+    }
+
+    console.log('[Notifications] Notification permissions granted successfully');
+    return true;
   } catch (error) {
-    console.error('[Notifications] Error checking device:', error);
+    console.error('[Notifications] ❌ Permission request failed:', error);
     return false;
   }
-
-  // Check existing permissions
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  let finalStatus = existingStatus;
-  
-  console.log('[Notifications] Existing permission status:', existingStatus);
-
-  // Request permissions if not already granted
-  if (existingStatus !== 'granted') {
-    const { status } = await Notifications.requestPermissionsAsync({
-      ios: {
-        allowAlert: true,
-        allowBadge: true,
-        allowSound: true,
-        allowDisplayInCarPlay: false,
-        allowCriticalAlerts: false,
-        provideAppNotificationSettings: false,
-        allowProvisional: false,
-        allowAnnouncements: false,
-      },
-    });
-    finalStatus = status;
-    console.log('[Notifications] Permission request result:', status);
-  }
-
-  if (finalStatus !== 'granted') {
-    console.warn('[Notifications] Notification permissions not granted');
-    return false;
-  }
-
-  // Set up notification channel for Android
-  if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('sea-time-entries', {
-      name: 'Sea Time Entries',
-      importance: Notifications.AndroidImportance.HIGH,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#007AFF',
-      sound: 'default',
-      description: 'Notifications for sea time entries that need review',
-      enableVibrate: true,
-      enableLights: true,
-      showBadge: true,
-    });
-    console.log('[Notifications] Android notification channel created');
-  }
-
-  console.log('[Notifications] Notification permissions granted successfully');
-  return true;
 }
 
 /**
@@ -146,13 +141,14 @@ export async function scheduleSeaTimeNotification(
     return null;
   }
 
-  // CRITICAL: Check if module loaded
-  if (!Notifications) {
-    console.error('[Notifications] Module not loaded');
-    return null;
-  }
-
   try {
+    const { Notifications } = await loadNotificationModules();
+    
+    if (!Notifications) {
+      console.error('[Notifications] Module not loaded');
+      return null;
+    }
+
     console.log('[Notifications] Scheduling notification for sea time entry:', {
       vesselName,
       entryId,
@@ -209,13 +205,14 @@ export async function scheduleDailySeaTimeReviewNotification(scheduledTime: stri
     return null;
   }
 
-  // CRITICAL: Check if module loaded
-  if (!Notifications) {
-    console.error('[Notifications] Module not loaded');
-    return null;
-  }
-
   try {
+    const { Notifications } = await loadNotificationModules();
+    
+    if (!Notifications) {
+      console.error('[Notifications] Module not loaded');
+      return null;
+    }
+
     console.log('[Notifications] Setting up daily sea time review notification at', scheduledTime);
 
     // Parse the scheduled time
@@ -277,11 +274,17 @@ export async function scheduleDailySeaTimeReviewNotification(scheduledTime: stri
  * @param notificationId - ID of the notification to cancel
  */
 export async function cancelNotification(notificationId: string): Promise<void> {
-  if (Platform.OS === 'web' || !Notifications) {
+  if (Platform.OS === 'web') {
     return;
   }
 
   try {
+    const { Notifications } = await loadNotificationModules();
+    
+    if (!Notifications) {
+      return;
+    }
+
     console.log('[Notifications] Canceling notification:', notificationId);
     await Notifications.cancelScheduledNotificationAsync(notificationId);
     console.log('[Notifications] Notification canceled successfully');
@@ -294,11 +297,17 @@ export async function cancelNotification(notificationId: string): Promise<void> 
  * Cancel all scheduled notifications
  */
 export async function cancelAllNotifications(): Promise<void> {
-  if (Platform.OS === 'web' || !Notifications) {
+  if (Platform.OS === 'web') {
     return;
   }
 
   try {
+    const { Notifications } = await loadNotificationModules();
+    
+    if (!Notifications) {
+      return;
+    }
+
     console.log('[Notifications] Canceling all notifications');
     await Notifications.cancelAllScheduledNotificationsAsync();
     console.log('[Notifications] All notifications canceled successfully');
@@ -311,11 +320,17 @@ export async function cancelAllNotifications(): Promise<void> {
  * Get the badge count
  */
 export async function getBadgeCount(): Promise<number> {
-  if (Platform.OS === 'web' || !Notifications) {
+  if (Platform.OS === 'web') {
     return 0;
   }
 
   try {
+    const { Notifications } = await loadNotificationModules();
+    
+    if (!Notifications) {
+      return 0;
+    }
+
     const count = await Notifications.getBadgeCountAsync();
     return count;
   } catch (error) {
@@ -329,11 +344,17 @@ export async function getBadgeCount(): Promise<number> {
  * @param count - Number to set as badge
  */
 export async function setBadgeCount(count: number): Promise<void> {
-  if (Platform.OS === 'web' || !Notifications) {
+  if (Platform.OS === 'web') {
     return;
   }
 
   try {
+    const { Notifications } = await loadNotificationModules();
+    
+    if (!Notifications) {
+      return;
+    }
+
     console.log('[Notifications] Setting badge count to:', count);
     await Notifications.setBadgeCountAsync(count);
   } catch (error) {

@@ -1,79 +1,51 @@
 
-import * as React from "react";
-import { createContext, useCallback, useContext } from "react";
-import { Platform } from "react-native";
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { Platform } from 'react-native';
 
-// Only import ExtensionStorage on iOS native (not web)
-let ExtensionStorage: any = null;
-let storage: any = null;
-
-// CRITICAL: Wrap in try-catch to prevent crashes
-// Only initialize on iOS native platform (not web or Android)
-if (Platform.OS === 'ios' && typeof window === 'undefined') {
-  try {
-    console.log('[WidgetContext] Attempting to load @bacons/apple-targets for iOS...');
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const appleTargets = require("@bacons/apple-targets");
-    ExtensionStorage = appleTargets.ExtensionStorage;
-    // Initialize storage with your group ID
-    storage = new ExtensionStorage("group.com.<user_name>.<app_name>");
-    console.log('[WidgetContext] ✅ Successfully loaded @bacons/apple-targets');
-  } catch (error) {
-    console.warn('[WidgetContext] ⚠️ Failed to load @bacons/apple-targets (non-critical):', error);
-  }
+interface WidgetContextType {
+  refreshWidget: () => Promise<void>;
 }
 
-type WidgetContextType = {
-  refreshWidget: () => void;
-};
+const WidgetContext = createContext<WidgetContextType | undefined>(undefined);
 
-const WidgetContext = createContext<WidgetContextType | null>(null);
+export function WidgetProvider({ children }: { children: ReactNode }) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-export function WidgetProvider({ children }: { children: React.ReactNode }) {
-  // Update widget state whenever what we want to show changes
-  React.useEffect(() => {
-    // CRITICAL: Wrap in try-catch to prevent crashes
-    try {
-      // Only run on iOS native with ExtensionStorage available
-      if (Platform.OS === 'ios' && ExtensionStorage && typeof window === 'undefined') {
-        try {
-          console.log('[WidgetContext] Reloading iOS widget...');
-          // set widget_state to null if we want to reset the widget
-          // storage?.set("widget_state", null);
-
-          // Refresh widget
-          ExtensionStorage.reloadWidget();
-          console.log('[WidgetContext] ✅ iOS widget reloaded successfully');
-        } catch (error) {
-          console.warn('[WidgetContext] ⚠️ Failed to reload widget (non-critical):', error);
-        }
-      } else {
-        console.log('[WidgetContext] Widget refresh skipped (not iOS native or ExtensionStorage not available)');
-      }
-    } catch (error) {
-      console.error('[WidgetContext] ❌ Widget effect error (non-critical):', error);
+  const refreshWidget = useCallback(async () => {
+    // Widgets only work on iOS
+    if (Platform.OS !== 'ios') {
+      console.log('[Widget] Widgets not supported on this platform');
+      return;
     }
-  }, []);
 
-  const refreshWidget = useCallback(() => {
-    // CRITICAL: Wrap in try-catch to prevent crashes
-    try {
-      // Only run on iOS native with ExtensionStorage available
-      if (Platform.OS === 'ios' && ExtensionStorage && typeof window === 'undefined') {
-        try {
-          console.log('[WidgetContext] Manually refreshing iOS widget...');
-          ExtensionStorage.reloadWidget();
-          console.log('[WidgetContext] ✅ iOS widget refreshed successfully');
-        } catch (error) {
-          console.warn('[WidgetContext] ⚠️ Failed to reload widget (non-critical):', error);
-        }
-      } else {
-        console.log('[WidgetContext] Widget refresh skipped (not iOS native or ExtensionStorage not available)');
-      }
-    } catch (error) {
-      console.error('[WidgetContext] ❌ Widget refresh error (non-critical):', error);
+    // Prevent concurrent refreshes
+    if (isRefreshing) {
+      console.log('[Widget] Refresh already in progress');
+      return;
     }
-  }, []);
+
+    setIsRefreshing(true);
+
+    try {
+      console.log('[Widget] Refreshing widget data...');
+      
+      // CRITICAL: Lazy load widget module with timeout
+      const loadPromise = import('react-native-widgetkit');
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Widget module load timeout')), 2000)
+      );
+      
+      const WidgetKit = await Promise.race([loadPromise, timeoutPromise]) as typeof import('react-native-widgetkit');
+      
+      await WidgetKit.reloadAllTimelines();
+      console.log('[Widget] ✅ Widget refreshed successfully');
+    } catch (error) {
+      console.error('[Widget] ❌ Widget refresh failed (non-critical):', error);
+      // Don't throw - widget refresh is non-critical
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing]);
 
   return (
     <WidgetContext.Provider value={{ refreshWidget }}>
@@ -82,10 +54,10 @@ export function WidgetProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export const useWidget = () => {
+export function useWidget() {
   const context = useContext(WidgetContext);
-  if (!context) {
-    throw new Error("useWidget must be used within a WidgetProvider");
+  if (context === undefined) {
+    throw new Error('useWidget must be used within WidgetProvider');
   }
   return context;
-};
+}
