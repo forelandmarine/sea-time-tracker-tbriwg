@@ -22,12 +22,37 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { useNotifications } from "@/hooks/useNotifications";
 
 // Platform-specific imports for native-only modules
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const SystemBars = Platform.OS !== 'web' ? require("react-native-edge-to-edge").SystemBars : null;
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const useNetworkState = Platform.OS !== 'web' ? require("expo-network").useNetworkState : () => ({ isConnected: true, isInternetReachable: true });
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const Notifications = Platform.OS !== 'web' ? require('expo-notifications') : null;
+let SystemBars: any = null;
+let useNetworkState: any = () => ({ isConnected: true, isInternetReachable: true });
+let Notifications: any = null;
+
+// CRITICAL: Wrap requires in try-catch to prevent crashes
+try {
+  if (Platform.OS !== 'web') {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    SystemBars = require("react-native-edge-to-edge").SystemBars;
+  }
+} catch (error) {
+  console.warn('[App] Failed to load SystemBars:', error);
+}
+
+try {
+  if (Platform.OS !== 'web') {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    useNetworkState = require("expo-network").useNetworkState;
+  }
+} catch (error) {
+  console.warn('[App] Failed to load useNetworkState:', error);
+}
+
+try {
+  if (Platform.OS !== 'web') {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    Notifications = require('expo-notifications');
+  }
+} catch (error) {
+  console.warn('[App] Failed to load Notifications:', error);
+}
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 if (Platform.OS !== 'web') {
@@ -89,15 +114,20 @@ function RootLayoutNav() {
       
       // Request notification permissions (only on native platforms)
       if (Platform.OS !== 'web') {
-        registerForPushNotificationsAsync().then((granted) => {
-          if (granted) {
-            console.log('[App] ✅ Notification permissions granted');
-          } else {
-            console.log('[App] ⚠️ Notification permissions not granted');
-          }
-        }).catch((err) => {
-          console.error('[App] ❌ Notification permission error:', err);
-        });
+        // CRITICAL: Wrap in try-catch and don't block app startup
+        try {
+          registerForPushNotificationsAsync().then((granted) => {
+            if (granted) {
+              console.log('[App] ✅ Notification permissions granted');
+            } else {
+              console.log('[App] ⚠️ Notification permissions not granted');
+            }
+          }).catch((err) => {
+            console.error('[App] ❌ Notification permission error (non-blocking):', err);
+          });
+        } catch (err) {
+          console.error('[App] ❌ Notification setup error (non-blocking):', err);
+        }
       } else {
         console.log('[App] ℹ️ Notifications not supported on web');
       }
@@ -152,58 +182,69 @@ function RootLayoutNav() {
   // Handle notification responses (when user taps on notification)
   // Only set up on native platforms
   useEffect(() => {
-    if (Platform.OS === 'web') {
+    if (Platform.OS === 'web' || !Notifications) {
       return;
     }
 
     console.log('[App] Setting up notification response listener');
     
-    // Check if app was opened from a notification
-    Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (response?.notification) {
-        console.log('[App] App opened from notification');
+    try {
+      // Check if app was opened from a notification
+      Notifications.getLastNotificationResponseAsync().then((response: any) => {
+        if (response?.notification) {
+          console.log('[App] App opened from notification');
+          const data = response.notification.request.content.data;
+          
+          // Navigate to confirmations tab if notification has the screen data
+          if (data?.screen === 'confirmations' || data?.url) {
+            console.log('[App] Navigating to confirmations tab from notification');
+            setTimeout(() => {
+              router.push('/(tabs)/confirmations');
+            }, 500);
+          }
+        }
+      }).catch((error: any) => {
+        console.error('[App] Error checking last notification response:', error);
+      });
+
+      // Listen for notification taps while app is running
+      const subscription = Notifications.addNotificationResponseReceivedListener((response: any) => {
+        console.log('[App] Notification tapped');
         const data = response.notification.request.content.data;
         
-        // Navigate to confirmations tab if notification has the screen data
+        // Navigate to confirmations tab
         if (data?.screen === 'confirmations' || data?.url) {
-          console.log('[App] Navigating to confirmations tab from notification');
-          setTimeout(() => {
-            router.push('/(tabs)/confirmations');
-          }, 500);
+          console.log('[App] Navigating to confirmations tab from notification tap');
+          router.push('/(tabs)/confirmations');
         }
-      }
-    }).catch((error) => {
-      console.error('[App] Error checking last notification response:', error);
-    });
+      });
 
-    // Listen for notification taps while app is running
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      console.log('[App] Notification tapped');
-      const data = response.notification.request.content.data;
-      
-      // Navigate to confirmations tab
-      if (data?.screen === 'confirmations' || data?.url) {
-        console.log('[App] Navigating to confirmations tab from notification tap');
-        router.push('/(tabs)/confirmations');
-      }
-    });
-
-    return () => {
-      subscription.remove();
-    };
+      return () => {
+        if (subscription && subscription.remove) {
+          subscription.remove();
+        }
+      };
+    } catch (error) {
+      console.error('[App] Error setting up notification listeners:', error);
+    }
   }, [router]);
 
   React.useEffect(() => {
-    if (Platform.OS !== 'web' && 
-        !networkState.isConnected &&
-        networkState.isInternetReachable === false
-    ) {
-      Alert.alert(
-        "You are offline",
-        "You can keep using the app! Your changes will be saved locally and synced when you are back online."
-      );
+    try {
+      if (Platform.OS !== 'web' && 
+          networkState &&
+          !networkState.isConnected &&
+          networkState.isInternetReachable === false
+      ) {
+        Alert.alert(
+          "You are offline",
+          "You can keep using the app! Your changes will be saved locally and synced when you are back online."
+        );
+      }
+    } catch (error) {
+      console.error('[App] Error checking network state:', error);
     }
-  }, [networkState.isConnected, networkState.isInternetReachable]);
+  }, [networkState]);
 
   // Show error screen if initialization failed
   if (initError) {

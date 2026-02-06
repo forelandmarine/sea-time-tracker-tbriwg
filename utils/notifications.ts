@@ -2,25 +2,49 @@
 import { Platform } from 'react-native';
 
 // Platform-specific imports - only load on native platforms
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const Notifications = Platform.OS !== 'web' ? require('expo-notifications') : null;
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const Device = Platform.OS !== 'web' ? require('expo-device') : null;
+let Notifications: any = null;
+let Device: any = null;
+
+// CRITICAL: Wrap module loading in try-catch to prevent crashes
+try {
+  if (Platform.OS !== 'web') {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    Notifications = require('expo-notifications');
+    console.log('[Notifications] ✅ expo-notifications loaded');
+  }
+} catch (error) {
+  console.error('[Notifications] ❌ Failed to load expo-notifications:', error);
+}
+
+try {
+  if (Platform.OS !== 'web') {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    Device = require('expo-device');
+    console.log('[Notifications] ✅ expo-device loaded');
+  }
+} catch (error) {
+  console.error('[Notifications] ❌ Failed to load expo-device:', error);
+}
 
 console.log('[Notifications] Notification utility initialized');
 
 // Set the notification handler to show notifications when app is in foreground
-// Only on native platforms
+// Only on native platforms - wrapped in try-catch
 if (Platform.OS !== 'web' && Notifications) {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+  try {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+    console.log('[Notifications] ✅ Notification handler set');
+  } catch (error) {
+    console.error('[Notifications] ❌ Failed to set notification handler:', error);
+  }
 }
 
 /**
@@ -35,10 +59,21 @@ export async function registerForPushNotificationsAsync(): Promise<boolean> {
     return false;
   }
 
+  // CRITICAL: Check if modules loaded successfully
+  if (!Notifications || !Device) {
+    console.error('[Notifications] Required modules not loaded');
+    return false;
+  }
+
   console.log('[Notifications] Requesting notification permissions');
   
-  if (!Device.isDevice) {
-    console.warn('[Notifications] Must use physical device for notifications');
+  try {
+    if (!Device.isDevice) {
+      console.warn('[Notifications] Must use physical device for notifications');
+      return false;
+    }
+  } catch (error) {
+    console.error('[Notifications] Error checking device:', error);
     return false;
   }
 
@@ -111,6 +146,12 @@ export async function scheduleSeaTimeNotification(
     return null;
   }
 
+  // CRITICAL: Check if module loaded
+  if (!Notifications) {
+    console.error('[Notifications] Module not loaded');
+    return null;
+  }
+
   try {
     console.log('[Notifications] Scheduling notification for sea time entry:', {
       vesselName,
@@ -165,6 +206,12 @@ export async function scheduleDailySeaTimeReviewNotification(scheduledTime: stri
   // Notifications are not supported on web
   if (Platform.OS === 'web') {
     console.log('[Notifications] Skipping daily notification setup on web');
+    return null;
+  }
+
+  // CRITICAL: Check if module loaded
+  if (!Notifications) {
+    console.error('[Notifications] Module not loaded');
     return null;
   }
 
@@ -230,7 +277,7 @@ export async function scheduleDailySeaTimeReviewNotification(scheduledTime: stri
  * @param notificationId - ID of the notification to cancel
  */
 export async function cancelNotification(notificationId: string): Promise<void> {
-  if (Platform.OS === 'web') {
+  if (Platform.OS === 'web' || !Notifications) {
     return;
   }
 
@@ -247,7 +294,7 @@ export async function cancelNotification(notificationId: string): Promise<void> 
  * Cancel all scheduled notifications
  */
 export async function cancelAllNotifications(): Promise<void> {
-  if (Platform.OS === 'web') {
+  if (Platform.OS === 'web' || !Notifications) {
     return;
   }
 
@@ -264,7 +311,7 @@ export async function cancelAllNotifications(): Promise<void> {
  * Get the badge count
  */
 export async function getBadgeCount(): Promise<number> {
-  if (Platform.OS === 'web') {
+  if (Platform.OS === 'web' || !Notifications) {
     return 0;
   }
 
@@ -282,7 +329,7 @@ export async function getBadgeCount(): Promise<number> {
  * @param count - Number to set as badge
  */
 export async function setBadgeCount(count: number): Promise<void> {
-  if (Platform.OS === 'web') {
+  if (Platform.OS === 'web' || !Notifications) {
     return;
   }
 

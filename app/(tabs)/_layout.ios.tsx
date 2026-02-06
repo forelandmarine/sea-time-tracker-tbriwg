@@ -3,29 +3,11 @@ import { Tabs } from 'expo-router';
 import React from 'react';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
-import { useColorScheme, View, Text } from 'react-native';
-import { useAuth } from '@/contexts/AuthContext';
+import { useColorScheme } from 'react-native';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const { user, loading } = useAuth();
-
-  // Show loading state while checking auth
-  if (loading) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: isDark ? colors.background : colors.backgroundLight }}>
-        <Text style={{ fontSize: 14, color: isDark ? '#999' : '#666' }}>Loading...</Text>
-      </View>
-    );
-  }
-
-  // If no user, show a blank screen - the root layout will handle redirect
-  if (!user) {
-    return (
-      <View style={{ flex: 1, backgroundColor: isDark ? colors.background : colors.backgroundLight }} />
-    );
-  }
 
   return (
     <Tabs
