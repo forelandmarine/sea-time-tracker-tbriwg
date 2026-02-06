@@ -26,36 +26,46 @@ let SystemBars: any = null;
 let useNetworkState: any = () => ({ isConnected: true, isInternetReachable: true });
 let Notifications: any = null;
 
-// CRITICAL: Wrap requires in try-catch to prevent crashes
+// CRITICAL: Wrap ALL requires in try-catch to prevent crashes
+console.log('[App] ========== APP INITIALIZATION STARTED ==========');
+console.log('[App] Platform:', Platform.OS);
+
 try {
   if (Platform.OS !== 'web') {
+    console.log('[App] Loading SystemBars...');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     SystemBars = require("react-native-edge-to-edge").SystemBars;
+    console.log('[App] ✅ SystemBars loaded');
   }
 } catch (error) {
-  console.warn('[App] Failed to load SystemBars:', error);
+  console.warn('[App] ⚠️ Failed to load SystemBars (non-critical):', error);
 }
 
 try {
   if (Platform.OS !== 'web') {
+    console.log('[App] Loading useNetworkState...');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     useNetworkState = require("expo-network").useNetworkState;
+    console.log('[App] ✅ useNetworkState loaded');
   }
 } catch (error) {
-  console.warn('[App] Failed to load useNetworkState:', error);
+  console.warn('[App] ⚠️ Failed to load useNetworkState (non-critical):', error);
 }
 
 try {
   if (Platform.OS !== 'web') {
+    console.log('[App] Loading Notifications...');
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     Notifications = require('expo-notifications');
+    console.log('[App] ✅ Notifications loaded');
   }
 } catch (error) {
-  console.warn('[App] Failed to load Notifications:', error);
+  console.warn('[App] ⚠️ Failed to load Notifications (non-critical):', error);
 }
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 if (Platform.OS !== 'web') {
+  console.log('[App] Preventing splash screen auto-hide...');
   SplashScreen.preventAutoHideAsync().catch((err) => {
     console.warn('[App] Could not prevent splash screen auto-hide:', err);
   });
@@ -76,7 +86,12 @@ function RootLayoutNav() {
   const [initError, setInitError] = useState<string | null>(null);
   
   // Set up notification polling and daily 18:00 notification
-  useNotifications();
+  // Wrapped in try-catch to prevent crashes
+  try {
+    useNotifications();
+  } catch (error) {
+    console.error('[App] ⚠️ useNotifications hook error (non-critical):', error);
+  }
 
   const [loaded, error] = useFonts({
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -96,8 +111,13 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (loaded) {
+      console.log('[App] ✅ Fonts loaded successfully');
+      
       if (Platform.OS !== 'web') {
-        SplashScreen.hideAsync().catch(() => {});
+        console.log('[App] Hiding splash screen...');
+        SplashScreen.hideAsync().catch((err) => {
+          console.warn('[App] Error hiding splash screen:', err);
+        });
       }
       
       console.log('[App] ========================================');
@@ -116,6 +136,7 @@ function RootLayoutNav() {
       if (Platform.OS !== 'web') {
         // CRITICAL: Wrap in try-catch and don't block app startup
         try {
+          console.log('[App] Requesting notification permissions (non-blocking)...');
           registerForPushNotificationsAsync().then((granted) => {
             if (granted) {
               console.log('[App] ✅ Notification permissions granted');
@@ -171,7 +192,11 @@ function RootLayoutNav() {
         } catch (navError) {
           console.error('[App] Navigation error:', navError);
           // Fallback to push if replace fails
-          router.push('/auth');
+          try {
+            router.push('/auth');
+          } catch (pushError) {
+            console.error('[App] Push navigation also failed:', pushError);
+          }
         } finally {
           setIsNavigating(false);
         }
@@ -199,7 +224,11 @@ function RootLayoutNav() {
           if (data?.screen === 'confirmations' || data?.url) {
             console.log('[App] Navigating to confirmations tab from notification');
             setTimeout(() => {
-              router.push('/(tabs)/confirmations');
+              try {
+                router.push('/(tabs)/confirmations');
+              } catch (error) {
+                console.error('[App] Navigation error:', error);
+              }
             }, 500);
           }
         }
@@ -215,7 +244,11 @@ function RootLayoutNav() {
         // Navigate to confirmations tab
         if (data?.screen === 'confirmations' || data?.url) {
           console.log('[App] Navigating to confirmations tab from notification tap');
-          router.push('/(tabs)/confirmations');
+          try {
+            router.push('/(tabs)/confirmations');
+          } catch (error) {
+            console.error('[App] Navigation error:', error);
+          }
         }
       });
 
@@ -505,6 +538,26 @@ function RootLayoutNav() {
               }} 
             />
 
+            {/* Admin update subscription screen */}
+            <Stack.Screen 
+              name="admin-update-subscription" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                headerBackTitle: 'Back',
+              }} 
+            />
+
+            {/* Admin activate subscriptions screen */}
+            <Stack.Screen 
+              name="admin-activate-subscriptions" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                headerBackTitle: 'Back',
+              }} 
+            />
+
             {/* Modal Demo Screens */}
             <Stack.Screen
               name="modal"
@@ -579,15 +632,31 @@ export default function RootLayout() {
     );
   }
 
-  return (
-    <ErrorBoundary>
-      <AuthProvider>
-        <SubscriptionProvider>
-          <WidgetProvider>
-            <RootLayoutNav />
-          </WidgetProvider>
-        </SubscriptionProvider>
-      </AuthProvider>
-    </ErrorBoundary>
-  );
+  // CRITICAL: Wrap providers in try-catch to catch initialization errors
+  try {
+    return (
+      <ErrorBoundary>
+        <AuthProvider>
+          <SubscriptionProvider>
+            <WidgetProvider>
+              <RootLayoutNav />
+            </WidgetProvider>
+          </SubscriptionProvider>
+        </AuthProvider>
+      </ErrorBoundary>
+    );
+  } catch (error: any) {
+    console.error('[App] ❌ CRITICAL ERROR during provider initialization:', error);
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000', padding: 20 }}>
+        <Text style={{ fontSize: 18, color: 'red', marginBottom: 10, textAlign: 'center' }}>Critical Error</Text>
+        <Text style={{ fontSize: 14, color: '#999', textAlign: 'center' }}>
+          {error.message || 'Failed to initialize app'}
+        </Text>
+        <Text style={{ fontSize: 12, color: '#666', marginTop: 20, textAlign: 'center' }}>
+          Please restart the app
+        </Text>
+      </View>
+    );
+  }
 }

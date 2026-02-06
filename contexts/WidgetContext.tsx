@@ -7,6 +7,7 @@ import { Platform } from "react-native";
 let ExtensionStorage: any = null;
 let storage: any = null;
 
+// CRITICAL: Wrap in try-catch to prevent crashes
 // Only initialize on iOS native platform (not web or Android)
 if (Platform.OS === 'ios' && typeof window === 'undefined') {
   try {
@@ -16,9 +17,9 @@ if (Platform.OS === 'ios' && typeof window === 'undefined') {
     ExtensionStorage = appleTargets.ExtensionStorage;
     // Initialize storage with your group ID
     storage = new ExtensionStorage("group.com.<user_name>.<app_name>");
-    console.log('[WidgetContext] Successfully loaded @bacons/apple-targets');
+    console.log('[WidgetContext] ✅ Successfully loaded @bacons/apple-targets');
   } catch (error) {
-    console.warn('[WidgetContext] Failed to load @bacons/apple-targets (this is normal on web):', error);
+    console.warn('[WidgetContext] ⚠️ Failed to load @bacons/apple-targets (non-critical):', error);
   }
 }
 
@@ -31,36 +32,46 @@ const WidgetContext = createContext<WidgetContextType | null>(null);
 export function WidgetProvider({ children }: { children: React.ReactNode }) {
   // Update widget state whenever what we want to show changes
   React.useEffect(() => {
-    // Only run on iOS native with ExtensionStorage available
-    if (Platform.OS === 'ios' && ExtensionStorage && typeof window === 'undefined') {
-      try {
-        console.log('[WidgetContext] Reloading iOS widget...');
-        // set widget_state to null if we want to reset the widget
-        // storage?.set("widget_state", null);
+    // CRITICAL: Wrap in try-catch to prevent crashes
+    try {
+      // Only run on iOS native with ExtensionStorage available
+      if (Platform.OS === 'ios' && ExtensionStorage && typeof window === 'undefined') {
+        try {
+          console.log('[WidgetContext] Reloading iOS widget...');
+          // set widget_state to null if we want to reset the widget
+          // storage?.set("widget_state", null);
 
-        // Refresh widget
-        ExtensionStorage.reloadWidget();
-        console.log('[WidgetContext] iOS widget reloaded successfully');
-      } catch (error) {
-        console.warn('[WidgetContext] Failed to reload widget:', error);
+          // Refresh widget
+          ExtensionStorage.reloadWidget();
+          console.log('[WidgetContext] ✅ iOS widget reloaded successfully');
+        } catch (error) {
+          console.warn('[WidgetContext] ⚠️ Failed to reload widget (non-critical):', error);
+        }
+      } else {
+        console.log('[WidgetContext] Widget refresh skipped (not iOS native or ExtensionStorage not available)');
       }
-    } else {
-      console.log('[WidgetContext] Widget refresh skipped (not iOS native or ExtensionStorage not available)');
+    } catch (error) {
+      console.error('[WidgetContext] ❌ Widget effect error (non-critical):', error);
     }
   }, []);
 
   const refreshWidget = useCallback(() => {
-    // Only run on iOS native with ExtensionStorage available
-    if (Platform.OS === 'ios' && ExtensionStorage && typeof window === 'undefined') {
-      try {
-        console.log('[WidgetContext] Manually refreshing iOS widget...');
-        ExtensionStorage.reloadWidget();
-        console.log('[WidgetContext] iOS widget refreshed successfully');
-      } catch (error) {
-        console.warn('[WidgetContext] Failed to reload widget:', error);
+    // CRITICAL: Wrap in try-catch to prevent crashes
+    try {
+      // Only run on iOS native with ExtensionStorage available
+      if (Platform.OS === 'ios' && ExtensionStorage && typeof window === 'undefined') {
+        try {
+          console.log('[WidgetContext] Manually refreshing iOS widget...');
+          ExtensionStorage.reloadWidget();
+          console.log('[WidgetContext] ✅ iOS widget refreshed successfully');
+        } catch (error) {
+          console.warn('[WidgetContext] ⚠️ Failed to reload widget (non-critical):', error);
+        }
+      } else {
+        console.log('[WidgetContext] Widget refresh skipped (not iOS native or ExtensionStorage not available)');
       }
-    } else {
-      console.log('[WidgetContext] Widget refresh skipped (not iOS native or ExtensionStorage not available)');
+    } catch (error) {
+      console.error('[WidgetContext] ❌ Widget refresh error (non-critical):', error);
     }
   }, []);
 

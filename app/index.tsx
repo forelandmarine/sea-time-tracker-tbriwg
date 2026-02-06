@@ -1,5 +1,4 @@
 
-import 'expo-router/entry';
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
@@ -15,14 +14,14 @@ export default function Index() {
   useEffect(() => {
     const checkUserPathway = async () => {
       if (!authLoading && isAuthenticated) {
-        console.log('Checking if user has selected a pathway...');
+        console.log('[Index] Checking if user has selected a pathway...');
         try {
           const profile = await seaTimeApi.getUserProfile();
           const hasSelectedDepartment = !!profile.department;
-          console.log('User has department:', hasSelectedDepartment, profile.department);
+          console.log('[Index] User has department:', hasSelectedDepartment, profile.department);
           setHasDepartment(hasSelectedDepartment);
         } catch (error) {
-          console.error('Failed to check user pathway:', error);
+          console.error('[Index] Failed to check user pathway:', error);
           setHasDepartment(false);
         }
       }
@@ -41,16 +40,16 @@ export default function Index() {
   }
 
   if (!isAuthenticated) {
-    console.log('User not authenticated, redirecting to auth screen');
+    console.log('[Index] User not authenticated, redirecting to auth screen');
     return <Redirect href="/auth" />;
   }
 
   if (!hasDepartment) {
-    console.log('User has not selected pathway, redirecting to pathway selection');
+    console.log('[Index] User has not selected pathway, redirecting to pathway selection');
     return <Redirect href="/select-pathway" />;
   }
 
-  console.log('User authenticated and has pathway, redirecting to home');
+  console.log('[Index] User authenticated and has pathway, redirecting to home');
   return <Redirect href="/(tabs)" />;
 }
 

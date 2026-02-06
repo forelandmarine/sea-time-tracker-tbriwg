@@ -27,6 +27,8 @@ import Constants from "expo-constants";
  */
 export const BACKEND_URL = Constants.expoConfig?.extra?.backendUrl || "";
 
+console.log('[API] Backend URL configured:', BACKEND_URL || 'NOT CONFIGURED');
+
 /**
  * Check if backend is properly configured
  */
@@ -161,6 +163,7 @@ export const apiDelete = async <T = any>(endpoint: string, options?: RequestOpti
 /**
  * Get authentication token from storage
  * Works on both web (localStorage) and native (SecureStore)
+ * CRITICAL: Wrapped in try-catch to prevent crashes
  */
 const getAuthToken = async (): Promise<string | null> => {
   try {
@@ -170,10 +173,14 @@ const getAuthToken = async (): Promise<string | null> => {
     }
     
     // Native platform - dynamically import SecureStore
-    const { Platform } = await import('react-native');
-    if (Platform.OS !== 'web') {
-      const SecureStore = await import('expo-secure-store');
-      return await SecureStore.getItemAsync('seatime_auth_token');
+    try {
+      const { Platform } = await import('react-native');
+      if (Platform.OS !== 'web') {
+        const SecureStore = await import('expo-secure-store');
+        return await SecureStore.getItemAsync('seatime_auth_token');
+      }
+    } catch (importError) {
+      console.error('[API] Error importing native modules:', importError);
     }
     
     return null;

@@ -8,6 +8,8 @@ import { scheduleSeaTimeNotification, scheduleDailySeaTimeReviewNotification, re
  * Hook to poll for new notifications and trigger local notifications
  * This checks the backend for new notification records and displays them as local notifications
  * Only works on native platforms (iOS/Android) - web is not supported
+ * 
+ * CRITICAL: Wrapped in try-catch to prevent crashes
  */
 export function useNotifications() {
   const lastCheckedRef = useRef<Set<string>>(new Set());
@@ -16,7 +18,6 @@ export function useNotifications() {
   const checkForNewNotifications = useCallback(async () => {
     // Skip on web - notifications not supported
     if (Platform.OS === 'web') {
-      console.log('[useNotifications] Skipping notification check on web');
       return;
     }
 
@@ -60,7 +61,7 @@ export function useNotifications() {
         lastCheckedRef.current.add(entry.id);
       }
     } catch (error) {
-      console.error('[useNotifications] Failed to check for notifications:', error);
+      console.error('[useNotifications] Failed to check for notifications (non-critical):', error);
     }
   }, []);
 
@@ -71,49 +72,60 @@ export function useNotifications() {
       return;
     }
 
-    console.log('[useNotifications] Setting up notification polling');
+    // CRITICAL: Wrap entire setup in try-catch to prevent crashes
+    try {
+      console.log('[useNotifications] Setting up notification polling');
 
-    // Request notification permissions and set up daily notification
-    const setupNotifications = async () => {
-      const hasPermission = await registerForPushNotificationsAsync();
-      if (hasPermission) {
-        console.log('[useNotifications] Syncing notification schedule with backend');
+      // Request notification permissions and set up daily notification
+      const setupNotifications = async () => {
         try {
-          // Fetch the user's notification schedule from backend
-          const schedule = await seaTimeApi.getNotificationSchedule();
-          console.log('[useNotifications] Backend schedule:', schedule);
-          
-          if (schedule && schedule.is_active) {
-            // Schedule local notification at the user's preferred time
-            const scheduledTime = schedule.scheduled_time || '18:00';
-            console.log('[useNotifications] Setting up daily notification at', scheduledTime);
-            await scheduleDailySeaTimeReviewNotification(scheduledTime);
+          const hasPermission = await registerForPushNotificationsAsync();
+          if (hasPermission) {
+            console.log('[useNotifications] Syncing notification schedule with backend');
+            try {
+              // Fetch the user's notification schedule from backend
+              const schedule = await seaTimeApi.getNotificationSchedule();
+              console.log('[useNotifications] Backend schedule:', schedule);
+              
+              if (schedule && schedule.is_active) {
+                // Schedule local notification at the user's preferred time
+                const scheduledTime = schedule.scheduled_time || '18:00';
+                console.log('[useNotifications] Setting up daily notification at', scheduledTime);
+                await scheduleDailySeaTimeReviewNotification(scheduledTime);
+              } else {
+                console.log('[useNotifications] Daily notifications are disabled in backend');
+              }
+            } catch (error) {
+              console.error('[useNotifications] Failed to sync with backend schedule, using default:', error);
+              // Fallback to default time if backend sync fails
+              await scheduleDailySeaTimeReviewNotification('18:00');
+            }
           } else {
-            console.log('[useNotifications] Daily notifications are disabled in backend');
+            console.warn('[useNotifications] Notification permissions not granted, skipping daily notification setup');
           }
         } catch (error) {
-          console.error('[useNotifications] Failed to sync with backend schedule, using default:', error);
-          // Fallback to default time if backend sync fails
-          await scheduleDailySeaTimeReviewNotification('18:00');
+          console.error('[useNotifications] Setup error (non-critical):', error);
         }
-      } else {
-        console.warn('[useNotifications] Notification permissions not granted, skipping daily notification setup');
-      }
-    };
+      };
 
-    setupNotifications();
+      setupNotifications();
 
-    // Check immediately on mount
-    checkForNewNotifications();
+      // Check immediately on mount
+      checkForNewNotifications();
 
-    // Then check every 30 seconds
-    intervalRef.current = setInterval(checkForNewNotifications, 30000);
+      // Then check every 30 seconds
+      intervalRef.current = setInterval(checkForNewNotifications, 30000);
 
-    return () => {
-      console.log('[useNotifications] Cleaning up notification polling');
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
+      return () => {
+        console.log('[useNotifications] Cleaning up notification polling');
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+        }
+      };
+    } catch (error) {
+      console.error('[useNotifications] ❌ CRITICAL: Hook initialization error (non-critical):', error);
+      // Return empty cleanup function
+      return () => {};
+    }
   }, [checkForNewNotifications]);
 }
