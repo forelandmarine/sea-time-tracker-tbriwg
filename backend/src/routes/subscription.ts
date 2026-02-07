@@ -32,10 +32,19 @@ function verifyAppleReceipt(receiptData: string, isSandbox: boolean = true): Pro
       password: process.env.APPLE_APP_SECRET || "",
     });
 
+    // Properly parse the URL to extract hostname and path
+    let urlObj: URL;
+    try {
+      urlObj = new URL(url);
+    } catch (error) {
+      reject(new Error(`Invalid Apple verification URL: ${error}`));
+      return;
+    }
+
     const options = {
-      hostname: url.split("//")[1],
-      path: "/verifyReceipt",
-      method: "POST",
+      hostname: urlObj.hostname,
+      path: urlObj.pathname,
+      method: "POST" as const,
       headers: {
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(postData),
@@ -73,6 +82,50 @@ function verifyAppleReceipt(receiptData: string, isSandbox: boolean = true): Pro
 }
 
 /**
+ * Safely parse a date value that could be Date | string | number | null
+ * Never throws - always returns Date | null with fallback to null
+ */
+function safeParseDateValue(value: any): Date | null {
+  try {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    // If already a Date object, return it
+    if (value instanceof Date) {
+      // Validate the date is valid
+      if (!isNaN(value.getTime())) {
+        return value;
+      }
+      return null;
+    }
+
+    // Try to parse as new Date
+    const parsed = new Date(value);
+    if (!isNaN(parsed.getTime())) {
+      return parsed;
+    }
+
+    return null;
+  } catch (error) {
+    // Silently catch all errors and return null
+    return null;
+  }
+}
+
+/**
+ * Check if a date is still valid (in the future)
+ */
+function isDateValid(date: Date | null): boolean {
+  if (!date) return false;
+  try {
+    return date.getTime() > new Date().getTime();
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Calculate subscription expiration date from Apple receipt
  */
 function getSubscriptionExpirationDate(receiptInfo: any): Date | null {
@@ -88,7 +141,14 @@ function getSubscriptionExpirationDate(receiptInfo: any): Date | null {
   });
 
   if (latestReceipt && latestReceipt.expires_date_ms) {
-    return new Date(parseInt(latestReceipt.expires_date_ms));
+    try {
+      const expirationDate = new Date(parseInt(latestReceipt.expires_date_ms));
+      if (!isNaN(expirationDate.getTime())) {
+        return expirationDate;
+      }
+    } catch (error) {
+      // Silently fail and return null
+    }
   }
 
   return null;
@@ -138,14 +198,35 @@ export function register(app: App, fastify: FastifyInstance): void {
         const user = users[0];
 
         // Handle case where subscription columns don't exist in database yet
-        const status = (user as any).subscription_status || "inactive";
-        const expiresAt = (user as any).subscription_expires_at;
-        const productId = (user as any).subscription_product_id;
+        // Always use safe parsing to prevent errors on invalid dates
+        const rawStatus = (user as any).subscription_status;
+        const rawExpiresAt = (user as any).subscription_expires_at;
+        const rawProductId = (user as any).subscription_product_id;
+
+        // Safely parse the expiration date
+        const expirationDate = safeParseDateValue(rawExpiresAt);
+
+        // Determine if subscription is actually active (status is 'active' AND date is valid/in future)
+        let status: 'active' | 'inactive' = 'inactive';
+        if (rawStatus === 'active' && isDateValid(expirationDate)) {
+          status = 'active';
+        }
+
+        // Format response with safe serialization
+        let expiresAtString: string | null = null;
+        try {
+          if (expirationDate && !isNaN(expirationDate.getTime())) {
+            expiresAtString = expirationDate.toISOString();
+          }
+        } catch (error) {
+          // Silently ignore serialization errors
+          expiresAtString = null;
+        }
 
         return reply.code(200).send({
           status,
-          expiresAt: expiresAt ? expiresAt.toISOString() : null,
-          productId: productId || null,
+          expiresAt: expiresAtString,
+          productId: rawProductId || null,
         });
       } catch (error) {
         app.logger.error({ err: error, userId }, "Error fetching subscription status");
