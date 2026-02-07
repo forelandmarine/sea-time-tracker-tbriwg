@@ -1,27 +1,13 @@
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { Platform } from 'react-native';
 import { BACKEND_URL } from '@/utils/api';
 import { clearBiometricCredentials } from '@/utils/biometricAuth';
 
 const TOKEN_KEY = 'seatime_auth_token';
 
-// CRITICAL: Absolute maximum timeouts to prevent hanging
-const AUTH_CHECK_TIMEOUT = 3000; // 3 seconds max for auth check
-const SIGN_IN_TIMEOUT = 10000; // 10 seconds max for sign in
-const SIGN_OUT_BACKEND_TIMEOUT = 500; // 500ms for backend sign out (fire-and-forget)
-const SAFETY_TIMEOUT = 6000; // 6 seconds absolute maximum for loading state
-
-// ═══════════════════════════════════════════════════════════════════════════
-// 🚨 CRITICAL FIX: DYNAMIC IMPORT OF EXPO-SECURE-STORE
-// ═══════════════════════════════════════════════════════════════════════════
-// PROBLEM: Importing expo-secure-store at module scope causes TurboModule
-// initialization during app startup, which can trigger SIGABRT crashes on iOS
-// when the native module is called before the React Native bridge is ready.
-//
-// SOLUTION: Use dynamic import() inside functions, ensuring SecureStore is
-// only loaded when actually needed, after the app is fully mounted and stable.
-// ═══════════════════════════════════════════════════════════════════════════
+// Simple, reasonable timeouts
+const API_TIMEOUT = 15000; // 15 seconds for API calls
 
 interface User {
   id: string;
@@ -45,775 +31,335 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// ═══════════════════════════════════════════════════════════════════════════
-// CRITICAL: Safe SecureStore wrapper with DYNAMIC IMPORT
-// ═══════════════════════════════════════════════════════════════════════════
+// Simple, robust token storage with proper error handling
 const tokenStorage = {
   async getToken(): Promise<string | null> {
     try {
-      console.log('[Auth] ⚠️ BREADCRUMB: tokenStorage.getToken called');
-      console.log('[Auth] Platform:', Platform.OS);
-      console.log('[Auth] TOKEN_KEY:', TOKEN_KEY);
-      
-      // CRITICAL: Validate TOKEN_KEY before native call
-      if (!TOKEN_KEY || typeof TOKEN_KEY !== 'string' || TOKEN_KEY.length === 0) {
-        console.error('[Auth] ❌ VALIDATION FAILED: Invalid TOKEN_KEY:', TOKEN_KEY);
-        return null;
-      }
-      
       if (Platform.OS === 'web') {
-        try {
-          const token = localStorage.getItem(TOKEN_KEY);
-          console.log('[Auth] ✅ Web token retrieved:', token ? 'YES (length: ' + token.length + ')' : 'NO');
-          return token;
-        } catch (webError) {
-          console.error('[Auth] ❌ Web localStorage error:', webError);
-          return null;
-        }
+        return localStorage.getItem(TOKEN_KEY);
       }
       
-      // CRITICAL: Dynamic import - SecureStore is NOT loaded at module scope
-      console.log('[Auth] ⚠️ BREADCRUMB: About to dynamically import expo-secure-store');
       const SecureStore = await import('expo-secure-store');
-      console.log('[Auth] ✅ expo-secure-store imported successfully');
-      
-      // CRITICAL: Wrap SecureStore call in try-catch
-      console.log('[Auth] ⚠️ BREADCRUMB: About to call SecureStore.getItemAsync');
-      console.log('[Auth] ⚠️ NATIVE CALL IMMINENT: SecureStore.getItemAsync with key:', TOKEN_KEY);
-      try {
-        const token = await SecureStore.getItemAsync(TOKEN_KEY);
-        console.log('[Auth] ✅ NATIVE CALL SUCCESS: SecureStore.getItemAsync');
-        console.log('[Auth] Token retrieved:', token ? 'YES (length: ' + token.length + ')' : 'NO');
-        return token;
-      } catch (secureStoreError: any) {
-        console.error('[Auth] ❌ NATIVE CALL FAILED: SecureStore.getItemAsync');
-        console.error('[Auth] Error:', secureStoreError);
-        console.error('[Auth] Error name:', secureStoreError.name);
-        console.error('[Auth] Error message:', secureStoreError.message);
-        console.error('[Auth] Error stack:', secureStoreError.stack);
-        return null;
-      }
-    } catch (error: any) {
-      console.error('[Auth] ❌ Error getting token:', error);
-      console.error('[Auth] Error details:', error.message, error.name);
+      return await SecureStore.getItemAsync(TOKEN_KEY);
+    } catch (error) {
+      console.error('[Auth] Error getting token:', error);
       return null;
     }
   },
   
   async setToken(token: string): Promise<void> {
+    if (!token) throw new Error('Invalid token');
+    
     try {
-      console.log('[Auth] ⚠️ BREADCRUMB: tokenStorage.setToken called');
-      console.log('[Auth] Platform:', Platform.OS);
-      console.log('[Auth] TOKEN_KEY:', TOKEN_KEY);
-      console.log('[Auth] Token length:', token?.length);
-      
-      // CRITICAL: Validate inputs before native call
-      if (!TOKEN_KEY || typeof TOKEN_KEY !== 'string' || TOKEN_KEY.length === 0) {
-        console.error('[Auth] ❌ VALIDATION FAILED: Invalid TOKEN_KEY:', TOKEN_KEY);
-        throw new Error('Invalid storage key');
-      }
-      
-      if (!token || typeof token !== 'string' || token.length === 0) {
-        console.error('[Auth] ❌ VALIDATION FAILED: Invalid token:', typeof token);
-        throw new Error('Invalid token value');
-      }
-      
       if (Platform.OS === 'web') {
-        try {
-          localStorage.setItem(TOKEN_KEY, token);
-          console.log('[Auth] ✅ Token stored in localStorage');
-        } catch (error: any) {
-          console.warn('[Auth] ⚠️ localStorage not accessible:', error.message);
-          throw error;
-        }
-      } else {
-        // CRITICAL: Dynamic import - SecureStore is NOT loaded at module scope
-        console.log('[Auth] ⚠️ BREADCRUMB: About to dynamically import expo-secure-store');
-        const SecureStore = await import('expo-secure-store');
-        console.log('[Auth] ✅ expo-secure-store imported successfully');
-        
-        // CRITICAL: Wrap SecureStore call in try-catch
-        console.log('[Auth] ⚠️ BREADCRUMB: About to call SecureStore.setItemAsync');
-        console.log('[Auth] ⚠️ NATIVE CALL IMMINENT: SecureStore.setItemAsync');
-        console.log('[Auth] Arguments: key =', TOKEN_KEY, ', value length =', token.length);
-        try {
-          await SecureStore.setItemAsync(TOKEN_KEY, token);
-          console.log('[Auth] ✅ NATIVE CALL SUCCESS: SecureStore.setItemAsync');
-          console.log('[Auth] Token stored in SecureStore');
-        } catch (secureStoreError: any) {
-          console.error('[Auth] ❌ NATIVE CALL FAILED: SecureStore.setItemAsync');
-          console.error('[Auth] Error:', secureStoreError);
-          console.error('[Auth] Error name:', secureStoreError.name);
-          console.error('[Auth] Error message:', secureStoreError.message);
-          console.error('[Auth] Error stack:', secureStoreError.stack);
-          throw new Error(`Failed to store token: ${secureStoreError.message}`);
-        }
+        localStorage.setItem(TOKEN_KEY, token);
+        return;
       }
-    } catch (error: any) {
-      console.error('[Auth] ❌ Error storing token:', error);
-      console.error('[Auth] Error details:', error.message, error.name);
+      
+      const SecureStore = await import('expo-secure-store');
+      await SecureStore.setItemAsync(TOKEN_KEY, token);
+    } catch (error) {
+      console.error('[Auth] Error storing token:', error);
       throw error;
     }
   },
   
   async removeToken(): Promise<void> {
     try {
-      console.log('[Auth] ⚠️ BREADCRUMB: tokenStorage.removeToken called');
-      console.log('[Auth] Platform:', Platform.OS);
-      console.log('[Auth] TOKEN_KEY:', TOKEN_KEY);
-      
-      // CRITICAL: Validate TOKEN_KEY before native call
-      if (!TOKEN_KEY || typeof TOKEN_KEY !== 'string' || TOKEN_KEY.length === 0) {
-        console.error('[Auth] ❌ VALIDATION FAILED: Invalid TOKEN_KEY:', TOKEN_KEY);
-        return; // Don't throw - we want to continue even if removal fails
-      }
-      
       if (Platform.OS === 'web') {
-        try {
-          localStorage.removeItem(TOKEN_KEY);
-          console.log('[Auth] ✅ Token removed from localStorage');
-        } catch {
-          // Ignore errors
-        }
-      } else {
-        // CRITICAL: Dynamic import - SecureStore is NOT loaded at module scope
-        console.log('[Auth] ⚠️ BREADCRUMB: About to dynamically import expo-secure-store');
-        const SecureStore = await import('expo-secure-store');
-        console.log('[Auth] ✅ expo-secure-store imported successfully');
-        
-        // CRITICAL: Wrap SecureStore call in try-catch
-        console.log('[Auth] ⚠️ BREADCRUMB: About to call SecureStore.deleteItemAsync');
-        console.log('[Auth] ⚠️ NATIVE CALL IMMINENT: SecureStore.deleteItemAsync with key:', TOKEN_KEY);
-        try {
-          await SecureStore.deleteItemAsync(TOKEN_KEY);
-          console.log('[Auth] ✅ NATIVE CALL SUCCESS: SecureStore.deleteItemAsync');
-          console.log('[Auth] Token removed from SecureStore');
-        } catch (secureStoreError: any) {
-          console.error('[Auth] ❌ NATIVE CALL FAILED: SecureStore.deleteItemAsync');
-          console.error('[Auth] Error:', secureStoreError);
-          console.error('[Auth] Error name:', secureStoreError.name);
-          console.error('[Auth] Error message:', secureStoreError.message);
-          // Don't throw - we want to continue even if removal fails
-        }
+        localStorage.removeItem(TOKEN_KEY);
+        return;
       }
-    } catch (error: any) {
-      console.error('[Auth] ❌ Error removing token:', error);
-      console.error('[Auth] Error details:', error.message, error.name);
-      // Don't throw - we want to continue even if removal fails
+      
+      const SecureStore = await import('expo-secure-store');
+      await SecureStore.deleteItemAsync(TOKEN_KEY);
+    } catch (error) {
+      console.error('[Auth] Error removing token:', error);
+      // Don't throw - we want sign out to always succeed locally
     }
   },
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false); // 🚨 CRITICAL FIX: Start with false to never block startup
+  const [loading, setLoading] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  
-  // CRITICAL: Use a single lock to prevent ALL concurrent auth operations
-  const authLock = useRef(false);
-  const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const appReadyRef = useRef(false);
-  const initialCheckDone = useRef(false);
 
   const triggerRefresh = useCallback(() => {
-    console.log('[Auth] ========== GLOBAL REFRESH TRIGGERED ==========');
+    console.log('[Auth] Global refresh triggered');
     setRefreshTrigger(prev => prev + 1);
   }, []);
 
-  // CRITICAL: Safety timeout to FORCE loading state to false
-  useEffect(() => {
-    if (!loading) return;
-    
-    safetyTimeoutRef.current = setTimeout(() => {
-      if (loading) {
-        console.warn('[Auth] ⚠️ SAFETY TIMEOUT - Force stopping loading state after 6 seconds');
-        setLoading(false);
-        authLock.current = false; // Release lock
-      }
-    }, SAFETY_TIMEOUT);
-    
-    return () => {
-      if (safetyTimeoutRef.current) {
-        clearTimeout(safetyTimeoutRef.current);
-      }
-    };
-  }, [loading]);
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 🚨 CRITICAL FIX: DELAYED APP READY FLAG
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Wait for app to be fully mounted and stable before allowing auth operations
-  // This prevents TurboModule crashes from calling native modules too early
-  // ═══════════════════════════════════════════════════════════════════════════
-  useEffect(() => {
-    console.log('[Auth] ⚠️ BREADCRUMB: Setting up app ready timer (2 second delay)...');
-    const readyTimer = setTimeout(() => {
-      console.log('[Auth] ✅ App is now ready for auth operations (after 2 second delay)');
-      appReadyRef.current = true;
-    }, 2000); // 2 seconds to ensure app is stable
-
-    return () => {
-      clearTimeout(readyTimer);
-    };
-  }, []);
-
   const checkAuth = useCallback(async () => {
-    console.log('[Auth] ⚠️ BREADCRUMB: checkAuth called');
-    
-    // CRITICAL: Don't check auth until app is ready
-    if (!appReadyRef.current) {
-      console.log('[Auth] App not ready yet, skipping auth check');
-      setLoading(false);
+    if (loading) {
+      console.log('[Auth] Already checking auth, skipping');
       return;
     }
 
-    // CRITICAL: Prevent ANY concurrent auth operations
-    if (authLock.current) {
-      console.log('[Auth] Auth operation in progress, skipping check');
-      return;
-    }
-
-    authLock.current = true;
     setLoading(true);
     
     try {
-      console.log('[Auth] Starting auth check...');
-      console.log('[Auth] Platform:', Platform.OS);
-      console.log('[Auth] BACKEND_URL:', BACKEND_URL || 'NOT CONFIGURED');
-      
       if (!BACKEND_URL) {
-        console.warn('[Auth] Backend URL not configured');
-        setLoading(false);
         setUser(null);
-        authLock.current = false;
         return;
       }
 
-      console.log('[Auth] ⚠️ BREADCRUMB: About to get token from storage');
       const token = await tokenStorage.getToken();
-      console.log('[Auth] Token retrieved:', token ? 'YES (length: ' + token.length + ')' : 'NO');
       
       if (!token) {
-        console.log('[Auth] No token found, user not authenticated');
-        setLoading(false);
         setUser(null);
-        authLock.current = false;
         return;
       }
 
-      console.log('[Auth] Token found, verifying with backend...');
-      
-      // CRITICAL: Aggressive timeout with AbortController
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.warn('[Auth] Auth check timeout after', AUTH_CHECK_TIMEOUT, 'ms, aborting...');
-        controller.abort();
-      }, AUTH_CHECK_TIMEOUT);
+      const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
       
       try {
-        const url = `${BACKEND_URL}/api/auth/user`;
-        console.log('[Auth] Fetching:', url);
-        
-        const response = await fetch(url, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
+        const response = await fetch(`${BACKEND_URL}/api/auth/user`, {
+          headers: { 'Authorization': `Bearer ${token}` },
           signal: controller.signal,
         });
 
         clearTimeout(timeoutId);
-        console.log('[Auth] Response received:', response.status, response.statusText);
 
         if (response.ok) {
           const data = await response.json();
-          console.log('[Auth] ✅ User authenticated:', data.user?.email);
           setUser(data.user);
         } else {
-          console.log('[Auth] Token invalid (status:', response.status, '), clearing...');
           await tokenStorage.removeToken();
           setUser(null);
         }
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
         
-        if (fetchError.name === 'AbortError') {
-          console.warn('[Auth] Auth check aborted due to timeout');
-        } else {
-          console.error('[Auth] Auth check fetch error:', fetchError.message);
-          console.error('[Auth] Error name:', fetchError.name);
-        }
-        
-        // Keep token on network errors (might be temporary)
+        // Keep token on network errors
         if (!(fetchError instanceof TypeError && fetchError.message.includes('Network'))) {
-          console.log('[Auth] Clearing token due to non-network error');
           await tokenStorage.removeToken();
-        } else {
-          console.log('[Auth] Keeping token (network error, might be temporary)');
         }
         setUser(null);
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('[Auth] Check auth failed:', error);
-      console.error('[Auth] Error details:', error.message, error.name);
       setUser(null);
     } finally {
-      console.log('[Auth] Auth check complete, setting loading to false');
       setLoading(false);
-      authLock.current = false;
     }
-  }, []);
-
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 🚨 CRITICAL FIX: REMOVE AUTOMATIC AUTH CHECK ON MOUNT
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Instead of checking auth automatically, we'll only check when:
-  // 1. User explicitly signs in
-  // 2. App navigates to a protected route (handled by _layout.tsx)
-  // This prevents early SecureStore access that can cause crashes
-  // ═══════════════════════════════════════════════════════════════════════════
-  useEffect(() => {
-    console.log('[Auth] ⚠️ BREADCRUMB: AuthProvider mounted - NOT checking auth automatically');
-    console.log('[Auth] Auth will be checked only when needed (sign in, protected route access)');
-    
-    // Mark initial check as done immediately without actually checking
-    initialCheckDone.current = true;
-    
-    // Set loading to false immediately so app can proceed
-    setLoading(false);
-  }, []);
+  }, [loading]);
 
   const signIn = useCallback(async (email: string, password: string) => {
-    console.log('[Auth] ⚠️ BREADCRUMB: signIn called');
-    
-    // CRITICAL: Prevent concurrent operations
-    if (authLock.current) {
-      throw new Error('Authentication operation already in progress. Please wait.');
+    if (loading) {
+      throw new Error('Authentication in progress');
     }
 
-    authLock.current = true;
-    setLoading(true);
-    console.log('[Auth] ========== SIGN IN STARTED ==========');
-    console.log('[Auth] Platform:', Platform.OS);
-    console.log('[Auth] Email:', email);
-    console.log('[Auth] BACKEND_URL:', BACKEND_URL);
-    
     if (!BACKEND_URL) {
-      authLock.current = false;
-      setLoading(false);
-      throw new Error('Backend URL is not configured');
+      throw new Error('Backend not configured');
     }
 
-    const url = `${BACKEND_URL}/api/auth/sign-in/email`;
-    console.log('[Auth] Request URL:', url);
+    setLoading(true);
     
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.warn('[Auth] Sign in timeout after', SIGN_IN_TIMEOUT, 'ms, aborting...');
-        controller.abort();
-      }, SIGN_IN_TIMEOUT);
+      const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
       
-      try {
-        console.log('[Auth] Preparing request body...');
-        const requestBody = JSON.stringify({ email, password });
-        console.log('[Auth] Request body length:', requestBody.length);
-        
-        console.log('[Auth] Sending fetch request...');
-        const fetchStartTime = Date.now();
-        
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: requestBody,
-          signal: controller.signal,
-        });
+      const response = await fetch(`${BACKEND_URL}/api/auth/sign-in/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+        signal: controller.signal,
+      });
 
-        const fetchDuration = Date.now() - fetchStartTime;
-        console.log('[Auth] Response received after', fetchDuration, 'ms');
-        console.log('[Auth] Response status:', response.status, response.statusText);
-        
-        clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
 
-        if (!response.ok) {
-          console.error('[Auth] Response not OK:', response.status);
-          
-          // Try to read response body
-          let errorText = '';
-          try {
-            errorText = await response.text();
-            console.error('[Auth] Error response body:', errorText);
-          } catch (readError) {
-            console.error('[Auth] Failed to read error response body:', readError);
-            throw new Error(`Login failed with status ${response.status}`);
-          }
-          
-          // Try to parse as JSON
-          let errorData;
-          try {
-            errorData = JSON.parse(errorText);
-            console.error('[Auth] Parsed error data:', errorData);
-          } catch {
-            // Not JSON, use raw text
-            throw new Error(`Login failed: ${errorText || response.statusText}`);
-          }
-          
-          throw new Error(errorData.error || errorData.message || 'Login failed');
-        }
-
-        console.log('[Auth] Reading response body...');
-        const responseText = await response.text();
-        console.log('[Auth] Response body length:', responseText.length);
-        
-        let data;
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
         try {
-          data = JSON.parse(responseText);
-          console.log('[Auth] Response data parsed:', { hasSession: !!data.session, hasUser: !!data.user });
-        } catch (parseError) {
-          console.error('[Auth] Failed to parse response JSON:', parseError);
-          console.error('[Auth] Response text:', responseText);
-          throw new Error('Invalid response from server');
+          errorData = JSON.parse(errorText);
+        } catch {
+          throw new Error(`Login failed: ${errorText || response.statusText}`);
         }
-
-        if (!data.session || !data.session.token) {
-          console.error('[Auth] No session token in response:', data);
-          throw new Error('No session token received from server');
-        }
-
-        console.log('[Auth] ⚠️ BREADCRUMB: About to store token');
-        
-        // 🚨 CRITICAL FIX: Wrap token storage in try-catch to prevent crashes
-        try {
-          await tokenStorage.setToken(data.session.token);
-          console.log('[Auth] Token stored successfully');
-        } catch (storageError: any) {
-          console.error('[Auth] ❌ CRITICAL: Token storage failed:', storageError);
-          console.error('[Auth] Storage error details:', storageError.message, storageError.name);
-          // Continue anyway - set user state even if storage fails
-          // This prevents the app from crashing but allows the user to proceed
-          console.warn('[Auth] ⚠️ Continuing without token storage - session will not persist');
-        }
-        
-        console.log('[Auth] Setting user state...');
-        setUser(data.user);
-        console.log('[Auth] User state set:', data.user.email);
-        
-        // CRITICAL: Add a small delay to ensure state updates propagate
-        // This prevents race conditions where navigation happens before state is ready
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
-        console.log('[Auth] ========== SIGN IN COMPLETED SUCCESSFULLY ==========');
-      } catch (error: any) {
-        clearTimeout(timeoutId);
-        console.error('[Auth] Fetch error:', error);
-        console.error('[Auth] Error type:', error.constructor.name);
-        console.error('[Auth] Error message:', error.message);
-        console.error('[Auth] Error stack:', error.stack);
-        throw error;
+        throw new Error(errorData.error || errorData.message || 'Login failed');
       }
+
+      const data = await response.json();
+
+      if (!data.session?.token) {
+        throw new Error('No session token received');
+      }
+
+      // Store token and set user atomically
+      await tokenStorage.setToken(data.session.token);
+      setUser(data.user);
+      
+      console.log('[Auth] Sign in successful:', data.user.email);
     } catch (error: any) {
-      console.error('[Auth] Sign in failed:', error.message);
-      console.error('[Auth] Error name:', error.name);
-      console.error('[Auth] Error stack:', error.stack);
+      console.error('[Auth] Sign in failed:', error);
       
       if (error.name === 'AbortError') {
-        throw new Error('Sign in timed out. Please check your connection and try again.');
+        throw new Error('Request timed out. Please try again.');
       }
       
-      if (error.message === 'Network request failed' || error.name === 'TypeError') {
-        throw new Error('Cannot connect to server. Please check your internet connection.');
+      if (error.message?.includes('Network') || error.name === 'TypeError') {
+        throw new Error('Cannot connect to server. Check your connection.');
       }
       
       throw error;
     } finally {
       setLoading(false);
-      authLock.current = false;
     }
-  }, []);
+  }, [loading]);
 
   const signUp = useCallback(async (email: string, password: string, name?: string) => {
-    console.log('[Auth] ⚠️ BREADCRUMB: signUp called');
-    
-    // CRITICAL: Prevent concurrent operations
-    if (authLock.current) {
-      throw new Error('Authentication operation already in progress. Please wait.');
+    if (loading) {
+      throw new Error('Authentication in progress');
     }
 
-    authLock.current = true;
-    setLoading(true);
-    console.log('[Auth] ========== SIGN UP STARTED ==========');
-    console.log('[Auth] Platform:', Platform.OS);
-    console.log('[Auth] Email:', email);
-    console.log('[Auth] Name:', name);
-    console.log('[Auth] BACKEND_URL:', BACKEND_URL);
-    
     if (!BACKEND_URL) {
-      authLock.current = false;
-      setLoading(false);
-      throw new Error('Backend URL is not configured');
+      throw new Error('Backend not configured');
     }
 
-    const url = `${BACKEND_URL}/api/auth/sign-up/email`;
-    console.log('[Auth] Request URL:', url);
+    setLoading(true);
     
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.warn('[Auth] Sign up timeout, aborting...');
-        controller.abort();
-      }, SIGN_IN_TIMEOUT);
+      const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
       
-      try {
-        console.log('[Auth] Sending fetch request...');
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ email, password, name: name || 'User' }),
-          signal: controller.signal,
-        });
+      const response = await fetch(`${BACKEND_URL}/api/auth/sign-up/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name: name || 'User' }),
+        signal: controller.signal,
+      });
 
-        console.log('[Auth] Response received:', response.status, response.statusText);
-        clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
 
-        if (!response.ok) {
-          console.error('[Auth] Response not OK:', response.status);
-          const errorText = await response.text();
-          console.error('[Auth] Error response body:', errorText);
-          let errorData;
-          try {
-            errorData = JSON.parse(errorText);
-          } catch {
-            throw new Error(`Registration failed: ${errorText}`);
-          }
-          throw new Error(errorData.error || 'Registration failed');
-        }
-
-        const data = await response.json();
-        console.log('[Auth] Response data received:', { hasSession: !!data.session, hasUser: !!data.user });
-
-        if (!data.session || !data.session.token) {
-          throw new Error('No session token received from server');
-        }
-
-        console.log('[Auth] ⚠️ BREADCRUMB: About to store token');
-        
-        // 🚨 CRITICAL FIX: Wrap token storage in try-catch to prevent crashes
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
         try {
-          await tokenStorage.setToken(data.session.token);
-          console.log('[Auth] Token stored successfully');
-        } catch (storageError: any) {
-          console.error('[Auth] ❌ CRITICAL: Token storage failed:', storageError);
-          console.error('[Auth] Storage error details:', storageError.message, storageError.name);
-          // Continue anyway - set user state even if storage fails
-          console.warn('[Auth] ⚠️ Continuing without token storage - session will not persist');
+          errorData = JSON.parse(errorText);
+        } catch {
+          throw new Error(`Registration failed: ${errorText}`);
         }
-        
-        setUser(data.user);
-        console.log('[Auth] ========== SIGN UP COMPLETED ==========');
-      } catch (error: any) {
-        clearTimeout(timeoutId);
-        console.error('[Auth] Fetch error:', error);
-        throw error;
+        throw new Error(errorData.error || 'Registration failed');
       }
+
+      const data = await response.json();
+
+      if (!data.session?.token) {
+        throw new Error('No session token received');
+      }
+
+      await tokenStorage.setToken(data.session.token);
+      setUser(data.user);
+      
+      console.log('[Auth] Sign up successful:', data.user.email);
     } catch (error: any) {
-      console.error('[Auth] Sign up failed:', error.message);
-      console.error('[Auth] Error name:', error.name);
-      console.error('[Auth] Error stack:', error.stack);
+      console.error('[Auth] Sign up failed:', error);
       
       if (error.name === 'AbortError') {
-        throw new Error('Sign up timed out. Please check your connection and try again.');
+        throw new Error('Request timed out. Please try again.');
       }
       
-      if (error.message === 'Network request failed' || error.name === 'TypeError') {
-        throw new Error('Cannot connect to server. Please check your internet connection.');
+      if (error.message?.includes('Network') || error.name === 'TypeError') {
+        throw new Error('Cannot connect to server. Check your connection.');
       }
       
       throw error;
     } finally {
       setLoading(false);
-      authLock.current = false;
     }
-  }, []);
+  }, [loading]);
 
   const signInWithApple = useCallback(async (identityToken: string, appleUser?: any) => {
-    console.log('[Auth] ⚠️ BREADCRUMB: signInWithApple called');
-    console.log('[Auth] ⚠️ BREADCRUMB: Identity token length:', identityToken?.length);
-    console.log('[Auth] ⚠️ BREADCRUMB: Apple user data present:', !!appleUser);
-    
-    // CRITICAL: Prevent concurrent operations
-    if (authLock.current) {
-      throw new Error('Authentication operation already in progress. Please wait.');
+    if (loading) {
+      throw new Error('Authentication in progress');
     }
 
-    authLock.current = true;
-    setLoading(true);
-    console.log('[Auth] ========== APPLE SIGN IN STARTED ==========');
-    console.log('[Auth] Platform:', Platform.OS);
-    console.log('[Auth] Identity token length:', identityToken?.length);
-    console.log('[Auth] Apple user data:', appleUser);
-    console.log('[Auth] BACKEND_URL:', BACKEND_URL);
-
-    // CRITICAL: Validate all inputs before ANY native operations
-    console.log('[Auth] ⚠️ BREADCRUMB: Validating identity token');
-    if (!identityToken || typeof identityToken !== 'string') {
-      console.error('[Auth] ❌ VALIDATION FAILED: Invalid identity token:', typeof identityToken);
-      authLock.current = false;
-      setLoading(false);
-      throw new Error('Invalid identity token received from Apple');
+    if (!identityToken) {
+      throw new Error('Invalid identity token');
     }
 
     if (!BACKEND_URL) {
-      console.error('[Auth] ❌ VALIDATION FAILED: Backend URL not configured');
-      authLock.current = false;
-      setLoading(false);
-      throw new Error('Backend URL is not configured');
+      throw new Error('Backend not configured');
     }
 
-    const requestBody = { 
-      identityToken,
-      user: appleUser ? {
-        email: appleUser.email || undefined,
-        name: appleUser.name ? {
-          firstName: appleUser.name.givenName || undefined,
-          lastName: appleUser.name.familyName || undefined,
-        } : undefined,
-      } : undefined,
-    };
-
-    const url = `${BACKEND_URL}/api/auth/sign-in/apple`;
-    console.log('[Auth] Request URL:', url);
-    console.log('[Auth] ⚠️ BREADCRUMB: Request body prepared');
-
+    setLoading(true);
+    
     try {
+      const requestBody = { 
+        identityToken,
+        user: appleUser ? {
+          email: appleUser.email || undefined,
+          name: appleUser.name ? {
+            firstName: appleUser.name.givenName || undefined,
+            lastName: appleUser.name.familyName || undefined,
+          } : undefined,
+        } : undefined,
+      };
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.warn('[Auth] Apple sign in timeout, aborting...');
-        controller.abort();
-      }, SIGN_IN_TIMEOUT);
+      const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
 
-      try {
-        console.log('[Auth] ⚠️ BREADCRUMB: Sending fetch request to backend');
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal,
-        });
+      const response = await fetch(`${BACKEND_URL}/api/auth/sign-in/apple`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal,
+      });
 
-        console.log('[Auth] Response received:', response.status, response.statusText);
-        clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
 
-        if (!response.ok) {
-          console.error('[Auth] Response not OK:', response.status);
-          const errorText = await response.text();
-          console.error('[Auth] Error response body:', errorText);
-          let errorData;
-          try {
-            errorData = JSON.parse(errorText);
-          } catch {
-            throw new Error(`Apple sign in failed: ${errorText}`);
-          }
-          throw new Error(errorData.error || 'Apple sign in failed');
-        }
-
-        const data = await response.json();
-        console.log('[Auth] ⚠️ BREADCRUMB: Response data received');
-        console.log('[Auth] Response data:', { hasSession: !!data.session, hasUser: !!data.user });
-
-        // CRITICAL: Validate response data before ANY native storage operations
-        console.log('[Auth] ⚠️ BREADCRUMB: Validating response data');
-        if (!data || typeof data !== 'object') {
-          console.error('[Auth] ❌ VALIDATION FAILED: Invalid response data type:', typeof data);
-          throw new Error('Invalid response from server');
-        }
-
-        if (!data.session || typeof data.session !== 'object') {
-          console.error('[Auth] ❌ VALIDATION FAILED: Invalid session object:', data.session);
-          throw new Error('No session received from server');
-        }
-
-        if (!data.session.token || typeof data.session.token !== 'string') {
-          console.error('[Auth] ❌ VALIDATION FAILED: Invalid session token:', typeof data.session.token);
-          throw new Error('No valid session token received from server');
-        }
-
-        if (!data.user || typeof data.user !== 'object') {
-          console.error('[Auth] ❌ VALIDATION FAILED: Invalid user object:', data.user);
-          throw new Error('No user data received from server');
-        }
-
-        // CRITICAL: Log BEFORE native storage operation (SecureStore/Keychain)
-        console.log('[Auth] ⚠️ BREADCRUMB: About to store token in SecureStore/Keychain');
-        console.log('[Auth] ⚠️ NATIVE CALL IMMINENT: tokenStorage.setToken');
-        console.log('[Auth] Token length:', data.session.token.length);
-        
-        // 🚨 CRITICAL FIX: Wrap token storage in try-catch to prevent crashes
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorData;
         try {
-          await tokenStorage.setToken(data.session.token);
-          console.log('[Auth] ✅ NATIVE CALL SUCCESS: Token stored in SecureStore/Keychain');
-        } catch (storageError: any) {
-          console.error('[Auth] ❌ NATIVE CALL FAILED: tokenStorage.setToken');
-          console.error('[Auth] Storage error:', storageError);
-          console.error('[Auth] Error name:', storageError.name);
-          console.error('[Auth] Error message:', storageError.message);
-          console.error('[Auth] Error stack:', storageError.stack);
-          // 🚨 CRITICAL: Don't throw - continue with authentication
-          // The user can still use the app, but the session won't persist
-          console.warn('[Auth] ⚠️ Continuing without token storage - session will not persist');
+          errorData = JSON.parse(errorText);
+        } catch {
+          throw new Error(`Apple sign in failed: ${errorText}`);
         }
-
-        console.log('[Auth] ⚠️ BREADCRUMB: Setting user state');
-        setUser(data.user);
-        console.log('[Auth] ========== APPLE SIGN IN COMPLETED ==========');
-      } catch (error: any) {
-        clearTimeout(timeoutId);
-        console.error('[Auth] Fetch error:', error);
-        throw error;
+        throw new Error(errorData.error || 'Apple sign in failed');
       }
+
+      const data = await response.json();
+
+      if (!data.session?.token) {
+        throw new Error('No session token received');
+      }
+
+      await tokenStorage.setToken(data.session.token);
+      setUser(data.user);
+      
+      console.log('[Auth] Apple sign in successful:', data.user.email);
     } catch (error: any) {
-      console.error('[Auth] Apple sign in failed:', error.message);
-      console.error('[Auth] Error name:', error.name);
-      console.error('[Auth] Error stack:', error.stack);
+      console.error('[Auth] Apple sign in failed:', error);
       
       if (error.name === 'AbortError') {
-        throw new Error('Apple sign in timed out. Please check your connection and try again.');
+        throw new Error('Request timed out. Please try again.');
       }
       
-      if (error.message === 'Network request failed' || error.name === 'TypeError') {
-        throw new Error('Cannot connect to server. Please check your internet connection.');
+      if (error.message?.includes('Network') || error.name === 'TypeError') {
+        throw new Error('Cannot connect to server. Check your connection.');
       }
       
       throw error;
     } finally {
       setLoading(false);
-      authLock.current = false;
     }
-  }, []);
+  }, [loading]);
 
   const signOut = useCallback(async () => {
-    console.log('[Auth] ⚠️ BREADCRUMB: signOut called');
+    console.log('[Auth] Sign out started');
     
-    // CRITICAL: Prevent concurrent operations
-    if (authLock.current) {
-      console.warn('[Auth] Auth operation in progress, forcing sign out anyway');
-    }
-
-    authLock.current = true;
-    console.log('[Auth] ========== SIGN OUT STARTED ==========');
+    // Clear local state immediately - don't wait for backend
+    setUser(null);
+    setLoading(false);
     
     try {
       const token = await tokenStorage.getToken();
       
+      // Fire-and-forget backend call
       if (token && BACKEND_URL) {
-        // Fire-and-forget backend call with VERY short timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), SIGN_OUT_BACKEND_TIMEOUT);
-        
         fetch(`${BACKEND_URL}/api/auth/sign-out`, {
           method: 'POST',
           headers: {
@@ -821,37 +367,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({}),
-          signal: controller.signal,
-        }).then(() => {
-          clearTimeout(timeoutId);
-          console.log('[Auth] Backend sign-out successful');
-        }).catch((error) => {
-          clearTimeout(timeoutId);
-          console.warn('[Auth] Backend sign-out failed (ignored):', error.message);
+        }).catch(() => {
+          // Ignore backend errors
         });
       }
+      
+      // Clean up local storage
+      await tokenStorage.removeToken();
+      await clearBiometricCredentials();
+      
+      console.log('[Auth] Sign out complete');
     } catch (error) {
-      console.error('[Auth] Sign out error (ignored):', error);
-    } finally {
-      // ALWAYS clear local state immediately, regardless of backend call
-      console.log('[Auth] ⚠️ BREADCRUMB: Clearing local state');
-      
-      try {
-        await tokenStorage.removeToken();
-      } catch (error) {
-        console.error('[Auth] Failed to remove token (ignored):', error);
-      }
-      
-      try {
-        await clearBiometricCredentials();
-      } catch (error) {
-        console.error('[Auth] Failed to clear biometric credentials (ignored):', error);
-      }
-      
-      setUser(null);
-      setLoading(false); // Ensure loading is false
-      authLock.current = false;
-      console.log('[Auth] ========== SIGN OUT COMPLETED ==========');
+      console.error('[Auth] Sign out cleanup error (ignored):', error);
     }
   }, []);
 

@@ -38,13 +38,7 @@ export const unstable_settings = {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
-  const router = useRouter();
-  const segments = useSegments();
-  const pathname = usePathname();
-  const { user, loading, checkAuth } = useAuth();
-  const [isNavigating, setIsNavigating] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
-  const [authCheckTriggered, setAuthCheckTriggered] = useState(false);
 
   const [loaded, error] = useFonts({
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -53,9 +47,8 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (error) {
-      console.error('[App] ❌ Font loading error:', error);
+      console.error('[App] Font loading error:', error);
       setInitError(`Font loading failed: ${error.message}`);
-      // Hide splash screen even if fonts fail to load
       if (Platform.OS !== 'web') {
         SplashScreen.hideAsync().catch(() => {});
       }
@@ -64,93 +57,17 @@ function RootLayoutNav() {
 
   useEffect(() => {
     if (loaded) {
-      console.log('[App] ✅ Fonts loaded successfully');
+      console.log('[App] Fonts loaded, hiding splash screen');
       
       if (Platform.OS !== 'web') {
-        console.log('[App] Hiding splash screen...');
         SplashScreen.hideAsync().catch((err) => {
           console.warn('[App] Error hiding splash screen:', err);
         });
       }
       
-      console.log('[App] ========================================');
-      console.log('[App] ✅ App Initialized');
-      console.log('[App] Platform:', Platform.OS);
-      console.log('[App] Backend URL:', BACKEND_URL || 'NOT CONFIGURED');
-      console.log('[App] Backend configured:', !!BACKEND_URL);
-      console.log('[App] ========================================');
-      
-      if (!BACKEND_URL) {
-        console.warn('[App] ⚠️ WARNING: Backend URL is not configured!');
-        console.warn('[App] The app may not function correctly without a backend.');
-      }
+      console.log('[App] App initialized - Platform:', Platform.OS, 'Backend:', BACKEND_URL ? 'configured' : 'NOT CONFIGURED');
     }
   }, [loaded]);
-
-  // 🚨 CRITICAL FIX: Only check auth when user tries to access protected routes
-  // This prevents early SecureStore access that can cause crashes
-  useEffect(() => {
-    if (!loaded || loading || isNavigating || authCheckTriggered) {
-      return;
-    }
-
-    const inAuthGroup = segments[0] === '(tabs)';
-    const isAuthScreen = pathname === '/auth';
-    const isIndexRoute = pathname === '/' || pathname === '';
-
-    console.log('[App] Auth routing check:', { 
-      user: !!user, 
-      inAuthGroup,
-      isAuthScreen,
-      isIndexRoute,
-      pathname,
-      platform: Platform.OS
-    });
-
-    // Let index route handle its own redirect
-    if (isIndexRoute) {
-      return;
-    }
-
-    // If user is trying to access protected routes without being authenticated
-    // Check auth first before redirecting
-    if (!user && inAuthGroup && !authCheckTriggered) {
-      console.log('[App] User accessing protected route, checking auth...');
-      setAuthCheckTriggered(true);
-      
-      // Check auth with a delay to ensure app is stable
-      setTimeout(() => {
-        checkAuth().then(() => {
-          console.log('[App] Auth check complete');
-          // After auth check, if still no user, redirect to auth
-          setTimeout(() => {
-            if (!user) {
-              console.log('[App] No user after auth check, redirecting to /auth');
-              setIsNavigating(true);
-              try {
-                router.replace('/auth');
-              } catch (navError) {
-                console.error('[App] Navigation error:', navError);
-              } finally {
-                setIsNavigating(false);
-              }
-            }
-          }, 100);
-        }).catch((error) => {
-          console.error('[App] Auth check failed:', error);
-          // On error, redirect to auth
-          setIsNavigating(true);
-          try {
-            router.replace('/auth');
-          } catch (navError) {
-            console.error('[App] Navigation error:', navError);
-          } finally {
-            setIsNavigating(false);
-          }
-        });
-      }, 1000);
-    }
-  }, [user, loading, loaded, pathname, segments, isNavigating, authCheckTriggered, checkAuth, router]);
 
   // Show error screen if initialization failed
   if (initError) {

@@ -101,268 +101,118 @@ export default function AuthScreen() {
   };
 
   const handleEmailAuth = async () => {
-    console.log('[AuthScreen] handleEmailAuth called');
-    
     if (!BACKEND_URL) {
-      console.error('[AuthScreen] Backend URL not configured');
-      showError('The app backend is not configured. Please ensure the backend URL is set in app.json.');
+      showError('Backend not configured');
       return;
     }
 
     if (!email || !password) {
-      console.warn('[AuthScreen] Email or password missing');
       showError('Please enter email and password');
       return;
     }
 
     if (isSignUp && password.length < 6) {
-      console.warn('[AuthScreen] Password too short');
       showError('Password must be at least 6 characters');
       return;
     }
 
-    console.log('[AuthScreen] Starting authentication...');
     setLoading(true);
     
     try {
       if (isSignUp) {
-        console.log('[AuthScreen] User tapped Sign Up button');
-        console.log('[AuthScreen] Calling signUp with email:', email);
         await signUp(email, password, name || 'User');
-        console.log('[AuthScreen] Sign up successful');
       } else {
-        console.log('[AuthScreen] User tapped Sign In button');
-        console.log('[AuthScreen] Calling signIn with email:', email);
         await signIn(email, password);
-        console.log('[AuthScreen] Sign in successful');
       }
 
       // Save credentials if remember me is checked
       if (rememberMe && !isSignUp) {
-        console.log('[AuthScreen] Saving credentials for biometric authentication');
         try {
           await saveBiometricCredentials(email, password);
           setHasSavedCredentials(true);
-          console.log('[AuthScreen] Credentials saved successfully');
         } catch (bioError) {
           console.error('[AuthScreen] Failed to save biometric credentials:', bioError);
-          // Don't block login if biometric save fails
         }
       }
 
-      console.log('[AuthScreen] Authentication successful, navigating to home');
-      
-      // Use setTimeout to ensure state updates complete before navigation
-      setTimeout(() => {
-        console.log('[AuthScreen] Executing navigation to /(tabs)');
-        try {
-          router.replace('/(tabs)');
-          console.log('[AuthScreen] Navigation completed');
-        } catch (navError) {
-          console.error('[AuthScreen] Navigation error:', navError);
-          // Fallback navigation
-          router.push('/(tabs)');
-        }
-      }, 100);
+      console.log('[AuthScreen] Auth successful, navigating');
+      router.replace('/(tabs)');
     } catch (error: any) {
-      console.error('[AuthScreen] Authentication failed:', error);
-      console.error('[AuthScreen] Error details:', {
-        message: error.message,
-        name: error.name,
-        stack: error.stack,
-      });
+      console.error('[AuthScreen] Auth failed:', error);
       
-      // Provide more helpful error messages
       let errorMsg = error.message || 'Authentication failed';
       
-      // Check if error message contains HTML (indicates server error)
       if (errorMsg.includes('<!DOCTYPE') || errorMsg.includes('<html')) {
-        errorMsg = 'Server error occurred. Please try again later or contact support.';
+        errorMsg = 'Server error. Please try again later.';
       } else if (errorMsg.includes('Network') || errorMsg.includes('fetch')) {
-        errorMsg = 'Cannot connect to server. Please check your internet connection.';
+        errorMsg = 'Cannot connect to server. Check your connection.';
       } else if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
-        errorMsg = 'Request timed out. Please check your connection and try again.';
-      } else if (errorMsg.includes('Invalid email or password')) {
-        errorMsg = 'Invalid email or password. Please check your credentials and try again.';
+        errorMsg = 'Request timed out. Please try again.';
       }
       
       showError(errorMsg);
     } finally {
       setLoading(false);
-      console.log('[AuthScreen] Authentication flow completed');
     }
   };
 
   const handleAppleSignIn = async () => {
     try {
-      console.log('[AuthScreen] ========== APPLE SIGN IN FLOW STARTED ==========');
-      console.log('[AuthScreen] User tapped Sign in with Apple button');
-      console.log('[AuthScreen] Platform:', Platform.OS);
-      console.log('[AuthScreen] Timestamp:', new Date().toISOString());
-      
-      // CRITICAL: Check if Apple Authentication is available
-      let isAvailable = false;
-      try {
-        console.log('[AuthScreen] ⚠️ ABOUT TO CALL NATIVE: AppleAuthentication.isAvailableAsync()');
-        console.log('[AuthScreen] This is a TurboModule call - monitoring for crash...');
-        isAvailable = await AppleAuthentication.isAvailableAsync();
-        console.log('[AuthScreen] ✅ NATIVE CALL SUCCESS: isAvailableAsync returned:', isAvailable);
-      } catch (availError: any) {
-        console.error('[AuthScreen] ❌ NATIVE CALL FAILED: AppleAuthentication.isAvailableAsync()');
-        console.error('[AuthScreen] Error:', availError);
-        console.error('[AuthScreen] Error name:', availError.name);
-        console.error('[AuthScreen] Error message:', availError.message);
-        console.error('[AuthScreen] Error stack:', availError.stack);
-        showError('Sign in with Apple is not available on this device. Please use email and password instead.');
-        return;
-      }
+      const isAvailable = await AppleAuthentication.isAvailableAsync();
       
       if (!isAvailable) {
-        console.log('[AuthScreen] Apple Authentication not available');
-        showError('Sign in with Apple is not available on this device. Please use email and password instead.');
+        showError('Sign in with Apple is not available on this device');
         return;
       }
 
       setLoading(true);
-      console.log('[AuthScreen] ⚠️ ABOUT TO CALL NATIVE: AppleAuthentication.signInAsync()');
-      console.log('[AuthScreen] Requesting scopes: FULL_NAME, EMAIL');
-      console.log('[AuthScreen] This is a TurboModule call - monitoring for crash...');
       
-      let credential;
-      try {
-        credential = await AppleAuthentication.signInAsync({
-          requestedScopes: [
-            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-            AppleAuthentication.AppleAuthenticationScope.EMAIL,
-          ],
-        });
-        console.log('[AuthScreen] ✅ NATIVE CALL SUCCESS: signInAsync completed');
-        console.log('[AuthScreen] Credential object received, type:', typeof credential);
-      } catch (signInError: any) {
-        console.error('[AuthScreen] ❌ NATIVE CALL FAILED: AppleAuthentication.signInAsync()');
-        console.error('[AuthScreen] Error:', signInError);
-        console.error('[AuthScreen] Error code:', signInError.code);
-        console.error('[AuthScreen] Error name:', signInError.name);
-        console.error('[AuthScreen] Error message:', signInError.message);
-        console.error('[AuthScreen] Error stack:', signInError.stack);
-        throw signInError;
-      }
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
 
-      console.log('[AuthScreen] ========== APPLE CREDENTIAL RECEIVED ==========');
-      console.log('[AuthScreen] Validating credential object...');
-      console.log('[AuthScreen] Has identityToken:', !!credential.identityToken);
-      console.log('[AuthScreen] Has email:', !!credential.email);
-      console.log('[AuthScreen] Has fullName:', !!credential.fullName);
-      console.log('[AuthScreen] User ID:', credential.user);
-
-      // CRITICAL: Validate credential object before proceeding
-      if (!credential || typeof credential !== 'object') {
-        console.error('[AuthScreen] ❌ VALIDATION FAILED: Invalid credential object type:', typeof credential);
-        showError('Received invalid credentials from Apple. Please try again.');
+      if (!credential?.identityToken) {
+        showError('Failed to get Apple authentication token');
         setLoading(false);
         return;
       }
 
-      if (!credential.identityToken || typeof credential.identityToken !== 'string') {
-        console.error('[AuthScreen] ❌ VALIDATION FAILED: Invalid identity token type:', typeof credential.identityToken);
-        showError('Failed to get Apple authentication token. Please try again.');
-        setLoading(false);
-        return;
-      }
-
-      console.log('[AuthScreen] ✅ VALIDATION SUCCESS: Credential object is valid');
-      console.log('[AuthScreen] Token length:', credential.identityToken.length);
-      console.log('[AuthScreen] Token preview:', credential.identityToken.substring(0, 30) + '...');
-
-      // CRITICAL: Sanitize and validate user data before sending
       const appleUserData = {
-        email: (credential.email && typeof credential.email === 'string') ? credential.email : undefined,
-        name: (credential.fullName && typeof credential.fullName === 'object') ? {
-          givenName: (credential.fullName.givenName && typeof credential.fullName.givenName === 'string') 
-            ? credential.fullName.givenName 
-            : undefined,
-          familyName: (credential.fullName.familyName && typeof credential.fullName.familyName === 'string') 
-            ? credential.fullName.familyName 
-            : undefined,
+        email: credential.email || undefined,
+        name: credential.fullName ? {
+          givenName: credential.fullName.givenName || undefined,
+          familyName: credential.fullName.familyName || undefined,
         } : undefined,
       };
       
-      console.log('[AuthScreen] ========== SENDING TO BACKEND ==========');
-      console.log('[AuthScreen] Formatted Apple user data:', JSON.stringify(appleUserData, null, 2));
-      console.log('[AuthScreen] ⚠️ ABOUT TO CALL: signInWithApple (backend API + SecureStore)');
-      console.log('[AuthScreen] This will trigger:');
-      console.log('[AuthScreen]   1. Backend API call (fetch)');
-      console.log('[AuthScreen]   2. SecureStore.setItemAsync (TurboModule/Keychain)');
-      console.log('[AuthScreen]   3. State updates (React)');
-      console.log('[AuthScreen] Monitoring for crash at any of these steps...');
+      await signInWithApple(credential.identityToken, appleUserData);
       
-      try {
-        await signInWithApple(credential.identityToken, appleUserData);
-        console.log('[AuthScreen] ✅ signInWithApple completed successfully');
-      } catch (signInError: any) {
-        console.error('[AuthScreen] ❌ signInWithApple FAILED');
-        console.error('[AuthScreen] Error:', signInError);
-        console.error('[AuthScreen] Error name:', signInError.name);
-        console.error('[AuthScreen] Error message:', signInError.message);
-        console.error('[AuthScreen] Error stack:', signInError.stack);
-        throw signInError;
-      }
-      
-      console.log('[AuthScreen] ========== NAVIGATION PHASE ==========');
-      console.log('[AuthScreen] Apple sign in successful, preparing navigation...');
-      
-      // Use setTimeout to ensure state updates complete before navigation
-      setTimeout(() => {
-        console.log('[AuthScreen] Executing navigation to /(tabs)');
-        console.log('[AuthScreen] ⚠️ ABOUT TO CALL: router.replace (React Navigation)');
-        try {
-          router.replace('/(tabs)');
-          console.log('[AuthScreen] ✅ Navigation completed successfully');
-          console.log('[AuthScreen] ========== APPLE SIGN IN FLOW COMPLETED ==========');
-        } catch (navError) {
-          console.error('[AuthScreen] ❌ Navigation error:', navError);
-          console.error('[AuthScreen] Attempting fallback navigation...');
-          // Fallback navigation
-          router.push('/(tabs)');
-        }
-      }, 100);
+      console.log('[AuthScreen] Apple sign in successful, navigating');
+      router.replace('/(tabs)');
     } catch (error: any) {
-      console.error('[AuthScreen] ========== APPLE SIGN IN FLOW FAILED ==========');
-      console.error('[AuthScreen] Error occurred at:', new Date().toISOString());
-      console.error('[AuthScreen] Error details:', {
-        code: error.code,
-        message: error.message,
-        name: error.name,
-        stack: error.stack,
-      });
+      console.error('[AuthScreen] Apple sign in failed:', error);
       
       // Don't show error for user cancellation
       if (error.code === 'ERR_CANCELED' || error.code === 'ERR_REQUEST_CANCELED') {
-        console.log('[AuthScreen] User cancelled Apple sign in');
         return;
       }
       
-      // Show helpful error messages for other errors
-      let errorMsg = 'Unable to sign in with Apple. ';
+      let errorMsg = 'Unable to sign in with Apple';
       
       if (error.code === 'ERR_INVALID_RESPONSE') {
-        errorMsg = 'Received an invalid response from Apple. Please try again.';
-      } else if (error.message?.includes('Network') || error.message?.includes('fetch') || error.message?.includes('timed out')) {
-        errorMsg = 'Cannot connect to server. Please check your internet connection and try again.';
-      } else if (error.message?.includes('token')) {
-        errorMsg = 'Authentication token is invalid. Please try again.';
-      } else if (error.message?.includes('<!DOCTYPE') || error.message?.includes('<html')) {
-        errorMsg = 'Server error occurred. Please try again later or contact support.';
+        errorMsg = 'Invalid response from Apple. Please try again.';
+      } else if (error.message?.includes('Network') || error.message?.includes('timed out')) {
+        errorMsg = 'Cannot connect to server. Check your connection.';
       } else if (error.message) {
         errorMsg = error.message;
-      } else {
-        errorMsg = 'An unknown error occurred. Please try again or use email and password.';
       }
       
       showError(errorMsg);
     } finally {
       setLoading(false);
-      console.log('[AuthScreen] Apple sign in flow cleanup completed');
     }
   };
 
