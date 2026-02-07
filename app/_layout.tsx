@@ -62,8 +62,6 @@ function RootLayoutNav() {
   const { user, loading } = useAuth();
   const [isNavigating, setIsNavigating] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
-  const [appFullyMounted, setAppFullyMounted] = useState(false);
-  const [nativeModulesLoaded, setNativeModulesLoaded] = useState(false);
 
   const [loaded, error] = useFonts({
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -103,126 +101,13 @@ function RootLayoutNav() {
         console.warn('[App] ⚠️ WARNING: Backend URL is not configured!');
         console.warn('[App] The app may not function correctly without a backend.');
       }
-
-      // Mark app as fully mounted
-      setAppFullyMounted(true);
     }
   }, [loaded]);
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 🚨 CRITICAL FIX: EXTREME DELAYED NATIVE MODULE LOADING
-  // ═══════════════════════════════════════════════════════════════════════════
-  // Load native modules ONLY after:
-  // 1. App is fully mounted
-  // 2. React Native bridge is stable
-  // 3. UI thread is ready
-  // 4. MUCH LONGER delays to ensure complete stability
-  //
-  // This prevents TurboModule crashes from:
-  // - UI calls on background threads
-  // - Modules loading before bridge is ready
-  // - Race conditions during initialization
-  // ═══════════════════════════════════════════════════════════════════════════
-  useEffect(() => {
-    if (!appFullyMounted || Platform.OS === 'web' || nativeModulesLoaded) {
-      return;
-    }
 
-    console.log('[App] ========================================');
-    console.log('[App] 🔧 STARTING NATIVE MODULE LOADING (EXTREME DELAYS)');
-    console.log('[App] ========================================');
+  // NOTE: No eager native module initialization at app startup.
+  // Native modules are loaded by feature screens/hooks on demand.
 
-    // CRITICAL: Add MUCH LONGER delay to ensure app is completely stable
-    // Previous delay was 2 seconds, now using 5 seconds
-    const loadTimer = setTimeout(async () => {
-      console.log('[App] App fully stable (5 second delay), loading native modules...');
-
-      // ═══════════════════════════════════════════════════════════════════
-      // MODULE 1: SystemBars (Edge-to-Edge)
-      // ═══════════════════════════════════════════════════════════════════
-      try {
-        console.log('[App] [1/4] Loading SystemBars...');
-        const { SystemBars } = await import('react-native-edge-to-edge');
-        console.log('[App] ✅ SystemBars loaded');
-      } catch (error: any) {
-        console.warn('[App] ⚠️ SystemBars load failed (non-critical):', error.message);
-      }
-
-      // ═══════════════════════════════════════════════════════════════════
-      // MODULE 2: Notifications (Expo Notifications + Device)
-      // ═══════════════════════════════════════════════════════════════════
-      // CRITICAL: Add MUCH LONGER delay before loading notification modules
-      // These are known to cause TurboModule crashes if loaded too early
-      // Previous delay was 3 seconds, now using 8 seconds
-      setTimeout(async () => {
-        try {
-          console.log('[App] [2/4] Loading notification modules (8 second delay)...');
-          const { registerForPushNotificationsAsync } = await import('@/utils/notifications');
-          
-          console.log('[App] Requesting notification permissions...');
-          const granted = await registerForPushNotificationsAsync();
-          
-          if (granted) {
-            console.log('[App] ✅ Notification permissions granted');
-          } else {
-            console.log('[App] ⚠️ Notification permissions not granted');
-          }
-        } catch (error: any) {
-          console.error('[App] ❌ Notification setup error (non-blocking):', error.message);
-          console.error('[App] Error stack:', error.stack);
-        }
-      }, 8000); // 8 second delay for notifications (was 3 seconds)
-
-      // ═══════════════════════════════════════════════════════════════════
-      // MODULE 3: Network State (Expo Network)
-      // ═══════════════════════════════════════════════════════════════════
-      // Previous delay was 4 seconds, now using 10 seconds
-      setTimeout(async () => {
-        try {
-          console.log('[App] [3/4] Loading network monitoring (10 second delay)...');
-          const NetInfo = await import('@react-native-community/netinfo');
-          
-          // Subscribe to network state changes
-          const unsubscribe = NetInfo.default.addEventListener(state => {
-            console.log('[App] Network state:', state.isConnected ? 'CONNECTED' : 'DISCONNECTED');
-          });
-          
-          console.log('[App] ✅ Network monitoring loaded');
-          
-          // Clean up on unmount
-          return () => {
-            unsubscribe();
-          };
-        } catch (error: any) {
-          console.warn('[App] ⚠️ Network monitoring load failed (non-critical):', error.message);
-        }
-      }, 10000); // 10 second delay for network monitoring (was 4 seconds)
-
-      // ═══════════════════════════════════════════════════════════════════
-      // MODULE 4: Haptics (Expo Haptics)
-      // ═══════════════════════════════════════════════════════════════════
-      // Previous delay was 5 seconds, now using 12 seconds
-      setTimeout(async () => {
-        try {
-          console.log('[App] [4/4] Loading haptics (12 second delay)...');
-          await import('expo-haptics');
-          console.log('[App] ✅ Haptics loaded');
-        } catch (error: any) {
-          console.warn('[App] ⚠️ Haptics load failed (non-critical):', error.message);
-        }
-      }, 12000); // 12 second delay for haptics (was 5 seconds)
-
-      console.log('[App] ========================================');
-      console.log('[App] ✅ NATIVE MODULE LOADING INITIATED (EXTREME DELAYS)');
-      console.log('[App] ========================================');
-      
-      setNativeModulesLoaded(true);
-    }, 5000); // 5 second initial delay before starting module loading (was 2 seconds)
-
-    return () => {
-      clearTimeout(loadTimer);
-    };
-  }, [appFullyMounted, nativeModulesLoaded]);
 
   // Simplified authentication routing - Let index.tsx handle redirects
   useEffect(() => {
