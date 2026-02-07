@@ -1,5 +1,6 @@
 import { eq, and, desc, isNotNull, lte } from 'drizzle-orm';
 import * as schema from '../db/schema.js';
+import * as authSchema from '../db/auth-schema.js';
 import type { App } from '../index.js';
 import { fetchVesselAISDataWithFallback } from '../routes/ais.js';
 import { processNotificationSchedules } from '../routes/notifications.js';
@@ -75,9 +76,11 @@ async function runSchedulerIteration(app: App): Promise<void> {
       .select({
         task: schema.scheduled_tasks,
         vessel: schema.vessels,
+        user: authSchema.user,
       })
       .from(schema.scheduled_tasks)
       .innerJoin(schema.vessels, eq(schema.vessels.id, schema.scheduled_tasks.vessel_id))
+      .innerJoin(authSchema.user, eq(authSchema.user.id, schema.vessels.user_id))
       .where(
         and(
           eq(schema.scheduled_tasks.task_type, 'ais_check'),
@@ -91,12 +94,14 @@ async function runSchedulerIteration(app: App): Promise<void> {
       {
         queriedTime: now.toISOString(),
         foundDueTasks: dueTasks.length,
-        tasks: dueTasks.map(({ task, vessel }) => ({
+        tasks: dueTasks.map(({ task, vessel, user }) => ({
           taskId: task.id,
           vesselId: vessel.id,
           vesselName: vessel.vessel_name,
           mmsi: vessel.mmsi,
           userId: vessel.user_id,
+          subscriptionStatus: (user as any).subscription_status || 'inactive',
+          subscriptionExpiresAt: (user as any).subscription_expires_at?.toISOString() || null,
           nextRun: task.next_run.toISOString(),
           isDue: task.next_run <= now,
         })),
@@ -104,23 +109,108 @@ async function runSchedulerIteration(app: App): Promise<void> {
       `Query result: found ${dueTasks.length} due AIS check task(s) for active vessels`
     );
 
+    // Filter tasks by subscription status
+    const activeSubscriptionTasks = dueTasks.filter(({ user }) => {
+      const subscriptionStatus = (user as any).subscription_status || 'inactive';
+      const subscriptionExpiresAt = (user as any).subscription_expires_at;
+
+      let isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
+      if (isActive && subscriptionExpiresAt) {
+        try {
+          const expiryDate = new Date(subscriptionExpiresAt);
+          if (isNaN(expiryDate.getTime()) || expiryDate <= now) {
+            isActive = false;
+          }
+        } catch {
+          isActive = false;
+        }
+      }
+
+      return isActive;
+    });
+
+    // Log tasks being skipped due to inactive subscriptions
+    const inactiveSubscriptionTasks = dueTasks.filter(({ user }) => {
+      const subscriptionStatus = (user as any).subscription_status || 'inactive';
+      const subscriptionExpiresAt = (user as any).subscription_expires_at;
+
+      let isActive = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
+      if (isActive && subscriptionExpiresAt) {
+        try {
+          const expiryDate = new Date(subscriptionExpiresAt);
+          if (isNaN(expiryDate.getTime()) || expiryDate <= now) {
+            isActive = false;
+          }
+        } catch {
+          isActive = false;
+        }
+      }
+
+      return !isActive;
+    });
+
+    // Handle vessels with inactive subscriptions
+    if (inactiveSubscriptionTasks.length > 0) {
+      app.logger.warn(
+        {
+          skippedTaskCount: inactiveSubscriptionTasks.length,
+          tasks: inactiveSubscriptionTasks.map(({ task, vessel, user }) => ({
+            taskId: task.id,
+            vesselId: vessel.id,
+            vesselName: vessel.vessel_name,
+            mmsi: vessel.mmsi,
+            userId: vessel.user_id,
+            subscriptionStatus: (user as any).subscription_status || 'inactive',
+            subscriptionExpiresAt: (user as any).subscription_expires_at?.toISOString() || null,
+          })),
+        },
+        `Skipping ${inactiveSubscriptionTasks.length} task(s) due to inactive subscription - will deactivate vessels`
+      );
+
+      // Deactivate vessels and delete scheduled tasks for inactive subscriptions
+      for (const { task, vessel } of inactiveSubscriptionTasks) {
+        try {
+          // Deactivate the vessel
+          await app.db
+            .update(schema.vessels)
+            .set({ is_active: false })
+            .where(eq(schema.vessels.id, vessel.id));
+
+          // Delete the scheduled task
+          await app.db
+            .delete(schema.scheduled_tasks)
+            .where(eq(schema.scheduled_tasks.id, task.id));
+
+          app.logger.info(
+            { taskId: task.id, vesselId: vessel.id, vesselName: vessel.vessel_name },
+            `Deactivated vessel and deleted scheduled task due to inactive subscription`
+          );
+        } catch (error) {
+          app.logger.error(
+            { err: error, taskId: task.id, vesselId: vessel.id },
+            `Failed to deactivate vessel or delete scheduled task`
+          );
+        }
+      }
+    }
+
     // Log which vessels are being checked
-    if (dueTasks.length > 0) {
-      const vesselsList = dueTasks.map(({ vessel }) => `${vessel.vessel_name} (MMSI: ${vessel.mmsi}, user: ${vessel.user_id})`).join('; ');
+    if (activeSubscriptionTasks.length > 0) {
+      const vesselsList = activeSubscriptionTasks.map(({ vessel }) => `${vessel.vessel_name} (MMSI: ${vessel.mmsi}, user: ${vessel.user_id})`).join('; ');
       app.logger.debug(
-        { vesselCount: dueTasks.length, vessels: vesselsList },
+        { vesselCount: activeSubscriptionTasks.length, vessels: vesselsList },
         `Checking positions for vessels: ${vesselsList}`
       );
     }
 
-    if (dueTasks.length === 0) {
-      app.logger.debug('No due AIS check tasks found for active vessels');
+    if (activeSubscriptionTasks.length === 0) {
+      app.logger.debug('No due AIS check tasks found for active vessels with active subscriptions');
       return;
     }
 
     app.logger.info(
-      { taskCount: dueTasks.length, timestamp: now.toISOString() },
-      `Found ${dueTasks.length} due AIS check task(s) for active vessels - checking vessel positions every 2 hours`
+      { taskCount: activeSubscriptionTasks.length, timestamp: now.toISOString() },
+      `Found ${activeSubscriptionTasks.length} due AIS check task(s) for active vessels with active subscriptions - checking vessel positions every 2 hours`
     );
 
     // Process each due task and track results
@@ -128,7 +218,7 @@ async function runSchedulerIteration(app: App): Promise<void> {
     let processedWithErrors = 0;
 
     // Process each due task
-    for (const { task, vessel } of dueTasks) {
+    for (const { task, vessel } of activeSubscriptionTasks) {
       try {
         app.logger.info(
           {
@@ -158,12 +248,14 @@ async function runSchedulerIteration(app: App): Promise<void> {
     app.logger.info(
       {
         totalTasksFound: dueTasks.length,
+        tasksWithActiveSubscription: activeSubscriptionTasks.length,
+        tasksSkippedInactiveSubscription: inactiveSubscriptionTasks.length,
         processedSuccessfully,
         processedWithErrors,
-        completionRate: dueTasks.length > 0 ? `${Math.round((processedSuccessfully / dueTasks.length) * 100)}%` : 'N/A',
+        completionRate: activeSubscriptionTasks.length > 0 ? `${Math.round((processedSuccessfully / activeSubscriptionTasks.length) * 100)}%` : 'N/A',
         iterationTime: now.toISOString(),
       },
-      `Scheduler iteration complete: ${dueTasks.length} tasks found, ${processedSuccessfully} processed successfully, ${processedWithErrors} failed`
+      `Scheduler iteration complete: ${dueTasks.length} tasks found, ${inactiveSubscriptionTasks.length} skipped (inactive subscription), ${activeSubscriptionTasks.length} active, ${processedSuccessfully} processed successfully, ${processedWithErrors} failed`
     );
   } catch (error) {
     app.logger.error({ err: error }, 'Error in scheduler iteration');
