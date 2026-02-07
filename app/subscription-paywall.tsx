@@ -82,137 +82,111 @@ export default function SubscriptionPaywallScreen() {
   const [loading, setLoading] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
   const [productInfo, setProductInfo] = useState<any>(null);
-  const [loadingPrice, setLoadingPrice] = useState(true);
+  const [loadingPrice, setLoadingPrice] = useState(false);
   const [purchaseInProgress, setPurchaseInProgress] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [storeKitInitialized, setStoreKitInitialized] = useState(false);
-  const { subscriptionStatus, checkSubscription, loading: subscriptionLoading } = useSubscription();
+  const [listenersReady, setListenersReady] = useState(false);
+  const { subscriptionStatus, checkSubscription } = useSubscription();
   const { signOut } = useAuth();
 
-  const initializeAndFetchProduct = useCallback(async () => {
-    if (Platform.OS !== 'ios') {
-      setLoadingPrice(false);
+  const setupStoreKitListeners = useCallback(async () => {
+    if (Platform.OS !== 'ios' || listenersReady) {
       return;
     }
 
-    setLoadingPrice(true);
-    setError(null);
-    
-    try {
-      // CRITICAL: Defer initialization to prevent blocking app startup
-      // Wait for screen to be fully rendered before initializing StoreKit
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Increased to 1 second
-      
-      console.log('[SubscriptionPaywall] Initializing StoreKit (deferred)');
-      const initialized = await StoreKitUtils.initializeStoreKit();
-      
-      if (initialized) {
-        setStoreKitInitialized(true);
-        console.log('[SubscriptionPaywall] Fetching product info (no hardcoded prices)');
-        const info = await StoreKitUtils.getProductInfo();
-        
-        if (info) {
-          console.log('[SubscriptionPaywall] Product info fetched:', info);
-          setProductInfo(info);
-        } else {
-          console.log('[SubscriptionPaywall] Product info not available - user will view pricing in App Store');
-          setError('Unable to load pricing. You can still subscribe - pricing will be shown in the App Store.');
+    await StoreKitUtils.setupPurchaseListeners(
+      async (purchase) => {
+        console.log('[SubscriptionPaywall] Purchase listener triggered:', purchase.transactionId);
+        setPurchaseInProgress(true);
+
+        try {
+          const result = await StoreKitUtils.processPurchase(purchase);
+
+          if (result.success) {
+            console.log('[SubscriptionPaywall] Purchase processed successfully');
+            await checkSubscription();
+            setPurchaseInProgress(false);
+
+            Alert.alert(
+              'Subscription Active',
+              'Your subscription is now active! Welcome to SeaTime Tracker.',
+              [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
+            );
+          } else {
+            console.error('[SubscriptionPaywall] Purchase processing failed:', result.error);
+            setPurchaseInProgress(false);
+            Alert.alert('Purchase Error', result.error || 'Unable to verify purchase. Please contact support.');
+          }
+        } catch (error: any) {
+          console.error('[SubscriptionPaywall] Error processing purchase:', error);
+          setPurchaseInProgress(false);
+          Alert.alert('Purchase Error', 'Unable to complete purchase. Please try again or contact support.');
         }
-      } else {
-        console.log('[SubscriptionPaywall] StoreKit not initialized');
-        setError('Unable to connect to App Store. Please check your connection and try again.');
+      },
+      (error) => {
+        console.error('[SubscriptionPaywall] Purchase error listener triggered:', error);
+        setPurchaseInProgress(false);
+
+        if (error.code !== 'E_USER_CANCELLED') {
+          Alert.alert('Purchase Failed', error.message || 'Unable to complete purchase. Please try again.');
+        }
       }
-    } catch (error: any) {
-      console.error('[SubscriptionPaywall] Error initializing StoreKit:', error);
-      setError('Unable to load pricing. You can still subscribe - pricing will be shown in the App Store.');
-    } finally {
-      setLoadingPrice(false);
+    );
+
+    setListenersReady(true);
+  }, [listenersReady, checkSubscription, router]);
+
+  const ensureStoreKitSession = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS !== 'ios') {
+      return false;
     }
-  }, []);
+
+    if (!storeKitInitialized) {
+      setLoadingPrice(true);
+      setError(null);
+
+      try {
+        console.log('[SubscriptionPaywall] Initializing StoreKit on user action');
+        const initialized = await StoreKitUtils.initializeStoreKit();
+
+        if (!initialized) {
+          setError('Unable to connect to App Store right now. Please try again.');
+          return false;
+        }
+
+        setStoreKitInitialized(true);
+      } catch (initError: any) {
+        console.error('[SubscriptionPaywall] StoreKit init failed:', initError);
+        setError('Unable to connect to App Store right now. Please try again.');
+        return false;
+      } finally {
+        setLoadingPrice(false);
+      }
+    }
+
+    await setupStoreKitListeners();
+
+    if (!productInfo) {
+      const info = await StoreKitUtils.getProductInfo();
+      if (info) {
+        setProductInfo(info);
+      }
+    }
+
+    return true;
+  }, [storeKitInitialized, setupStoreKitListeners, productInfo]);
 
   useEffect(() => {
     console.log('[SubscriptionPaywall] Screen mounted');
     console.log('[SubscriptionPaywall] Current subscription status:', subscriptionStatus?.status);
-    
-    // Initialize StoreKit and fetch product info (deferred)
-    initializeAndFetchProduct();
 
-    // Setup purchase listeners (only if on iOS)
-    if (Platform.OS === 'ios') {
-      // Wrap in async function to handle promise
-      const setupListeners = async () => {
-        await StoreKitUtils.setupPurchaseListeners(
-          // On purchase success
-          async (purchase) => {
-            console.log('[SubscriptionPaywall] Purchase listener triggered:', purchase.transactionId);
-            setPurchaseInProgress(true);
-            
-            try {
-              // Process the purchase (verify + finish transaction)
-              const result = await StoreKitUtils.processPurchase(purchase);
-              
-              if (result.success) {
-                console.log('[SubscriptionPaywall] Purchase processed successfully');
-                
-                // Refresh subscription status
-                await checkSubscription();
-                
-                setPurchaseInProgress(false);
-                
-                Alert.alert(
-                  'Subscription Active',
-                  'Your subscription is now active! Welcome to SeaTime Tracker.',
-                  [
-                    {
-                      text: 'Continue',
-                      onPress: () => router.replace('/(tabs)'),
-                    },
-                  ]
-                );
-              } else {
-                console.error('[SubscriptionPaywall] Purchase processing failed:', result.error);
-                setPurchaseInProgress(false);
-                
-                Alert.alert(
-                  'Purchase Error',
-                  result.error || 'Unable to verify purchase. Please contact support.'
-                );
-              }
-            } catch (error: any) {
-              console.error('[SubscriptionPaywall] Error processing purchase:', error);
-              setPurchaseInProgress(false);
-              
-              Alert.alert(
-                'Purchase Error',
-                'Unable to complete purchase. Please try again or contact support.'
-              );
-            }
-          },
-          // On purchase error
-          (error) => {
-            console.error('[SubscriptionPaywall] Purchase error listener triggered:', error);
-            setPurchaseInProgress(false);
-            
-            // Don't show alert for user cancellation
-            if (error.code !== 'E_USER_CANCELLED') {
-              Alert.alert(
-                'Purchase Failed',
-                error.message || 'Unable to complete purchase. Please try again.'
-              );
-            }
-          }
-        );
-      };
-
-      setupListeners();
-
-      // Cleanup listeners on unmount
-      return () => {
-        console.log('[SubscriptionPaywall] Cleaning up purchase listeners');
-        StoreKitUtils.removePurchaseListeners();
-      };
-    }
-  }, [initializeAndFetchProduct, checkSubscription, router, subscriptionStatus?.status]);
+    // CRITICAL: do not initialize StoreKit on mount.
+    return () => {
+      console.log('[SubscriptionPaywall] Cleaning up purchase listeners');
+      StoreKitUtils.removePurchaseListeners();
+    };
+  }, [subscriptionStatus?.status]);
 
   const handleSubscribe = async () => {
     if (Platform.OS !== 'ios') {
@@ -228,32 +202,13 @@ export default function SubscriptionPaywallScreen() {
       return;
     }
 
-    // Check if StoreKit is initialized
-    if (!storeKitInitialized) {
-      console.log('[SubscriptionPaywall] StoreKit not initialized, attempting to initialize now');
+    const ready = await ensureStoreKitSession();
+    if (!ready) {
       Alert.alert(
-        'Connecting to App Store',
-        'Please wait while we connect to the App Store...',
-        [{ text: 'OK' }]
+        'Connection Error',
+        'Unable to connect to the App Store. Please check your internet connection and try again.'
       );
-      
-      try {
-        const initialized = await StoreKitUtils.initializeStoreKit();
-        if (!initialized) {
-          Alert.alert(
-            'Connection Error',
-            'Unable to connect to the App Store. Please check your internet connection and try again.'
-          );
-          return;
-        }
-        setStoreKitInitialized(true);
-      } catch (error: any) {
-        Alert.alert(
-          'Connection Error',
-          'Unable to connect to the App Store. Please check your internet connection and try again.'
-        );
-        return;
-      }
+      return;
     }
 
     try {
@@ -323,26 +278,13 @@ export default function SubscriptionPaywallScreen() {
       return;
     }
 
-    // Check if StoreKit is initialized
-    if (!storeKitInitialized) {
-      console.log('[SubscriptionPaywall] StoreKit not initialized for restore, attempting to initialize now');
-      try {
-        const initialized = await StoreKitUtils.initializeStoreKit();
-        if (!initialized) {
-          Alert.alert(
-            'Connection Error',
-            'Unable to connect to the App Store. Please check your internet connection and try again.'
-          );
-          return;
-        }
-        setStoreKitInitialized(true);
-      } catch (error: any) {
-        Alert.alert(
-          'Connection Error',
-          'Unable to connect to the App Store. Please check your internet connection and try again.'
-        );
-        return;
-      }
+    const ready = await ensureStoreKitSession();
+    if (!ready) {
+      Alert.alert(
+        'Connection Error',
+        'Unable to connect to the App Store. Please check your internet connection and try again.'
+      );
+      return;
     }
 
     try {
@@ -435,7 +377,7 @@ export default function SubscriptionPaywallScreen() {
     ? productInfo.localizedPrice
     : 'View in App Store';
 
-  const isProcessing = loading || subscriptionLoading || purchaseInProgress;
+  const isProcessing = loading || purchaseInProgress;
 
   return (
     <>
