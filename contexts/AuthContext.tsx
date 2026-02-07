@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
 import { Platform } from 'react-native';
 import { BACKEND_URL } from '@/utils/api';
 import { clearBiometricCredentials } from '@/utils/biometricAuth';
@@ -14,6 +14,7 @@ interface User {
   email: string;
   name?: string;
   hasDepartment?: boolean;
+  department?: string;
 }
 
 interface AuthContextType {
@@ -43,9 +44,6 @@ const tokenStorage = {
       // This prevents TurboModule crashes during startup
       console.log('[Auth] Dynamically loading expo-secure-store for token retrieval...');
       
-      // Add a small delay to ensure the app is fully initialized
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
       const SecureStore = await import('expo-secure-store');
       const token = await SecureStore.getItemAsync(TOKEN_KEY);
       console.log('[Auth] Token retrieved:', token ? 'exists' : 'null');
@@ -69,9 +67,6 @@ const tokenStorage = {
       // CRITICAL: Dynamically import SecureStore
       console.log('[Auth] Dynamically loading expo-secure-store for token storage...');
       
-      // Add a small delay to ensure the app is fully initialized
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
       const SecureStore = await import('expo-secure-store');
       await SecureStore.setItemAsync(TOKEN_KEY, token);
       console.log('[Auth] Token stored in SecureStore');
@@ -92,9 +87,6 @@ const tokenStorage = {
       // CRITICAL: Dynamically import SecureStore
       console.log('[Auth] Dynamically loading expo-secure-store for token removal...');
       
-      // Add a small delay to ensure the app is fully initialized
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
       const SecureStore = await import('expo-secure-store');
       await SecureStore.deleteItemAsync(TOKEN_KEY);
       console.log('[Auth] Token removed from SecureStore');
@@ -107,7 +99,7 @@ const tokenStorage = {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // Start with loading true
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const triggerRefresh = useCallback(() => {
@@ -116,17 +108,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const checkAuth = useCallback(async () => {
-    if (loading) {
-      console.log('[Auth] Already checking auth, skipping');
-      return;
-    }
-
-    setLoading(true);
+    console.log('[Auth] Checking authentication...');
     
     try {
       if (!BACKEND_URL) {
         console.log('[Auth] No backend URL configured');
         setUser(null);
+        setLoading(false);
         return;
       }
 
@@ -135,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!token) {
         console.log('[Auth] No token found');
         setUser(null);
+        setLoading(false);
         return;
       }
 
@@ -152,7 +141,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (response.ok) {
           const data = await response.json();
           console.log('[Auth] User authenticated:', data.user.email);
-          setUser(data.user);
+          
+          // Fetch user profile to get department info
+          try {
+            const profileResponse = await fetch(`${BACKEND_URL}/api/profile`, {
+              headers: { 'Authorization': `Bearer ${token}` },
+              signal: controller.signal,
+            });
+            
+            if (profileResponse.ok) {
+              const profileData = await profileResponse.json();
+              console.log('[Auth] User profile loaded, department:', profileData.department);
+              setUser({
+                ...data.user,
+                department: profileData.department,
+                hasDepartment: !!profileData.department,
+              });
+            } else {
+              // Profile fetch failed, but user is authenticated
+              setUser(data.user);
+            }
+          } catch (profileError) {
+            console.warn('[Auth] Failed to fetch profile, continuing with basic user data:', profileError);
+            setUser(data.user);
+          }
         } else {
           console.log('[Auth] Token invalid, clearing');
           await tokenStorage.removeToken();
@@ -173,7 +185,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [loading]);
+  }, []);
+
+  // Check auth on mount
+  useEffect(() => {
+    console.log('[Auth] AuthProvider mounted, checking auth...');
+    checkAuth();
+  }, [checkAuth]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     if (loading) {
@@ -216,9 +234,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('No session token received');
       }
 
-      // Store token and set user atomically
+      // Store token
       await tokenStorage.setToken(data.session.token);
-      setUser(data.user);
+      
+      // Fetch user profile to get department info
+      try {
+        const profileResponse = await fetch(`${BACKEND_URL}/api/profile`, {
+          headers: { 'Authorization': `Bearer ${data.session.token}` },
+        });
+        
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          setUser({
+            ...data.user,
+            department: profileData.department,
+            hasDepartment: !!profileData.department,
+          });
+        } else {
+          setUser(data.user);
+        }
+      } catch (profileError) {
+        console.warn('[Auth] Failed to fetch profile after sign in:', profileError);
+        setUser(data.user);
+      }
       
       console.log('[Auth] Sign in successful:', data.user.email);
     } catch (error: any) {
@@ -357,7 +395,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       await tokenStorage.setToken(data.session.token);
-      setUser(data.user);
+      
+      // Fetch user profile to get department info
+      try {
+        const profileResponse = await fetch(`${BACKEND_URL}/api/profile`, {
+          headers: { 'Authorization': `Bearer ${data.session.token}` },
+        });
+        
+        if (profileResponse.ok) {
+          const profileData = await profileResponse.json();
+          setUser({
+            ...data.user,
+            department: profileData.department,
+            hasDepartment: !!profileData.department,
+          });
+        } else {
+          setUser(data.user);
+        }
+      } catch (profileError) {
+        console.warn('[Auth] Failed to fetch profile after Apple sign in:', profileError);
+        setUser(data.user);
+      }
       
       console.log('[Auth] Apple sign in successful:', data.user.email);
     } catch (error: any) {

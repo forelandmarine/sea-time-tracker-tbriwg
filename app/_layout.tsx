@@ -3,7 +3,7 @@ import "react-native-reanimated";
 import React, { useEffect, useState } from "react";
 import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, Platform, View, Text, InteractionManager } from "react-native";
+import { useColorScheme, Platform, View, Text } from "react-native";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import {

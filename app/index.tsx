@@ -4,62 +4,28 @@ import { useAuth } from '@/contexts/AuthContext';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import React, { useEffect, useState } from 'react';
-import * as seaTimeApi from '@/utils/seaTimeApi';
 
 export default function Index() {
-  const { isAuthenticated, loading: authLoading, checkAuth } = useAuth();
-  const [checkingPathway, setCheckingPathway] = useState(false);
-  const [hasDepartment, setHasDepartment] = useState(false);
-  const [initialized, setInitialized] = useState(false);
+  const { isAuthenticated, loading: authLoading, user } = useAuth();
+  const [initialCheckDone, setInitialCheckDone] = useState(false);
 
-  // Check auth on mount
+  // Wait for initial auth check to complete
   useEffect(() => {
-    console.log('[Index] Starting auth check...');
-    checkAuth().finally(() => {
-      console.log('[Index] Auth check complete');
-      setInitialized(true);
-    });
-  }, [checkAuth]);
-
-  // Check user pathway after auth completes
-  useEffect(() => {
-    if (!initialized || authLoading || !isAuthenticated) {
-      return;
+    if (!authLoading) {
+      // Add a small delay to prevent flicker
+      const timer = setTimeout(() => {
+        setInitialCheckDone(true);
+      }, 100);
+      return () => clearTimeout(timer);
     }
+  }, [authLoading]);
 
-    const checkUserPathway = async () => {
-      setCheckingPathway(true);
-      
-      try {
-        console.log('[Index] Checking user pathway...');
-        const profile = await seaTimeApi.getUserProfile();
-        const hasDept = !!profile.department;
-        console.log('[Index] User has department:', hasDept);
-        setHasDepartment(hasDept);
-      } catch (error) {
-        console.error('[Index] Failed to check pathway:', error);
-        // Allow user to proceed - they can set pathway later
-        setHasDepartment(false);
-      } finally {
-        setCheckingPathway(false);
-      }
-    };
-
-    checkUserPathway();
-  }, [initialized, authLoading, isAuthenticated]);
-
-  // Show loading while initializing
-  if (!initialized || authLoading || (isAuthenticated && checkingPathway)) {
-    const loadingMessage = !initialized 
-      ? 'Checking authentication...' 
-      : checkingPathway 
-        ? 'Loading profile...' 
-        : 'Loading...';
-
+  // Show loading while checking auth
+  if (authLoading || !initialCheckDone) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>{loadingMessage}</Text>
+        <Text style={styles.loadingText}>Loading...</Text>
       </View>
     );
   }
@@ -70,6 +36,9 @@ export default function Index() {
     return <Redirect href="/auth" />;
   }
 
+  // Check if user has department set
+  const hasDepartment = user?.hasDepartment || (user as any)?.department;
+  
   if (!hasDepartment) {
     console.log('[Index] No department set, redirecting to /select-pathway');
     return <Redirect href="/select-pathway" />;
