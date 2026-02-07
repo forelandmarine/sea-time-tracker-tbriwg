@@ -144,10 +144,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           
           // Fetch user profile to get department info
           try {
+            const profileController = new AbortController();
+            const profileTimeoutId = setTimeout(() => profileController.abort(), API_TIMEOUT);
+            
             const profileResponse = await fetch(`${BACKEND_URL}/api/profile`, {
               headers: { 'Authorization': `Bearer ${token}` },
-              signal: controller.signal,
+              signal: profileController.signal,
             });
+            
+            clearTimeout(profileTimeoutId);
             
             if (profileResponse.ok) {
               const profileData = await profileResponse.json();
@@ -159,6 +164,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               });
             } else {
               // Profile fetch failed, but user is authenticated
+              console.warn('[Auth] Profile fetch returned non-OK status:', profileResponse.status);
               setUser(data.user);
             }
           } catch (profileError) {
@@ -166,14 +172,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(data.user);
           }
         } else {
-          console.log('[Auth] Token invalid, clearing');
+          console.log('[Auth] Token invalid (status:', response.status, '), clearing');
           await tokenStorage.removeToken();
           setUser(null);
         }
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
         
-        // Keep token on network errors
+        console.error('[Auth] Auth check fetch error:', fetchError);
+        
+        // Keep token on network errors (offline mode)
         if (!(fetchError instanceof TypeError && fetchError.message.includes('Network'))) {
           await tokenStorage.removeToken();
         }
@@ -202,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Backend not configured');
     }
 
+    console.log('[Auth] Sign in attempt for:', email);
     setLoading(true);
     
     try {
@@ -217,8 +226,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       clearTimeout(timeoutId);
 
+      console.log('[Auth] Sign in response status:', response.status);
+
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('[Auth] Sign in failed with status:', response.status, 'body:', errorText);
+        
         let errorData;
         try {
           errorData = JSON.parse(errorText);
@@ -229,28 +242,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
+      console.log('[Auth] Sign in response data received');
 
       if (!data.session?.token) {
+        console.error('[Auth] No session token in response:', data);
         throw new Error('No session token received');
       }
 
       // Store token
       await tokenStorage.setToken(data.session.token);
+      console.log('[Auth] Token stored successfully');
       
       // Fetch user profile to get department info
       try {
+        const profileController = new AbortController();
+        const profileTimeoutId = setTimeout(() => profileController.abort(), API_TIMEOUT);
+        
         const profileResponse = await fetch(`${BACKEND_URL}/api/profile`, {
           headers: { 'Authorization': `Bearer ${data.session.token}` },
+          signal: profileController.signal,
         });
+        
+        clearTimeout(profileTimeoutId);
         
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
+          console.log('[Auth] Profile fetched after sign in, department:', profileData.department);
           setUser({
             ...data.user,
             department: profileData.department,
             hasDepartment: !!profileData.department,
           });
         } else {
+          console.warn('[Auth] Profile fetch failed after sign in, using basic user data');
           setUser(data.user);
         }
       } catch (profileError) {
@@ -285,6 +309,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Backend not configured');
     }
 
+    console.log('[Auth] Sign up attempt for:', email);
     setLoading(true);
     
     try {
@@ -300,8 +325,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       clearTimeout(timeoutId);
 
+      console.log('[Auth] Sign up response status:', response.status);
+
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('[Auth] Sign up failed with status:', response.status, 'body:', errorText);
+        
         let errorData;
         try {
           errorData = JSON.parse(errorText);
@@ -312,12 +341,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
+      console.log('[Auth] Sign up response data received');
 
       if (!data.session?.token) {
+        console.error('[Auth] No session token in response:', data);
         throw new Error('No session token received');
       }
 
       await tokenStorage.setToken(data.session.token);
+      console.log('[Auth] Token stored successfully');
+      
       setUser(data.user);
       
       console.log('[Auth] Sign up successful:', data.user.email);
@@ -351,6 +384,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw new Error('Backend not configured');
     }
 
+    console.log('[Auth] Apple sign in attempt');
     setLoading(true);
     
     try {
@@ -377,8 +411,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       clearTimeout(timeoutId);
 
+      console.log('[Auth] Apple sign in response status:', response.status);
+
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('[Auth] Apple sign in failed with status:', response.status, 'body:', errorText);
+        
         let errorData;
         try {
           errorData = JSON.parse(errorText);
@@ -389,27 +427,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       const data = await response.json();
+      console.log('[Auth] Apple sign in response data received');
 
       if (!data.session?.token) {
+        console.error('[Auth] No session token in response:', data);
         throw new Error('No session token received');
       }
 
       await tokenStorage.setToken(data.session.token);
+      console.log('[Auth] Token stored successfully');
       
       // Fetch user profile to get department info
       try {
+        const profileController = new AbortController();
+        const profileTimeoutId = setTimeout(() => profileController.abort(), API_TIMEOUT);
+        
         const profileResponse = await fetch(`${BACKEND_URL}/api/profile`, {
           headers: { 'Authorization': `Bearer ${data.session.token}` },
+          signal: profileController.signal,
         });
+        
+        clearTimeout(profileTimeoutId);
         
         if (profileResponse.ok) {
           const profileData = await profileResponse.json();
+          console.log('[Auth] Profile fetched after Apple sign in, department:', profileData.department);
           setUser({
             ...data.user,
             department: profileData.department,
             hasDepartment: !!profileData.department,
           });
         } else {
+          console.warn('[Auth] Profile fetch failed after Apple sign in, using basic user data');
           setUser(data.user);
         }
       } catch (profileError) {
@@ -456,6 +505,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           body: JSON.stringify({}),
         }).catch(() => {
           // Ignore backend errors
+          console.log('[Auth] Backend sign out call failed (ignored)');
         });
       }
       
