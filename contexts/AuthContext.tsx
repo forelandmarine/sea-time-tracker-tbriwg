@@ -2,10 +2,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import Constants from 'expo-constants';
+import { BACKEND_URL } from '@/utils/api';
 import { clearBiometricCredentials } from '@/utils/biometricAuth';
 
-const API_URL = Constants.expoConfig?.extra?.backendUrl || '';
 const TOKEN_KEY = 'seatime_auth_token';
 
 // CRITICAL: Absolute maximum timeouts to prevent hanging
@@ -152,9 +151,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       console.log('[Auth] Starting auth check...');
       console.log('[Auth] Platform:', Platform.OS);
-      console.log('[Auth] API_URL:', API_URL || 'NOT CONFIGURED');
+      console.log('[Auth] BACKEND_URL:', BACKEND_URL || 'NOT CONFIGURED');
       
-      if (!API_URL) {
+      if (!BACKEND_URL) {
         console.warn('[Auth] Backend URL not configured');
         setLoading(false);
         setUser(null);
@@ -184,7 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }, AUTH_CHECK_TIMEOUT);
       
       try {
-        const url = `${API_URL}/api/auth/user`;
+        const url = `${BACKEND_URL}/api/auth/user`;
         console.log('[Auth] Fetching:', url);
         
         const response = await fetch(url, {
@@ -252,14 +251,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('[Auth] ========== SIGN IN STARTED ==========');
     console.log('[Auth] Platform:', Platform.OS);
     console.log('[Auth] Email:', email);
-    console.log('[Auth] API_URL:', API_URL);
+    console.log('[Auth] BACKEND_URL:', BACKEND_URL);
     
-    if (!API_URL) {
+    if (!BACKEND_URL) {
       authLock.current = false;
       throw new Error('Backend URL is not configured');
     }
 
-    const url = `${API_URL}/api/auth/sign-in/email`;
+    const url = `${BACKEND_URL}/api/auth/sign-in/email`;
     console.log('[Auth] Request URL:', url);
     
     try {
@@ -382,14 +381,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('[Auth] Platform:', Platform.OS);
     console.log('[Auth] Email:', email);
     console.log('[Auth] Name:', name);
-    console.log('[Auth] API_URL:', API_URL);
+    console.log('[Auth] BACKEND_URL:', BACKEND_URL);
     
-    if (!API_URL) {
+    if (!BACKEND_URL) {
       authLock.current = false;
       throw new Error('Backend URL is not configured');
     }
 
-    const url = `${API_URL}/api/auth/sign-up/email`;
+    const url = `${BACKEND_URL}/api/auth/sign-up/email`;
     console.log('[Auth] Request URL:', url);
     
     try {
@@ -471,9 +470,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('[Auth] Platform:', Platform.OS);
     console.log('[Auth] Identity token length:', identityToken?.length);
     console.log('[Auth] Apple user data:', appleUser);
-    console.log('[Auth] API_URL:', API_URL);
+    console.log('[Auth] BACKEND_URL:', BACKEND_URL);
 
-    if (!API_URL) {
+    if (!BACKEND_URL) {
       authLock.current = false;
       throw new Error('Backend URL is not configured');
     }
@@ -494,7 +493,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } : undefined,
     };
 
-    const url = `${API_URL}/api/auth/sign-in/apple`;
+    const url = `${BACKEND_URL}/api/auth/sign-in/apple`;
     console.log('[Auth] Request URL:', url);
     console.log('[Auth] Request body:', JSON.stringify(requestBody, null, 2));
 
@@ -578,12 +577,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const token = await tokenStorage.getToken();
       
-      if (token && API_URL) {
+      if (token && BACKEND_URL) {
         // Fire-and-forget backend call with VERY short timeout
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), SIGN_OUT_BACKEND_TIMEOUT);
         
-        fetch(`${API_URL}/api/auth/sign-out`, {
+        fetch(`${BACKEND_URL}/api/auth/sign-out`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,
