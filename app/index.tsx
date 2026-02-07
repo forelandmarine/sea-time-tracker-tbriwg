@@ -8,9 +8,23 @@ import React, { useEffect, useState } from 'react';
 export default function Index() {
   // CRITICAL: Call useAuth at the top level - NEVER conditionally
   // This must be called before any early returns or conditions
-  const { user, loading: authLoading } = useAuth();
+  const authContext = useAuth();
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
+  // CRITICAL: Defensive check - if auth context is somehow undefined, show error
+  if (!authContext) {
+    console.error('[Index] CRITICAL: Auth context is undefined');
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>Authentication Error</Text>
+        <Text style={styles.loadingText}>Please restart the app</Text>
+      </View>
+    );
+  }
+
+  const { user, loading: authLoading } = authContext;
+
+  // FIXED: Move useEffect to top level - NEVER call hooks conditionally
   // Wait for initial auth check to complete
   useEffect(() => {
     // CRITICAL: Wrap in try-catch to prevent crashes
@@ -77,5 +91,11 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: colors.textSecondary,
+  },
+  errorText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: colors.error,
+    marginBottom: 8,
   },
 });

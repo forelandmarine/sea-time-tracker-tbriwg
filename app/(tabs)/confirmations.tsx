@@ -64,7 +64,12 @@ export default function ConfirmationsScreen() {
   const styles = createStyles(isDark);
   const notifiedEntriesRef = useRef<Set<string>>(new Set());
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const { triggerRefresh } = useAuth();
+  
+  // CRITICAL: Defensive auth context access
+  const authContext = useAuth();
+  const triggerRefresh = authContext?.triggerRefresh || (() => {
+    console.warn('[Confirmations] triggerRefresh not available');
+  });
 
   const toNumber = (value: number | string | null | undefined): number => {
     // CRITICAL: Safe number conversion to prevent NaN crashes
@@ -89,12 +94,21 @@ export default function ConfirmationsScreen() {
       
       console.log('[Confirmations] Loaded', pendingEntries.length, 'pending entries from backend');
       
+      // CRITICAL: Validate entries array before setting state
+      if (!Array.isArray(pendingEntries)) {
+        console.error('[Confirmations] Invalid entries data received:', pendingEntries);
+        setEntries([]);
+        return;
+      }
+      
       // Show ALL pending entries returned by the backend
       // The backend determines what should be pending, not the frontend
       setEntries(pendingEntries);
     } catch (error: any) {
       console.error('[Confirmations] Failed to load data:', error);
-      Alert.alert('Error', 'Failed to load data: ' + error.message);
+      // CRITICAL: Don't crash on error - set empty array
+      setEntries([]);
+      Alert.alert('Error', 'Failed to load data: ' + (error?.message || 'Unknown error'));
     } finally {
       setLoading(false);
     }
@@ -110,23 +124,41 @@ export default function ConfirmationsScreen() {
       console.log('[Confirmations] Checking for new entries to notify');
       const result = await seaTimeApi.getNewSeaTimeEntries();
       
+      // CRITICAL: Validate result structure
+      if (!result || !Array.isArray(result.newEntries)) {
+        console.warn('[Confirmations] Invalid new entries result:', result);
+        return;
+      }
+      
       if (result.newEntries && result.newEntries.length > 0) {
         console.log('[Confirmations] Found', result.newEntries.length, 'new entries');
         
         const validEntries = result.newEntries.filter((entry: any) => {
-          const hasEndTime = entry.end_time !== null && entry.end_time !== undefined;
-          const durationHours = typeof entry.duration_hours === 'string' 
-            ? parseFloat(entry.duration_hours) 
-            : entry.duration_hours || 0;
-          const isMCACompliant = durationHours >= 4.0;
-          
-          // Only notify for MCA-compliant entries (4+ hours)
-          return hasEndTime && isMCACompliant;
+          // CRITICAL: Safe property access
+          try {
+            const hasEndTime = entry?.end_time !== null && entry?.end_time !== undefined;
+            const durationHours = typeof entry?.duration_hours === 'string' 
+              ? parseFloat(entry.duration_hours) 
+              : entry?.duration_hours || 0;
+            const isMCACompliant = durationHours >= 4.0;
+            
+            // Only notify for MCA-compliant entries (4+ hours)
+            return hasEndTime && isMCACompliant;
+          } catch (e) {
+            console.error('[Confirmations] Error filtering entry:', e);
+            return false;
+          }
         });
         
         console.log('[Confirmations] Filtered to', validEntries.length, 'valid MCA-compliant sea days (4+ hours with end time)');
         
         for (const entry of validEntries) {
+          // CRITICAL: Validate entry has required properties
+          if (!entry?.id || !entry?.vessel_name) {
+            console.warn('[Confirmations] Skipping invalid entry:', entry);
+            continue;
+          }
+          
           if (notifiedEntriesRef.current.has(entry.id)) {
             console.log('[Confirmations] Skipping already notified entry:', entry.id);
             continue;
@@ -144,8 +176,13 @@ export default function ConfirmationsScreen() {
             mcaCompliant: true,
           });
 
-          await scheduleSeaTimeNotification(vesselName, entry.id, durationHours, true);
-          notifiedEntriesRef.current.add(entry.id);
+          try {
+            await scheduleSeaTimeNotification(vesselName, entry.id, durationHours, true);
+            notifiedEntriesRef.current.add(entry.id);
+          } catch (notifError) {
+            console.error('[Confirmations] Failed to schedule notification:', notifError);
+            // Continue with other entries
+          }
         }
 
         if (validEntries.length > 0) {
@@ -156,12 +193,20 @@ export default function ConfirmationsScreen() {
       }
     } catch (error) {
       console.error('[Confirmations] Failed to check for new entries:', error);
+      // Don't crash - just log the error
     }
   }, [loadData]);
 
   useEffect(() => {
     console.log('[Confirmations] Component mounted, loading data');
-    loadData();
+    
+    // CRITICAL: Wrap in try-catch
+    try {
+      loadData();
+    } catch (error) {
+      console.error('[Confirmations] Error in initial load:', error);
+      setLoading(false);
+    }
 
     if (Platform.OS !== 'web') {
       console.log('[Confirmations] Setting up notification polling - will only notify for 4+ hour sea days with end time');
@@ -180,11 +225,23 @@ export default function ConfirmationsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
+    try {
+      await loadData();
+    } catch (error) {
+      console.error('[Confirmations] Refresh failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleConfirmEntry = (entry: SeaTimeEntry) => {
+    // CRITICAL: Validate entry before proceeding
+    if (!entry || !entry.id) {
+      console.error('[Confirmations] Invalid entry for confirmation:', entry);
+      Alert.alert('Error', 'Invalid entry');
+      return;
+    }
+    
     console.log('[Confirmations] User confirming entry:', entry.id);
     setSelectedEntry(entry);
     setSelectedServiceType('actual_sea_service');
@@ -192,7 +249,10 @@ export default function ConfirmationsScreen() {
   };
 
   const confirmWithServiceType = async () => {
-    if (!selectedEntry) return;
+    if (!selectedEntry || !selectedEntry.id) {
+      console.error('[Confirmations] No entry selected for confirmation');
+      return;
+    }
 
     try {
       console.log('[Confirmations] Confirming entry with service type:', selectedServiceType);
@@ -211,7 +271,7 @@ export default function ConfirmationsScreen() {
     } catch (error: any) {
       console.error('[Confirmations] Failed to confirm entry:', error);
       setProcessingEntryId(null);
-      Alert.alert('Error', 'Failed to confirm entry: ' + error.message);
+      Alert.alert('Error', 'Failed to confirm entry: ' + (error?.message || 'Unknown error'));
     }
   };
 
@@ -276,6 +336,12 @@ export default function ConfirmationsScreen() {
   };
 
   const toggleExpanded = (entryId: string) => {
+    // CRITICAL: Validate entryId
+    if (!entryId) {
+      console.error('[Confirmations] Invalid entryId for toggle:', entryId);
+      return;
+    }
+    
     console.log('[Confirmations] Toggling expanded state for entry:', entryId);
     setExpandedEntries(prev => {
       const newSet = new Set(prev);
@@ -290,7 +356,9 @@ export default function ConfirmationsScreen() {
 
   const formatDate = (dateString: string): string => {
     try {
+      if (!dateString) return 'N/A';
       const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
       return date.toLocaleDateString('en-GB', {
         day: '2-digit',
         month: 'short',
@@ -298,20 +366,22 @@ export default function ConfirmationsScreen() {
       });
     } catch (e) {
       console.error('[Confirmations] Failed to format date:', e);
-      return dateString;
+      return dateString || 'N/A';
     }
   };
 
   const formatTime = (dateString: string): string => {
     try {
+      if (!dateString) return 'N/A';
       const date = new Date(dateString);
+      if (isNaN(date.getTime())) return dateString;
       return date.toLocaleTimeString('en-GB', {
         hour: '2-digit',
         minute: '2-digit',
       });
     } catch (e) {
       console.error('[Confirmations] Failed to format time:', e);
-      return dateString;
+      return dateString || 'N/A';
     }
   };
 
@@ -334,20 +404,30 @@ export default function ConfirmationsScreen() {
   };
 
   const convertToDMS = (decimal: number, isLatitude: boolean): string => {
-    const absolute = Math.abs(decimal);
-    const degrees = Math.floor(absolute);
-    const minutesDecimal = (absolute - degrees) * 60;
-    const minutes = Math.floor(minutesDecimal);
-    const seconds = ((minutesDecimal - minutes) * 60).toFixed(1);
-    
-    let direction = '';
-    if (isLatitude) {
-      direction = decimal >= 0 ? 'N' : 'S';
-    } else {
-      direction = decimal >= 0 ? 'E' : 'W';
+    // CRITICAL: Validate input
+    if (typeof decimal !== 'number' || isNaN(decimal) || !isFinite(decimal)) {
+      return 'Invalid';
     }
     
-    return `${degrees}° ${minutes}' ${seconds}" ${direction}`;
+    try {
+      const absolute = Math.abs(decimal);
+      const degrees = Math.floor(absolute);
+      const minutesDecimal = (absolute - degrees) * 60;
+      const minutes = Math.floor(minutesDecimal);
+      const seconds = ((minutesDecimal - minutes) * 60).toFixed(1);
+      
+      let direction = '';
+      if (isLatitude) {
+        direction = decimal >= 0 ? 'N' : 'S';
+      } else {
+        direction = decimal >= 0 ? 'E' : 'W';
+      }
+      
+      return `${degrees}° ${minutes}' ${seconds}" ${direction}`;
+    } catch (e) {
+      console.error('[Confirmations] Error converting to DMS:', e);
+      return 'Invalid';
+    }
   };
 
   const formatCoordinateDMS = (
@@ -398,12 +478,18 @@ export default function ConfirmationsScreen() {
   };
 
   const isMCACompliant = (entry: SeaTimeEntry): boolean => {
-    if (entry.mca_compliant !== null && entry.mca_compliant !== undefined) {
-      return entry.mca_compliant;
+    // CRITICAL: Safe property access
+    try {
+      if (entry?.mca_compliant !== null && entry?.mca_compliant !== undefined) {
+        return entry.mca_compliant;
+      }
+      
+      const hours = toNumber(entry?.duration_hours);
+      return hours >= 4.0;
+    } catch (e) {
+      console.error('[Confirmations] Error checking MCA compliance:', e);
+      return false;
     }
-    
-    const hours = toNumber(entry.duration_hours);
-    return hours >= 4.0;
   };
 
   const getMCAWarningText = (entry: SeaTimeEntry): string | null => {
@@ -461,6 +547,12 @@ export default function ConfirmationsScreen() {
             </View>
           ) : (
             entries.map((entry) => {
+              // CRITICAL: Validate entry has required properties
+              if (!entry || !entry.id) {
+                console.warn('[Confirmations] Skipping invalid entry:', entry);
+                return null;
+              }
+              
               const isExpanded = expandedEntries.has(entry.id);
               const isProcessing = processingEntryId === entry.id;
               const mcaCompliant = isMCACompliant(entry);
