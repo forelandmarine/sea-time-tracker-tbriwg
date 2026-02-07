@@ -16,14 +16,16 @@ import { authenticatedPost } from './api';
 // CRITICAL: Aggressive timeouts to prevent blocking
 const INIT_TIMEOUT = 2000; // 2 seconds max for initialization
 const PRODUCT_FETCH_TIMEOUT = 3000; // 3 seconds max for product fetch
-const PURCHASE_TIMEOUT = 30000; // 30 seconds for purchase (user interaction)
-
+const MODULE_LOAD_TIMEOUT = 2000; // 2 seconds max for module load
+const MODULE_RETRY_COOLDOWN = 5000; // 5 seconds before retry after failed module load
 // COMPLIANCE: Apple subscription management URL
 const APPLE_SUBSCRIPTION_URL = 'https://apps.apple.com/account/subscriptions';
 
 // Lazy import RNIap - NEVER loaded until explicitly needed
 let RNIap: any = null;
 let iapLoadAttempted = false;
+let iapLoadInFlight: Promise<boolean> | null = null;
+let lastIapLoadFailureAt = 0;
 
 // Product ID configured in App Store Connect
 export const SUBSCRIPTION_PRODUCT_ID = 'com.forelandmarine.seatime.monthly';
@@ -38,6 +40,46 @@ let isInitialized = false;
 let purchaseUpdateSubscription: any = null;
 let purchaseErrorSubscription: any = null;
 
+const getIapModule = (): any => {
+  if (!RNIap) return null;
+  return RNIap.default ?? RNIap;
+};
+
+const getPurchaseReceipt = (purchase: Purchase): string | null => {
+  // react-native-iap v14+: purchaseToken is the unified token
+  // (JWS for iOS / purchaseToken for Android).
+  if (typeof purchase.purchaseToken === 'string' && purchase.purchaseToken.length > 0) {
+    return purchase.purchaseToken;
+  }
+
+  // Backward-compatible fallback for older react-native-iap payload shapes.
+  const withLegacyReceipt = purchase as Purchase & { transactionReceipt?: string | null };
+  if (typeof withLegacyReceipt.transactionReceipt === 'string' && withLegacyReceipt.transactionReceipt.length > 0) {
+    return withLegacyReceipt.transactionReceipt;
+  }
+
+  return null;
+};
+
+const getVerificationReceipt = async (purchase: Purchase): Promise<string | null> => {
+  const iap = getIapModule();
+
+  // Backend currently verifies via Apple's /verifyReceipt endpoint,
+  // which expects the app receipt (base64), not transaction identifiers.
+  if (Platform.OS === 'ios' && iap?.getReceiptIOS) {
+    try {
+      const appReceipt = await iap.getReceiptIOS();
+      if (typeof appReceipt === 'string' && appReceipt.length > 0) {
+        return appReceipt;
+      }
+    } catch (error: any) {
+      console.warn('[StoreKit] Failed to get iOS app receipt, falling back to purchase token:', error?.message);
+    }
+  }
+
+  return getPurchaseReceipt(purchase);
+};
+
 /**
  * Lazy load RNIap module
  * CRITICAL: This is the ONLY place the module is loaded
@@ -47,29 +89,61 @@ async function loadRNIap(): Promise<boolean> {
     return true;
   }
 
+  if (iapLoadInFlight) {
+    return iapLoadInFlight;
+  }
+
   if (iapLoadAttempted) {
-    console.log('[StoreKit] Module load already attempted and failed');
-    return false;
+    const elapsed = Date.now() - lastIapLoadFailureAt;
+    if (elapsed < MODULE_RETRY_COOLDOWN) {
+      console.log('[StoreKit] Module load recently failed, skipping retry');
+      return false;
+    }
+
+    console.log('[StoreKit] Retrying module load after cooldown');
+    iapLoadAttempted = false;
   }
 
   iapLoadAttempted = true;
 
-  try {
-    console.log('[StoreKit] Loading react-native-iap module (lazy)...');
-    
-    // Add timeout to module loading
-    const loadPromise = import('react-native-iap');
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error('Module load timeout')), 2000)
-    );
-    
-    RNIap = await Promise.race([loadPromise, timeoutPromise]);
-    console.log('[StoreKit] ✅ Module loaded successfully');
-    return true;
-  } catch (error: any) {
-    console.error('[StoreKit] ❌ Failed to load module:', error.message);
-    return false;
+  iapLoadInFlight = (async () => {
+    try {
+      console.log('[StoreKit] Loading react-native-iap module (lazy)...');
+
+      const loadPromise = import('react-native-iap');
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Module load timeout')), MODULE_LOAD_TIMEOUT)
+      );
+
+      RNIap = await Promise.race([loadPromise, timeoutPromise]);
+      console.log('[StoreKit] ✅ Module loaded successfully');
+      return true;
+    } catch (error: any) {
+      lastIapLoadFailureAt = Date.now();
+      console.error('[StoreKit] ❌ Failed to load module:', error.message);
+      return false;
+    } finally {
+      iapLoadInFlight = null;
+    }
+  })();
+
+  return iapLoadInFlight;
+}
+
+async function ensureStoreKitReady(): Promise<any | null> {
+  const loaded = await loadRNIap();
+  if (!loaded) {
+    return null;
   }
+
+  if (!isInitialized) {
+    const initialized = await initializeStoreKit();
+    if (!initialized) {
+      return null;
+    }
+  }
+
+  return getIapModule();
 }
 
 /**
@@ -98,7 +172,13 @@ export async function initializeStoreKit(): Promise<boolean> {
     console.log('[StoreKit] Initializing connection...');
     
     // CRITICAL: Aggressive timeout
-    const initPromise = RNIap.initConnection();
+    const iap = getIapModule();
+    if (!iap?.initConnection) {
+      console.error('[StoreKit] initConnection is unavailable on loaded module');
+      return false;
+    }
+
+    const initPromise = iap.initConnection();
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Init timeout')), INIT_TIMEOUT)
     );
@@ -107,7 +187,7 @@ export async function initializeStoreKit(): Promise<boolean> {
     console.log('[StoreKit] ✅ Connection initialized');
     
     // Clear pending transactions (non-blocking)
-    RNIap.flushFailedPurchasesCachedAsPendingAndroid().catch(() => {
+    iap.flushFailedPurchasesCachedAsPendingAndroid?.().catch(() => {
       // Ignore errors
     });
     
@@ -135,22 +215,20 @@ export async function getProductInfo(): Promise<{
   }
 
   try {
-    const loaded = await loadRNIap();
-    if (!loaded) {
+    const iap = await ensureStoreKitReady();
+    if (!iap) {
       return null;
-    }
-
-    if (!isInitialized) {
-      const initialized = await initializeStoreKit();
-      if (!initialized) {
-        return null;
-      }
     }
 
     console.log('[StoreKit] Fetching product info...');
     
     // CRITICAL: Aggressive timeout
-    const productsPromise = RNIap.getSubscriptions({ skus: subscriptionSkus as string[] });
+    if (!iap?.getSubscriptions) {
+      console.error('[StoreKit] getSubscriptions is unavailable on loaded module');
+      return null;
+    }
+
+    const productsPromise = iap.getSubscriptions({ skus: subscriptionSkus as string[] });
     const timeoutPromise = new Promise<never>((_, reject) =>
       setTimeout(() => reject(new Error('Product fetch timeout')), PRODUCT_FETCH_TIMEOUT)
     );
@@ -190,8 +268,8 @@ export async function setupPurchaseListeners(
     return;
   }
 
-  const loaded = await loadRNIap();
-  if (!loaded) {
+  const iap = await ensureStoreKitReady();
+  if (!iap) {
     return;
   }
 
@@ -199,13 +277,17 @@ export async function setupPurchaseListeners(
 
   // Remove existing listeners
   removePurchaseListeners();
+  if (!iap?.purchaseUpdatedListener || !iap?.purchaseErrorListener) {
+    console.error('[StoreKit] Purchase listeners are unavailable on loaded module');
+    return;
+  }
 
-  purchaseUpdateSubscription = RNIap.purchaseUpdatedListener((purchase: Purchase) => {
+  purchaseUpdateSubscription = iap.purchaseUpdatedListener((purchase: Purchase) => {
     console.log('[StoreKit] Purchase updated:', purchase.transactionId);
     onPurchaseUpdate(purchase);
   });
 
-  purchaseErrorSubscription = RNIap.purchaseErrorListener((error: PurchaseError) => {
+  purchaseErrorSubscription = iap.purchaseErrorListener((error: PurchaseError) => {
     console.error('[StoreKit] Purchase error:', error.code);
     onPurchaseError(error);
   });
@@ -239,20 +321,17 @@ export async function purchaseSubscription(): Promise<void> {
   }
 
   try {
-    const loaded = await loadRNIap();
-    if (!loaded) {
+    const iap = await ensureStoreKitReady();
+    if (!iap) {
       throw new Error('StoreKit module not available');
     }
 
-    if (!isInitialized) {
-      const initialized = await initializeStoreKit();
-      if (!initialized) {
-        throw new Error('Failed to initialize StoreKit');
-      }
+    console.log('[StoreKit] Requesting subscription...');
+    if (!iap?.requestSubscription) {
+      throw new Error('requestSubscription is unavailable');
     }
 
-    console.log('[StoreKit] Requesting subscription...');
-    await RNIap.requestSubscription({
+    await iap.requestSubscription({
       sku: SUBSCRIPTION_PRODUCT_ID,
     });
 
@@ -277,21 +356,17 @@ export async function restorePurchases(): Promise<Purchase | null> {
   }
 
   try {
-    const loaded = await loadRNIap();
-    if (!loaded) {
+    const iap = await ensureStoreKitReady();
+    if (!iap) {
       throw new Error('StoreKit module not available');
     }
 
-    if (!isInitialized) {
-      const initialized = await initializeStoreKit();
-      if (!initialized) {
-        throw new Error('Failed to initialize StoreKit');
-      }
+    console.log('[StoreKit] Restoring purchases...');
+    if (!iap?.getAvailablePurchases) {
+      throw new Error('getAvailablePurchases is unavailable');
     }
 
-    console.log('[StoreKit] Restoring purchases...');
-    
-    const purchases = await RNIap.getAvailablePurchases();
+    const purchases = await iap.getAvailablePurchases();
     console.log('[StoreKit] Found purchases:', purchases.length);
     
     if (purchases.length === 0) {
@@ -360,14 +435,17 @@ export async function verifyReceiptWithBackend(
  */
 export async function finishTransaction(purchase: Purchase): Promise<void> {
   try {
-    const loaded = await loadRNIap();
-    if (!loaded) {
+    const iap = await ensureStoreKitReady();
+    if (!iap) {
       return;
     }
 
     console.log('[StoreKit] Finishing transaction:', purchase.transactionId);
-    
-    await RNIap.finishTransaction({
+    if (!iap?.finishTransaction) {
+      return;
+    }
+
+    await iap.finishTransaction({
       purchase,
       isConsumable: false,
     });
@@ -388,7 +466,7 @@ export async function processPurchase(purchase: Purchase): Promise<{
 }> {
   console.log('[StoreKit] Processing purchase:', purchase.transactionId);
 
-  const receipt = purchase.transactionReceipt;
+  const receipt = await getVerificationReceipt(purchase);
   
   if (!receipt) {
     console.error('[StoreKit] No receipt in purchase');
@@ -463,7 +541,8 @@ export async function disconnectStoreKit(): Promise<void> {
     console.log('[StoreKit] Cleaning up connection');
     
     removePurchaseListeners();
-    await RNIap.endConnection();
+    const iap = getIapModule();
+    await iap?.endConnection?.();
     isInitialized = false;
     
     console.log('[StoreKit] ✅ Connection closed');
