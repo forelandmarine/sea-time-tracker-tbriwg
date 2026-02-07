@@ -57,7 +57,7 @@ export default function SeaTimeScreen() {
   // CRITICAL: Call useAuth at the top level - NEVER conditionally
   // This must be called before any early returns or conditions
   const { refreshTrigger } = useAuth();
-  const { handleSubscriptionError, requireSubscription } = useSubscriptionEnforcement();
+  const { handleSubscriptionError, requireSubscription, hasSubscription } = useSubscriptionEnforcement();
   
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +82,9 @@ export default function SeaTimeScreen() {
   // Separate vessels into active and historic
   const activeVessel = vessels.find(v => v.is_active);
   const historicVessels = vessels.filter(v => !v.is_active);
+
+  // Check if user has active subscription
+  const hasActiveSubscription = hasSubscription();
 
   const isLocationStale = useCallback((timestamp: string | null | undefined): boolean => {
     if (!timestamp) return false;
@@ -392,6 +395,11 @@ export default function SeaTimeScreen() {
     router.push('/user-profile');
   };
 
+  const handleSubscribePress = () => {
+    console.log('[Home] User tapped subscribe button, navigating to subscription paywall');
+    router.push('/subscription-paywall');
+  };
+
   const convertToDMS = (decimal: number, isLatitude: boolean): string => {
     const absolute = Math.abs(decimal);
     const degrees = Math.floor(absolute);
@@ -480,6 +488,38 @@ export default function SeaTimeScreen() {
           </View>
         </View>
 
+        {/* Subscription Required Banner - Show when no active subscription */}
+        {!hasActiveSubscription && (
+          <View style={styles.subscriptionBanner}>
+            <View style={styles.subscriptionBannerContent}>
+              <IconSymbol
+                ios_icon_name="exclamationmark.triangle.fill"
+                android_material_icon_name="warning"
+                size={32}
+                color={colors.warning}
+              />
+              <View style={styles.subscriptionBannerTextContainer}>
+                <Text style={styles.subscriptionBannerTitle}>Vessel Tracking Paused</Text>
+                <Text style={styles.subscriptionBannerMessage}>
+                  Your subscription is inactive. Vessel tracking has been paused. Subscribe to resume automatic sea time tracking.
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity 
+              style={styles.subscriptionBannerButton}
+              onPress={handleSubscribePress}
+            >
+              <Text style={styles.subscriptionBannerButtonText}>Subscribe Now</Text>
+              <IconSymbol
+                ios_icon_name="arrow.right"
+                android_material_icon_name="arrow-forward"
+                size={18}
+                color="#fff"
+              />
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Active Vessel Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -517,7 +557,9 @@ export default function SeaTimeScreen() {
               >
                 <View style={styles.activeVesselBadge}>
                   <View style={styles.activeIndicatorPulse} />
-                  <Text style={styles.activeVesselBadgeText}>TRACKING</Text>
+                  <Text style={styles.activeVesselBadgeText}>
+                    {hasActiveSubscription ? 'TRACKING' : 'PAUSED'}
+                  </Text>
                 </View>
                 
                 <Text style={styles.vesselName}>{activeVessel.vessel_name}</Text>
@@ -971,6 +1013,51 @@ function createStyles(isDark: boolean) {
     },
     userAccountButton: {
       padding: 4,
+    },
+    subscriptionBanner: {
+      backgroundColor: colors.warning + '20',
+      borderLeftWidth: 4,
+      borderLeftColor: colors.warning,
+      padding: 16,
+      marginHorizontal: 16,
+      marginTop: 16,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.warning + '40',
+    },
+    subscriptionBannerContent: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+      marginBottom: 12,
+    },
+    subscriptionBannerTextContainer: {
+      flex: 1,
+    },
+    subscriptionBannerTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 6,
+    },
+    subscriptionBannerMessage: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      lineHeight: 20,
+    },
+    subscriptionBannerButton: {
+      backgroundColor: colors.primary,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 14,
+      borderRadius: 8,
+      gap: 8,
+    },
+    subscriptionBannerButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: 'bold',
     },
     section: {
       padding: 16,
