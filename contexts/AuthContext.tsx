@@ -1,6 +1,5 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { BACKEND_URL } from '@/utils/api';
 import { clearBiometricCredentials } from '@/utils/biometricAuth';
@@ -14,11 +13,14 @@ const SIGN_OUT_BACKEND_TIMEOUT = 500; // 500ms for backend sign out (fire-and-fo
 const SAFETY_TIMEOUT = 4000; // 4 seconds absolute maximum for loading state
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 🚨 CRITICAL FIX: SECURE STORE WRAPPER WITH MAIN THREAD DISPATCH
+// 🚨 CRITICAL FIX: DYNAMIC IMPORT OF EXPO-SECURE-STORE
 // ═══════════════════════════════════════════════════════════════════════════
-// PROBLEM: SecureStore (Keychain) operations MUST run on the main thread on iOS
-// If called from a background thread, they throw NSInternalInconsistencyException
-// This is the MOST LIKELY cause of the TurboModule SIGABRT crash
+// PROBLEM: Importing expo-secure-store at module scope causes TurboModule
+// initialization during app startup, which can trigger SIGABRT crashes on iOS
+// when the native module is called before the React Native bridge is ready.
+//
+// SOLUTION: Use dynamic import() inside functions, ensuring SecureStore is
+// only loaded when actually needed, after the app is fully mounted and stable.
 // ═══════════════════════════════════════════════════════════════════════════
 
 interface User {
@@ -44,7 +46,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CRITICAL: Safe SecureStore wrapper with validation and error handling
+// CRITICAL: Safe SecureStore wrapper with DYNAMIC IMPORT
 // ═══════════════════════════════════════════════════════════════════════════
 const tokenStorage = {
   async getToken(): Promise<string | null> {
@@ -69,6 +71,11 @@ const tokenStorage = {
           return null;
         }
       }
+      
+      // CRITICAL: Dynamic import - SecureStore is NOT loaded at module scope
+      console.log('[Auth] Dynamically importing expo-secure-store...');
+      const SecureStore = await import('expo-secure-store');
+      console.log('[Auth] ✅ expo-secure-store imported successfully');
       
       // CRITICAL: Wrap SecureStore call in try-catch
       console.log('[Auth] Calling SecureStore.getItemAsync...');
@@ -119,6 +126,11 @@ const tokenStorage = {
           throw error;
         }
       } else {
+        // CRITICAL: Dynamic import - SecureStore is NOT loaded at module scope
+        console.log('[Auth] Dynamically importing expo-secure-store...');
+        const SecureStore = await import('expo-secure-store');
+        console.log('[Auth] ✅ expo-secure-store imported successfully');
+        
         // CRITICAL: Wrap SecureStore call in try-catch
         console.log('[Auth] Calling SecureStore.setItemAsync...');
         try {
@@ -161,6 +173,11 @@ const tokenStorage = {
           // Ignore errors
         }
       } else {
+        // CRITICAL: Dynamic import - SecureStore is NOT loaded at module scope
+        console.log('[Auth] Dynamically importing expo-secure-store...');
+        const SecureStore = await import('expo-secure-store');
+        console.log('[Auth] ✅ expo-secure-store imported successfully');
+        
         // CRITICAL: Wrap SecureStore call in try-catch
         console.log('[Auth] Calling SecureStore.deleteItemAsync...');
         try {
