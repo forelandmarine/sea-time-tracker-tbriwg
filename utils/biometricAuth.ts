@@ -1,6 +1,5 @@
 
 import * as LocalAuthentication from 'expo-local-authentication';
-import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 const BIOMETRIC_CREDENTIALS_KEY = 'seatime_biometric_credentials';
@@ -9,6 +8,15 @@ interface BiometricCredentials {
   email: string;
   password: string;
 }
+
+/**
+ * Dynamic SecureStore loader to prevent module-scope TurboModule initialization
+ * This prevents early initialization that can cause SIGABRT crashes post-auth
+ */
+const getSecureStore = async () => {
+  console.log('[BiometricAuth] Dynamically loading expo-secure-store...');
+  return await import('expo-secure-store');
+};
 
 /**
  * Check if biometric authentication is available on the device
@@ -149,7 +157,8 @@ export async function saveBiometricCredentials(
       localStorage.setItem(BIOMETRIC_CREDENTIALS_KEY, JSON.stringify(credentials));
       console.log('[BiometricAuth] Credentials saved to localStorage (web)');
     } else {
-      // For native, use SecureStore
+      // For native, dynamically load SecureStore
+      const SecureStore = await getSecureStore();
       await SecureStore.setItemAsync(
         BIOMETRIC_CREDENTIALS_KEY,
         JSON.stringify(credentials)
@@ -172,6 +181,8 @@ export async function getBiometricCredentials(): Promise<BiometricCredentials | 
     if (Platform.OS === 'web') {
       credentialsJson = localStorage.getItem(BIOMETRIC_CREDENTIALS_KEY);
     } else {
+      // For native, dynamically load SecureStore
+      const SecureStore = await getSecureStore();
       credentialsJson = await SecureStore.getItemAsync(BIOMETRIC_CREDENTIALS_KEY);
     }
 
@@ -199,6 +210,8 @@ export async function clearBiometricCredentials(): Promise<void> {
     if (Platform.OS === 'web') {
       localStorage.removeItem(BIOMETRIC_CREDENTIALS_KEY);
     } else {
+      // For native, dynamically load SecureStore
+      const SecureStore = await getSecureStore();
       await SecureStore.deleteItemAsync(BIOMETRIC_CREDENTIALS_KEY);
     }
 

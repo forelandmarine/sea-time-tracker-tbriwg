@@ -1,5 +1,4 @@
 
-import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
@@ -12,6 +11,15 @@ export const BIOMETRIC_CREDENTIALS_KEY = 'seatime_biometric_credentials';
 // Rate limiting constants
 const VESSEL_QUERY_INTERVAL = 2 * 60 * 60 * 1000; // 2 hours in milliseconds
 const LAST_QUERY_TIME_PREFIX = 'vessel_last_query_time_';
+
+/**
+ * Dynamic SecureStore loader to prevent module-scope TurboModule initialization
+ * This prevents early initialization that can cause SIGABRT crashes post-auth
+ */
+const getSecureStore = async () => {
+  console.log('[seaTimeApi] Dynamically loading expo-secure-store...');
+  return await import('expo-secure-store');
+};
 
 // Helper to normalize vessel data from API
 const normalizeVessel = (vessel: any) => {
@@ -81,6 +89,8 @@ const getAuthToken = async (): Promise<string | null> => {
     if (Platform.OS === 'web') {
       return localStorage.getItem(TOKEN_KEY);
     }
+    // Dynamically load SecureStore to prevent early TurboModule initialization
+    const SecureStore = await getSecureStore();
     return await SecureStore.getItemAsync(TOKEN_KEY);
   } catch (error) {
     console.error('[seaTimeApi] Error getting auth token:', error);
