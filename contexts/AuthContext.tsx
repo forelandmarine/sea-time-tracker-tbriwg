@@ -51,7 +51,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const tokenStorage = {
   async getToken(): Promise<string | null> {
     try {
-      console.log('[Auth] ⚠️ ABOUT TO CALL NATIVE: tokenStorage.getToken');
+      console.log('[Auth] ⚠️ BREADCRUMB: tokenStorage.getToken called');
       console.log('[Auth] Platform:', Platform.OS);
       console.log('[Auth] TOKEN_KEY:', TOKEN_KEY);
       
@@ -73,12 +73,13 @@ const tokenStorage = {
       }
       
       // CRITICAL: Dynamic import - SecureStore is NOT loaded at module scope
-      console.log('[Auth] Dynamically importing expo-secure-store...');
+      console.log('[Auth] ⚠️ BREADCRUMB: About to dynamically import expo-secure-store');
       const SecureStore = await import('expo-secure-store');
       console.log('[Auth] ✅ expo-secure-store imported successfully');
       
       // CRITICAL: Wrap SecureStore call in try-catch
-      console.log('[Auth] Calling SecureStore.getItemAsync...');
+      console.log('[Auth] ⚠️ BREADCRUMB: About to call SecureStore.getItemAsync');
+      console.log('[Auth] ⚠️ NATIVE CALL IMMINENT: SecureStore.getItemAsync with key:', TOKEN_KEY);
       try {
         const token = await SecureStore.getItemAsync(TOKEN_KEY);
         console.log('[Auth] ✅ NATIVE CALL SUCCESS: SecureStore.getItemAsync');
@@ -101,7 +102,7 @@ const tokenStorage = {
   
   async setToken(token: string): Promise<void> {
     try {
-      console.log('[Auth] ⚠️ ABOUT TO CALL NATIVE: tokenStorage.setToken');
+      console.log('[Auth] ⚠️ BREADCRUMB: tokenStorage.setToken called');
       console.log('[Auth] Platform:', Platform.OS);
       console.log('[Auth] TOKEN_KEY:', TOKEN_KEY);
       console.log('[Auth] Token length:', token?.length);
@@ -127,12 +128,14 @@ const tokenStorage = {
         }
       } else {
         // CRITICAL: Dynamic import - SecureStore is NOT loaded at module scope
-        console.log('[Auth] Dynamically importing expo-secure-store...');
+        console.log('[Auth] ⚠️ BREADCRUMB: About to dynamically import expo-secure-store');
         const SecureStore = await import('expo-secure-store');
         console.log('[Auth] ✅ expo-secure-store imported successfully');
         
         // CRITICAL: Wrap SecureStore call in try-catch
-        console.log('[Auth] Calling SecureStore.setItemAsync...');
+        console.log('[Auth] ⚠️ BREADCRUMB: About to call SecureStore.setItemAsync');
+        console.log('[Auth] ⚠️ NATIVE CALL IMMINENT: SecureStore.setItemAsync');
+        console.log('[Auth] Arguments: key =', TOKEN_KEY, ', value length =', token.length);
         try {
           await SecureStore.setItemAsync(TOKEN_KEY, token);
           console.log('[Auth] ✅ NATIVE CALL SUCCESS: SecureStore.setItemAsync');
@@ -155,7 +158,7 @@ const tokenStorage = {
   
   async removeToken(): Promise<void> {
     try {
-      console.log('[Auth] ⚠️ ABOUT TO CALL NATIVE: tokenStorage.removeToken');
+      console.log('[Auth] ⚠️ BREADCRUMB: tokenStorage.removeToken called');
       console.log('[Auth] Platform:', Platform.OS);
       console.log('[Auth] TOKEN_KEY:', TOKEN_KEY);
       
@@ -174,12 +177,13 @@ const tokenStorage = {
         }
       } else {
         // CRITICAL: Dynamic import - SecureStore is NOT loaded at module scope
-        console.log('[Auth] Dynamically importing expo-secure-store...');
+        console.log('[Auth] ⚠️ BREADCRUMB: About to dynamically import expo-secure-store');
         const SecureStore = await import('expo-secure-store');
         console.log('[Auth] ✅ expo-secure-store imported successfully');
         
         // CRITICAL: Wrap SecureStore call in try-catch
-        console.log('[Auth] Calling SecureStore.deleteItemAsync...');
+        console.log('[Auth] ⚠️ BREADCRUMB: About to call SecureStore.deleteItemAsync');
+        console.log('[Auth] ⚠️ NATIVE CALL IMMINENT: SecureStore.deleteItemAsync with key:', TOKEN_KEY);
         try {
           await SecureStore.deleteItemAsync(TOKEN_KEY);
           console.log('[Auth] ✅ NATIVE CALL SUCCESS: SecureStore.deleteItemAsync');
@@ -236,17 +240,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loading]);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 🚨 CRITICAL FIX: EXTREME DELAYED APP READY FLAG
+  // 🚨 CRITICAL FIX: DELAYED APP READY FLAG
   // ═══════════════════════════════════════════════════════════════════════════
-  // Wait for app to be fully mounted and VERY stable before allowing auth operations
+  // Wait for app to be fully mounted and stable before allowing auth operations
   // This prevents TurboModule crashes from calling native modules too early
   // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    console.log('[Auth] Setting up app ready timer (5 second delay)...');
+    console.log('[Auth] ⚠️ BREADCRUMB: Setting up app ready timer (2 second delay)...');
     const readyTimer = setTimeout(() => {
-      console.log('[Auth] ✅ App is now ready for auth operations (after 5 second delay)');
+      console.log('[Auth] ✅ App is now ready for auth operations (after 2 second delay)');
       appReadyRef.current = true;
-    }, 5000); // 🚨 INCREASED to 5 seconds to ensure maximum stability
+    }, 2000); // 2 seconds to ensure app is stable
 
     return () => {
       clearTimeout(readyTimer);
@@ -254,6 +258,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const checkAuth = useCallback(async () => {
+    console.log('[Auth] ⚠️ BREADCRUMB: checkAuth called');
+    
     // CRITICAL: Don't check auth until app is ready
     if (!appReadyRef.current) {
       console.log('[Auth] App not ready yet, skipping auth check');
@@ -283,7 +289,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      console.log('[Auth] Getting token from storage...');
+      console.log('[Auth] ⚠️ BREADCRUMB: About to get token from storage');
       const token = await tokenStorage.getToken();
       console.log('[Auth] Token retrieved:', token ? 'YES (length: ' + token.length + ')' : 'NO');
       
@@ -366,7 +372,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // This prevents early SecureStore access that can cause crashes
   // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    console.log('[Auth] AuthProvider mounted - NOT checking auth automatically');
+    console.log('[Auth] ⚠️ BREADCRUMB: AuthProvider mounted - NOT checking auth automatically');
     console.log('[Auth] Auth will be checked only when needed (sign in, protected route access)');
     
     // Mark initial check as done immediately without actually checking
@@ -377,6 +383,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
+    console.log('[Auth] ⚠️ BREADCRUMB: signIn called');
+    
     // CRITICAL: Prevent concurrent operations
     if (authLock.current) {
       throw new Error('Authentication operation already in progress. Please wait.');
@@ -425,7 +433,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const fetchDuration = Date.now() - fetchStartTime;
         console.log('[Auth] Response received after', fetchDuration, 'ms');
         console.log('[Auth] Response status:', response.status, response.statusText);
-        console.log('[Auth] Response headers:', JSON.stringify(Object.fromEntries(response.headers.entries())));
         
         clearTimeout(timeoutId);
 
@@ -458,7 +465,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('[Auth] Reading response body...');
         const responseText = await response.text();
         console.log('[Auth] Response body length:', responseText.length);
-        console.log('[Auth] Response body preview:', responseText.substring(0, 200));
         
         let data;
         try {
@@ -475,7 +481,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error('No session token received from server');
         }
 
-        console.log('[Auth] Storing token...');
+        console.log('[Auth] ⚠️ BREADCRUMB: About to store token');
         
         // 🚨 CRITICAL FIX: Wrap token storage in try-catch to prevent crashes
         try {
@@ -527,6 +533,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signUp = useCallback(async (email: string, password: string, name?: string) => {
+    console.log('[Auth] ⚠️ BREADCRUMB: signUp called');
+    
     // CRITICAL: Prevent concurrent operations
     if (authLock.current) {
       throw new Error('Authentication operation already in progress. Please wait.');
@@ -590,6 +598,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error('No session token received from server');
         }
 
+        console.log('[Auth] ⚠️ BREADCRUMB: About to store token');
+        
         // 🚨 CRITICAL FIX: Wrap token storage in try-catch to prevent crashes
         try {
           await tokenStorage.setToken(data.session.token);
@@ -629,6 +639,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signInWithApple = useCallback(async (identityToken: string, appleUser?: any) => {
+    console.log('[Auth] ⚠️ BREADCRUMB: signInWithApple called');
+    console.log('[Auth] ⚠️ BREADCRUMB: Identity token length:', identityToken?.length);
+    console.log('[Auth] ⚠️ BREADCRUMB: Apple user data present:', !!appleUser);
+    
     // CRITICAL: Prevent concurrent operations
     if (authLock.current) {
       throw new Error('Authentication operation already in progress. Please wait.');
@@ -643,15 +657,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('[Auth] BACKEND_URL:', BACKEND_URL);
 
     // CRITICAL: Validate all inputs before ANY native operations
+    console.log('[Auth] ⚠️ BREADCRUMB: Validating identity token');
     if (!identityToken || typeof identityToken !== 'string') {
-      console.error('[Auth] Invalid identity token:', typeof identityToken);
+      console.error('[Auth] ❌ VALIDATION FAILED: Invalid identity token:', typeof identityToken);
       authLock.current = false;
       setLoading(false);
       throw new Error('Invalid identity token received from Apple');
     }
 
     if (!BACKEND_URL) {
-      console.error('[Auth] Backend URL not configured');
+      console.error('[Auth] ❌ VALIDATION FAILED: Backend URL not configured');
       authLock.current = false;
       setLoading(false);
       throw new Error('Backend URL is not configured');
@@ -670,7 +685,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const url = `${BACKEND_URL}/api/auth/sign-in/apple`;
     console.log('[Auth] Request URL:', url);
-    console.log('[Auth] Request body:', JSON.stringify(requestBody, null, 2));
+    console.log('[Auth] ⚠️ BREADCRUMB: Request body prepared');
 
     try {
       const controller = new AbortController();
@@ -680,7 +695,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }, SIGN_IN_TIMEOUT);
 
       try {
-        console.log('[Auth] Sending fetch request...');
+        console.log('[Auth] ⚠️ BREADCRUMB: Sending fetch request to backend');
         const response = await fetch(url, {
           method: 'POST',
           headers: {
@@ -707,31 +722,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         const data = await response.json();
-        console.log('[Auth] Response data received:', { hasSession: !!data.session, hasUser: !!data.user });
+        console.log('[Auth] ⚠️ BREADCRUMB: Response data received');
+        console.log('[Auth] Response data:', { hasSession: !!data.session, hasUser: !!data.user });
 
         // CRITICAL: Validate response data before ANY native storage operations
+        console.log('[Auth] ⚠️ BREADCRUMB: Validating response data');
         if (!data || typeof data !== 'object') {
-          console.error('[Auth] Invalid response data type:', typeof data);
+          console.error('[Auth] ❌ VALIDATION FAILED: Invalid response data type:', typeof data);
           throw new Error('Invalid response from server');
         }
 
         if (!data.session || typeof data.session !== 'object') {
-          console.error('[Auth] Invalid session object:', data.session);
+          console.error('[Auth] ❌ VALIDATION FAILED: Invalid session object:', data.session);
           throw new Error('No session received from server');
         }
 
         if (!data.session.token || typeof data.session.token !== 'string') {
-          console.error('[Auth] Invalid session token:', typeof data.session.token);
+          console.error('[Auth] ❌ VALIDATION FAILED: Invalid session token:', typeof data.session.token);
           throw new Error('No valid session token received from server');
         }
 
         if (!data.user || typeof data.user !== 'object') {
-          console.error('[Auth] Invalid user object:', data.user);
+          console.error('[Auth] ❌ VALIDATION FAILED: Invalid user object:', data.user);
           throw new Error('No user data received from server');
         }
 
         // CRITICAL: Log BEFORE native storage operation (SecureStore/Keychain)
-        console.log('[Auth] ⚠️ ABOUT TO CALL NATIVE: tokenStorage.setToken (SecureStore/Keychain)');
+        console.log('[Auth] ⚠️ BREADCRUMB: About to store token in SecureStore/Keychain');
+        console.log('[Auth] ⚠️ NATIVE CALL IMMINENT: tokenStorage.setToken');
         console.log('[Auth] Token length:', data.session.token.length);
         
         // 🚨 CRITICAL FIX: Wrap token storage in try-catch to prevent crashes
@@ -749,7 +767,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.warn('[Auth] ⚠️ Continuing without token storage - session will not persist');
         }
 
-        console.log('[Auth] Setting user state...');
+        console.log('[Auth] ⚠️ BREADCRUMB: Setting user state');
         setUser(data.user);
         console.log('[Auth] ========== APPLE SIGN IN COMPLETED ==========');
       } catch (error: any) {
@@ -778,6 +796,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    console.log('[Auth] ⚠️ BREADCRUMB: signOut called');
+    
     // CRITICAL: Prevent concurrent operations
     if (authLock.current) {
       console.warn('[Auth] Auth operation in progress, forcing sign out anyway');
@@ -814,7 +834,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error('[Auth] Sign out error (ignored):', error);
     } finally {
       // ALWAYS clear local state immediately, regardless of backend call
-      console.log('[Auth] Clearing local state...');
+      console.log('[Auth] ⚠️ BREADCRUMB: Clearing local state');
       
       try {
         await tokenStorage.removeToken();
