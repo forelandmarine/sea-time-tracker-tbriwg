@@ -1,9 +1,9 @@
 
 import "react-native-reanimated";
 import React, { useEffect, useState } from "react";
-import { Stack, useRouter, useSegments, usePathname } from "expo-router";
+import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, Platform, View, Text } from "react-native";
+import { useColorScheme, Platform, View, Text, InteractionManager } from "react-native";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import {
@@ -14,7 +14,7 @@ import {
 } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
-import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { BACKEND_URL } from "@/utils/api";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -23,6 +23,7 @@ console.log('[App] ========== APP INITIALIZATION STARTED ==========');
 console.log('[App] Platform:', Platform.OS);
 console.log('[App] React Native Version:', Platform.Version);
 console.log('[App] New Architecture:', (global as any).RN$Bridgeless ? 'ENABLED' : 'DISABLED');
+console.log('[App] Backend URL:', BACKEND_URL);
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 if (Platform.OS !== 'web') {
@@ -39,11 +40,25 @@ export const unstable_settings = {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const [initError, setInitError] = useState<string | null>(null);
+  const [bridgeReady, setBridgeReady] = useState(false);
 
   const [loaded, error] = useFonts({
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
+
+  // Wait for React Native bridge to be fully ready before allowing any native module calls
+  useEffect(() => {
+    console.log('[App] Waiting for React Native bridge to be ready...');
+    
+    // Use InteractionManager to ensure all animations and interactions are complete
+    const task = InteractionManager.runAfterInteractions(() => {
+      console.log('[App] ✅ React Native bridge is ready');
+      setBridgeReady(true);
+    });
+
+    return () => task.cancel();
+  }, []);
 
   useEffect(() => {
     if (error) {
@@ -56,18 +71,21 @@ function RootLayoutNav() {
   }, [error]);
 
   useEffect(() => {
-    if (loaded) {
-      console.log('[App] Fonts loaded, hiding splash screen');
+    if (loaded && bridgeReady) {
+      console.log('[App] Fonts loaded and bridge ready, hiding splash screen');
       
       if (Platform.OS !== 'web') {
-        SplashScreen.hideAsync().catch((err) => {
-          console.warn('[App] Error hiding splash screen:', err);
-        });
+        // Small delay to ensure everything is truly ready
+        setTimeout(() => {
+          SplashScreen.hideAsync().catch((err) => {
+            console.warn('[App] Error hiding splash screen:', err);
+          });
+        }, 100);
       }
       
-      console.log('[App] App initialized - Platform:', Platform.OS, 'Backend:', BACKEND_URL ? 'configured' : 'NOT CONFIGURED');
+      console.log('[App] ✅ App initialized - Platform:', Platform.OS, 'Backend:', BACKEND_URL ? 'configured' : 'NOT CONFIGURED');
     }
-  }, [loaded]);
+  }, [loaded, bridgeReady]);
 
   // Show error screen if initialization failed
   if (initError) {
@@ -84,13 +102,13 @@ function RootLayoutNav() {
     );
   }
 
-  // Show loading screen while fonts are loading
-  if (!loaded) {
+  // Show loading screen while fonts are loading or bridge is not ready
+  if (!loaded || !bridgeReady) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff' }}>
         <Text style={{ fontSize: 18, color: colorScheme === 'dark' ? '#fff' : '#000', marginBottom: 10 }}>SeaTime Tracker</Text>
         <Text style={{ fontSize: 14, color: colorScheme === 'dark' ? '#999' : '#666' }}>
-          Loading...
+          {!loaded ? 'Loading fonts...' : 'Initializing...'}
         </Text>
       </View>
     );

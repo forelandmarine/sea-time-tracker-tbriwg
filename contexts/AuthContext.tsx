@@ -1,12 +1,12 @@
 
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { Platform } from 'react-native';
+import { Platform, InteractionManager } from 'react-native';
 import { BACKEND_URL } from '@/utils/api';
 import { clearBiometricCredentials } from '@/utils/biometricAuth';
 
 const TOKEN_KEY = 'seatime_auth_token';
 
-// Simple, reasonable timeouts
+// Reasonable timeouts
 const API_TIMEOUT = 15000; // 15 seconds for API calls
 
 interface User {
@@ -31,7 +31,7 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Simple, robust token storage with proper error handling
+// Token storage with deferred SecureStore loading to prevent early TurboModule initialization
 const tokenStorage = {
   async getToken(): Promise<string | null> {
     try {
@@ -39,6 +39,9 @@ const tokenStorage = {
         return localStorage.getItem(TOKEN_KEY);
       }
       
+      // CRITICAL: Dynamically import SecureStore to prevent module-scope initialization
+      // This prevents TurboModule crashes during startup
+      console.log('[Auth] Dynamically loading expo-secure-store for token retrieval...');
       const SecureStore = await import('expo-secure-store');
       return await SecureStore.getItemAsync(TOKEN_KEY);
     } catch (error) {
@@ -56,6 +59,8 @@ const tokenStorage = {
         return;
       }
       
+      // CRITICAL: Dynamically import SecureStore
+      console.log('[Auth] Dynamically loading expo-secure-store for token storage...');
       const SecureStore = await import('expo-secure-store');
       await SecureStore.setItemAsync(TOKEN_KEY, token);
     } catch (error) {
@@ -71,6 +76,8 @@ const tokenStorage = {
         return;
       }
       
+      // CRITICAL: Dynamically import SecureStore
+      console.log('[Auth] Dynamically loading expo-secure-store for token removal...');
       const SecureStore = await import('expo-secure-store');
       await SecureStore.deleteItemAsync(TOKEN_KEY);
     } catch (error) {
@@ -100,13 +107,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     try {
       if (!BACKEND_URL) {
+        console.log('[Auth] No backend URL configured');
         setUser(null);
         return;
       }
 
+      // CRITICAL: Wait for all interactions to complete before accessing SecureStore
+      // This ensures the TurboModule bridge is fully initialized
+      await new Promise<void>((resolve) => {
+        InteractionManager.runAfterInteractions(() => {
+          console.log('[Auth] Interactions complete, safe to access SecureStore');
+          resolve();
+        });
+      });
+
       const token = await tokenStorage.getToken();
       
       if (!token) {
+        console.log('[Auth] No token found');
         setUser(null);
         return;
       }
@@ -124,8 +142,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         if (response.ok) {
           const data = await response.json();
+          console.log('[Auth] User authenticated:', data.user.email);
           setUser(data.user);
         } else {
+          console.log('[Auth] Token invalid, clearing');
           await tokenStorage.removeToken();
           setUser(null);
         }
@@ -186,6 +206,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!data.session?.token) {
         throw new Error('No session token received');
       }
+
+      // CRITICAL: Wait for interactions before storing token
+      await new Promise<void>((resolve) => {
+        InteractionManager.runAfterInteractions(() => {
+          console.log('[Auth] Safe to store token after sign in');
+          resolve();
+        });
+      });
 
       // Store token and set user atomically
       await tokenStorage.setToken(data.session.token);
@@ -249,6 +277,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!data.session?.token) {
         throw new Error('No session token received');
       }
+
+      // CRITICAL: Wait for interactions before storing token
+      await new Promise<void>((resolve) => {
+        InteractionManager.runAfterInteractions(() => {
+          console.log('[Auth] Safe to store token after sign up');
+          resolve();
+        });
+      });
 
       await tokenStorage.setToken(data.session.token);
       setUser(data.user);
@@ -326,6 +362,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!data.session?.token) {
         throw new Error('No session token received');
       }
+
+      // CRITICAL: Wait for interactions before storing token
+      await new Promise<void>((resolve) => {
+        InteractionManager.runAfterInteractions(() => {
+          console.log('[Auth] Safe to store token after Apple sign in');
+          resolve();
+        });
+      });
 
       await tokenStorage.setToken(data.session.token);
       setUser(data.user);
