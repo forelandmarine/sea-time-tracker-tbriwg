@@ -11,6 +11,25 @@ export default function Index() {
   const authContext = useAuth();
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
+  // CRITICAL: Move useEffect to top level - BEFORE any conditional returns
+  // React Hooks MUST be called in the same order every render
+  useEffect(() => {
+    // CRITICAL: Wrap in try-catch to prevent crashes
+    try {
+      // Only proceed if authContext exists and is not loading
+      if (authContext && !authContext.loading) {
+        // Add a small delay to prevent flicker
+        const timer = setTimeout(() => {
+          setInitialCheckDone(true);
+        }, 100);
+        return () => clearTimeout(timer);
+      }
+    } catch (error: any) {
+      console.error('[Index] Error in auth check effect:', error);
+      setInitialCheckDone(true); // Continue anyway
+    }
+  }, [authContext]);
+
   // CRITICAL: Defensive check - if auth context is somehow undefined, show error
   if (!authContext) {
     console.error('[Index] CRITICAL: Auth context is undefined');
@@ -23,24 +42,6 @@ export default function Index() {
   }
 
   const { user, loading: authLoading } = authContext;
-
-  // FIXED: Move useEffect to top level - NEVER call hooks conditionally
-  // Wait for initial auth check to complete
-  useEffect(() => {
-    // CRITICAL: Wrap in try-catch to prevent crashes
-    try {
-      if (!authLoading) {
-        // Add a small delay to prevent flicker
-        const timer = setTimeout(() => {
-          setInitialCheckDone(true);
-        }, 100);
-        return () => clearTimeout(timer);
-      }
-    } catch (error: any) {
-      console.error('[Index] Error in auth check effect:', error);
-      setInitialCheckDone(true); // Continue anyway
-    }
-  }, [authLoading]);
 
   // Show loading while checking auth
   if (authLoading || !initialCheckDone) {
