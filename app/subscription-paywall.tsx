@@ -4,14 +4,14 @@
  * 
  * ✅ STOREKIT REMOVED - Preparing for RevenueCat integration
  * ✅ STABLE IMPLEMENTATION - No native IAP dependencies
+ * ✅ NO SUBSCRIPTION CONTEXT - Standalone screen for future integration
  * 
  * This screen displays subscription information and will be updated
  * to use RevenueCat for subscription management once integrated.
  * 
  * Current Flow:
  * 1. User sees subscription features
- * 2. User can check subscription status with backend
- * 3. User can sign out
+ * 2. User can sign out
  * 
  * Future Flow (with RevenueCat):
  * 1. User taps "Subscribe Now" → RevenueCat paywall
@@ -37,7 +37,6 @@ import {
 import { Stack, useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
-import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useAuth } from '@/contexts/AuthContext';
 
 // COMPLIANCE: Developer URLs (replace with actual URLs before submission)
@@ -51,14 +50,12 @@ export default function SubscriptionPaywallScreen() {
   const isDark = colorScheme === 'dark';
   const [loading, setLoading] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
-  const { subscriptionStatus, checkSubscription } = useSubscription();
   const { signOut } = useAuth();
 
   useEffect(() => {
     console.log('[SubscriptionPaywall] Screen mounted');
-    console.log('[SubscriptionPaywall] Current subscription status:', subscriptionStatus?.status);
     console.log('[SubscriptionPaywall] StoreKit removed - Ready for RevenueCat integration');
-  }, [subscriptionStatus?.status]);
+  }, []);
 
   const handleSubscribe = async () => {
     console.log('[SubscriptionPaywall] Subscribe button tapped');
@@ -70,42 +67,6 @@ export default function SubscriptionPaywallScreen() {
       'Subscription functionality will be available soon via RevenueCat.\n\nFor early access or questions, please contact ' + SUPPORT_EMAIL,
       [{ text: 'OK' }]
     );
-  };
-
-  const handleCheckStatus = async () => {
-    setLoading(true);
-    try {
-      console.log('[SubscriptionPaywall] Checking subscription status');
-      await checkSubscription();
-      
-      if (subscriptionStatus?.status === 'active') {
-        console.log('[SubscriptionPaywall] Subscription is active, redirecting to app');
-        Alert.alert(
-          'Subscription Active',
-          'Your subscription is active! Welcome to SeaTime Tracker.',
-          [
-            {
-              text: 'Continue',
-              onPress: () => router.replace('/(tabs)'),
-            },
-          ]
-        );
-      } else {
-        console.log('[SubscriptionPaywall] No active subscription found');
-        Alert.alert(
-          'No Active Subscription',
-          'No active subscription was found. Please subscribe to access SeaTime Tracker.\n\nFor questions, contact ' + SUPPORT_EMAIL
-        );
-      }
-    } catch (error: any) {
-      console.error('[SubscriptionPaywall] Check status error:', error);
-      Alert.alert(
-        'Error',
-        'Unable to check subscription status. Please check your internet connection and try again.'
-      );
-    } finally {
-      setLoading(false);
-    }
   };
 
   const handleOpenLink = async (url: string, title: string) => {
@@ -242,18 +203,6 @@ export default function SubscriptionPaywallScreen() {
                 <Text style={styles.buttonText}>Subscribe Now</Text>
                 <Text style={styles.buttonSubtext}>Coming Soon</Text>
               </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton, loading && styles.buttonDisabled]}
-            onPress={handleCheckStatus}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color={isDark ? colors.text : colors.textLight} />
-            ) : (
-              <Text style={styles.secondaryButtonText}>Check Subscription Status</Text>
             )}
           </TouchableOpacity>
 
@@ -435,16 +384,6 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       marginTop: 4,
       opacity: 0.9,
-    },
-    secondaryButton: {
-      backgroundColor: 'transparent',
-      borderWidth: 2,
-      borderColor: isDark ? colors.border : colors.borderLight,
-    },
-    secondaryButtonText: {
-      color: isDark ? colors.text : colors.textLight,
-      fontSize: 16,
-      fontWeight: '600',
     },
     tertiaryButton: {
       backgroundColor: 'transparent',
