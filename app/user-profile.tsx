@@ -1,9 +1,5 @@
 
-import { IconSymbol } from '@/components/IconSymbol';
-import { useAuth } from '@/contexts/AuthContext';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import React, { useState, useEffect } from 'react';
-import * as seaTimeApi from '@/utils/seaTimeApi';
 import {
   View,
   Text,
@@ -19,9 +15,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import { colors } from '@/styles/commonStyles';
 import { Stack, useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { IconSymbol } from '@/components/IconSymbol';
+import { colors } from '@/styles/commonStyles';
+import { useAuth } from '@/contexts/AuthContext';
+import * as seaTimeApi from '@/utils/seaTimeApi';
 
 interface UserProfile {
   id: string;
