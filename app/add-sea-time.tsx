@@ -19,6 +19,7 @@ import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { useSubscriptionEnforcement } from '@/hooks/useSubscriptionEnforcement';
 
 interface Vessel {
   id: string;
@@ -303,6 +304,7 @@ export default function AddSeaTimeScreen() {
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
   const router = useRouter();
+  const { handleSubscriptionError, requireSubscription } = useSubscriptionEnforcement();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -387,6 +389,11 @@ export default function AddSeaTimeScreen() {
       return;
     }
 
+    // Check subscription before creating manual entry
+    if (!requireSubscription('manual sea time entry creation')) {
+      return;
+    }
+
     try {
       setSaving(true);
       const fromCoords = parseLatLong(voyageFrom);
@@ -427,6 +434,12 @@ export default function AddSeaTimeScreen() {
       ]);
     } catch (error: any) {
       console.error('[AddSeaTimeScreen] Error saving entry:', error);
+      
+      // Check if it's a subscription error
+      if (handleSubscriptionError(error)) {
+        return;
+      }
+      
       Alert.alert('Error', error.message || 'Failed to save sea time entry');
     } finally {
       setSaving(false);

@@ -1,6 +1,7 @@
 
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRevenueCat } from '@/contexts/RevenueCatContext';
 import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import React, { useEffect, useState } from 'react';
@@ -9,6 +10,7 @@ export default function Index() {
   // CRITICAL: Call useAuth at the top level - NEVER conditionally
   // This must be called before any early returns or conditions
   const authContext = useAuth();
+  const revenueCatContext = useRevenueCat();
   const [initialCheckDone, setInitialCheckDone] = useState(false);
 
   // CRITICAL: Move useEffect to top level - BEFORE any conditional returns
@@ -42,9 +44,10 @@ export default function Index() {
   }
 
   const { user, loading: authLoading } = authContext;
+  const { hasActiveSubscription, loading: subscriptionLoading } = revenueCatContext;
 
-  // Show loading while checking auth
-  if (authLoading || !initialCheckDone) {
+  // Show loading while checking auth and subscription
+  if (authLoading || subscriptionLoading || !initialCheckDone) {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -77,7 +80,13 @@ export default function Index() {
     return <Redirect href="/select-pathway" />;
   }
 
-  console.log('[Index] Authenticated with department, redirecting to /(tabs)');
+  // Check subscription status
+  if (!hasActiveSubscription) {
+    console.log('[Index] No active subscription, redirecting to /subscription-paywall');
+    return <Redirect href="/subscription-paywall" />;
+  }
+
+  console.log('[Index] Authenticated with department and active subscription, redirecting to /(tabs)');
   return <Redirect href="/(tabs)" />;
 }
 

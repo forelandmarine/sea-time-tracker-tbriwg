@@ -315,3 +315,35 @@ export const authenticatedPatch = async <T = any>(
 export const authenticatedDelete = async <T = any>(endpoint: string, options?: RequestOptions): Promise<T> => {
   return authenticatedApiCall<T>(endpoint, { ...options, method: "DELETE" });
 };
+
+/**
+ * Check if an error is a subscription-related error (403 with subscription codes)
+ */
+export const isSubscriptionError = (error: any): boolean => {
+  const errorMessage = error?.message || error?.toString() || '';
+  return (
+    errorMessage.includes('403') || 
+    errorMessage.includes('SUBSCRIPTION_REQUIRED') ||
+    errorMessage.includes('PAYMENT_REQUIRED') ||
+    errorMessage.includes('Active subscription required')
+  );
+};
+
+/**
+ * Extract error message from various error formats
+ */
+export const getErrorMessage = (error: any): string => {
+  if (typeof error === 'string') {
+    return error;
+  }
+  
+  if (error?.message) {
+    return error.message;
+  }
+  
+  if (error?.error) {
+    return error.error;
+  }
+  
+  return 'An unexpected error occurred';
+};

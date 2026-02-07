@@ -15,6 +15,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { RevenueCatProvider } from "@/contexts/RevenueCatContext";
 import { BACKEND_URL } from "@/utils/api";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -388,9 +389,11 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <WidgetProvider>
-          <RootLayoutNav />
-        </WidgetProvider>
+        <RevenueCatProvider>
+          <WidgetProvider>
+            <RootLayoutNav />
+          </WidgetProvider>
+        </RevenueCatProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

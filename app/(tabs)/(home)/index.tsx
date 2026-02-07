@@ -23,6 +23,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import CartoMap from '@/components/CartoMap';
 import { useAuth } from '@/contexts/AuthContext';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { useSubscriptionEnforcement } from '@/hooks/useSubscriptionEnforcement';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -56,6 +57,7 @@ export default function SeaTimeScreen() {
   // CRITICAL: Call useAuth at the top level - NEVER conditionally
   // This must be called before any early returns or conditions
   const { refreshTrigger } = useAuth();
+  const { handleSubscriptionError, requireSubscription } = useSubscriptionEnforcement();
   
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -232,6 +234,11 @@ export default function SeaTimeScreen() {
       return;
     }
 
+    // Check subscription before creating vessel
+    if (!requireSubscription('vessel creation')) {
+      return;
+    }
+
     try {
       const vesselNameTrimmed = newVesselName.trim();
       console.log('[Home] User action: Creating new vessel:', { 
@@ -276,6 +283,10 @@ export default function SeaTimeScreen() {
         console.log('[Home] Initial position captured successfully');
       } catch (aisError: any) {
         console.error('[Home] Failed to capture initial position:', aisError);
+        // Check if it's a subscription error
+        if (handleSubscriptionError(aisError)) {
+          return;
+        }
         // Don't fail the whole operation if AIS check fails
         // The scheduled task will pick it up on the next run
       }
@@ -296,12 +307,23 @@ export default function SeaTimeScreen() {
       Alert.alert('Success', `${vesselNameTrimmed} has been added and is now being tracked`);
     } catch (error: any) {
       console.error('[Home] Failed to add vessel:', error);
+      
+      // Check if it's a subscription error
+      if (handleSubscriptionError(error)) {
+        return;
+      }
+      
       // Display the error message from the API (which now includes user-friendly messages)
       Alert.alert('Error', error.message || 'Failed to add vessel. Please try again.');
     }
   };
 
   const handleActivateVessel = async (vesselId: string, vesselName: string) => {
+    // Check subscription before activating vessel
+    if (!requireSubscription('vessel activation')) {
+      return;
+    }
+
     const message = activeVessel 
       ? `Start tracking ${vesselName}? This will deactivate ${activeVessel.vessel_name}.`
       : `Start tracking ${vesselName}? The app will monitor this vessel's AIS data.`;
@@ -321,6 +343,12 @@ export default function SeaTimeScreen() {
               Alert.alert('Success', `${vesselName} is now being tracked`);
             } catch (error: any) {
               console.error('[Home] Failed to activate vessel:', error);
+              
+              // Check if it's a subscription error
+              if (handleSubscriptionError(error)) {
+                return;
+              }
+              
               Alert.alert('Error', 'Failed to activate vessel: ' + error.message);
             }
           },

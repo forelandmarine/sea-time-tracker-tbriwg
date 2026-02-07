@@ -1,23 +1,13 @@
 
 /**
- * Subscription Paywall Screen
+ * RevenueCat Subscription Paywall Screen
  * 
- * ✅ STOREKIT REMOVED - Preparing for RevenueCat integration
- * ✅ STABLE IMPLEMENTATION - No native IAP dependencies
- * ✅ NO SUBSCRIPTION CONTEXT - Standalone screen for future integration
+ * ✅ APPLE APP STORE COMPLIANT
+ * ✅ REVENUECAT INTEGRATION
+ * ✅ SUBSCRIPTION ENFORCEMENT
  * 
- * This screen displays subscription information and will be updated
- * to use RevenueCat for subscription management once integrated.
- * 
- * Current Flow:
- * 1. User sees subscription features
- * 2. User can sign out
- * 
- * Future Flow (with RevenueCat):
- * 1. User taps "Subscribe Now" → RevenueCat paywall
- * 2. User completes purchase through RevenueCat
- * 3. RevenueCat handles receipt verification automatically
- * 4. User gains access to app features
+ * This screen displays subscription offerings from RevenueCat and handles purchases.
+ * Users without an active subscription are blocked from tracking features.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -38,6 +28,8 @@ import { Stack, useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRevenueCat } from '@/contexts/RevenueCatContext';
+import { PurchasesPackage } from 'react-native-purchases';
 
 // COMPLIANCE: Developer URLs (replace with actual URLs before submission)
 const PRIVACY_POLICY_URL = 'https://forelandmarine.com/privacy';
@@ -48,25 +40,101 @@ export default function SubscriptionPaywallScreen() {
   const router = useRouter();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const [loading, setLoading] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [selectedPackage, setSelectedPackage] = useState<PurchasesPackage | null>(null);
   const { signOut } = useAuth();
+  const {
+    subscriptionStatus,
+    loading,
+    offerings,
+    purchasePackage,
+    restorePurchases,
+    hasActiveSubscription,
+  } = useRevenueCat();
 
   useEffect(() => {
     console.log('[SubscriptionPaywall] Screen mounted');
-    console.log('[SubscriptionPaywall] StoreKit removed - Ready for RevenueCat integration');
-  }, []);
+    console.log('[SubscriptionPaywall] Subscription status:', subscriptionStatus);
+    console.log('[SubscriptionPaywall] Has active subscription:', hasActiveSubscription);
+    console.log('[SubscriptionPaywall] Offerings:', offerings);
+  }, [subscriptionStatus, hasActiveSubscription, offerings]);
 
-  const handleSubscribe = async () => {
-    console.log('[SubscriptionPaywall] Subscribe button tapped');
-    
-    // TODO: RevenueCat Integration
-    // This will be replaced with RevenueCat paywall presentation
-    Alert.alert(
-      'Coming Soon',
-      'Subscription functionality will be available soon via RevenueCat.\n\nFor early access or questions, please contact ' + SUPPORT_EMAIL,
-      [{ text: 'OK' }]
-    );
+  // Auto-select first package
+  useEffect(() => {
+    if (offerings && offerings.availablePackages.length > 0 && !selectedPackage) {
+      setSelectedPackage(offerings.availablePackages[0]);
+    }
+  }, [offerings, selectedPackage]);
+
+  const handlePurchase = async () => {
+    if (!selectedPackage) {
+      Alert.alert('Error', 'Please select a subscription package');
+      return;
+    }
+
+    setPurchasing(true);
+    try {
+      console.log('[SubscriptionPaywall] Purchasing package:', selectedPackage.identifier);
+      
+      const success = await purchasePackage(selectedPackage);
+      
+      if (success) {
+        Alert.alert(
+          'Success!',
+          'Your subscription is now active. You can start tracking your sea time.',
+          [
+            {
+              text: 'Get Started',
+              onPress: () => router.replace('/(tabs)/(home)'),
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Purchase Failed',
+          'Unable to complete your purchase. Please try again or contact support.'
+        );
+      }
+    } catch (error: any) {
+      console.error('[SubscriptionPaywall] Purchase error:', error);
+      Alert.alert('Error', 'An error occurred during purchase. Please try again.');
+    } finally {
+      setPurchasing(false);
+    }
+  };
+
+  const handleRestore = async () => {
+    setRestoring(true);
+    try {
+      console.log('[SubscriptionPaywall] Restoring purchases');
+      
+      const success = await restorePurchases();
+      
+      if (success) {
+        Alert.alert(
+          'Purchases Restored',
+          'Your subscription has been restored successfully.',
+          [
+            {
+              text: 'Continue',
+              onPress: () => router.replace('/(tabs)/(home)'),
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'No Purchases Found',
+          'We could not find any previous purchases to restore.'
+        );
+      }
+    } catch (error: any) {
+      console.error('[SubscriptionPaywall] Restore error:', error);
+      Alert.alert('Error', 'An error occurred while restoring purchases. Please try again.');
+    } finally {
+      setRestoring(false);
+    }
   };
 
   const handleOpenLink = async (url: string, title: string) => {
@@ -102,6 +170,24 @@ export default function SubscriptionPaywallScreen() {
       router.replace('/auth');
     } catch (error: any) {
       console.error('[SubscriptionPaywall] Sign out error:', error);
+    }
+  };
+
+  const formatPrice = (pkg: PurchasesPackage): string => {
+    return pkg.product.priceString;
+  };
+
+  const formatPeriod = (pkg: PurchasesPackage): string => {
+    const period = pkg.packageType;
+    switch (period) {
+      case 'MONTHLY':
+        return 'per month';
+      case 'ANNUAL':
+        return 'per year';
+      case 'WEEKLY':
+        return 'per week';
+      default:
+        return '';
     }
   };
 
@@ -185,24 +271,85 @@ export default function SubscriptionPaywallScreen() {
           </View>
         </View>
 
-        <View style={styles.pricingContainer}>
-          <Text style={styles.pricingTitle}>Monthly Subscription</Text>
-          <Text style={styles.pricingNote}>Pricing details coming soon</Text>
-        </View>
+        {/* Subscription Packages */}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading subscription options...</Text>
+          </View>
+        ) : offerings && offerings.availablePackages.length > 0 ? (
+          <View style={styles.packagesContainer}>
+            {offerings.availablePackages.map((pkg) => {
+              const isSelected = selectedPackage?.identifier === pkg.identifier;
+              const priceText = formatPrice(pkg);
+              const periodText = formatPeriod(pkg);
+              
+              return (
+                <TouchableOpacity
+                  key={pkg.identifier}
+                  style={[
+                    styles.packageCard,
+                    isSelected && styles.packageCardSelected,
+                  ]}
+                  onPress={() => setSelectedPackage(pkg)}
+                >
+                  <View style={styles.packageHeader}>
+                    <Text style={styles.packageTitle}>{pkg.product.title}</Text>
+                    {isSelected && (
+                      <IconSymbol
+                        ios_icon_name="checkmark.circle.fill"
+                        android_material_icon_name="check-circle"
+                        size={24}
+                        color={colors.primary}
+                      />
+                    )}
+                  </View>
+                  <Text style={styles.packagePrice}>{priceText}</Text>
+                  <Text style={styles.packagePeriod}>{periodText}</Text>
+                  {pkg.product.description && (
+                    <Text style={styles.packageDescription}>{pkg.product.description}</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <View style={styles.noOffersContainer}>
+            <Text style={styles.noOffersText}>
+              No subscription options available at this time.
+            </Text>
+            <Text style={styles.noOffersSubtext}>
+              Please contact support for assistance.
+            </Text>
+          </View>
+        )}
 
         <View style={styles.buttonContainer}>
           <TouchableOpacity
-            style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled]}
-            onPress={handleSubscribe}
-            disabled={loading}
+            style={[
+              styles.button,
+              styles.primaryButton,
+              (purchasing || !selectedPackage) && styles.buttonDisabled,
+            ]}
+            onPress={handlePurchase}
+            disabled={purchasing || !selectedPackage}
           >
-            {loading ? (
+            {purchasing ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <>
-                <Text style={styles.buttonText}>Subscribe Now</Text>
-                <Text style={styles.buttonSubtext}>Coming Soon</Text>
-              </>
+              <Text style={styles.buttonText}>Subscribe Now</Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.secondaryButton, restoring && styles.buttonDisabled]}
+            onPress={handleRestore}
+            disabled={restoring}
+          >
+            {restoring ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <Text style={styles.secondaryButtonText}>Restore Purchases</Text>
             )}
           </TouchableOpacity>
 
@@ -239,6 +386,9 @@ export default function SubscriptionPaywallScreen() {
         </View>
 
         <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            Subscriptions are managed through the App Store and will automatically renew unless cancelled at least 24 hours before the end of the current period.
+          </Text>
           <Text style={styles.footerText}>
             Need help? Contact {SUPPORT_EMAIL}
           </Text>
@@ -291,7 +441,7 @@ function createStyles(isDark: boolean) {
     },
     header: {
       alignItems: 'center',
-      marginBottom: 40,
+      marginBottom: 32,
     },
     iconContainer: {
       width: 120,
@@ -339,22 +489,68 @@ function createStyles(isDark: boolean) {
       marginLeft: 12,
       flex: 1,
     },
-    pricingContainer: {
+    loadingContainer: {
+      alignItems: 'center',
+      padding: 40,
+    },
+    loadingText: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 16,
+    },
+    packagesContainer: {
+      marginBottom: 24,
+    },
+    packageCard: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 16,
-      padding: 24,
-      marginBottom: 16,
-      alignItems: 'center',
+      padding: 20,
+      marginBottom: 12,
       borderWidth: 2,
+      borderColor: 'transparent',
+    },
+    packageCardSelected: {
       borderColor: colors.primary,
     },
-    pricingTitle: {
+    packageHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 8,
+    },
+    packageTitle: {
       fontSize: 18,
       fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
+      flex: 1,
+    },
+    packagePrice: {
+      fontSize: 32,
+      fontWeight: 'bold',
+      color: colors.primary,
+      marginBottom: 4,
+    },
+    packagePeriod: {
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginBottom: 8,
     },
-    pricingNote: {
+    packageDescription: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      lineHeight: 20,
+    },
+    noOffersContainer: {
+      alignItems: 'center',
+      padding: 40,
+    },
+    noOffersText: {
+      fontSize: 16,
+      color: isDark ? colors.text : colors.textLight,
+      textAlign: 'center',
+      marginBottom: 8,
+    },
+    noOffersSubtext: {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
@@ -371,6 +567,11 @@ function createStyles(isDark: boolean) {
     primaryButton: {
       backgroundColor: colors.primary,
     },
+    secondaryButton: {
+      backgroundColor: 'transparent',
+      borderWidth: 2,
+      borderColor: colors.primary,
+    },
     buttonDisabled: {
       opacity: 0.6,
     },
@@ -379,11 +580,10 @@ function createStyles(isDark: boolean) {
       fontSize: 18,
       fontWeight: '600',
     },
-    buttonSubtext: {
-      color: '#FFFFFF',
-      fontSize: 14,
-      marginTop: 4,
-      opacity: 0.9,
+    secondaryButtonText: {
+      color: colors.primary,
+      fontSize: 16,
+      fontWeight: '600',
     },
     tertiaryButton: {
       backgroundColor: 'transparent',
