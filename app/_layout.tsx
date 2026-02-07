@@ -3,7 +3,7 @@ import "react-native-reanimated";
 import React, { useEffect, useState } from "react";
 import { Stack, useRouter, useSegments, usePathname } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { useColorScheme, Alert, Platform, View, Text } from "react-native";
+import { useColorScheme, Platform, View, Text } from "react-native";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import {
@@ -19,10 +19,27 @@ import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { BACKEND_URL } from "@/utils/api";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-// CRITICAL FIX: NO native module imports at file scope
-// All native modules will be loaded AFTER app initialization
+// ═══════════════════════════════════════════════════════════════════════════
+// 🚨 CRITICAL FIX: TURBOMODULE CRASH PREVENTION
+// ═══════════════════════════════════════════════════════════════════════════
+// 
+// PROBLEM: TurboModule crashes occur when native modules are loaded during
+// app initialization, especially on iOS with New Architecture enabled.
+//
+// ROOT CAUSES:
+// 1. Native modules calling UI APIs from background threads
+// 2. Modules being initialized before React Native bridge is ready
+// 3. Signature mismatches between JS and native code
+// 4. Nil values passed to nonnull Objective-C parameters
+//
+// SOLUTION: Complete lazy loading - NO native modules at file scope
+// All native modules are loaded AFTER app is fully mounted and stable
+// ═══════════════════════════════════════════════════════════════════════════
+
 console.log('[App] ========== APP INITIALIZATION STARTED ==========');
 console.log('[App] Platform:', Platform.OS);
+console.log('[App] React Native Version:', Platform.Version);
+console.log('[App] New Architecture:', (global as any).RN$Bridgeless ? 'ENABLED' : 'DISABLED');
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 if (Platform.OS !== 'web') {
@@ -45,6 +62,7 @@ function RootLayoutNav() {
   const [isNavigating, setIsNavigating] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
   const [appFullyMounted, setAppFullyMounted] = useState(false);
+  const [nativeModulesLoaded, setNativeModulesLoaded] = useState(false);
 
   const [loaded, error] = useFonts({
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -90,55 +108,115 @@ function RootLayoutNav() {
     }
   }, [loaded]);
 
-  // CRITICAL FIX: Load native modules AFTER app is fully mounted
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🚨 CRITICAL FIX: DELAYED NATIVE MODULE LOADING
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Load native modules ONLY after:
+  // 1. App is fully mounted
+  // 2. React Native bridge is stable
+  // 3. UI thread is ready
+  //
+  // This prevents TurboModule crashes from:
+  // - UI calls on background threads
+  // - Modules loading before bridge is ready
+  // - Race conditions during initialization
+  // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    if (!appFullyMounted || Platform.OS === 'web') {
+    if (!appFullyMounted || Platform.OS === 'web' || nativeModulesLoaded) {
       return;
     }
 
-    console.log('[App] App fully mounted, loading native modules...');
+    console.log('[App] ========================================');
+    console.log('[App] 🔧 STARTING NATIVE MODULE LOADING');
+    console.log('[App] ========================================');
 
-    // Load SystemBars (non-blocking)
-    (async () => {
+    // CRITICAL: Add significant delay to ensure app is completely stable
+    const loadTimer = setTimeout(async () => {
+      console.log('[App] App fully stable, loading native modules...');
+
+      // ═══════════════════════════════════════════════════════════════════
+      // MODULE 1: SystemBars (Edge-to-Edge)
+      // ═══════════════════════════════════════════════════════════════════
       try {
+        console.log('[App] [1/4] Loading SystemBars...');
         const { SystemBars } = await import('react-native-edge-to-edge');
         console.log('[App] ✅ SystemBars loaded');
-        // SystemBars will be rendered in JSX below
-      } catch (error) {
-        console.warn('[App] ⚠️ Failed to load SystemBars (non-critical):', error);
+      } catch (error: any) {
+        console.warn('[App] ⚠️ SystemBars load failed (non-critical):', error.message);
       }
-    })();
 
-    // Load and setup notifications (non-blocking, with delay)
-    setTimeout(async () => {
-      try {
-        console.log('[App] Loading notification modules...');
-        const { registerForPushNotificationsAsync } = await import('@/utils/notifications');
-        
-        const granted = await registerForPushNotificationsAsync();
-        if (granted) {
-          console.log('[App] ✅ Notification permissions granted');
-        } else {
-          console.log('[App] ⚠️ Notification permissions not granted');
+      // ═══════════════════════════════════════════════════════════════════
+      // MODULE 2: Notifications (Expo Notifications + Device)
+      // ═══════════════════════════════════════════════════════════════════
+      // CRITICAL: Add extra delay before loading notification modules
+      // These are known to cause TurboModule crashes if loaded too early
+      setTimeout(async () => {
+        try {
+          console.log('[App] [2/4] Loading notification modules...');
+          const { registerForPushNotificationsAsync } = await import('@/utils/notifications');
+          
+          console.log('[App] Requesting notification permissions...');
+          const granted = await registerForPushNotificationsAsync();
+          
+          if (granted) {
+            console.log('[App] ✅ Notification permissions granted');
+          } else {
+            console.log('[App] ⚠️ Notification permissions not granted');
+          }
+        } catch (error: any) {
+          console.error('[App] ❌ Notification setup error (non-blocking):', error.message);
+          console.error('[App] Error stack:', error.stack);
         }
-      } catch (error) {
-        console.error('[App] ❌ Notification setup error (non-blocking):', error);
-      }
-    }, 2000); // 2 second delay to ensure app is stable
+      }, 3000); // 3 second delay for notifications
 
-    // Load network state monitoring (non-blocking, with delay)
-    setTimeout(async () => {
-      try {
-        console.log('[App] Loading network monitoring...');
-        const { useNetworkState } = await import('expo-network');
-        // Network state will be checked in a separate effect
-        console.log('[App] ✅ Network monitoring loaded');
-      } catch (error) {
-        console.warn('[App] ⚠️ Failed to load network monitoring (non-critical):', error);
-      }
-    }, 3000); // 3 second delay
+      // ═══════════════════════════════════════════════════════════════════
+      // MODULE 3: Network State (Expo Network)
+      // ═══════════════════════════════════════════════════════════════════
+      setTimeout(async () => {
+        try {
+          console.log('[App] [3/4] Loading network monitoring...');
+          const NetInfo = await import('@react-native-community/netinfo');
+          
+          // Subscribe to network state changes
+          const unsubscribe = NetInfo.default.addEventListener(state => {
+            console.log('[App] Network state:', state.isConnected ? 'CONNECTED' : 'DISCONNECTED');
+          });
+          
+          console.log('[App] ✅ Network monitoring loaded');
+          
+          // Clean up on unmount
+          return () => {
+            unsubscribe();
+          };
+        } catch (error: any) {
+          console.warn('[App] ⚠️ Network monitoring load failed (non-critical):', error.message);
+        }
+      }, 4000); // 4 second delay for network monitoring
 
-  }, [appFullyMounted]);
+      // ═══════════════════════════════════════════════════════════════════
+      // MODULE 4: Haptics (Expo Haptics)
+      // ═══════════════════════════════════════════════════════════════════
+      setTimeout(async () => {
+        try {
+          console.log('[App] [4/4] Loading haptics...');
+          await import('expo-haptics');
+          console.log('[App] ✅ Haptics loaded');
+        } catch (error: any) {
+          console.warn('[App] ⚠️ Haptics load failed (non-critical):', error.message);
+        }
+      }, 5000); // 5 second delay for haptics
+
+      console.log('[App] ========================================');
+      console.log('[App] ✅ NATIVE MODULE LOADING INITIATED');
+      console.log('[App] ========================================');
+      
+      setNativeModulesLoaded(true);
+    }, 2000); // 2 second initial delay before starting module loading
+
+    return () => {
+      clearTimeout(loadTimer);
+    };
+  }, [appFullyMounted, nativeModulesLoaded]);
 
   // Simplified authentication routing - Let index.tsx handle redirects
   useEffect(() => {
@@ -165,18 +243,15 @@ function RootLayoutNav() {
     }
 
     // Only protect tab routes - redirect to auth if not authenticated
-    // Add a small delay to ensure user state is fully updated
     if (!user && inAuthGroup && !isNavigating) {
       console.log('[App] ⚠️ User not authenticated but in tabs, redirecting to /auth');
       setIsNavigating(true);
       
-      // Use a longer timeout to ensure state updates complete
       setTimeout(() => {
         try {
           router.replace('/auth');
         } catch (navError) {
           console.error('[App] Navigation error:', navError);
-          // Fallback to push if replace fails
           try {
             router.push('/auth');
           } catch (pushError) {
@@ -311,7 +386,7 @@ function RootLayoutNav() {
               }} 
             />
 
-            {/* Add Sea Time Entry screen - Full screen page with back button */}
+            {/* Add Sea Time Entry screen */}
             <Stack.Screen 
               name="add-sea-time" 
               options={{ 
@@ -321,7 +396,7 @@ function RootLayoutNav() {
               }} 
             />
 
-            {/* Edit Sea Time Entry screen - Full screen page with back button */}
+            {/* Edit Sea Time Entry screen */}
             <Stack.Screen 
               name="edit-sea-time" 
               options={{ 
@@ -331,7 +406,7 @@ function RootLayoutNav() {
               }} 
             />
 
-            {/* User profile screen - Allow header to show */}
+            {/* User profile screen */}
             <Stack.Screen 
               name="user-profile" 
               options={{ 
@@ -511,7 +586,6 @@ function RootLayoutNav() {
 export default function RootLayout() {
   const [providerError, setProviderError] = useState<string | null>(null);
 
-  // Catch any errors during provider initialization
   useEffect(() => {
     console.log('[App] Root layout mounted');
     
