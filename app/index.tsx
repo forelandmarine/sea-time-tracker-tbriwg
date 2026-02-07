@@ -36,11 +36,20 @@ export default function Index() {
       console.log('[Index] User data:', user);
       
       try {
-        // Add a small delay to ensure backend is ready
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // CRITICAL: Add longer delay to ensure auth state is fully settled
+        // This prevents race conditions where the token isn't fully stored yet
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
         console.log('[Index] Fetching user profile...');
-        const profile = await seaTimeApi.getUserProfile();
+        
+        // CRITICAL: Add timeout to profile fetch to prevent hanging
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Profile fetch timeout')), 5000)
+        );
+        
+        const profilePromise = seaTimeApi.getUserProfile();
+        
+        const profile = await Promise.race([profilePromise, timeoutPromise]) as any;
         console.log('[Index] Profile received:', profile);
         
         const hasSelectedDepartment = !!profile.department;
@@ -49,10 +58,12 @@ export default function Index() {
         setError(null);
       } catch (error: any) {
         console.error('[Index] Failed to check user pathway:', error);
-        console.error('[Index] Error details:', error.message, error.name);
+        console.error('[Index] Error details:', error.message, error.name, error.stack);
         
-        // On error, assume no department and let user proceed
-        // They'll be prompted to select pathway later if needed
+        // CRITICAL: On ANY error, allow user to proceed to home
+        // They can select pathway later from profile settings
+        // This prevents the app from getting stuck on the loading screen
+        console.log('[Index] Allowing user to proceed despite error (graceful degradation)');
         setHasDepartment(false);
         setError(error.message);
       } finally {
@@ -61,7 +72,14 @@ export default function Index() {
       }
     };
 
-    checkUserPathway();
+    // CRITICAL: Wrap in try-catch to prevent any uncaught errors from crashing the app
+    try {
+      checkUserPathway();
+    } catch (error: any) {
+      console.error('[Index] CRITICAL: Uncaught error in checkUserPathway:', error);
+      setCheckingPathway(false);
+      setError(error.message);
+    }
   }, [isAuthenticated, authLoading, user]);
 
   // Show loading while auth is checking or pathway is being verified
@@ -77,28 +95,47 @@ export default function Index() {
     );
   }
 
-  // If there was an error checking pathway, show error but still allow navigation
-  if (error) {
-    console.warn('[Index] Error occurred but allowing navigation:', error);
-    // Continue to redirect based on auth status
-  }
+  // CRITICAL: Wrap all redirects in try-catch to prevent navigation crashes
+  try {
+    // If there was an error checking pathway, show error but still allow navigation
+    if (error) {
+      console.warn('[Index] Error occurred but allowing navigation:', error);
+      // Continue to redirect based on auth status
+    }
 
-  // Redirect to auth if not authenticated
-  if (!isAuthenticated) {
-    console.log('[Index] User not authenticated, redirecting to /auth');
-    return <Redirect href="/auth" />;
-  }
+    // Redirect to auth if not authenticated
+    if (!isAuthenticated) {
+      console.log('[Index] User not authenticated, redirecting to /auth');
+      return <Redirect href="/auth" />;
+    }
 
-  // Redirect to pathway selection if no department
-  if (!hasDepartment && !error) {
-    console.log('[Index] User has no department, redirecting to /select-pathway');
-    return <Redirect href="/select-pathway" />;
-  }
+    // Redirect to pathway selection if no department
+    if (!hasDepartment && !error) {
+      console.log('[Index] User has no department, redirecting to /select-pathway');
+      return <Redirect href="/select-pathway" />;
+    }
 
-  // If there was an error, skip pathway check and go to home
-  // User can select pathway later from profile
-  console.log('[Index] User authenticated, redirecting to /(tabs)');
-  return <Redirect href="/(tabs)" />;
+    // If there was an error, skip pathway check and go to home
+    // User can select pathway later from profile
+    console.log('[Index] User authenticated, redirecting to /(tabs)');
+    return <Redirect href="/(tabs)" />;
+  } catch (redirectError: any) {
+    console.error('[Index] CRITICAL: Redirect error:', redirectError);
+    // Show error screen instead of crashing
+    return (
+      <View style={styles.container}>
+        <Text style={[styles.loadingText, { color: 'red' }]}>
+          Navigation Error
+        </Text>
+        <Text style={[styles.loadingText, { fontSize: 14, marginTop: 8 }]}>
+          {redirectError.message}
+        </Text>
+        <Text style={[styles.loadingText, { fontSize: 12, marginTop: 16 }]}>
+          Please restart the app
+        </Text>
+      </View>
+    );
+  }
 }
 
 const styles = StyleSheet.create({

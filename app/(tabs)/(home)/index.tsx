@@ -22,6 +22,7 @@ import { colors } from '@/styles/commonStyles';
 import React, { useState, useEffect, useCallback } from 'react';
 import CartoMap from '@/components/CartoMap';
 import { useAuth } from '@/contexts/AuthContext';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -48,8 +49,19 @@ interface VesselLocation {
 }
 
 export default function SeaTimeScreen() {
+  console.log('[Home] Component mounted');
+  
   const router = useRouter();
-  const { refreshTrigger } = useAuth();
+  
+  // CRITICAL: Wrap useAuth in try-catch to prevent crashes
+  let refreshTrigger = 0;
+  try {
+    const auth = useAuth();
+    refreshTrigger = auth.refreshTrigger;
+  } catch (error: any) {
+    console.error('[Home] CRITICAL: Failed to get auth context:', error);
+  }
+  
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -134,38 +146,66 @@ export default function SeaTimeScreen() {
     try {
       console.log('[Home] Loading vessels...');
       const vesselsData = await seaTimeApi.getVessels();
-      setVessels(vesselsData);
+      console.log('[Home] Vessels data received:', vesselsData?.length || 0, 'vessels');
+      
+      setVessels(vesselsData || []);
       console.log('[Home] Vessels loaded - Active:', vesselsData.filter(v => v.is_active).length, 'Historic:', vesselsData.filter(v => !v.is_active).length);
       
       // Load location for the active vessel - ALWAYS force refresh for instant fresh data
       const newActiveVessel = vesselsData.find(v => v.is_active);
       if (newActiveVessel) {
         console.log('[Home] Found active vessel, loading location with FORCE refresh for instant fresh data:', newActiveVessel.vessel_name);
-        // Force refresh to ensure user always gets fresh data on good connection
-        await loadActiveVesselLocation(newActiveVessel.id, true);
+        // CRITICAL: Wrap in try-catch to prevent location errors from crashing the app
+        try {
+          // Force refresh to ensure user always gets fresh data on good connection
+          await loadActiveVesselLocation(newActiveVessel.id, true);
+        } catch (locationError: any) {
+          console.error('[Home] Failed to load vessel location (non-critical):', locationError);
+          // Don't crash the app, just log the error
+          setActiveVesselLocation(null);
+        }
       } else {
         console.log('[Home] No active vessel found, clearing location');
         setActiveVesselLocation(null);
       }
     } catch (error: any) {
       console.error('[Home] Failed to load data:', error);
-      Alert.alert('Error', 'Failed to load data: ' + error.message);
+      console.error('[Home] Error details:', error.message, error.name, error.stack);
+      
+      // CRITICAL: Don't show alert on initial load failure
+      // Just set empty state and let user retry with pull-to-refresh
+      setVessels([]);
+      setActiveVesselLocation(null);
     } finally {
+      console.log('[Home] Load data complete, setting loading to false');
       setLoading(false);
     }
   }, [loadActiveVesselLocation]);
 
   // Initial data load
   useEffect(() => {
-    console.log('[Home] Initial data load');
-    loadData();
+    console.log('[Home] Initial data load effect triggered');
+    
+    // CRITICAL: Wrap in try-catch to prevent any uncaught errors from crashing the app
+    try {
+      loadData();
+    } catch (error: any) {
+      console.error('[Home] CRITICAL: Uncaught error in loadData:', error);
+      setLoading(false);
+    }
   }, [loadData]);
 
   // Listen for global refresh trigger
   useEffect(() => {
     if (refreshTrigger > 0) {
       console.log('[Home] Global refresh triggered, reloading data');
-      loadData();
+      
+      // CRITICAL: Wrap in try-catch
+      try {
+        loadData();
+      } catch (error: any) {
+        console.error('[Home] CRITICAL: Uncaught error in refresh loadData:', error);
+      }
     }
   }, [refreshTrigger, loadData]);
 
@@ -380,8 +420,10 @@ export default function SeaTimeScreen() {
     ? require('@/assets/images/c13cbd51-c2f7-489f-bbbb-6b28094d9b2b.png')
     : require('@/assets/images/c0b805f0-b63d-4d71-8549-490ab57ba961.png');
 
+  // CRITICAL: Wrap entire component in ErrorBoundary to catch any rendering errors
   return (
-    <View style={styles.container}>
+    <ErrorBoundary>
+      <View style={styles.container}>
       <ScrollView
         style={styles.scrollView}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -849,6 +891,7 @@ export default function SeaTimeScreen() {
         </View>
       </Modal>
     </View>
+    </ErrorBoundary>
   );
 }
 

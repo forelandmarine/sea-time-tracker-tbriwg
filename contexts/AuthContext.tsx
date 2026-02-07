@@ -340,8 +340,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         console.log('[Auth] Storing token...');
         await tokenStorage.setToken(data.session.token);
+        console.log('[Auth] Token stored successfully');
+        
         console.log('[Auth] Setting user state...');
         setUser(data.user);
+        console.log('[Auth] User state set:', data.user.email);
+        
+        // CRITICAL: Add a small delay to ensure state updates propagate
+        // This prevents race conditions where navigation happens before state is ready
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
         console.log('[Auth] ========== SIGN IN COMPLETED SUCCESSFULLY ==========');
       } catch (error: any) {
         clearTimeout(timeoutId);
