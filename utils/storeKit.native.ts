@@ -6,15 +6,10 @@
  * ✅ LAZY LOADING - Module only loads when needed
  * ✅ AGGRESSIVE TIMEOUTS - Never blocks app startup
  * ✅ BULLETPROOF ERROR HANDLING - Graceful fallbacks everywhere
- * 
- * CRITICAL CHANGES:
- * - Module is NEVER loaded during app startup
- * - All operations have aggressive timeouts (2-3 seconds max)
- * - Initialization is completely optional - app works without it
- * - No blocking operations - everything is async with fallbacks
+ * ✅ APPLE GUIDELINE 3.1.2 COMPLIANCE - Proper subscription management
  */
 
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, Linking } from 'react-native';
 import type { Purchase, PurchaseError } from 'react-native-iap';
 import { authenticatedPost } from './api';
 
@@ -22,6 +17,9 @@ import { authenticatedPost } from './api';
 const INIT_TIMEOUT = 2000; // 2 seconds max for initialization
 const PRODUCT_FETCH_TIMEOUT = 3000; // 3 seconds max for product fetch
 const PURCHASE_TIMEOUT = 30000; // 30 seconds for purchase (user interaction)
+
+// COMPLIANCE: Apple subscription management URL
+const APPLE_SUBSCRIPTION_URL = 'https://apps.apple.com/account/subscriptions';
 
 // Lazy import RNIap - NEVER loaded until explicitly needed
 let RNIap: any = null;
@@ -491,7 +489,9 @@ export function showSubscriptionInstructions(): void {
 }
 
 /**
- * Open iOS Settings to manage subscriptions
+ * COMPLIANCE: Open Apple subscription management page (3.1.2)
+ * Opens https://apps.apple.com/account/subscriptions
+ * Falls back to app-settings: if URL cannot be opened
  */
 export async function openSubscriptionManagement(): Promise<void> {
   if (Platform.OS !== 'ios') {
@@ -504,20 +504,30 @@ export async function openSubscriptionManagement(): Promise<void> {
   }
 
   try {
-    console.log('[StoreKit] Opening subscription management');
+    console.log('[StoreKit] Opening Apple subscription management page');
     
-    const { Linking } = await import('react-native');
+    // COMPLIANCE: Try to open Apple's subscription management URL first
+    const canOpenURL = await Linking.canOpenURL(APPLE_SUBSCRIPTION_URL);
+    
+    if (canOpenURL) {
+      await Linking.openURL(APPLE_SUBSCRIPTION_URL);
+      console.log('[StoreKit] ✅ Opened Apple subscription management');
+      return;
+    }
+    
+    // Fallback to app settings if URL cannot be opened
+    console.log('[StoreKit] Cannot open URL, falling back to app settings');
     const settingsUrl = 'app-settings:';
-    const canOpen = await Linking.canOpenURL(settingsUrl);
+    const canOpenSettings = await Linking.canOpenURL(settingsUrl);
     
-    if (canOpen) {
+    if (canOpenSettings) {
       await Linking.openURL(settingsUrl);
       console.log('[StoreKit] ✅ Opened iOS Settings');
     } else {
       throw new Error('Cannot open Settings');
     }
   } catch (error: any) {
-    console.error('[StoreKit] ❌ Error opening settings:', error.message);
+    console.error('[StoreKit] ❌ Error opening subscription management:', error.message);
     
     Alert.alert(
       'Manage Subscription',

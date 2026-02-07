@@ -12,6 +12,12 @@
  * - Receipt verification happens automatically with backend
  * - Transactions are properly finished after verification
  * 
+ * ✅ APPLE GUIDELINE 3.1.2 COMPLIANCE (SUBSCRIPTIONS):
+ * - Tappable links to Privacy Policy and Apple Standard EULA
+ * - Auto-renewal disclosure text
+ * - Subscription management link to Apple's subscription page
+ * - Restore purchases with clear user feedback
+ * 
  * ✅ STOREKIT 2 BEST PRACTICES:
  * - Purchase listeners handle async updates
  * - Transactions are finished after verification
@@ -55,6 +61,7 @@ import {
   Platform,
   Modal,
   Alert,
+  Linking,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
@@ -62,6 +69,11 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useAuth } from '@/contexts/AuthContext';
 import * as StoreKitUtils from '@/utils/storeKit';
+
+// COMPLIANCE: Developer URLs (replace with actual URLs before submission)
+const PRIVACY_POLICY_URL = 'https://forelandmarine.com/privacy';
+const TERMS_OF_SERVICE_URL = 'https://forelandmarine.com/terms';
+const APPLE_EULA_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
 
 export default function SubscriptionPaywallScreen() {
   const router = useRouter();
@@ -344,8 +356,8 @@ export default function SubscriptionPaywallScreen() {
         await checkSubscription();
         
         Alert.alert(
-          'Restore Successful',
-          'Your subscription has been restored!',
+          'Subscription Restored',
+          'Your subscription has been successfully restored and is now active.',
           [
             {
               text: 'Continue',
@@ -361,13 +373,13 @@ export default function SubscriptionPaywallScreen() {
         console.log('[SubscriptionPaywall] Restore failed:', result.error);
         Alert.alert(
           'No Purchases Found',
-          result.error || 'No previous purchases found to restore.'
+          'No previous purchases were found to restore. If you recently subscribed, please wait a moment and try again.\n\nIf you continue to have issues, please contact info@forelandmarine.com'
         );
       }
     } catch (error: any) {
       console.error('[SubscriptionPaywall] Restore error:', error);
       Alert.alert(
-        'Error',
+        'Restore Failed',
         'Unable to restore purchases. Please try again or contact support at info@forelandmarine.com'
       );
     } finally {
@@ -386,6 +398,20 @@ export default function SubscriptionPaywallScreen() {
 
   const handleShowInstructions = () => {
     StoreKitUtils.showSubscriptionInstructions();
+  };
+
+  const handleOpenLink = async (url: string, title: string) => {
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Error', `Unable to open ${title}`);
+      }
+    } catch (error) {
+      console.error(`Error opening ${title}:`, error);
+      Alert.alert('Error', `Unable to open ${title}`);
+    }
   };
 
   const handleSignOut = async () => {
@@ -502,7 +528,19 @@ export default function SubscriptionPaywallScreen() {
               )}
             </>
           )}
-          <Text style={styles.pricingNote}>Cancel anytime • No trial period</Text>
+        </View>
+
+        {/* COMPLIANCE: Auto-renewal disclosure (3.1.2) */}
+        <View style={styles.disclosureContainer}>
+          <Text style={styles.disclosureText}>
+            • Subscription automatically renews unless canceled at least 24 hours before the end of the current period
+          </Text>
+          <Text style={styles.disclosureText}>
+            • Payment will be charged to your Apple ID at confirmation of purchase
+          </Text>
+          <Text style={styles.disclosureText}>
+            • You can manage or cancel your subscription in App Store account settings
+          </Text>
         </View>
 
         <View style={styles.buttonContainer}>
@@ -525,18 +563,6 @@ export default function SubscriptionPaywallScreen() {
                   <Text style={styles.buttonSubtext}>Native In-App Purchase</Text>
                 )}
               </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, styles.secondaryButton, isProcessing && styles.buttonDisabled]}
-            onPress={handleCheckStatus}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <ActivityIndicator color={isDark ? colors.text : colors.textLight} />
-            ) : (
-              <Text style={styles.secondaryButtonText}>Check Subscription Status</Text>
             )}
           </TouchableOpacity>
 
@@ -584,22 +610,22 @@ export default function SubscriptionPaywallScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* COMPLIANCE: Required links (3.1.2) */}
+        <View style={styles.linksContainer}>
+          <TouchableOpacity onPress={() => handleOpenLink(PRIVACY_POLICY_URL, 'Privacy Policy')}>
+            <Text style={styles.linkText}>Privacy Policy</Text>
+          </TouchableOpacity>
+          <Text style={styles.linkSeparator}>•</Text>
+          <TouchableOpacity onPress={() => handleOpenLink(TERMS_OF_SERVICE_URL, 'Terms of Service')}>
+            <Text style={styles.linkText}>Terms of Service</Text>
+          </TouchableOpacity>
+          <Text style={styles.linkSeparator}>•</Text>
+          <TouchableOpacity onPress={() => handleOpenLink(APPLE_EULA_URL, 'EULA')}>
+            <Text style={styles.linkText}>EULA</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            By subscribing, you agree to our Terms of Service and Privacy Policy.
-          </Text>
-          <Text style={styles.footerText}>
-            Subscription automatically renews unless cancelled 24 hours before the end of the current period.
-          </Text>
-          <Text style={styles.footerText}>
-            Manage your subscription in iOS Settings → Apple ID → Subscriptions
-          </Text>
-          <Text style={styles.footerText}>
-            Pricing is displayed in your local currency via the App Store.
-          </Text>
-          <Text style={styles.footerText}>
-            Payment will be charged to your Apple ID account at confirmation of purchase.
-          </Text>
           <Text style={styles.footerText}>
             Need help? Contact info@forelandmarine.com
           </Text>
@@ -704,7 +730,7 @@ function createStyles(isDark: boolean) {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 16,
       padding: 24,
-      marginBottom: 24,
+      marginBottom: 16,
       alignItems: 'center',
       borderWidth: 2,
       borderColor: colors.primary,
@@ -740,6 +766,20 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
       marginTop: 4,
+    },
+    disclosureContainer: {
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 24,
+      borderLeftWidth: 4,
+      borderLeftColor: colors.primary,
+    },
+    disclosureText: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      lineHeight: 20,
+      marginBottom: 8,
     },
     buttonContainer: {
       marginBottom: 24,
@@ -799,8 +839,26 @@ function createStyles(isDark: boolean) {
       fontSize: 16,
       fontWeight: '500',
     },
+    linksContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginBottom: 16,
+      flexWrap: 'wrap',
+    },
+    linkText: {
+      fontSize: 14,
+      color: colors.primary,
+      textDecorationLine: 'underline',
+      marginHorizontal: 4,
+    },
+    linkSeparator: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginHorizontal: 4,
+    },
     footer: {
-      marginTop: 24,
+      marginTop: 8,
       paddingBottom: 40,
     },
     footerText: {

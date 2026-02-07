@@ -7,6 +7,8 @@
  * 
  * Product ID: com.forelandmarine.seatime.monthly
  * App ID: 6758010893
+ * 
+ * ✅ APPLE GUIDELINE 3.1.2 COMPLIANCE - Proper subscription management
  */
 
 import { Platform, Linking, Alert } from 'react-native';
@@ -15,8 +17,8 @@ import { authenticatedPost } from './api';
 // Product ID configured in App Store Connect
 export const SUBSCRIPTION_PRODUCT_ID = 'com.forelandmarine.seatime.monthly';
 
-// App Store URLs
-const APP_STORE_SUBSCRIPTION_URL = 'https://apps.apple.com/account/subscriptions';
+// COMPLIANCE: Apple subscription management URL
+const APPLE_SUBSCRIPTION_URL = 'https://apps.apple.com/account/subscriptions';
 const APP_STORE_APP_URL = 'https://apps.apple.com/app/id6758010893';
 
 /**
@@ -107,9 +109,9 @@ export async function openAppStoreSubscription(): Promise<void> {
       console.log('[StoreKit] Opened app subscription page');
     } else {
       // Fallback to general subscriptions page
-      const canOpenGeneral = await Linking.canOpenURL(APP_STORE_SUBSCRIPTION_URL);
+      const canOpenGeneral = await Linking.canOpenURL(APPLE_SUBSCRIPTION_URL);
       if (canOpenGeneral) {
-        await Linking.openURL(APP_STORE_SUBSCRIPTION_URL);
+        await Linking.openURL(APPLE_SUBSCRIPTION_URL);
         console.log('[StoreKit] Opened general subscriptions page');
       } else {
         throw new Error('Cannot open App Store');
@@ -128,7 +130,9 @@ export async function openAppStoreSubscription(): Promise<void> {
 }
 
 /**
- * Open iOS Settings to manage subscriptions
+ * COMPLIANCE: Open Apple subscription management page (3.1.2)
+ * Opens https://apps.apple.com/account/subscriptions
+ * Falls back to app-settings: if URL cannot be opened
  */
 export async function openSubscriptionManagement(): Promise<void> {
   if (Platform.OS !== 'ios') {
@@ -142,17 +146,30 @@ export async function openSubscriptionManagement(): Promise<void> {
   }
 
   try {
-    console.log('[StoreKit] Opening subscription management');
+    console.log('[StoreKit] Opening Apple subscription management page');
     
-    const canOpen = await Linking.canOpenURL(APP_STORE_SUBSCRIPTION_URL);
-    if (canOpen) {
-      await Linking.openURL(APP_STORE_SUBSCRIPTION_URL);
-      console.log('[StoreKit] Opened subscription management');
+    // COMPLIANCE: Try to open Apple's subscription management URL first
+    const canOpenURL = await Linking.canOpenURL(APPLE_SUBSCRIPTION_URL);
+    
+    if (canOpenURL) {
+      await Linking.openURL(APPLE_SUBSCRIPTION_URL);
+      console.log('[StoreKit] ✅ Opened Apple subscription management');
+      return;
+    }
+    
+    // Fallback to app settings if URL cannot be opened
+    console.log('[StoreKit] Cannot open URL, falling back to app settings');
+    const settingsUrl = 'app-settings:';
+    const canOpenSettings = await Linking.canOpenURL(settingsUrl);
+    
+    if (canOpenSettings) {
+      await Linking.openURL(settingsUrl);
+      console.log('[StoreKit] ✅ Opened iOS Settings');
     } else {
-      throw new Error('Cannot open subscription management');
+      throw new Error('Cannot open Settings');
     }
   } catch (error: any) {
-    console.error('[StoreKit] Error opening subscription management:', error);
+    console.error('[StoreKit] ❌ Error opening subscription management:', error.message);
     
     Alert.alert(
       'Manage Subscription',
