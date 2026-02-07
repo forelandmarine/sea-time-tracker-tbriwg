@@ -2,15 +2,26 @@
 /**
  * Subscription Paywall Screen
  * 
- * This screen displays subscription information and handles NATIVE iOS StoreKit purchases.
+ * ✅ STABILIZED IMPLEMENTATION - App Store Deep-Link Path
+ * ✅ NATIVE IAP DISABLED - Using cross-platform fallback for stability
+ * ✅ NO STOREKIT TURBOMODULE - Eliminates crash risk on iOS 26
+ * 
+ * This screen displays subscription information and directs users to the App Store
+ * to complete their purchase. After purchasing, users return to the app and verify
+ * their subscription status with the backend.
+ * 
+ * Flow:
+ * 1. User taps "Subscribe Now" → Opens App Store subscription page
+ * 2. User completes purchase in App Store
+ * 3. User returns to app and taps "Check Subscription Status"
+ * 4. Backend verifies subscription with Apple's servers
+ * 5. User gains access to app features
  * 
  * ✅ APPLE GUIDELINE 3.1.1 COMPLIANCE:
- * - Uses NATIVE in-app purchases via react-native-iap
- * - Purchases happen WITHIN the app (not external links)
- * - Pricing is fetched from App Store in real-time (never hardcoded)
+ * - Directs to App Store for in-app purchases (no external payment)
+ * - Pricing is shown in App Store (never hardcoded)
  * - Users complete purchase using Apple Pay or Apple ID
- * - Receipt verification happens automatically with backend
- * - Transactions are properly finished after verification
+ * - Receipt verification happens with backend
  * 
  * ✅ APPLE GUIDELINE 3.1.2 COMPLIANCE (SUBSCRIPTIONS):
  * - Tappable links to Privacy Policy and Apple Standard EULA
@@ -18,38 +29,15 @@
  * - Subscription management link to Apple's subscription page
  * - Restore purchases with clear user feedback
  * 
- * ✅ STOREKIT 2 BEST PRACTICES:
- * - Purchase listeners handle async updates
- * - Transactions are finished after verification
- * - Proper error handling for all scenarios
- * - User-friendly messaging for all states
- * 
- * ✅ PERFORMANCE OPTIMIZATION:
- * - StoreKit initialization is DEFERRED until screen is visible
- * - Does NOT block app startup or authentication
- * - Graceful fallback if StoreKit fails to initialize
- * 
  * Features:
- * - Display subscription features (NO HARDCODED PRICES - fetched from App Store)
- * - Native StoreKit purchase flow (opens iOS payment sheet)
- * - Restore previous purchases
+ * - Display subscription features
+ * - Open App Store for subscription
  * - Check subscription status with backend
  * - Manage subscription via iOS Settings
  * - Sign out option
- * 
- * Subscription Model:
- * - Monthly subscription (price fetched from App Store)
- * - No free trial period
- * - Users must subscribe to access the app
- * - Status: 'active' or 'inactive'
- * 
- * Backend Integration:
- * - GET /api/subscription/status - Get current subscription status
- * - POST /api/subscription/verify - Verify App Store receipt (automatic)
- * - PATCH /api/subscription/pause-tracking - Pause tracking when subscription expires
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -81,111 +69,13 @@ export default function SubscriptionPaywallScreen() {
   const isDark = colorScheme === 'dark';
   const [loading, setLoading] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
-  const [productInfo, setProductInfo] = useState<any>(null);
-  const [loadingPrice, setLoadingPrice] = useState(false);
-  const [purchaseInProgress, setPurchaseInProgress] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [storeKitInitialized, setStoreKitInitialized] = useState(false);
-  const [listenersReady, setListenersReady] = useState(false);
   const { subscriptionStatus, checkSubscription } = useSubscription();
   const { signOut } = useAuth();
-
-  const setupStoreKitListeners = useCallback(async () => {
-    if (Platform.OS !== 'ios' || listenersReady) {
-      return;
-    }
-
-    await StoreKitUtils.setupPurchaseListeners(
-      async (purchase) => {
-        console.log('[SubscriptionPaywall] Purchase listener triggered:', purchase.transactionId);
-        setPurchaseInProgress(true);
-
-        try {
-          const result = await StoreKitUtils.processPurchase(purchase);
-
-          if (result.success) {
-            console.log('[SubscriptionPaywall] Purchase processed successfully');
-            await checkSubscription();
-            setPurchaseInProgress(false);
-
-            Alert.alert(
-              'Subscription Active',
-              'Your subscription is now active! Welcome to SeaTime Tracker.',
-              [{ text: 'Continue', onPress: () => router.replace('/(tabs)') }]
-            );
-          } else {
-            console.error('[SubscriptionPaywall] Purchase processing failed:', result.error);
-            setPurchaseInProgress(false);
-            Alert.alert('Purchase Error', result.error || 'Unable to verify purchase. Please contact support.');
-          }
-        } catch (error: any) {
-          console.error('[SubscriptionPaywall] Error processing purchase:', error);
-          setPurchaseInProgress(false);
-          Alert.alert('Purchase Error', 'Unable to complete purchase. Please try again or contact support.');
-        }
-      },
-      (error) => {
-        console.error('[SubscriptionPaywall] Purchase error listener triggered:', error);
-        setPurchaseInProgress(false);
-
-        if (error.code !== 'E_USER_CANCELLED') {
-          Alert.alert('Purchase Failed', error.message || 'Unable to complete purchase. Please try again.');
-        }
-      }
-    );
-
-    setListenersReady(true);
-  }, [listenersReady, checkSubscription, router]);
-
-  const ensureStoreKitSession = useCallback(async (): Promise<boolean> => {
-    if (Platform.OS !== 'ios') {
-      return false;
-    }
-
-    if (!storeKitInitialized) {
-      setLoadingPrice(true);
-      setError(null);
-
-      try {
-        console.log('[SubscriptionPaywall] Initializing StoreKit on user action');
-        const initialized = await StoreKitUtils.initializeStoreKit();
-
-        if (!initialized) {
-          setError('Unable to connect to App Store right now. Please try again.');
-          return false;
-        }
-
-        setStoreKitInitialized(true);
-      } catch (initError: any) {
-        console.error('[SubscriptionPaywall] StoreKit init failed:', initError);
-        setError('Unable to connect to App Store right now. Please try again.');
-        return false;
-      } finally {
-        setLoadingPrice(false);
-      }
-    }
-
-    await setupStoreKitListeners();
-
-    if (!productInfo) {
-      const info = await StoreKitUtils.getProductInfo();
-      if (info) {
-        setProductInfo(info);
-      }
-    }
-
-    return true;
-  }, [storeKitInitialized, setupStoreKitListeners, productInfo]);
 
   useEffect(() => {
     console.log('[SubscriptionPaywall] Screen mounted');
     console.log('[SubscriptionPaywall] Current subscription status:', subscriptionStatus?.status);
-
-    // CRITICAL: do not initialize StoreKit on mount.
-    return () => {
-      console.log('[SubscriptionPaywall] Cleaning up purchase listeners');
-      StoreKitUtils.removePurchaseListeners();
-    };
+    console.log('[SubscriptionPaywall] Using App Store deep-link path (native IAP disabled)');
   }, [subscriptionStatus?.status]);
 
   const handleSubscribe = async () => {
@@ -197,39 +87,24 @@ export default function SubscriptionPaywallScreen() {
       return;
     }
 
-    if (purchaseInProgress) {
-      console.log('[SubscriptionPaywall] Purchase already in progress, ignoring tap');
-      return;
-    }
-
-    const ready = await ensureStoreKitSession();
-    if (!ready) {
-      Alert.alert(
-        'Connection Error',
-        'Unable to connect to the App Store. Please check your internet connection and try again.'
-      );
-      return;
-    }
-
     try {
-      console.log('[SubscriptionPaywall] User tapped Subscribe button - initiating native purchase');
-      setPurchaseInProgress(true);
-      
-      // Request purchase - result will come through listener
+      console.log('[SubscriptionPaywall] User tapped Subscribe button - opening App Store');
       await StoreKitUtils.purchaseSubscription();
       
-      console.log('[SubscriptionPaywall] Purchase request sent, waiting for listener callback');
-    } catch (error: any) {
-      console.error('[SubscriptionPaywall] Subscription error:', error);
-      setPurchaseInProgress(false);
-      
-      // Don't show error for user cancellation
-      if (!error.message?.includes('cancelled')) {
+      // Show instructions after opening App Store
+      setTimeout(() => {
         Alert.alert(
-          'Error',
-          error.message || 'Unable to start purchase. Please try again.'
+          'Complete Your Purchase',
+          'After completing your purchase in the App Store, return to this screen and tap "Check Subscription Status" to activate your subscription.',
+          [{ text: 'Got it' }]
         );
-      }
+      }, 1000);
+    } catch (error: any) {
+      console.error('[SubscriptionPaywall] Subscribe error:', error);
+      Alert.alert(
+        'Error',
+        error.message || 'Unable to open App Store. Please try again.'
+      );
     }
   };
 
@@ -278,55 +153,14 @@ export default function SubscriptionPaywallScreen() {
       return;
     }
 
-    const ready = await ensureStoreKitSession();
-    if (!ready) {
-      Alert.alert(
-        'Connection Error',
-        'Unable to connect to the App Store. Please check your internet connection and try again.'
-      );
-      return;
-    }
-
-    try {
-      console.log('[SubscriptionPaywall] User tapped Restore Purchases button');
-      setLoading(true);
-      
-      const result = await StoreKitUtils.completeRestoreFlow();
-      
-      if (result.success) {
-        console.log('[SubscriptionPaywall] Restore successful, checking subscription status');
-        await checkSubscription();
-        
-        Alert.alert(
-          'Subscription Restored',
-          'Your subscription has been successfully restored and is now active.',
-          [
-            {
-              text: 'Continue',
-              onPress: () => {
-                if (subscriptionStatus?.status === 'active') {
-                  router.replace('/(tabs)');
-                }
-              },
-            },
-          ]
-        );
-      } else {
-        console.log('[SubscriptionPaywall] Restore failed:', result.error);
-        Alert.alert(
-          'No Purchases Found',
-          'No previous purchases were found to restore. If you recently subscribed, please wait a moment and try again.\n\nIf you continue to have issues, please contact info@forelandmarine.com'
-        );
-      }
-    } catch (error: any) {
-      console.error('[SubscriptionPaywall] Restore error:', error);
-      Alert.alert(
-        'Restore Failed',
-        'Unable to restore purchases. Please try again or contact support at info@forelandmarine.com'
-      );
-    } finally {
-      setLoading(false);
-    }
+    Alert.alert(
+      'Restore Purchases',
+      'To restore your subscription, tap "Check Subscription Status". The app will verify your subscription with Apple\'s servers.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Check Status', onPress: handleCheckStatus },
+      ]
+    );
   };
 
   const handleManageSubscription = async () => {
@@ -371,13 +205,6 @@ export default function SubscriptionPaywallScreen() {
 
   const statusText = 'Subscription Required';
   const messageText = 'SeaTime Tracker requires an active subscription to track your sea time and generate MCA-compliant reports.';
-
-  // Format price display
-  const priceDisplay = productInfo 
-    ? productInfo.localizedPrice
-    : 'View in App Store';
-
-  const isProcessing = loading || purchaseInProgress;
 
   return (
     <>
@@ -456,20 +283,7 @@ export default function SubscriptionPaywallScreen() {
 
         <View style={styles.pricingContainer}>
           <Text style={styles.pricingTitle}>Monthly Subscription</Text>
-          {loadingPrice ? (
-            <View style={styles.priceLoaderContainer}>
-              <ActivityIndicator size="large" color={colors.primary} />
-              <Text style={styles.loadingText}>Connecting to App Store...</Text>
-            </View>
-          ) : (
-            <>
-              <Text style={styles.price}>{priceDisplay}</Text>
-              {productInfo && <Text style={styles.pricingSubtitle}>per month</Text>}
-              {!productInfo && Platform.OS === 'ios' && (
-                <Text style={styles.pricingNote}>Tap Subscribe to view pricing in your currency</Text>
-              )}
-            </>
-          )}
+          <Text style={styles.pricingNote}>View pricing in the App Store</Text>
         </View>
 
         {/* COMPLIANCE: Auto-renewal disclosure (3.1.2) */}
@@ -487,37 +301,40 @@ export default function SubscriptionPaywallScreen() {
 
         <View style={styles.buttonContainer}>
           <TouchableOpacity
-            style={[styles.button, styles.primaryButton, isProcessing && styles.buttonDisabled]}
+            style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled]}
             onPress={handleSubscribe}
-            disabled={isProcessing}
+            disabled={loading}
           >
-            {purchaseInProgress ? (
-              <>
-                <ActivityIndicator color="#FFFFFF" />
-                <Text style={[styles.buttonText, { marginTop: 8 }]}>Processing Purchase...</Text>
-              </>
-            ) : isProcessing ? (
+            {loading ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
               <>
                 <Text style={styles.buttonText}>Subscribe Now</Text>
                 {Platform.OS === 'ios' && (
-                  <Text style={styles.buttonSubtext}>Native In-App Purchase</Text>
+                  <Text style={styles.buttonSubtext}>Opens App Store</Text>
                 )}
               </>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.button, styles.secondaryButton, isProcessing && styles.buttonDisabled]}
-            onPress={handleRestorePurchases}
-            disabled={isProcessing}
+            style={[styles.button, styles.secondaryButton, loading && styles.buttonDisabled]}
+            onPress={handleCheckStatus}
+            disabled={loading}
           >
-            {isProcessing ? (
+            {loading ? (
               <ActivityIndicator color={isDark ? colors.text : colors.textLight} />
             ) : (
-              <Text style={styles.secondaryButtonText}>Restore Purchases</Text>
+              <Text style={styles.secondaryButtonText}>Check Subscription Status</Text>
             )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, styles.secondaryButton, loading && styles.buttonDisabled]}
+            onPress={handleRestorePurchases}
+            disabled={loading}
+          >
+            <Text style={styles.secondaryButtonText}>Restore Purchases</Text>
           </TouchableOpacity>
 
           {Platform.OS === 'ios' && (
@@ -683,31 +500,10 @@ function createStyles(isDark: boolean) {
       color: isDark ? colors.text : colors.textLight,
       marginBottom: 8,
     },
-    priceLoaderContainer: {
-      marginVertical: 20,
-      alignItems: 'center',
-    },
-    loadingText: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginTop: 12,
-    },
-    price: {
-      fontSize: 36,
-      fontWeight: 'bold',
-      color: colors.primary,
-      marginBottom: 4,
-    },
-    pricingSubtitle: {
-      fontSize: 16,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 8,
-    },
     pricingNote: {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
-      marginTop: 4,
     },
     disclosureContainer: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,

@@ -1,14 +1,23 @@
 
 /**
- * StoreKit Integration for iOS In-App Purchases (WEB STUB)
+ * StoreKit Integration for iOS In-App Purchases
  * 
- * This is a stub file for web/non-iOS platforms.
- * The actual implementation is in storeKit.native.ts for iOS/Android.
+ * ✅ STABILIZED IMPLEMENTATION - App Store Deep-Link Path
+ * ✅ NATIVE IAP DISABLED - Using cross-platform fallback for stability
+ * ✅ APPLE GUIDELINE 3.1.2 COMPLIANCE - Proper subscription management
+ * 
+ * This module uses App Store deep-links + backend verification instead of
+ * native StoreKit integration to avoid TurboModule crashes on iOS 26.
  * 
  * Product ID: com.forelandmarine.seatime.monthly
  * App ID: 6758010893
  * 
- * ✅ APPLE GUIDELINE 3.1.2 COMPLIANCE - Proper subscription management
+ * Flow:
+ * 1. User taps "Subscribe" → Opens App Store subscription page
+ * 2. User completes purchase in App Store
+ * 3. User returns to app and taps "Check Subscription Status"
+ * 4. Backend verifies subscription with Apple's servers
+ * 5. User gains access to app features
  */
 
 import { Platform, Linking, Alert } from 'react-native';
@@ -31,7 +40,8 @@ export async function initializeStoreKit(): Promise<boolean> {
     return false;
   }
 
-  console.log('[StoreKit] StoreKit integration ready (using App Store links)');
+  console.log('[StoreKit] StoreKit integration ready (using App Store deep-link path)');
+  console.log('[StoreKit] Native IAP disabled for stability');
   return true;
 }
 
@@ -47,38 +57,39 @@ export async function getProductInfo(): Promise<any | null> {
   }
 
   console.log('[StoreKit] Product info must be viewed in App Store (no hardcoded prices)');
+  console.log('[StoreKit] Native IAP disabled - using App Store deep-link path');
   return null;
 }
 
 /**
- * Setup purchase listeners (stub for web)
+ * Setup purchase listeners (stub - not used in deep-link path)
  */
 export function setupPurchaseListeners(
   onPurchaseUpdate: (purchase: any) => void,
   onPurchaseError: (error: any) => void
 ): void {
-  console.log('[StoreKit] Purchase listeners not available on web');
+  console.log('[StoreKit] Purchase listeners not used in App Store deep-link path');
 }
 
 /**
- * Remove purchase listeners (stub for web)
+ * Remove purchase listeners (stub - not used in deep-link path)
  */
 export function removePurchaseListeners(): void {
-  console.log('[StoreKit] Purchase listeners not available on web');
+  console.log('[StoreKit] Purchase listeners not used in App Store deep-link path');
 }
 
 /**
- * Process a purchase (stub for web)
+ * Process a purchase (stub - not used in deep-link path)
  */
 export async function processPurchase(purchase: any): Promise<{
   success: boolean;
   status?: 'active' | 'inactive';
   error?: string;
 }> {
-  console.log('[StoreKit] Purchase processing not available on web');
+  console.log('[StoreKit] Purchase processing not used in App Store deep-link path');
   return {
     success: false,
-    error: 'Purchase processing only available on iOS',
+    error: 'Please use "Check Subscription Status" after purchasing in App Store',
   };
 }
 
@@ -291,13 +302,13 @@ export async function completePurchaseFlow(): Promise<{
   status?: 'active' | 'inactive';
   error?: string;
 }> {
-  console.log('[StoreKit] Starting complete purchase flow');
+  console.log('[StoreKit] Starting complete purchase flow (App Store deep-link path)');
 
   await purchaseSubscription();
   
   return {
     success: false,
-    error: 'Please complete purchase in App Store',
+    error: 'Please complete purchase in App Store, then tap "Check Subscription Status"',
   };
 }
 
@@ -310,13 +321,13 @@ export async function completeRestoreFlow(): Promise<{
   status?: 'active' | 'inactive';
   error?: string;
 }> {
-  console.log('[StoreKit] Starting complete restore flow');
+  console.log('[StoreKit] Starting complete restore flow (App Store deep-link path)');
 
   const restoreResult = await restorePurchases();
   
   return {
     success: false,
-    error: restoreResult.error || 'Please check subscription status',
+    error: restoreResult.error || 'Please tap "Check Subscription Status" to verify',
   };
 }
 
@@ -326,10 +337,10 @@ export async function completeRestoreFlow(): Promise<{
 export function showSubscriptionInstructions(): void {
   Alert.alert(
     'How to Subscribe',
-    'SeaTime Tracker uses native in-app purchases on iOS:\n\n' +
-    '1. Tap "Subscribe Now" to see pricing in your local currency\n' +
-    '2. Complete your purchase using Apple Pay or your Apple ID\n' +
-    '3. Your subscription will be active immediately\n\n' +
+    'SeaTime Tracker uses App Store subscriptions:\n\n' +
+    '1. Tap "Subscribe Now" to open the App Store\n' +
+    '2. Complete your purchase in the App Store\n' +
+    '3. Return to the app and tap "Check Subscription Status"\n\n' +
     'Your subscription is managed through your Apple ID and will automatically renew each month.\n\n' +
     'You can manage or cancel your subscription anytime in:\nSettings → Apple ID → Subscriptions',
     [{ text: 'Got it' }]
