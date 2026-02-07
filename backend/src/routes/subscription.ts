@@ -304,12 +304,12 @@ export function register(app: App, fastify: FastifyInstance): void {
         const subscriptionStatus = isExpired ? "inactive" : "active";
 
         // Update user subscription
-        // NOTE: subscription_status, subscription_expires_at, and subscription_product_id columns
-        // do not exist in the current database schema. They will be added in a future migration.
-        // For now, we only update the updatedAt field.
         const [updatedUser] = await app.db
           .update(authSchema.user)
           .set({
+            subscription_status: subscriptionStatus,
+            subscription_expires_at: expirationDate,
+            subscription_product_id: productId,
             updatedAt: new Date(),
           })
           .where(eq(authSchema.user.id, userId))
