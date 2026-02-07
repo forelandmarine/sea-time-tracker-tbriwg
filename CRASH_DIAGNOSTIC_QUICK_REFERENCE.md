@@ -15,19 +15,23 @@
 1. Connect iPhone to Mac (USB)
 2. Xcode > Devices and Simulators
 3. Select device > Open Console
-4. Filter: "TurboModuleInvoke"
+4. Filter: "FATAL" or "CRASH"
 5. Reproduce crash
-6. Last log before crash = culprit
+6. Look for exception reason and call stack
 ```
 
 **Example output:**
 ```
-[TurboModuleInvoke] Module: RCTSecureStore
-[TurboModuleInvoke] Method: setItemAsync:value:options:resolver:rejecter:
-[TurboModuleInvoke] Arguments: 5
+❌ FATAL: UNCAUGHT OBJECTIVE-C EXCEPTION
+Exception Name: NSInvalidArgumentException
+Exception Reason: attempt to insert nil object
+Call Stack Symbols:
+  0   CoreFoundation   0x... __exceptionPreprocess
+  1   libobjc.A.dylib  0x... objc_exception_throw
+  2   ExpoSecureStore  0x... -[EXSecureStore setItemAsync:...]
 <CRASH>
 ```
-**Culprit:** `SecureStore.setItemAsync`
+**Culprit:** `SecureStore.setItemAsync` (from call stack)
 
 ### Option 2: Crash Log File
 ```bash
@@ -43,9 +47,10 @@
 
 | Fix | File | What It Does |
 |-----|------|--------------|
-| **TurboModule Logging** | `patches/react-native+0.81.5.patch` | Logs every native call before execution |
 | **Fatal Handlers** | `plugins/ios-crash-instrumentation.js` | Captures exception details before SIGABRT |
 | **Dynamic SecureStore** | `contexts/AuthContext.tsx` | Prevents module-scope initialization |
+| **Dynamic SecureStore** | `utils/biometricAuth.ts` | Prevents module-scope initialization |
+| **Dynamic SecureStore** | `utils/seaTimeApi.ts` | Prevents module-scope initialization |
 | **Extreme Delays** | `app/_layout.tsx` | Staggers native module loading (3-12s) |
 | **Input Validation** | `contexts/AuthContext.tsx` | Validates all params before native calls |
 | **Concurrency Lock** | `contexts/AuthContext.tsx` | Prevents race conditions |
@@ -56,10 +61,10 @@
 
 ```bash
 # 1. Verify instrumentation
-chmod +x scripts/verify-crash-instrumentation.sh
-./scripts/verify-crash-instrumentation.sh
+cat app.json | grep -A 10 '"plugins"'
+# Should include: "./plugins/ios-crash-instrumentation"
 
-# 2. Install dependencies (applies patches)
+# 2. Install dependencies
 npm install
 
 # 3. Clean prebuild
@@ -69,7 +74,7 @@ npx expo prebuild --clean
 eas build --platform ios --profile production
 
 # 5. Monitor crash
-# Connect device > Xcode > Console > Filter: "TurboModuleInvoke"
+# Connect device > Xcode > Console > Filter: "FATAL"
 ```
 
 ---
@@ -90,7 +95,7 @@ After Apple Sign-In, these modules are called:
 ## 🔧 If Crash Persists
 
 ### Step 1: Identify Module
-Check device console for last `[TurboModuleInvoke]` log
+Check device console for exception reason and call stack
 
 ### Step 2: Apply Fix Based on Module
 
@@ -127,9 +132,9 @@ setTimeout(async () => {
 ## ✅ Success Criteria
 
 **Diagnostic Success:**
-- ✅ Device console shows `[TurboModuleInvoke]` logs
+- ✅ Device console shows `[AppDelegate] ✅ CRASH INSTRUMENTATION ACTIVE`
 - ✅ Crash logs include exception name/reason
-- ✅ Last invoked module is identified
+- ✅ Call stack identifies the crashing module
 
 **Fix Success:**
 - ✅ No crash after Apple Sign-In
@@ -141,11 +146,12 @@ setTimeout(async () => {
 ## 📞 Support
 
 **Full Guide:** `TURBOMODULE_CRASH_DIAGNOSTIC_GUIDE.md`  
-**Verification Script:** `scripts/verify-crash-instrumentation.sh`  
-**Patch File:** `patches/react-native+0.81.5.patch`  
+**Build Fix:** `BUILD_ERROR_FIX_SUMMARY.md`  
 **Config Plugin:** `plugins/ios-crash-instrumentation.js`
 
 ---
 
 **Last Updated:** 2026-02-06  
-**Version:** 1.0.4 (Build 84)
+**Version:** 1.0.4
+
+

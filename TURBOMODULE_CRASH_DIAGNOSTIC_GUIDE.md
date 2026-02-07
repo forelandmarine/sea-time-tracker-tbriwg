@@ -14,41 +14,11 @@ This is **NOT** a JavaScript exception. It's a native crash that JS try/catch ca
 
 ## 🔍 Diagnostic Tools Implemented
 
-### 1. **TurboModule Invocation Logging** (CRITICAL)
-
-**File:** `patches/react-native+0.81.5.patch`
-
-This patch modifies React Native itself to log EVERY TurboModule call before execution:
-
-```objective-c
-NSLog(@"[TurboModuleInvoke] Module: %@", moduleName);
-NSLog(@"[TurboModuleInvoke] Method: %@", methodName);
-NSLog(@"[TurboModuleInvoke] Arguments: %lu", (unsigned long)count);
-```
-
-**How to use:**
-1. The patch is automatically applied via `postinstall` script in `package.json`
-2. Build and deploy to TestFlight
-3. When the crash occurs, check device console (Xcode > Devices & Simulators > Console)
-4. The **LAST** `[TurboModuleInvoke]` log line before the crash is the culprit
-
-**Example output:**
-```
-[TurboModuleInvoke] Module: RCTSecureStore
-[TurboModuleInvoke] Method: setItemAsync:value:options:resolver:rejecter:
-[TurboModuleInvoke] Arguments: 5
-<CRASH OCCURS HERE>
-```
-
-This tells you: **SecureStore.setItemAsync** is the crashing method.
-
----
-
-### 2. **Native Fatal Exception Handlers**
+### 1. **Native Fatal Exception Handlers** (PRIMARY)
 
 **File:** `plugins/ios-crash-instrumentation.js`
 
-Installed via Expo config plugin (already activated in `app.json`).
+Installed via Expo config plugin (activated in `app.json`).
 
 Captures:
 - `NSSetUncaughtExceptionHandler` - Objective-C exceptions
@@ -67,12 +37,20 @@ Exception Reason: -[__NSPlaceholderDictionary initWithObjects:forKeys:count:]: a
 Call Stack Symbols:
   0   CoreFoundation   0x00000001a1234567 __exceptionPreprocess + 123
   1   libobjc.A.dylib  0x00000001a2345678 objc_exception_throw + 56
+  2   ExpoSecureStore  0x00000001a3456789 -[EXSecureStore setItemAsync:value:options:resolver:rejecter:] + 234
   ...
 ```
 
+**How to use:**
+1. The plugin is automatically activated via `app.json`
+2. Build and deploy to TestFlight
+3. When the crash occurs, check device console (Xcode > Devices & Simulators > Console)
+4. Look for `❌ FATAL:` logs that show the exception name, reason, and call stack
+5. The call stack will show which module and method caused the crash
+
 ---
 
-### 3. **Frontend Breadcrumb Logging**
+### 2. **Frontend Breadcrumb Logging**
 
 **Files:** `contexts/AuthContext.tsx`, `app/_layout.tsx`
 
@@ -109,6 +87,8 @@ await SecureStore.getItemAsync('token');
 
 **Files changed:**
 - `contexts/AuthContext.tsx` - All SecureStore calls now use dynamic import
+- `utils/biometricAuth.ts` - Dynamic SecureStore import
+- `utils/seaTimeApi.ts` - Dynamic SecureStore import
 
 ---
 
@@ -189,51 +169,36 @@ const signIn = useCallback(async (email: string, password: string) => {
 
 ## 📋 Deployment Checklist
 
-### Step 1: Apply Patches
-
-```bash
-# Install patch-package (already done)
-npm install
-
-# Verify patch is applied
-ls patches/
-# Should see: react-native+0.81.5.patch
-
-# Verify postinstall script
-cat package.json | grep postinstall
-# Should see: "postinstall": "patch-package"
-```
-
-### Step 2: Verify Config Plugin
+### Step 1: Verify Config Plugin
 
 ```bash
 # Check app.json plugins array
 cat app.json | grep -A 10 '"plugins"'
-# Should include: "./plugins/ios-crash-instrumentation.js"
+# Should include: "./plugins/ios-crash-instrumentation"
 ```
 
-### Step 3: Build for TestFlight
+### Step 2: Build for TestFlight
 
 ```bash
 # Clean build
 rm -rf node_modules ios android .expo
 npm install
 
-# Prebuild (generates native projects with patches applied)
+# Prebuild (generates native projects with crash handlers)
 npx expo prebuild --clean
 
 # Build for iOS
 eas build --platform ios --profile production
 ```
 
-### Step 4: Test & Monitor
+### Step 3: Test & Monitor
 
 1. Install TestFlight build on device
 2. Connect device to Mac
 3. Open Xcode > Devices & Simulators > Select device > Open Console
 4. Launch app and trigger Apple Sign-In
 5. Watch console for:
-   - `[TurboModuleInvoke]` logs (shows which module is called)
+   - `[AppDelegate] ✅ CRASH INSTRUMENTATION ACTIVE` (confirms handlers are installed)
    - `❌ FATAL:` logs (shows exception details if crash occurs)
 
 ---
@@ -246,9 +211,9 @@ eas build --platform ios --profile production
 2. Open Xcode > Window > Devices and Simulators
 3. Select your device
 4. Click "Open Console" button
-5. Filter by "TurboModuleInvoke" or "FATAL"
+5. Filter by "FATAL" or "CRASH"
 6. Reproduce the crash
-7. The **last** `[TurboModuleInvoke]` log before crash is the culprit
+7. Look for the exception reason and call stack
 
 ### Method 2: Crash Log File
 
@@ -263,8 +228,8 @@ eas build --platform ios --profile production
 
 1. App Store Connect > TestFlight > Crashes
 2. Download crash log
-3. Search for "TurboModuleInvoke" in the log
-4. The last invocation before the crash is the failing module
+3. Look for exception name and reason in the crash report
+4. The call stack will show which module caused the crash
 
 ---
 
@@ -338,26 +303,26 @@ setTimeout(async () => {
 After deploying the fix:
 
 1. **Check logs appear:**
-   - Device console shows `[TurboModuleInvoke]` logs
    - Device console shows `[AppDelegate] ✅ CRASH INSTRUMENTATION ACTIVE`
+   - Device console shows `[Auth]` breadcrumb logs
 
 2. **Reproduce the crash:**
    - Sign in with Apple
    - Wait 5-20 seconds
-   - If crash occurs, check console for last `[TurboModuleInvoke]` log
+   - If crash occurs, check console for `❌ FATAL:` logs
 
 3. **Confirm fix:**
    - If no crash occurs, the fix is successful
-   - If crash still occurs, the last `[TurboModuleInvoke]` log identifies the new culprit
+   - If crash still occurs, the exception reason and call stack identify the culprit
 
 ---
 
 ## 📊 Success Criteria
 
 ✅ **Diagnostic Success:**
-- Device console shows `[TurboModuleInvoke]` logs for every native call
+- Device console shows `[AppDelegate] ✅ CRASH INSTRUMENTATION ACTIVE`
 - Crash logs include exception name and reason
-- Last invoked module is clearly identified
+- Call stack clearly identifies the crashing module
 
 ✅ **Fix Success:**
 - App does not crash after Apple Sign-In
@@ -370,34 +335,34 @@ After deploying the fix:
 
 If the crash still occurs after implementing all fixes:
 
-1. **Identify the exact module** using the diagnostic logs
-2. **Add a longer delay** for that specific module (e.g., 20-30 seconds)
-3. **Check for threading issues** - ensure UI calls are on main thread
-4. **Validate all parameters** - ensure no nil values are passed to nonnull params
-5. **Report findings** - Share the exact module and method from logs
+1. **Check the exception reason** in the crash logs
+2. **Identify the exact module** from the call stack
+3. **Add a longer delay** for that specific module (e.g., 20-30 seconds)
+4. **Check for threading issues** - ensure UI calls are on main thread
+5. **Validate all parameters** - ensure no nil values are passed to nonnull params
+6. **Report findings** - Share the exact exception reason and call stack
 
 ---
 
 ## 📝 Summary
 
 **What we've done:**
-1. ✅ Patched React Native to log every TurboModule invocation
-2. ✅ Installed native fatal exception handlers
-3. ✅ Added frontend breadcrumb logging
-4. ✅ Implemented dynamic SecureStore import
-5. ✅ Added extreme delays for native module loading
-6. ✅ Added input validation before all native calls
-7. ✅ Implemented concurrency lock for auth operations
+1. ✅ Installed native fatal exception handlers
+2. ✅ Added frontend breadcrumb logging
+3. ✅ Implemented dynamic SecureStore import
+4. ✅ Added extreme delays for native module loading
+5. ✅ Added input validation before all native calls
+6. ✅ Implemented concurrency lock for auth operations
 
 **What you need to do:**
 1. Build and deploy to TestFlight
 2. Connect device to Mac and open console
 3. Reproduce the crash
-4. Check the **last** `[TurboModuleInvoke]` log before crash
+4. Check the exception reason and call stack in the crash logs
 5. Report the exact module and method
 
 **Expected outcome:**
-- The exact crashing TurboModule and method will be identified
+- The exact crashing module and method will be identified from the exception
 - The appropriate fix can then be applied (delay, threading, validation, etc.)
 - The crash will be eliminated
 
@@ -405,14 +370,16 @@ If the crash still occurs after implementing all fixes:
 
 ## 🔗 Related Files
 
-- `patches/react-native+0.81.5.patch` - TurboModule invocation logging
 - `plugins/ios-crash-instrumentation.js` - Native fatal handlers
 - `contexts/AuthContext.tsx` - Dynamic SecureStore import + validation
 - `app/_layout.tsx` - Staggered native module loading
+- `utils/biometricAuth.ts` - Dynamic SecureStore import
+- `utils/seaTimeApi.ts` - Dynamic SecureStore import
 - `app.json` - Config plugin activation
-- `package.json` - postinstall script for patches
 
 ---
 
 **Last Updated:** 2026-02-06  
-**Version:** 1.0.4 (Build 84)
+**Version:** 1.0.4
+
+

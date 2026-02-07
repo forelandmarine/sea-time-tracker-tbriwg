@@ -3,56 +3,27 @@
 
 This directory contains patches applied to `node_modules` packages using `patch-package`.
 
-## Why Patches?
+## Current Status
 
-Patches are used to modify third-party packages when:
-1. A bug fix is needed before the official package is updated
-2. Custom functionality is required for the project
-3. Diagnostic instrumentation needs to be added
+**No active patches.**
 
-## Current Patches
+The previous `react-native+0.81.5.patch` for TurboModule diagnostic logging has been removed because:
+1. The patch file was malformed (placeholder line numbers instead of actual git diff)
+2. It was blocking EAS builds with `patch-package` errors
+3. Native crash instrumentation is handled by `plugins/ios-crash-instrumentation.js` instead
 
-### react-native+0.81.5.patch
+## iOS Crash Diagnostics
 
-**Purpose:** iOS TurboModule Crash Diagnostic Instrumentation
+For iOS crash diagnostics, we use:
+- **Native crash handlers** via `plugins/ios-crash-instrumentation.js`
+- **NSSetUncaughtExceptionHandler** for Objective-C exceptions
+- **RCTSetFatalHandler** for React Native fatal errors
+- **RCTSetFatalExceptionHandler** for React Native exceptions
 
-**What it does:**
-- Adds logging to `RCTTurboModule.mm` to track every TurboModule invocation
-- Logs module name, method name, and argument count before execution
-- Helps identify which TurboModule causes SIGABRT crashes
-
-**Why it's needed:**
-- iOS TurboModule crashes (SIGABRT) occur at the native level
-- Without instrumentation, it's impossible to identify the crashing module
-- The last `[TurboModuleInvoke]` log before crash identifies the culprit
-
-**File modified:**
-```
-node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/RCTTurboModule.mm
-```
-
-**Changes:**
-- Added logging at line ~441 in `performVoidMethodInvocation` method
-- Logs are visible in device console (Xcode > Devices > Console)
-- Logs appear in Release/TestFlight builds (not just development)
-
-**Example output:**
-```
-[TurboModuleInvoke] Module: RCTSecureStore
-[TurboModuleInvoke] Method: setItemAsync:value:options:resolver:rejecter:
-[TurboModuleInvoke] Arguments: 5
-```
-
-**How to verify patch is applied:**
-```bash
-# Check if patch file exists
-ls patches/react-native+0.81.5.patch
-
-# Check if patch is applied to node_modules
-grep "TurboModuleInvoke" node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/RCTTurboModule.mm
-```
-
-**Expected:** Should see the logging code in the file.
+These are injected into `AppDelegate.mm` during prebuild and provide:
+- Exception name and reason
+- Call stack symbols
+- Visible in Xcode device console logs
 
 ## How Patches Work
 
@@ -72,36 +43,25 @@ This is configured in `package.json`:
 }
 ```
 
-### Manual Application
-
-If patches are not applied automatically:
-```bash
-# Apply all patches
-npx patch-package
-
-# Apply specific patch
-npx patch-package react-native
-```
-
 ### Creating New Patches
 
 If you need to modify a package:
 
 1. **Make changes** to the file in `node_modules`:
    ```bash
-   # Example: Edit React Native file
-   code node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/RCTTurboModule.mm
+   # Example: Edit a file
+   code node_modules/some-package/lib/file.js
    ```
 
 2. **Create patch**:
    ```bash
-   npx patch-package react-native
+   npx patch-package some-package
    ```
 
 3. **Commit patch file**:
    ```bash
-   git add patches/react-native+0.81.5.patch
-   git commit -m "Add TurboModule logging patch"
+   git add patches/some-package+1.2.3.patch
+   git commit -m "Add patch for some-package"
    ```
 
 4. **Verify patch works**:
@@ -111,7 +71,7 @@ If you need to modify a package:
    npm install
    
    # Check if patch was applied
-   grep "TurboModuleInvoke" node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/RCTTurboModule.mm
+   cat node_modules/some-package/lib/file.js
    ```
 
 ## Troubleshooting
@@ -132,21 +92,13 @@ If you need to modify a package:
 **Causes:**
 - Package version changed (patch is for specific version)
 - Package file structure changed
-- Patch file is corrupted
+- Patch file is corrupted or malformed
 
 **Solutions:**
 1. Check package version matches patch filename
-2. Recreate patch from scratch
+2. Recreate patch from scratch by editing `node_modules` and running `npx patch-package`
 3. Update patch for new package version
-
-### Patch Not Included in Build
-
-**Symptom:** Logging doesn't appear in TestFlight build
-
-**Solutions:**
-1. Verify patch is applied: `grep "TurboModuleInvoke" node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/RCTTurboModule.mm`
-2. Clean prebuild: `npx expo prebuild --clean`
-3. Rebuild: `eas build --platform ios --profile production`
+4. If patch is blocking builds, remove it: `rm patches/package-name+version.patch`
 
 ## Best Practices
 
@@ -155,6 +107,7 @@ If you need to modify a package:
 3. **Test thoroughly** - Verify patch works in development and production
 4. **Plan for removal** - Patches should be temporary until official fix is available
 5. **Version control** - Always commit patch files to git
+6. **Valid patches only** - Never commit malformed patches with placeholder line numbers
 
 ## Maintenance
 
@@ -169,7 +122,7 @@ If you need to modify a package:
 
 1. **Delete patch file**:
    ```bash
-   rm patches/react-native+0.81.5.patch
+   rm patches/package-name+version.patch
    ```
 
 2. **Clean install**:
@@ -178,18 +131,11 @@ If you need to modify a package:
    npm install
    ```
 
-3. **Verify removal**:
-   ```bash
-   # Should NOT find the patched code
-   grep "TurboModuleInvoke" node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/RCTTurboModule.mm
-   ```
-
 ## Related Documentation
 
+- **iOS Crash Plugin:** `../plugins/ios-crash-instrumentation.js`
 - **Diagnostic Guide:** `../TURBOMODULE_CRASH_DIAGNOSTIC_GUIDE.md`
-- **Quick Reference:** `../CRASH_DIAGNOSTIC_QUICK_REFERENCE.md`
 - **Testing Guide:** `../CRASH_TESTING_GUIDE.md`
-- **Implementation Summary:** `../IMPLEMENTATION_SUMMARY.md`
 
 ## Support
 
