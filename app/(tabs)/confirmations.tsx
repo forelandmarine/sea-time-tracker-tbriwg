@@ -67,10 +67,19 @@ export default function ConfirmationsScreen() {
   const { triggerRefresh } = useAuth();
 
   const toNumber = (value: number | string | null | undefined): number => {
+    // CRITICAL: Safe number conversion to prevent NaN crashes
     if (value === null || value === undefined) return 0;
-    if (typeof value === 'number') return value;
-    const parsed = parseFloat(value);
-    return isNaN(parsed) ? 0 : parsed;
+    if (typeof value === 'number') {
+      // Check for NaN and Infinity
+      if (isNaN(value) || !isFinite(value)) return 0;
+      return value;
+    }
+    if (typeof value === 'string') {
+      const parsed = parseFloat(value);
+      if (isNaN(parsed) || !isFinite(parsed)) return 0;
+      return parsed;
+    }
+    return 0;
   };
 
   const loadData = useCallback(async () => {
@@ -209,6 +218,13 @@ export default function ConfirmationsScreen() {
   const handleRejectEntry = async (entryId: string) => {
     console.log('[Confirmations] User tapped Reject button for entry:', entryId);
     
+    // CRITICAL: Validate entryId to prevent crashes
+    if (!entryId || typeof entryId !== 'string') {
+      console.error('[Confirmations] Invalid entryId:', entryId);
+      Alert.alert('Error', 'Invalid entry ID');
+      return;
+    }
+    
     if (processingEntryId) {
       console.log('[Confirmations] Already processing an entry, ignoring tap');
       return;
@@ -244,12 +260,14 @@ export default function ConfirmationsScreen() {
             } catch (error: any) {
               console.error('[Confirmations] Failed to reject entry:', error);
               console.error('[Confirmations] Error details:', {
-                message: error.message,
-                stack: error.stack,
-                name: error.name
+                message: error?.message || 'Unknown error',
+                stack: error?.stack || 'No stack trace',
+                name: error?.name || 'Unknown error type'
               });
               setProcessingEntryId(null);
-              Alert.alert('Error', 'Failed to reject entry: ' + error.message);
+              // CRITICAL: Safe error message extraction
+              const errorMessage = error?.message || 'An unexpected error occurred';
+              Alert.alert('Error', 'Failed to reject entry: ' + errorMessage);
             }
           },
         },

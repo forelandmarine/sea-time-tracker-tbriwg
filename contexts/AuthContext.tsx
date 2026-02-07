@@ -542,7 +542,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within AuthProvider');
+    // CRITICAL: Log error but don't crash the app
+    console.error('[Auth] CRITICAL: useAuth called outside AuthProvider. This is a developer error.');
+    // Return a safe default context to prevent crashes
+    return {
+      user: null,
+      loading: false,
+      signIn: async () => { throw new Error('Auth not initialized'); },
+      signUp: async () => { throw new Error('Auth not initialized'); },
+      signInWithApple: async () => { throw new Error('Auth not initialized'); },
+      signOut: async () => { console.log('[Auth] Sign out called but auth not initialized'); },
+      isAuthenticated: false,
+      refreshTrigger: 0,
+      triggerRefresh: () => { console.log('[Auth] Refresh triggered but auth not initialized'); },
+      checkAuth: async () => { console.log('[Auth] Check auth called but auth not initialized'); },
+    };
   }
   return context;
 }

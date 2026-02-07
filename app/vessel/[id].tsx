@@ -364,20 +364,30 @@ export default function VesselDetailScreen() {
   };
 
   const formatDate = (dateString: string): string => {
+    // CRITICAL: Safe date formatting to prevent crashes
     try {
+      if (!dateString) return 'N/A';
       const date = new Date(dateString);
+      // Check if date is valid
+      if (isNaN(date.getTime())) return dateString;
       return date.toLocaleDateString();
     } catch (e) {
-      return dateString;
+      console.error('[VesselDetail] Failed to format date:', e);
+      return dateString || 'N/A';
     }
   };
 
   const formatDateTime = (dateString: string): string => {
+    // CRITICAL: Safe datetime formatting to prevent crashes
     try {
+      if (!dateString) return 'N/A';
       const date = new Date(dateString);
+      // Check if date is valid
+      if (isNaN(date.getTime())) return dateString;
       return date.toLocaleString();
     } catch (e) {
-      return dateString;
+      console.error('[VesselDetail] Failed to format datetime:', e);
+      return dateString || 'N/A';
     }
   };
 
@@ -430,43 +440,85 @@ export default function VesselDetailScreen() {
   };
 
   const convertToDMS = (decimal: number, isLatitude: boolean): string => {
-    const absolute = Math.abs(decimal);
-    const degrees = Math.floor(absolute);
-    const minutesDecimal = (absolute - degrees) * 60;
-    const minutes = Math.floor(minutesDecimal);
-    const seconds = ((minutesDecimal - minutes) * 60).toFixed(1);
-    
-    let direction = '';
-    if (isLatitude) {
-      direction = decimal >= 0 ? 'N' : 'S';
-    } else {
-      direction = decimal >= 0 ? 'E' : 'W';
+    // CRITICAL: Safe coordinate conversion to prevent crashes
+    try {
+      // Validate input
+      if (typeof decimal !== 'number' || isNaN(decimal) || !isFinite(decimal)) {
+        return 'Invalid';
+      }
+      
+      const absolute = Math.abs(decimal);
+      const degrees = Math.floor(absolute);
+      const minutesDecimal = (absolute - degrees) * 60;
+      const minutes = Math.floor(minutesDecimal);
+      const seconds = ((minutesDecimal - minutes) * 60).toFixed(1);
+      
+      let direction = '';
+      if (isLatitude) {
+        direction = decimal >= 0 ? 'N' : 'S';
+      } else {
+        direction = decimal >= 0 ? 'E' : 'W';
+      }
+      
+      return `${degrees}° ${minutes}' ${seconds}" ${direction}`;
+    } catch (e) {
+      console.error('[VesselDetail] Failed to convert to DMS:', e);
+      return 'Invalid';
     }
-    
-    return `${degrees}° ${minutes}' ${seconds}" ${direction}`;
   };
 
   const formatCoordinateDMS = (lat: number | null, lon: number | null): string => {
-    if (lat === null || lon === null || (lat === 0 && lon === 0)) return 'No coordinates';
-    return `${convertToDMS(lat, true)}, ${convertToDMS(lon, false)}`;
+    // CRITICAL: Safe coordinate formatting to prevent crashes
+    try {
+      if (lat === null || lat === undefined || lon === null || lon === undefined) {
+        return 'No coordinates';
+      }
+      if (typeof lat !== 'number' || typeof lon !== 'number') {
+        return 'Invalid coordinates';
+      }
+      if (isNaN(lat) || isNaN(lon) || !isFinite(lat) || !isFinite(lon)) {
+        return 'Invalid coordinates';
+      }
+      if (lat === 0 && lon === 0) {
+        return 'No coordinates';
+      }
+      return `${convertToDMS(lat, true)}, ${convertToDMS(lon, false)}`;
+    } catch (e) {
+      console.error('[VesselDetail] Failed to format coordinates:', e);
+      return 'Invalid coordinates';
+    }
   };
 
   const formatDuration = (hours: number | null): string => {
-    if (hours === null) return 'In progress';
-    
-    if (hours >= 24) {
-      const days = Math.floor(hours / 24);
-      const remainingHours = Math.round(hours % 24);
-      if (remainingHours === 0) {
-        return `${days} ${days === 1 ? 'day' : 'days'}`;
+    // CRITICAL: Safe duration formatting to prevent crashes
+    try {
+      if (hours === null || hours === undefined) return 'In progress';
+      
+      // Validate input
+      if (typeof hours !== 'number' || isNaN(hours) || !isFinite(hours)) {
+        return 'Invalid duration';
       }
-      return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours}h`;
+      
+      // Handle negative values
+      if (hours < 0) return 'Invalid duration';
+      
+      if (hours >= 24) {
+        const days = Math.floor(hours / 24);
+        const remainingHours = Math.round(hours % 24);
+        if (remainingHours === 0) {
+          return `${days} ${days === 1 ? 'day' : 'days'}`;
+        }
+        return `${days} ${days === 1 ? 'day' : 'days'}, ${remainingHours}h`;
+      }
+      
+      const wholeHours = Math.floor(hours);
+      const minutes = Math.round((hours - wholeHours) * 60);
+      if (minutes === 0) return `${wholeHours}h`;
+      return `${wholeHours}h ${minutes}m`;
+    } catch (e) {
+      console.error('[VesselDetail] Failed to format duration:', e);
+      return 'Invalid duration';
     }
-    
-    const wholeHours = Math.floor(hours);
-    const minutes = Math.round((hours - wholeHours) * 60);
-    if (minutes === 0) return `${wholeHours}h`;
-    return `${wholeHours}h ${minutes}m`;
   };
 
   const isMCACompliant = (entry: SeaTimeEntry): boolean => {

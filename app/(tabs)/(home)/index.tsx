@@ -53,14 +53,9 @@ export default function SeaTimeScreen() {
   
   const router = useRouter();
   
-  // CRITICAL: Wrap useAuth in try-catch to prevent crashes
-  let refreshTrigger = 0;
-  try {
-    const auth = useAuth();
-    refreshTrigger = auth.refreshTrigger;
-  } catch (error: any) {
-    console.error('[Home] CRITICAL: Failed to get auth context:', error);
-  }
+  // CRITICAL: Call useAuth at the top level - NEVER conditionally
+  // This must be called before any early returns or conditions
+  const { refreshTrigger } = useAuth();
   
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -231,7 +226,8 @@ export default function SeaTimeScreen() {
   };
 
   const handleAddVessel = async () => {
-    if (!newMMSI.trim() || !newVesselName.trim()) {
+    // CRITICAL: Validate inputs to prevent crashes
+    if (!newMMSI || !newMMSI.trim() || !newVesselName || !newVesselName.trim()) {
       Alert.alert('Error', 'Please enter both MMSI and vessel name');
       return;
     }

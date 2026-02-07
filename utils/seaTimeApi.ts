@@ -25,11 +25,17 @@ const getSecureStore = async () => {
 
 // Helper to normalize vessel data from API
 const normalizeVessel = (vessel: any) => {
-  if (!vessel) return null;
-  return {
-    ...vessel,
-    vessel_type: vessel.vessel_type || vessel.type,
-  };
+  // CRITICAL: Safe vessel normalization to prevent crashes
+  try {
+    if (!vessel || typeof vessel !== 'object') return null;
+    return {
+      ...vessel,
+      vessel_type: vessel.vessel_type || vessel.type || null,
+    };
+  } catch (error: any) {
+    console.error('[seaTimeApi] Error normalizing vessel:', error?.message || error);
+    return null;
+  }
 };
 
 // Rate limiting helpers
@@ -87,29 +93,48 @@ export const checkBackendConfigured = () => {
 
 // Get auth token from secure storage
 const getAuthToken = async (): Promise<string | null> => {
+  // CRITICAL: Comprehensive error handling to prevent crashes
   try {
     if (Platform.OS === 'web') {
-      return localStorage.getItem(TOKEN_KEY);
+      // Safe localStorage access
+      if (typeof window !== 'undefined' && window.localStorage) {
+        return localStorage.getItem(TOKEN_KEY);
+      }
+      return null;
     }
     // Dynamically load SecureStore to prevent early TurboModule initialization
     const SecureStore = await getSecureStore();
+    if (!SecureStore || !SecureStore.getItemAsync) {
+      console.error('[seaTimeApi] SecureStore not available');
+      return null;
+    }
     return await SecureStore.getItemAsync(TOKEN_KEY);
-  } catch (error) {
-    console.error('[seaTimeApi] Error getting auth token:', error);
+  } catch (error: any) {
+    console.error('[seaTimeApi] Error getting auth token:', error?.message || error);
+    // Don't crash - return null and let the app handle unauthenticated state
     return null;
   }
 };
 
 // Get headers with auth token
 const getApiHeaders = async () => {
-  const token = await getAuthToken();
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  // CRITICAL: Safe header construction to prevent crashes
+  try {
+    const token = await getAuthToken();
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (token && typeof token === 'string' && token.length > 0) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    return headers;
+  } catch (error: any) {
+    console.error('[seaTimeApi] Error getting API headers:', error?.message || error);
+    // Return basic headers without auth
+    return {
+      'Content-Type': 'application/json',
+    };
   }
-  return headers;
 };
 
 // Helper to get fetch options with auth

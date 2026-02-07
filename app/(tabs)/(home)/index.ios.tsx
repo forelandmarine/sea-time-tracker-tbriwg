@@ -208,7 +208,8 @@ export default function SeaTimeScreen() {
   };
 
   const handleAddVessel = async () => {
-    if (!newMMSI.trim() || !newVesselName.trim()) {
+    // CRITICAL: Validate inputs to prevent crashes
+    if (!newMMSI || !newMMSI.trim() || !newVesselName || !newVesselName.trim()) {
       Alert.alert('Error', 'Please enter both MMSI and vessel name');
       return;
     }
