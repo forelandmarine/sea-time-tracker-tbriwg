@@ -10,7 +10,7 @@ const TOKEN_KEY = 'seatime_auth_token';
 const AUTH_CHECK_TIMEOUT = 3000; // 3 seconds max for auth check
 const SIGN_IN_TIMEOUT = 10000; // 10 seconds max for sign in
 const SIGN_OUT_BACKEND_TIMEOUT = 500; // 500ms for backend sign out (fire-and-forget)
-const SAFETY_TIMEOUT = 6000; // 6 seconds absolute maximum for loading state (increased from 4)
+const SAFETY_TIMEOUT = 6000; // 6 seconds absolute maximum for loading state
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🚨 CRITICAL FIX: DYNAMIC IMPORT OF EXPO-SECURE-STORE
@@ -237,7 +237,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ═══════════════════════════════════════════════════════════════════════════
   // Wait for app to be fully mounted and VERY stable before allowing auth operations
   // This prevents TurboModule crashes from calling native modules too early
-  // Previous delay was 1.5 seconds, now using 3 seconds
   // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
     console.log('[Auth] Setting up app ready timer (3 second delay)...');
@@ -359,7 +358,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ═══════════════════════════════════════════════════════════════════════════
   // Don't check auth immediately on mount - wait for app to be VERY stable
   // This prevents TurboModule crashes from calling SecureStore too early
-  // Previous delay was 2 seconds, now using 4 seconds
   // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
     console.log('[Auth] Scheduling initial auth check (4 second delay)...');
@@ -471,8 +469,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         console.log('[Auth] Storing token...');
-        await tokenStorage.setToken(data.session.token);
-        console.log('[Auth] Token stored successfully');
+        
+        // 🚨 CRITICAL FIX: Wrap token storage in try-catch to prevent crashes
+        try {
+          await tokenStorage.setToken(data.session.token);
+          console.log('[Auth] Token stored successfully');
+        } catch (storageError: any) {
+          console.error('[Auth] ❌ CRITICAL: Token storage failed:', storageError);
+          console.error('[Auth] Storage error details:', storageError.message, storageError.name);
+          // Continue anyway - set user state even if storage fails
+          // This prevents the app from crashing but allows the user to proceed
+          console.warn('[Auth] ⚠️ Continuing without token storage - session will not persist');
+        }
         
         console.log('[Auth] Setting user state...');
         setUser(data.user);
@@ -572,7 +580,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           throw new Error('No session token received from server');
         }
 
-        await tokenStorage.setToken(data.session.token);
+        // 🚨 CRITICAL FIX: Wrap token storage in try-catch to prevent crashes
+        try {
+          await tokenStorage.setToken(data.session.token);
+          console.log('[Auth] Token stored successfully');
+        } catch (storageError: any) {
+          console.error('[Auth] ❌ CRITICAL: Token storage failed:', storageError);
+          console.error('[Auth] Storage error details:', storageError.message, storageError.name);
+          // Continue anyway - set user state even if storage fails
+          console.warn('[Auth] ⚠️ Continuing without token storage - session will not persist');
+        }
+        
         setUser(data.user);
         console.log('[Auth] ========== SIGN UP COMPLETED ==========');
       } catch (error: any) {
@@ -702,6 +720,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log('[Auth] ⚠️ ABOUT TO CALL NATIVE: tokenStorage.setToken (SecureStore/Keychain)');
         console.log('[Auth] Token length:', data.session.token.length);
         
+        // 🚨 CRITICAL FIX: Wrap token storage in try-catch to prevent crashes
         try {
           await tokenStorage.setToken(data.session.token);
           console.log('[Auth] ✅ NATIVE CALL SUCCESS: Token stored in SecureStore/Keychain');
@@ -711,7 +730,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('[Auth] Error name:', storageError.name);
           console.error('[Auth] Error message:', storageError.message);
           console.error('[Auth] Error stack:', storageError.stack);
-          throw new Error(`Failed to store authentication token: ${storageError.message}`);
+          // 🚨 CRITICAL: Don't throw - continue with authentication
+          // The user can still use the app, but the session won't persist
+          console.warn('[Auth] ⚠️ Continuing without token storage - session will not persist');
         }
 
         console.log('[Auth] Setting user state...');
