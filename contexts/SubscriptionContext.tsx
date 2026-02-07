@@ -56,15 +56,44 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }, SUBSCRIPTION_CHECK_TIMEOUT);
 
       try {
-        const response = await authenticatedGet<{ subscription: SubscriptionStatus }>(
-          '/api/subscription',
+        console.log('[Subscription] ⚠️ ABOUT TO CALL: authenticatedGet /api/subscription/status');
+        const response = await authenticatedGet<SubscriptionStatus>(
+          '/api/subscription/status',
           { signal: controller.signal }
         );
 
         clearTimeout(timeoutId);
 
-        console.log('[Subscription] ✅ Status received:', response.subscription.status);
-        setSubscriptionStatus(response.subscription);
+        console.log('[Subscription] ✅ API call completed');
+        console.log('[Subscription] Response:', response);
+
+        // CRITICAL: Validate response structure before using it
+        if (!response || typeof response !== 'object') {
+          console.error('[Subscription] Invalid response type:', typeof response);
+          throw new Error('Invalid response from subscription API');
+        }
+
+        // Validate status field
+        const status = response.status;
+        if (status !== 'active' && status !== 'inactive' && status !== 'pending') {
+          console.warn('[Subscription] Invalid status value:', status, '- defaulting to inactive');
+          response.status = 'inactive';
+        }
+
+        // Validate expiresAt field
+        if (response.expiresAt !== null && typeof response.expiresAt !== 'string') {
+          console.warn('[Subscription] Invalid expiresAt type:', typeof response.expiresAt, '- setting to null');
+          response.expiresAt = null;
+        }
+
+        // Validate productId field
+        if (response.productId !== null && typeof response.productId !== 'string') {
+          console.warn('[Subscription] Invalid productId type:', typeof response.productId, '- setting to null');
+          response.productId = null;
+        }
+
+        console.log('[Subscription] ✅ Status validated and received:', response.status);
+        setSubscriptionStatus(response);
       } catch (fetchError: any) {
         clearTimeout(timeoutId);
         

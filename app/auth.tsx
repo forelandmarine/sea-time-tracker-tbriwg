@@ -199,13 +199,17 @@ export default function AuthScreen() {
       console.log('[AuthScreen] Platform:', Platform.OS);
       console.log('[AuthScreen] Checking Apple Authentication availability...');
       
-      // Check if Apple Authentication is available
+      // CRITICAL: Check if Apple Authentication is available
       let isAvailable = false;
       try {
+        console.log('[AuthScreen] ⚠️ ABOUT TO CALL NATIVE: AppleAuthentication.isAvailableAsync()');
         isAvailable = await AppleAuthentication.isAvailableAsync();
-        console.log('[AuthScreen] Apple Authentication available:', isAvailable);
+        console.log('[AuthScreen] ✅ NATIVE CALL SUCCESS: isAvailableAsync returned:', isAvailable);
       } catch (availError: any) {
-        console.error('[AuthScreen] Error checking Apple Authentication availability:', availError);
+        console.error('[AuthScreen] ❌ NATIVE CALL FAILED: AppleAuthentication.isAvailableAsync()');
+        console.error('[AuthScreen] Error:', availError);
+        console.error('[AuthScreen] Error name:', availError.name);
+        console.error('[AuthScreen] Error message:', availError.message);
         showError('Sign in with Apple is not available on this device. Please use email and password instead.');
         return;
       }
@@ -217,14 +221,26 @@ export default function AuthScreen() {
       }
 
       setLoading(true);
-      console.log('[AuthScreen] Requesting Apple credentials...');
+      console.log('[AuthScreen] ⚠️ ABOUT TO CALL NATIVE: AppleAuthentication.signInAsync()');
+      console.log('[AuthScreen] Requesting scopes: FULL_NAME, EMAIL');
       
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
+      let credential;
+      try {
+        credential = await AppleAuthentication.signInAsync({
+          requestedScopes: [
+            AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+            AppleAuthentication.AppleAuthenticationScope.EMAIL,
+          ],
+        });
+        console.log('[AuthScreen] ✅ NATIVE CALL SUCCESS: signInAsync completed');
+      } catch (signInError: any) {
+        console.error('[AuthScreen] ❌ NATIVE CALL FAILED: AppleAuthentication.signInAsync()');
+        console.error('[AuthScreen] Error:', signInError);
+        console.error('[AuthScreen] Error code:', signInError.code);
+        console.error('[AuthScreen] Error name:', signInError.name);
+        console.error('[AuthScreen] Error message:', signInError.message);
+        throw signInError;
+      }
 
       console.log('[AuthScreen] Apple credential received:', {
         hasIdentityToken: !!credential.identityToken,
@@ -234,27 +250,45 @@ export default function AuthScreen() {
         user: credential.user,
       });
 
-      if (!credential.identityToken) {
-        console.error('[AuthScreen] No identity token received from Apple');
+      // CRITICAL: Validate credential object before proceeding
+      if (!credential || typeof credential !== 'object') {
+        console.error('[AuthScreen] Invalid credential object:', typeof credential);
+        showError('Received invalid credentials from Apple. Please try again.');
+        setLoading(false);
+        return;
+      }
+
+      if (!credential.identityToken || typeof credential.identityToken !== 'string') {
+        console.error('[AuthScreen] Invalid identity token:', typeof credential.identityToken);
         showError('Failed to get Apple authentication token. Please try again.');
         setLoading(false);
         return;
       }
 
+      console.log('[AuthScreen] Validating identity token...');
+      console.log('[AuthScreen] Token length:', credential.identityToken.length);
+      console.log('[AuthScreen] Token starts with:', credential.identityToken.substring(0, 20));
+
       console.log('[AuthScreen] Sending Apple credentials to backend...');
       
-      // Format the user data properly for the backend
+      // CRITICAL: Sanitize and validate user data before sending
       const appleUserData = {
-        email: credential.email || undefined,
-        name: credential.fullName ? {
-          givenName: credential.fullName.givenName || undefined,
-          familyName: credential.fullName.familyName || undefined,
+        email: (credential.email && typeof credential.email === 'string') ? credential.email : undefined,
+        name: (credential.fullName && typeof credential.fullName === 'object') ? {
+          givenName: (credential.fullName.givenName && typeof credential.fullName.givenName === 'string') 
+            ? credential.fullName.givenName 
+            : undefined,
+          familyName: (credential.fullName.familyName && typeof credential.fullName.familyName === 'string') 
+            ? credential.fullName.familyName 
+            : undefined,
         } : undefined,
       };
       
       console.log('[AuthScreen] Formatted Apple user data:', appleUserData);
+      console.log('[AuthScreen] ⚠️ ABOUT TO CALL: signInWithApple (backend + SecureStore)');
       
       await signInWithApple(credential.identityToken, appleUserData);
+      console.log('[AuthScreen] ✅ signInWithApple completed successfully');
       
       console.log('[AuthScreen] Apple sign in successful, navigating to home');
       

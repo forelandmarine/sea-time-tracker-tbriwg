@@ -480,14 +480,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     console.log('[Auth] Apple user data:', appleUser);
     console.log('[Auth] BACKEND_URL:', BACKEND_URL);
 
-    if (!BACKEND_URL) {
+    // CRITICAL: Validate all inputs before ANY native operations
+    if (!identityToken || typeof identityToken !== 'string') {
+      console.error('[Auth] Invalid identity token:', typeof identityToken);
       authLock.current = false;
-      throw new Error('Backend URL is not configured');
+      throw new Error('Invalid identity token received from Apple');
     }
 
-    if (!identityToken) {
+    if (!BACKEND_URL) {
+      console.error('[Auth] Backend URL not configured');
       authLock.current = false;
-      throw new Error('No identity token provided');
+      throw new Error('Backend URL is not configured');
     }
 
     const requestBody = { 
@@ -542,11 +545,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const data = await response.json();
         console.log('[Auth] Response data received:', { hasSession: !!data.session, hasUser: !!data.user });
 
-        if (!data.session || !data.session.token) {
-          throw new Error('No session token received from server');
+        // CRITICAL: Validate response data before ANY native storage operations
+        if (!data || typeof data !== 'object') {
+          console.error('[Auth] Invalid response data type:', typeof data);
+          throw new Error('Invalid response from server');
         }
 
-        await tokenStorage.setToken(data.session.token);
+        if (!data.session || typeof data.session !== 'object') {
+          console.error('[Auth] Invalid session object:', data.session);
+          throw new Error('No session received from server');
+        }
+
+        if (!data.session.token || typeof data.session.token !== 'string') {
+          console.error('[Auth] Invalid session token:', typeof data.session.token);
+          throw new Error('No valid session token received from server');
+        }
+
+        if (!data.user || typeof data.user !== 'object') {
+          console.error('[Auth] Invalid user object:', data.user);
+          throw new Error('No user data received from server');
+        }
+
+        // CRITICAL: Log BEFORE native storage operation (SecureStore/Keychain)
+        console.log('[Auth] ⚠️ ABOUT TO CALL NATIVE: tokenStorage.setToken (SecureStore/Keychain)');
+        console.log('[Auth] Token length:', data.session.token.length);
+        
+        try {
+          await tokenStorage.setToken(data.session.token);
+          console.log('[Auth] ✅ NATIVE CALL SUCCESS: Token stored in SecureStore/Keychain');
+        } catch (storageError: any) {
+          console.error('[Auth] ❌ NATIVE CALL FAILED: tokenStorage.setToken');
+          console.error('[Auth] Storage error:', storageError);
+          console.error('[Auth] Error name:', storageError.name);
+          console.error('[Auth] Error message:', storageError.message);
+          console.error('[Auth] Error stack:', storageError.stack);
+          throw new Error(`Failed to store authentication token: ${storageError.message}`);
+        }
+
+        console.log('[Auth] Setting user state...');
         setUser(data.user);
         console.log('[Auth] ========== APPLE SIGN IN COMPLETED ==========');
       } catch (error: any) {
