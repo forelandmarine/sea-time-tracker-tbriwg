@@ -2,39 +2,22 @@
 /**
  * Subscription Paywall Screen
  * 
- * ✅ STABILIZED IMPLEMENTATION - App Store Deep-Link Path
- * ✅ NATIVE IAP DISABLED - Using cross-platform fallback for stability
- * ✅ NO STOREKIT TURBOMODULE - Eliminates crash risk on iOS 26
+ * ✅ STOREKIT REMOVED - Preparing for RevenueCat integration
+ * ✅ STABLE IMPLEMENTATION - No native IAP dependencies
  * 
- * This screen displays subscription information and directs users to the App Store
- * to complete their purchase. After purchasing, users return to the app and verify
- * their subscription status with the backend.
+ * This screen displays subscription information and will be updated
+ * to use RevenueCat for subscription management once integrated.
  * 
- * Flow:
- * 1. User taps "Subscribe Now" → Opens App Store subscription page
- * 2. User completes purchase in App Store
- * 3. User returns to app and taps "Check Subscription Status"
- * 4. Backend verifies subscription with Apple's servers
- * 5. User gains access to app features
+ * Current Flow:
+ * 1. User sees subscription features
+ * 2. User can check subscription status with backend
+ * 3. User can sign out
  * 
- * ✅ APPLE GUIDELINE 3.1.1 COMPLIANCE:
- * - Directs to App Store for in-app purchases (no external payment)
- * - Pricing is shown in App Store (never hardcoded)
- * - Users complete purchase using Apple Pay or Apple ID
- * - Receipt verification happens with backend
- * 
- * ✅ APPLE GUIDELINE 3.1.2 COMPLIANCE (SUBSCRIPTIONS):
- * - Tappable links to Privacy Policy and Apple Standard EULA
- * - Auto-renewal disclosure text
- * - Subscription management link to Apple's subscription page
- * - Restore purchases with clear user feedback
- * 
- * Features:
- * - Display subscription features
- * - Open App Store for subscription
- * - Check subscription status with backend
- * - Manage subscription via iOS Settings
- * - Sign out option
+ * Future Flow (with RevenueCat):
+ * 1. User taps "Subscribe Now" → RevenueCat paywall
+ * 2. User completes purchase through RevenueCat
+ * 3. RevenueCat handles receipt verification automatically
+ * 4. User gains access to app features
  */
 
 import React, { useState, useEffect } from 'react';
@@ -56,12 +39,11 @@ import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useAuth } from '@/contexts/AuthContext';
-import * as StoreKitUtils from '@/utils/storeKit';
 
 // COMPLIANCE: Developer URLs (replace with actual URLs before submission)
 const PRIVACY_POLICY_URL = 'https://forelandmarine.com/privacy';
 const TERMS_OF_SERVICE_URL = 'https://forelandmarine.com/terms';
-const APPLE_EULA_URL = 'https://www.apple.com/legal/internet-services/itunes/dev/stdeula/';
+const SUPPORT_EMAIL = 'info@forelandmarine.com';
 
 export default function SubscriptionPaywallScreen() {
   const router = useRouter();
@@ -75,43 +57,25 @@ export default function SubscriptionPaywallScreen() {
   useEffect(() => {
     console.log('[SubscriptionPaywall] Screen mounted');
     console.log('[SubscriptionPaywall] Current subscription status:', subscriptionStatus?.status);
-    console.log('[SubscriptionPaywall] Using App Store deep-link path (native IAP disabled)');
+    console.log('[SubscriptionPaywall] StoreKit removed - Ready for RevenueCat integration');
   }, [subscriptionStatus?.status]);
 
   const handleSubscribe = async () => {
-    if (Platform.OS !== 'ios') {
-      Alert.alert(
-        'iOS Only',
-        'Subscriptions are currently only available on iOS via the App Store.\n\nFor information about Android subscriptions, please contact info@forelandmarine.com'
-      );
-      return;
-    }
-
-    try {
-      console.log('[SubscriptionPaywall] User tapped Subscribe button - opening App Store');
-      await StoreKitUtils.purchaseSubscription();
-      
-      // Show instructions after opening App Store
-      setTimeout(() => {
-        Alert.alert(
-          'Complete Your Purchase',
-          'After completing your purchase in the App Store, return to this screen and tap "Check Subscription Status" to activate your subscription.',
-          [{ text: 'Got it' }]
-        );
-      }, 1000);
-    } catch (error: any) {
-      console.error('[SubscriptionPaywall] Subscribe error:', error);
-      Alert.alert(
-        'Error',
-        error.message || 'Unable to open App Store. Please try again.'
-      );
-    }
+    console.log('[SubscriptionPaywall] Subscribe button tapped');
+    
+    // TODO: RevenueCat Integration
+    // This will be replaced with RevenueCat paywall presentation
+    Alert.alert(
+      'Coming Soon',
+      'Subscription functionality will be available soon via RevenueCat.\n\nFor early access or questions, please contact ' + SUPPORT_EMAIL,
+      [{ text: 'OK' }]
+    );
   };
 
   const handleCheckStatus = async () => {
     setLoading(true);
     try {
-      console.log('[SubscriptionPaywall] User tapped Check Subscription Status button');
+      console.log('[SubscriptionPaywall] Checking subscription status');
       await checkSubscription();
       
       if (subscriptionStatus?.status === 'active') {
@@ -130,7 +94,7 @@ export default function SubscriptionPaywallScreen() {
         console.log('[SubscriptionPaywall] No active subscription found');
         Alert.alert(
           'No Active Subscription',
-          'No active subscription was found. If you just subscribed, please wait a moment for Apple to process your purchase, then try again.\n\nIf you continue to have issues, please contact info@forelandmarine.com'
+          'No active subscription was found. Please subscribe to access SeaTime Tracker.\n\nFor questions, contact ' + SUPPORT_EMAIL
         );
       }
     } catch (error: any) {
@@ -142,38 +106,6 @@ export default function SubscriptionPaywallScreen() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleRestorePurchases = async () => {
-    if (Platform.OS !== 'ios') {
-      Alert.alert(
-        'iOS Only',
-        'Restore purchases is only available on iOS.'
-      );
-      return;
-    }
-
-    Alert.alert(
-      'Restore Purchases',
-      'To restore your subscription, tap "Check Subscription Status". The app will verify your subscription with Apple\'s servers.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Check Status', onPress: handleCheckStatus },
-      ]
-    );
-  };
-
-  const handleManageSubscription = async () => {
-    try {
-      console.log('[SubscriptionPaywall] User tapped Manage Subscription button');
-      await StoreKitUtils.openSubscriptionManagement();
-    } catch (error: any) {
-      console.error('[SubscriptionPaywall] Manage subscription error:', error);
-    }
-  };
-
-  const handleShowInstructions = () => {
-    StoreKitUtils.showSubscriptionInstructions();
   };
 
   const handleOpenLink = async (url: string, title: string) => {
@@ -188,6 +120,17 @@ export default function SubscriptionPaywallScreen() {
       console.error(`Error opening ${title}:`, error);
       Alert.alert('Error', `Unable to open ${title}`);
     }
+  };
+
+  const handleContactSupport = () => {
+    const emailUrl = `mailto:${SUPPORT_EMAIL}?subject=SeaTime Tracker Subscription Inquiry`;
+    Linking.openURL(emailUrl).catch(() => {
+      Alert.alert(
+        'Contact Support',
+        `Please email us at ${SUPPORT_EMAIL} for assistance.`,
+        [{ text: 'OK' }]
+      );
+    });
   };
 
   const handleSignOut = async () => {
@@ -283,20 +226,7 @@ export default function SubscriptionPaywallScreen() {
 
         <View style={styles.pricingContainer}>
           <Text style={styles.pricingTitle}>Monthly Subscription</Text>
-          <Text style={styles.pricingNote}>View pricing in the App Store</Text>
-        </View>
-
-        {/* COMPLIANCE: Auto-renewal disclosure (3.1.2) */}
-        <View style={styles.disclosureContainer}>
-          <Text style={styles.disclosureText}>
-            • Subscription automatically renews unless canceled at least 24 hours before the end of the current period
-          </Text>
-          <Text style={styles.disclosureText}>
-            • Payment will be charged to your Apple ID at confirmation of purchase
-          </Text>
-          <Text style={styles.disclosureText}>
-            • You can manage or cancel your subscription in App Store account settings
-          </Text>
+          <Text style={styles.pricingNote}>Pricing details coming soon</Text>
         </View>
 
         <View style={styles.buttonContainer}>
@@ -310,9 +240,7 @@ export default function SubscriptionPaywallScreen() {
             ) : (
               <>
                 <Text style={styles.buttonText}>Subscribe Now</Text>
-                {Platform.OS === 'ios' && (
-                  <Text style={styles.buttonSubtext}>Opens App Store</Text>
-                )}
+                <Text style={styles.buttonSubtext}>Coming Soon</Text>
               </>
             )}
           </TouchableOpacity>
@@ -330,36 +258,17 @@ export default function SubscriptionPaywallScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.button, styles.secondaryButton, loading && styles.buttonDisabled]}
-            onPress={handleRestorePurchases}
-            disabled={loading}
+            style={[styles.button, styles.tertiaryButton]}
+            onPress={handleContactSupport}
           >
-            <Text style={styles.secondaryButtonText}>Restore Purchases</Text>
+            <IconSymbol
+              ios_icon_name="envelope.fill"
+              android_material_icon_name="email"
+              size={20}
+              color={isDark ? colors.textSecondary : colors.textSecondaryLight}
+            />
+            <Text style={styles.tertiaryButtonText}>Contact Support</Text>
           </TouchableOpacity>
-
-          {Platform.OS === 'ios' && (
-            <>
-              <TouchableOpacity
-                style={[styles.button, styles.secondaryButton]}
-                onPress={handleManageSubscription}
-              >
-                <Text style={styles.secondaryButtonText}>Manage Subscription</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.button, styles.tertiaryButton]}
-                onPress={handleShowInstructions}
-              >
-                <IconSymbol
-                  ios_icon_name="questionmark.circle"
-                  android_material_icon_name="help"
-                  size={20}
-                  color={isDark ? colors.textSecondary : colors.textSecondaryLight}
-                />
-                <Text style={styles.tertiaryButtonText}>How to Subscribe</Text>
-              </TouchableOpacity>
-            </>
-          )}
 
           <TouchableOpacity
             style={styles.signOutButton}
@@ -369,7 +278,7 @@ export default function SubscriptionPaywallScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* COMPLIANCE: Required links (3.1.2) */}
+        {/* COMPLIANCE: Required links */}
         <View style={styles.linksContainer}>
           <TouchableOpacity onPress={() => handleOpenLink(PRIVACY_POLICY_URL, 'Privacy Policy')}>
             <Text style={styles.linkText}>Privacy Policy</Text>
@@ -378,15 +287,11 @@ export default function SubscriptionPaywallScreen() {
           <TouchableOpacity onPress={() => handleOpenLink(TERMS_OF_SERVICE_URL, 'Terms of Service')}>
             <Text style={styles.linkText}>Terms of Service</Text>
           </TouchableOpacity>
-          <Text style={styles.linkSeparator}>•</Text>
-          <TouchableOpacity onPress={() => handleOpenLink(APPLE_EULA_URL, 'EULA')}>
-            <Text style={styles.linkText}>EULA</Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Need help? Contact info@forelandmarine.com
+            Need help? Contact {SUPPORT_EMAIL}
           </Text>
         </View>
       </ScrollView>
@@ -504,20 +409,6 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
-    },
-    disclosureContainer: {
-      backgroundColor: isDark ? colors.cardBackground : colors.card,
-      borderRadius: 12,
-      padding: 16,
-      marginBottom: 24,
-      borderLeftWidth: 4,
-      borderLeftColor: colors.primary,
-    },
-    disclosureText: {
-      fontSize: 13,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      lineHeight: 20,
-      marginBottom: 8,
     },
     buttonContainer: {
       marginBottom: 24,
