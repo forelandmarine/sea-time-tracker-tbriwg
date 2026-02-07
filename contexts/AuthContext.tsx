@@ -10,7 +10,7 @@ const TOKEN_KEY = 'seatime_auth_token';
 const AUTH_CHECK_TIMEOUT = 3000; // 3 seconds max for auth check
 const SIGN_IN_TIMEOUT = 10000; // 10 seconds max for sign in
 const SIGN_OUT_BACKEND_TIMEOUT = 500; // 500ms for backend sign out (fire-and-forget)
-const SAFETY_TIMEOUT = 4000; // 4 seconds absolute maximum for loading state
+const SAFETY_TIMEOUT = 6000; // 6 seconds absolute maximum for loading state (increased from 4)
 
 // ═══════════════════════════════════════════════════════════════════════════
 // 🚨 CRITICAL FIX: DYNAMIC IMPORT OF EXPO-SECURE-STORE
@@ -219,7 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     safetyTimeoutRef.current = setTimeout(() => {
       if (loading) {
-        console.warn('[Auth] ⚠️ SAFETY TIMEOUT - Force stopping loading state after 4 seconds');
+        console.warn('[Auth] ⚠️ SAFETY TIMEOUT - Force stopping loading state after 6 seconds');
         setLoading(false);
         authLock.current = false; // Release lock
       }
@@ -233,17 +233,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loading]);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 🚨 CRITICAL FIX: DELAYED APP READY FLAG
+  // 🚨 CRITICAL FIX: EXTREME DELAYED APP READY FLAG
   // ═══════════════════════════════════════════════════════════════════════════
-  // Wait for app to be fully mounted and stable before allowing auth operations
+  // Wait for app to be fully mounted and VERY stable before allowing auth operations
   // This prevents TurboModule crashes from calling native modules too early
+  // Previous delay was 1.5 seconds, now using 3 seconds
   // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    console.log('[Auth] Setting up app ready timer...');
+    console.log('[Auth] Setting up app ready timer (3 second delay)...');
     const readyTimer = setTimeout(() => {
-      console.log('[Auth] ✅ App is now ready for auth operations');
+      console.log('[Auth] ✅ App is now ready for auth operations (after 3 second delay)');
       appReadyRef.current = true;
-    }, 1500); // 1.5 second delay to ensure app is stable
+    }, 3000); // 3 second delay to ensure app is stable (was 1.5 seconds)
 
     return () => {
       clearTimeout(readyTimer);
@@ -354,17 +355,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 🚨 CRITICAL FIX: DELAYED INITIAL AUTH CHECK
+  // 🚨 CRITICAL FIX: EXTREME DELAYED INITIAL AUTH CHECK
   // ═══════════════════════════════════════════════════════════════════════════
-  // Don't check auth immediately on mount - wait for app to be stable
+  // Don't check auth immediately on mount - wait for app to be VERY stable
   // This prevents TurboModule crashes from calling SecureStore too early
+  // Previous delay was 2 seconds, now using 4 seconds
   // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    console.log('[Auth] Scheduling initial auth check...');
+    console.log('[Auth] Scheduling initial auth check (4 second delay)...');
     const checkTimer = setTimeout(() => {
-      console.log('[Auth] Starting initial auth check...');
+      console.log('[Auth] Starting initial auth check (after 4 second delay)...');
       checkAuth();
-    }, 2000); // 2 second delay
+    }, 4000); // 4 second delay (was 2 seconds)
 
     return () => {
       clearTimeout(checkTimer);

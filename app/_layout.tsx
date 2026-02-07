@@ -20,7 +20,7 @@ import { BACKEND_URL } from "@/utils/api";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // ═══════════════════════════════════════════════════════════════════════════
-// 🚨 CRITICAL FIX: TURBOMODULE CRASH PREVENTION
+// 🚨 CRITICAL FIX: TURBOMODULE CRASH PREVENTION - EXTREME DELAYS
 // ═══════════════════════════════════════════════════════════════════════════
 // 
 // PROBLEM: TurboModule crashes occur when native modules are loaded during
@@ -32,8 +32,9 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 // 3. Signature mismatches between JS and native code
 // 4. Nil values passed to nonnull Objective-C parameters
 //
-// SOLUTION: Complete lazy loading - NO native modules at file scope
-// All native modules are loaded AFTER app is fully mounted and stable
+// SOLUTION: EXTREME lazy loading - NO native modules at file scope
+// All native modules are loaded AFTER app is fully mounted and VERY stable
+// Using MUCH LONGER delays to ensure bridge is completely ready
 // ═══════════════════════════════════════════════════════════════════════════
 
 console.log('[App] ========== APP INITIALIZATION STARTED ==========');
@@ -109,12 +110,13 @@ function RootLayoutNav() {
   }, [loaded]);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 🚨 CRITICAL FIX: DELAYED NATIVE MODULE LOADING
+  // 🚨 CRITICAL FIX: EXTREME DELAYED NATIVE MODULE LOADING
   // ═══════════════════════════════════════════════════════════════════════════
   // Load native modules ONLY after:
   // 1. App is fully mounted
   // 2. React Native bridge is stable
   // 3. UI thread is ready
+  // 4. MUCH LONGER delays to ensure complete stability
   //
   // This prevents TurboModule crashes from:
   // - UI calls on background threads
@@ -127,12 +129,13 @@ function RootLayoutNav() {
     }
 
     console.log('[App] ========================================');
-    console.log('[App] 🔧 STARTING NATIVE MODULE LOADING');
+    console.log('[App] 🔧 STARTING NATIVE MODULE LOADING (EXTREME DELAYS)');
     console.log('[App] ========================================');
 
-    // CRITICAL: Add significant delay to ensure app is completely stable
+    // CRITICAL: Add MUCH LONGER delay to ensure app is completely stable
+    // Previous delay was 2 seconds, now using 5 seconds
     const loadTimer = setTimeout(async () => {
-      console.log('[App] App fully stable, loading native modules...');
+      console.log('[App] App fully stable (5 second delay), loading native modules...');
 
       // ═══════════════════════════════════════════════════════════════════
       // MODULE 1: SystemBars (Edge-to-Edge)
@@ -148,11 +151,12 @@ function RootLayoutNav() {
       // ═══════════════════════════════════════════════════════════════════
       // MODULE 2: Notifications (Expo Notifications + Device)
       // ═══════════════════════════════════════════════════════════════════
-      // CRITICAL: Add extra delay before loading notification modules
+      // CRITICAL: Add MUCH LONGER delay before loading notification modules
       // These are known to cause TurboModule crashes if loaded too early
+      // Previous delay was 3 seconds, now using 8 seconds
       setTimeout(async () => {
         try {
-          console.log('[App] [2/4] Loading notification modules...');
+          console.log('[App] [2/4] Loading notification modules (8 second delay)...');
           const { registerForPushNotificationsAsync } = await import('@/utils/notifications');
           
           console.log('[App] Requesting notification permissions...');
@@ -167,14 +171,15 @@ function RootLayoutNav() {
           console.error('[App] ❌ Notification setup error (non-blocking):', error.message);
           console.error('[App] Error stack:', error.stack);
         }
-      }, 3000); // 3 second delay for notifications
+      }, 8000); // 8 second delay for notifications (was 3 seconds)
 
       // ═══════════════════════════════════════════════════════════════════
       // MODULE 3: Network State (Expo Network)
       // ═══════════════════════════════════════════════════════════════════
+      // Previous delay was 4 seconds, now using 10 seconds
       setTimeout(async () => {
         try {
-          console.log('[App] [3/4] Loading network monitoring...');
+          console.log('[App] [3/4] Loading network monitoring (10 second delay)...');
           const NetInfo = await import('@react-native-community/netinfo');
           
           // Subscribe to network state changes
@@ -191,27 +196,28 @@ function RootLayoutNav() {
         } catch (error: any) {
           console.warn('[App] ⚠️ Network monitoring load failed (non-critical):', error.message);
         }
-      }, 4000); // 4 second delay for network monitoring
+      }, 10000); // 10 second delay for network monitoring (was 4 seconds)
 
       // ═══════════════════════════════════════════════════════════════════
       // MODULE 4: Haptics (Expo Haptics)
       // ═══════════════════════════════════════════════════════════════════
+      // Previous delay was 5 seconds, now using 12 seconds
       setTimeout(async () => {
         try {
-          console.log('[App] [4/4] Loading haptics...');
+          console.log('[App] [4/4] Loading haptics (12 second delay)...');
           await import('expo-haptics');
           console.log('[App] ✅ Haptics loaded');
         } catch (error: any) {
           console.warn('[App] ⚠️ Haptics load failed (non-critical):', error.message);
         }
-      }, 5000); // 5 second delay for haptics
+      }, 12000); // 12 second delay for haptics (was 5 seconds)
 
       console.log('[App] ========================================');
-      console.log('[App] ✅ NATIVE MODULE LOADING INITIATED');
+      console.log('[App] ✅ NATIVE MODULE LOADING INITIATED (EXTREME DELAYS)');
       console.log('[App] ========================================');
       
       setNativeModulesLoaded(true);
-    }, 2000); // 2 second initial delay before starting module loading
+    }, 5000); // 5 second initial delay before starting module loading (was 2 seconds)
 
     return () => {
       clearTimeout(loadTimer);
