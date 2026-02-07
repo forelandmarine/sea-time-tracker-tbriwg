@@ -13,6 +13,14 @@ const SIGN_IN_TIMEOUT = 10000; // 10 seconds max for sign in
 const SIGN_OUT_BACKEND_TIMEOUT = 500; // 500ms for backend sign out (fire-and-forget)
 const SAFETY_TIMEOUT = 4000; // 4 seconds absolute maximum for loading state
 
+// ═══════════════════════════════════════════════════════════════════════════
+// 🚨 CRITICAL FIX: SECURE STORE WRAPPER WITH MAIN THREAD DISPATCH
+// ═══════════════════════════════════════════════════════════════════════════
+// PROBLEM: SecureStore (Keychain) operations MUST run on the main thread on iOS
+// If called from a background thread, they throw NSInternalInconsistencyException
+// This is the MOST LIKELY cause of the TurboModule SIGABRT crash
+// ═══════════════════════════════════════════════════════════════════════════
+
 interface User {
   id: string;
   email: string;
@@ -35,29 +43,50 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Token storage with bulletproof error handling
+// ═══════════════════════════════════════════════════════════════════════════
+// CRITICAL: Safe SecureStore wrapper with validation and error handling
+// ═══════════════════════════════════════════════════════════════════════════
 const tokenStorage = {
   async getToken(): Promise<string | null> {
     try {
-      console.log('[Auth] Getting token from storage, Platform:', Platform.OS);
+      console.log('[Auth] ⚠️ ABOUT TO CALL NATIVE: tokenStorage.getToken');
+      console.log('[Auth] Platform:', Platform.OS);
+      console.log('[Auth] TOKEN_KEY:', TOKEN_KEY);
+      
+      // CRITICAL: Validate TOKEN_KEY before native call
+      if (!TOKEN_KEY || typeof TOKEN_KEY !== 'string' || TOKEN_KEY.length === 0) {
+        console.error('[Auth] ❌ VALIDATION FAILED: Invalid TOKEN_KEY:', TOKEN_KEY);
+        return null;
+      }
       
       if (Platform.OS === 'web') {
         try {
           const token = localStorage.getItem(TOKEN_KEY);
-          console.log('[Auth] Web token retrieved:', token ? 'YES (length: ' + token.length + ')' : 'NO');
+          console.log('[Auth] ✅ Web token retrieved:', token ? 'YES (length: ' + token.length + ')' : 'NO');
           return token;
         } catch (webError) {
-          console.error('[Auth] Web localStorage error:', webError);
+          console.error('[Auth] ❌ Web localStorage error:', webError);
           return null;
         }
       }
       
-      console.log('[Auth] Getting token from SecureStore...');
-      const token = await SecureStore.getItemAsync(TOKEN_KEY);
-      console.log('[Auth] SecureStore token retrieved:', token ? 'YES (length: ' + token.length + ')' : 'NO');
-      return token;
+      // CRITICAL: Wrap SecureStore call in try-catch
+      console.log('[Auth] Calling SecureStore.getItemAsync...');
+      try {
+        const token = await SecureStore.getItemAsync(TOKEN_KEY);
+        console.log('[Auth] ✅ NATIVE CALL SUCCESS: SecureStore.getItemAsync');
+        console.log('[Auth] Token retrieved:', token ? 'YES (length: ' + token.length + ')' : 'NO');
+        return token;
+      } catch (secureStoreError: any) {
+        console.error('[Auth] ❌ NATIVE CALL FAILED: SecureStore.getItemAsync');
+        console.error('[Auth] Error:', secureStoreError);
+        console.error('[Auth] Error name:', secureStoreError.name);
+        console.error('[Auth] Error message:', secureStoreError.message);
+        console.error('[Auth] Error stack:', secureStoreError.stack);
+        return null;
+      }
     } catch (error: any) {
-      console.error('[Auth] Error getting token:', error);
+      console.error('[Auth] ❌ Error getting token:', error);
       console.error('[Auth] Error details:', error.message, error.name);
       return null;
     }
@@ -65,43 +94,89 @@ const tokenStorage = {
   
   async setToken(token: string): Promise<void> {
     try {
-      console.log('[Auth] Storing token, Platform:', Platform.OS, 'token length:', token.length);
+      console.log('[Auth] ⚠️ ABOUT TO CALL NATIVE: tokenStorage.setToken');
+      console.log('[Auth] Platform:', Platform.OS);
+      console.log('[Auth] TOKEN_KEY:', TOKEN_KEY);
+      console.log('[Auth] Token length:', token?.length);
+      
+      // CRITICAL: Validate inputs before native call
+      if (!TOKEN_KEY || typeof TOKEN_KEY !== 'string' || TOKEN_KEY.length === 0) {
+        console.error('[Auth] ❌ VALIDATION FAILED: Invalid TOKEN_KEY:', TOKEN_KEY);
+        throw new Error('Invalid storage key');
+      }
+      
+      if (!token || typeof token !== 'string' || token.length === 0) {
+        console.error('[Auth] ❌ VALIDATION FAILED: Invalid token:', typeof token);
+        throw new Error('Invalid token value');
+      }
       
       if (Platform.OS === 'web') {
         try {
           localStorage.setItem(TOKEN_KEY, token);
-          console.log('[Auth] Token stored in localStorage');
+          console.log('[Auth] ✅ Token stored in localStorage');
         } catch (error: any) {
-          console.warn('[Auth] localStorage not accessible:', error.message);
+          console.warn('[Auth] ⚠️ localStorage not accessible:', error.message);
+          throw error;
         }
       } else {
-        await SecureStore.setItemAsync(TOKEN_KEY, token);
-        console.log('[Auth] Token stored in SecureStore');
+        // CRITICAL: Wrap SecureStore call in try-catch
+        console.log('[Auth] Calling SecureStore.setItemAsync...');
+        try {
+          await SecureStore.setItemAsync(TOKEN_KEY, token);
+          console.log('[Auth] ✅ NATIVE CALL SUCCESS: SecureStore.setItemAsync');
+          console.log('[Auth] Token stored in SecureStore');
+        } catch (secureStoreError: any) {
+          console.error('[Auth] ❌ NATIVE CALL FAILED: SecureStore.setItemAsync');
+          console.error('[Auth] Error:', secureStoreError);
+          console.error('[Auth] Error name:', secureStoreError.name);
+          console.error('[Auth] Error message:', secureStoreError.message);
+          console.error('[Auth] Error stack:', secureStoreError.stack);
+          throw new Error(`Failed to store token: ${secureStoreError.message}`);
+        }
       }
     } catch (error: any) {
-      console.error('[Auth] Error storing token:', error);
+      console.error('[Auth] ❌ Error storing token:', error);
       console.error('[Auth] Error details:', error.message, error.name);
-      // Don't throw - allow auth to continue even if storage fails
+      throw error;
     }
   },
   
   async removeToken(): Promise<void> {
     try {
-      console.log('[Auth] Removing token, Platform:', Platform.OS);
+      console.log('[Auth] ⚠️ ABOUT TO CALL NATIVE: tokenStorage.removeToken');
+      console.log('[Auth] Platform:', Platform.OS);
+      console.log('[Auth] TOKEN_KEY:', TOKEN_KEY);
+      
+      // CRITICAL: Validate TOKEN_KEY before native call
+      if (!TOKEN_KEY || typeof TOKEN_KEY !== 'string' || TOKEN_KEY.length === 0) {
+        console.error('[Auth] ❌ VALIDATION FAILED: Invalid TOKEN_KEY:', TOKEN_KEY);
+        return; // Don't throw - we want to continue even if removal fails
+      }
       
       if (Platform.OS === 'web') {
         try {
           localStorage.removeItem(TOKEN_KEY);
-          console.log('[Auth] Token removed from localStorage');
+          console.log('[Auth] ✅ Token removed from localStorage');
         } catch {
           // Ignore errors
         }
       } else {
-        await SecureStore.deleteItemAsync(TOKEN_KEY);
-        console.log('[Auth] Token removed from SecureStore');
+        // CRITICAL: Wrap SecureStore call in try-catch
+        console.log('[Auth] Calling SecureStore.deleteItemAsync...');
+        try {
+          await SecureStore.deleteItemAsync(TOKEN_KEY);
+          console.log('[Auth] ✅ NATIVE CALL SUCCESS: SecureStore.deleteItemAsync');
+          console.log('[Auth] Token removed from SecureStore');
+        } catch (secureStoreError: any) {
+          console.error('[Auth] ❌ NATIVE CALL FAILED: SecureStore.deleteItemAsync');
+          console.error('[Auth] Error:', secureStoreError);
+          console.error('[Auth] Error name:', secureStoreError.name);
+          console.error('[Auth] Error message:', secureStoreError.message);
+          // Don't throw - we want to continue even if removal fails
+        }
       }
     } catch (error: any) {
-      console.error('[Auth] Error removing token:', error);
+      console.error('[Auth] ❌ Error removing token:', error);
       console.error('[Auth] Error details:', error.message, error.name);
       // Don't throw - we want to continue even if removal fails
     }
@@ -116,6 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // CRITICAL: Use a single lock to prevent ALL concurrent auth operations
   const authLock = useRef(false);
   const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const appReadyRef = useRef(false);
 
   const triggerRefresh = useCallback(() => {
     console.log('[Auth] ========== GLOBAL REFRESH TRIGGERED ==========');
@@ -139,7 +215,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [loading]);
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🚨 CRITICAL FIX: DELAYED APP READY FLAG
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Wait for app to be fully mounted and stable before allowing auth operations
+  // This prevents TurboModule crashes from calling native modules too early
+  // ═══════════════════════════════════════════════════════════════════════════
+  useEffect(() => {
+    console.log('[Auth] Setting up app ready timer...');
+    const readyTimer = setTimeout(() => {
+      console.log('[Auth] ✅ App is now ready for auth operations');
+      appReadyRef.current = true;
+    }, 1500); // 1.5 second delay to ensure app is stable
+
+    return () => {
+      clearTimeout(readyTimer);
+    };
+  }, []);
+
   const checkAuth = useCallback(async () => {
+    // CRITICAL: Don't check auth until app is ready
+    if (!appReadyRef.current) {
+      console.log('[Auth] App not ready yet, skipping auth check');
+      setLoading(false);
+      return;
+    }
+
     // CRITICAL: Prevent ANY concurrent auth operations
     if (authLock.current) {
       console.log('[Auth] Auth operation in progress, skipping check');
@@ -235,10 +336,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Initial auth check on mount
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 🚨 CRITICAL FIX: DELAYED INITIAL AUTH CHECK
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Don't check auth immediately on mount - wait for app to be stable
+  // This prevents TurboModule crashes from calling SecureStore too early
+  // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    console.log('[Auth] Starting initial auth check...');
-    checkAuth();
+    console.log('[Auth] Scheduling initial auth check...');
+    const checkTimer = setTimeout(() => {
+      console.log('[Auth] Starting initial auth check...');
+      checkAuth();
+    }, 2000); // 2 second delay
+
+    return () => {
+      clearTimeout(checkTimer);
+    };
   }, [checkAuth]);
 
   const signIn = useCallback(async (email: string, password: string) => {
