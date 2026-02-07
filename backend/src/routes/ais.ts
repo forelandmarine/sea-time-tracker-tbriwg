@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { eq, desc, and, gte, isNotNull, lt } from "drizzle-orm";
 import * as schema from "../db/schema.js";
+import * as authSchema from "../db/auth-schema.js";
 import type { App } from "../index.js";
 import { extractUserIdFromRequest } from "../middleware/auth.js";
 
@@ -1041,6 +1042,7 @@ export function register(app: App, fastify: FastifyInstance) {
           },
         },
         400: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
         404: { type: 'object', properties: { error: { type: 'string' } } },
         429: { type: 'object', properties: { error: { type: 'string' }, nextQueryTime: { type: 'number' } } },
         502: { type: 'object', properties: { error: { type: 'string' } } },
@@ -1065,6 +1067,41 @@ export function register(app: App, fastify: FastifyInstance) {
     if (vessel.length === 0) {
       app.logger.warn(`Vessel not found: ${vesselId}`);
       return reply.code(404).send({ error: 'Vessel not found' });
+    }
+
+    // Check subscription status for vessel owner
+    const userId = vessel[0].user_id;
+    const users = await app.db
+      .select()
+      .from(authSchema.user)
+      .where(eq(authSchema.user.id, userId));
+
+    if (users.length > 0) {
+      const user = users[0];
+      const subscriptionStatus = (user as any).subscription_status || 'inactive';
+      const subscriptionExpiresAt = (user as any).subscription_expires_at;
+
+      let isSubscriptionActive = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
+      if (isSubscriptionActive && subscriptionExpiresAt) {
+        try {
+          const expiryDate = new Date(subscriptionExpiresAt);
+          if (isNaN(expiryDate.getTime()) || expiryDate <= new Date()) {
+            isSubscriptionActive = false;
+          }
+        } catch {
+          isSubscriptionActive = false;
+        }
+      }
+
+      if (!isSubscriptionActive) {
+        app.logger.warn(
+          { userId, vesselId, subscriptionStatus },
+          'AIS check denied: subscription not active'
+        );
+        return reply.code(403).send({
+          error: 'Active subscription required to check vessel AIS data',
+        });
+      }
     }
 
     // Check if vessel is active
@@ -1104,7 +1141,6 @@ export function register(app: App, fastify: FastifyInstance) {
     }
 
     const mmsi = vessel[0].mmsi;
-    const userId = vessel[0].user_id;
     app.logger.info(`Processing AIS check for active vessel: ${vessel[0].vessel_name} (MMSI: ${mmsi})`);
 
     // Fetch real-time AIS data using fallback chain: Datalastic → MyShipTracking → Base44

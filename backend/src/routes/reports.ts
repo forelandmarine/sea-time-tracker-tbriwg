@@ -37,6 +37,7 @@ export function register(app: App, fastify: FastifyInstance) {
       response: {
         200: { type: 'string' },
         401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
@@ -44,6 +45,42 @@ export function register(app: App, fastify: FastifyInstance) {
     if (!userId) {
       app.logger.warn({}, 'CSV report requested without authentication');
       return reply.code(401).send({ error: 'Authentication required' });
+    }
+
+    // Check subscription status
+    const users = await app.db
+      .select()
+      .from(authSchema.user)
+      .where(eq(authSchema.user.id, userId));
+
+    if (users.length === 0) {
+      return reply.code(401).send({ error: 'User not found' });
+    }
+
+    const user = users[0];
+    const subscriptionStatus = (user as any).subscription_status || 'inactive';
+    const subscriptionExpiresAt = (user as any).subscription_expires_at;
+
+    let isSubscriptionActive = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
+    if (isSubscriptionActive && subscriptionExpiresAt) {
+      try {
+        const expiryDate = new Date(subscriptionExpiresAt);
+        if (isNaN(expiryDate.getTime()) || expiryDate <= new Date()) {
+          isSubscriptionActive = false;
+        }
+      } catch {
+        isSubscriptionActive = false;
+      }
+    }
+
+    if (!isSubscriptionActive) {
+      app.logger.warn(
+        { userId, subscriptionStatus },
+        'CSV report denied: subscription not active'
+      );
+      return reply.code(403).send({
+        error: 'Active subscription required to generate reports',
+      });
     }
 
     const { startDate, endDate } = request.query;
@@ -174,6 +211,7 @@ export function register(app: App, fastify: FastifyInstance) {
           },
         },
         401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
@@ -181,6 +219,42 @@ export function register(app: App, fastify: FastifyInstance) {
     if (!userId) {
       app.logger.warn({}, 'Summary report requested without authentication');
       return reply.code(401).send({ error: 'Authentication required' });
+    }
+
+    // Check subscription status
+    const users = await app.db
+      .select()
+      .from(authSchema.user)
+      .where(eq(authSchema.user.id, userId));
+
+    if (users.length === 0) {
+      return reply.code(401).send({ error: 'User not found' });
+    }
+
+    const user = users[0];
+    const subscriptionStatus = (user as any).subscription_status || 'inactive';
+    const subscriptionExpiresAt = (user as any).subscription_expires_at;
+
+    let isSubscriptionActive = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
+    if (isSubscriptionActive && subscriptionExpiresAt) {
+      try {
+        const expiryDate = new Date(subscriptionExpiresAt);
+        if (isNaN(expiryDate.getTime()) || expiryDate <= new Date()) {
+          isSubscriptionActive = false;
+        }
+      } catch {
+        isSubscriptionActive = false;
+      }
+    }
+
+    if (!isSubscriptionActive) {
+      app.logger.warn(
+        { userId, subscriptionStatus },
+        'Summary report denied: subscription not active'
+      );
+      return reply.code(403).send({
+        error: 'Active subscription required to generate reports',
+      });
     }
 
     const { startDate, endDate } = request.query;
@@ -315,6 +389,7 @@ export function register(app: App, fastify: FastifyInstance) {
       response: {
         200: { type: 'string' },
         401: { type: 'object', properties: { error: { type: 'string' } } },
+        403: { type: 'object', properties: { error: { type: 'string' } } },
       },
     },
   }, async (request, reply) => {
@@ -322,6 +397,42 @@ export function register(app: App, fastify: FastifyInstance) {
     if (!userId) {
       app.logger.warn({}, 'PDF report requested without authentication');
       return reply.code(401).send({ error: 'Authentication required' });
+    }
+
+    // Check subscription status
+    const users = await app.db
+      .select()
+      .from(authSchema.user)
+      .where(eq(authSchema.user.id, userId));
+
+    if (users.length === 0) {
+      return reply.code(401).send({ error: 'User not found' });
+    }
+
+    const user = users[0];
+    const subscriptionStatus = (user as any).subscription_status || 'inactive';
+    const subscriptionExpiresAt = (user as any).subscription_expires_at;
+
+    let isSubscriptionActive = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
+    if (isSubscriptionActive && subscriptionExpiresAt) {
+      try {
+        const expiryDate = new Date(subscriptionExpiresAt);
+        if (isNaN(expiryDate.getTime()) || expiryDate <= new Date()) {
+          isSubscriptionActive = false;
+        }
+      } catch {
+        isSubscriptionActive = false;
+      }
+    }
+
+    if (!isSubscriptionActive) {
+      app.logger.warn(
+        { userId, subscriptionStatus },
+        'PDF report denied: subscription not active'
+      );
+      return reply.code(403).send({
+        error: 'Active subscription required to generate reports',
+      });
     }
 
     const { startDate, endDate } = request.query;

@@ -13,9 +13,12 @@ export const user = pgTable("user", {
   nationality: text("nationality"), // User's nationality
   pya_membership_no: text("pya_membership_no"), // PYA membership number
   department: text("department"), // Department: 'deck' or 'engineering'
-  subscription_status: text("subscription_status").default("inactive"), // 'active' or 'inactive'
+  subscription_status: text("subscription_status").default("inactive"), // 'active', 'inactive', 'trial', or 'expired'
   subscription_expires_at: timestamp("subscription_expires_at", { withTimezone: true }), // When subscription expires
   subscription_product_id: text("subscription_product_id"), // iOS App Store product ID
+  revenuecat_customer_id: text("revenuecat_customer_id"), // RevenueCat customer ID for sync
+  subscription_platform: text("subscription_platform"), // 'ios', 'android', 'web', or null for legacy
+  trial_ends_at: timestamp("trial_ends_at", { withTimezone: true }), // When trial period ends
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
