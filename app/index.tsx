@@ -9,12 +9,29 @@ import * as seaTimeApi from '@/utils/seaTimeApi';
 export default function Index() {
   console.log('[Index] Component mounted, Platform:', Platform.OS);
   
-  const { isAuthenticated, loading: authLoading, user } = useAuth();
-  const [checkingPathway, setCheckingPathway] = useState(true);
+  const { isAuthenticated, loading: authLoading, user, checkAuth } = useAuth();
+  const [checkingPathway, setCheckingPathway] = useState(false);
   const [hasDepartment, setHasDepartment] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   console.log('[Index] Render - authLoading:', authLoading, 'isAuthenticated:', isAuthenticated, 'checkingPathway:', checkingPathway);
+
+  // 🚨 CRITICAL FIX: Check auth on mount with delay
+  useEffect(() => {
+    if (authChecked) return;
+    
+    console.log('[Index] Checking auth on mount...');
+    setAuthChecked(true);
+    
+    // Add delay to ensure app is stable before checking auth
+    setTimeout(() => {
+      checkAuth().catch((error) => {
+        console.error('[Index] Auth check failed:', error);
+        // Continue anyway - user will be redirected to auth screen
+      });
+    }, 1000);
+  }, [authChecked, checkAuth]);
 
   useEffect(() => {
     console.log('[Index] useEffect triggered - authLoading:', authLoading, 'isAuthenticated:', isAuthenticated);
@@ -34,6 +51,8 @@ export default function Index() {
 
       console.log('[Index] User authenticated, checking pathway...');
       console.log('[Index] User data:', user);
+      
+      setCheckingPathway(true);
       
       try {
         // CRITICAL: Add longer delay to ensure auth state is fully settled
@@ -83,13 +102,13 @@ export default function Index() {
   }, [isAuthenticated, authLoading, user]);
 
   // Show loading while auth is checking or pathway is being verified
-  if (authLoading || checkingPathway) {
-    console.log('[Index] Showing loading screen - authLoading:', authLoading, 'checkingPathway:', checkingPathway);
+  if (authLoading || checkingPathway || !authChecked) {
+    console.log('[Index] Showing loading screen - authLoading:', authLoading, 'checkingPathway:', checkingPathway, 'authChecked:', authChecked);
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color={colors.primary} />
         <Text style={styles.loadingText}>
-          {authLoading ? 'Checking authentication...' : 'Loading profile...'}
+          {!authChecked ? 'Starting up...' : authLoading ? 'Checking authentication...' : 'Loading profile...'}
         </Text>
       </View>
     );

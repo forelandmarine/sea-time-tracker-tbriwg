@@ -19,24 +19,6 @@ import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { BACKEND_URL } from "@/utils/api";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🚨 CRITICAL FIX: TURBOMODULE CRASH PREVENTION - EXTREME DELAYS
-// ═══════════════════════════════════════════════════════════════════════════
-// 
-// PROBLEM: TurboModule crashes occur when native modules are loaded during
-// app initialization, especially on iOS with New Architecture enabled.
-//
-// ROOT CAUSES:
-// 1. Native modules calling UI APIs from background threads
-// 2. Modules being initialized before React Native bridge is ready
-// 3. Signature mismatches between JS and native code
-// 4. Nil values passed to nonnull Objective-C parameters
-//
-// SOLUTION: EXTREME lazy loading - NO native modules at file scope
-// All native modules are loaded AFTER app is fully mounted and VERY stable
-// Using MUCH LONGER delays to ensure bridge is completely ready
-// ═══════════════════════════════════════════════════════════════════════════
-
 console.log('[App] ========== APP INITIALIZATION STARTED ==========');
 console.log('[App] Platform:', Platform.OS);
 console.log('[App] React Native Version:', Platform.Version);
@@ -59,9 +41,10 @@ function RootLayoutNav() {
   const router = useRouter();
   const segments = useSegments();
   const pathname = usePathname();
-  const { user, loading } = useAuth();
+  const { user, loading, checkAuth } = useAuth();
   const [isNavigating, setIsNavigating] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
+  const [authCheckTriggered, setAuthCheckTriggered] = useState(false);
 
   const [loaded, error] = useFonts({
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -104,14 +87,10 @@ function RootLayoutNav() {
     }
   }, [loaded]);
 
-
-  // NOTE: No eager native module initialization at app startup.
-  // Native modules are loaded by feature screens/hooks on demand.
-
-
-  // Simplified authentication routing - Let index.tsx handle redirects
+  // 🚨 CRITICAL FIX: Only check auth when user tries to access protected routes
+  // This prevents early SecureStore access that can cause crashes
   useEffect(() => {
-    if (!loaded || loading || isNavigating) {
+    if (!loaded || loading || isNavigating || authCheckTriggered) {
       return;
     }
 
@@ -133,27 +112,45 @@ function RootLayoutNav() {
       return;
     }
 
-    // Only protect tab routes - redirect to auth if not authenticated
-    if (!user && inAuthGroup && !isNavigating) {
-      console.log('[App] ⚠️ User not authenticated but in tabs, redirecting to /auth');
-      setIsNavigating(true);
+    // If user is trying to access protected routes without being authenticated
+    // Check auth first before redirecting
+    if (!user && inAuthGroup && !authCheckTriggered) {
+      console.log('[App] User accessing protected route, checking auth...');
+      setAuthCheckTriggered(true);
       
+      // Check auth with a delay to ensure app is stable
       setTimeout(() => {
-        try {
-          router.replace('/auth');
-        } catch (navError) {
-          console.error('[App] Navigation error:', navError);
+        checkAuth().then(() => {
+          console.log('[App] Auth check complete');
+          // After auth check, if still no user, redirect to auth
+          setTimeout(() => {
+            if (!user) {
+              console.log('[App] No user after auth check, redirecting to /auth');
+              setIsNavigating(true);
+              try {
+                router.replace('/auth');
+              } catch (navError) {
+                console.error('[App] Navigation error:', navError);
+              } finally {
+                setIsNavigating(false);
+              }
+            }
+          }, 100);
+        }).catch((error) => {
+          console.error('[App] Auth check failed:', error);
+          // On error, redirect to auth
+          setIsNavigating(true);
           try {
-            router.push('/auth');
-          } catch (pushError) {
-            console.error('[App] Push navigation also failed:', pushError);
+            router.replace('/auth');
+          } catch (navError) {
+            console.error('[App] Navigation error:', navError);
+          } finally {
+            setIsNavigating(false);
           }
-        } finally {
-          setIsNavigating(false);
-        }
-      }, 200);
+        });
+      }, 1000);
     }
-  }, [user, loading, loaded, pathname, segments, isNavigating, router]);
+  }, [user, loading, loaded, pathname, segments, isNavigating, authCheckTriggered, checkAuth, router]);
 
   // Show error screen if initialization failed
   if (initError) {
@@ -170,13 +167,13 @@ function RootLayoutNav() {
     );
   }
 
-  // Show loading screen while fonts are loading OR auth is checking
-  if (!loaded || loading) {
+  // Show loading screen while fonts are loading
+  if (!loaded) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff' }}>
         <Text style={{ fontSize: 18, color: colorScheme === 'dark' ? '#fff' : '#000', marginBottom: 10 }}>SeaTime Tracker</Text>
         <Text style={{ fontSize: 14, color: colorScheme === 'dark' ? '#999' : '#666' }}>
-          {!loaded ? 'Loading fonts...' : 'Checking authentication...'}
+          Loading...
         </Text>
       </View>
     );

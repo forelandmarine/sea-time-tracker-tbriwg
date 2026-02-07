@@ -202,13 +202,14 @@ const tokenStorage = {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // 🚨 CRITICAL FIX: Start with false to never block startup
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // CRITICAL: Use a single lock to prevent ALL concurrent auth operations
   const authLock = useRef(false);
   const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const appReadyRef = useRef(false);
+  const initialCheckDone = useRef(false);
 
   const triggerRefresh = useCallback(() => {
     console.log('[Auth] ========== GLOBAL REFRESH TRIGGERED ==========');
@@ -217,6 +218,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // CRITICAL: Safety timeout to FORCE loading state to false
   useEffect(() => {
+    if (!loading) return;
+    
     safetyTimeoutRef.current = setTimeout(() => {
       if (loading) {
         console.warn('[Auth] ⚠️ SAFETY TIMEOUT - Force stopping loading state after 6 seconds');
@@ -239,11 +242,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // This prevents TurboModule crashes from calling native modules too early
   // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    console.log('[Auth] Setting up app ready timer (3 second delay)...');
+    console.log('[Auth] Setting up app ready timer (5 second delay)...');
     const readyTimer = setTimeout(() => {
-      console.log('[Auth] ✅ App is now ready for auth operations (after 3 second delay)');
+      console.log('[Auth] ✅ App is now ready for auth operations (after 5 second delay)');
       appReadyRef.current = true;
-    }, 3000); // 3 second delay to ensure bridge/native modules are ready
+    }, 5000); // 🚨 INCREASED to 5 seconds to ensure maximum stability
 
     return () => {
       clearTimeout(readyTimer);
@@ -265,6 +268,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     authLock.current = true;
+    setLoading(true);
     
     try {
       console.log('[Auth] Starting auth check...');
@@ -354,22 +358,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // 🚨 CRITICAL FIX: EXTREME DELAYED INITIAL AUTH CHECK
+  // 🚨 CRITICAL FIX: REMOVE AUTOMATIC AUTH CHECK ON MOUNT
   // ═══════════════════════════════════════════════════════════════════════════
-  // Don't check auth immediately on mount - wait for app to be VERY stable
-  // This prevents TurboModule crashes from calling SecureStore too early
+  // Instead of checking auth automatically, we'll only check when:
+  // 1. User explicitly signs in
+  // 2. App navigates to a protected route (handled by _layout.tsx)
+  // This prevents early SecureStore access that can cause crashes
   // ═══════════════════════════════════════════════════════════════════════════
   useEffect(() => {
-    console.log('[Auth] Scheduling initial auth check (4 second delay)...');
-    const checkTimer = setTimeout(() => {
-      console.log('[Auth] Starting initial auth check (after 4 second delay)...');
-      checkAuth();
-    }, 4000); // 4 second delay
-
-    return () => {
-      clearTimeout(checkTimer);
-    };
-  }, [checkAuth]);
+    console.log('[Auth] AuthProvider mounted - NOT checking auth automatically');
+    console.log('[Auth] Auth will be checked only when needed (sign in, protected route access)');
+    
+    // Mark initial check as done immediately without actually checking
+    initialCheckDone.current = true;
+    
+    // Set loading to false immediately so app can proceed
+    setLoading(false);
+  }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
     // CRITICAL: Prevent concurrent operations
@@ -378,6 +383,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     authLock.current = true;
+    setLoading(true);
     console.log('[Auth] ========== SIGN IN STARTED ==========');
     console.log('[Auth] Platform:', Platform.OS);
     console.log('[Auth] Email:', email);
@@ -385,6 +391,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     if (!BACKEND_URL) {
       authLock.current = false;
+      setLoading(false);
       throw new Error('Backend URL is not configured');
     }
 
@@ -514,6 +521,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       throw error;
     } finally {
+      setLoading(false);
       authLock.current = false;
     }
   }, []);
@@ -525,6 +533,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     authLock.current = true;
+    setLoading(true);
     console.log('[Auth] ========== SIGN UP STARTED ==========');
     console.log('[Auth] Platform:', Platform.OS);
     console.log('[Auth] Email:', email);
@@ -533,6 +542,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     
     if (!BACKEND_URL) {
       authLock.current = false;
+      setLoading(false);
       throw new Error('Backend URL is not configured');
     }
 
@@ -613,6 +623,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       throw error;
     } finally {
+      setLoading(false);
       authLock.current = false;
     }
   }, []);
@@ -624,6 +635,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     authLock.current = true;
+    setLoading(true);
     console.log('[Auth] ========== APPLE SIGN IN STARTED ==========');
     console.log('[Auth] Platform:', Platform.OS);
     console.log('[Auth] Identity token length:', identityToken?.length);
@@ -634,12 +646,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!identityToken || typeof identityToken !== 'string') {
       console.error('[Auth] Invalid identity token:', typeof identityToken);
       authLock.current = false;
+      setLoading(false);
       throw new Error('Invalid identity token received from Apple');
     }
 
     if (!BACKEND_URL) {
       console.error('[Auth] Backend URL not configured');
       authLock.current = false;
+      setLoading(false);
       throw new Error('Backend URL is not configured');
     }
 
@@ -758,6 +772,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       throw error;
     } finally {
+      setLoading(false);
       authLock.current = false;
     }
   }, []);
