@@ -90,8 +90,9 @@ export default function AuthScreen() {
 
       console.log('[AuthScreen] Biometric authentication successful, signing in...');
       await signIn(credentials.email, credentials.password);
-      console.log('[AuthScreen] Sign in successful, navigating to home');
-      router.replace('/(tabs)');
+      console.log('[AuthScreen] Sign in successful, navigating to index for subscription check');
+      // CRITICAL FIX: Navigate to / instead of /(tabs) to trigger subscription check
+      router.replace('/');
     } catch (error: any) {
       console.error('[AuthScreen] Biometric sign in failed:', error);
       showError(error.message || 'Biometric sign in failed');
@@ -135,8 +136,9 @@ export default function AuthScreen() {
         }
       }
 
-      console.log('[AuthScreen] Auth successful, navigating');
-      router.replace('/(tabs)');
+      console.log('[AuthScreen] Auth successful, navigating to index for subscription check');
+      // CRITICAL FIX: Navigate to / instead of /(tabs) to trigger subscription check
+      router.replace('/');
     } catch (error: any) {
       console.error('[AuthScreen] Auth failed:', error);
       
@@ -190,8 +192,9 @@ export default function AuthScreen() {
       
       await signInWithApple(credential.identityToken, appleUserData);
       
-      console.log('[AuthScreen] Apple sign in successful, navigating');
-      router.replace('/(tabs)');
+      console.log('[AuthScreen] Apple sign in successful, navigating to index for subscription check');
+      // CRITICAL FIX: Navigate to / instead of /(tabs) to trigger subscription check
+      router.replace('/');
     } catch (error: any) {
       console.error('[AuthScreen] Apple sign in failed:', error);
       
