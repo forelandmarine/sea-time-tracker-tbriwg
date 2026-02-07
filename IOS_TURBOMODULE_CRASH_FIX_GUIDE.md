@@ -1,374 +1,342 @@
 
 # iOS TurboModule Crash Fix Guide
 
-## 🚨 CRITICAL: AppDelegate.mm Modifications Required
-
-This guide provides the **exact code** you need to add to your iOS `AppDelegate.mm` file to diagnose and prevent TurboModule crashes.
-
----
-
 ## Problem Summary
 
-Your app is crashing ~2 seconds after launch with:
-- **Exception Type:** `EXC_CRASH (SIGABRT)`
-- **Termination Reason:** `SIGNAL 6 Abort trap: 6`
-- **Key Stack Frame:** `facebook::react::ObjCTurboModule::performVoidMethodInvocation`
-
-This indicates a **TurboModule bridge failure** where a JavaScript call to a native module is triggering an Objective-C runtime exception.
-
----
-
-## Root Causes
-
-1. **UI API calls from background threads** (e.g., `CLLocationManager`, `AVAudioSession`, `UIKit`)
-2. **Signature mismatches** between JS and Objective-C method signatures
-3. **Nil values passed to nonnull parameters**
-4. **Modules loading before React Native bridge is ready**
-
----
-
-## Solution: Enhanced AppDelegate.mm
-
-### Step 1: Open Your AppDelegate.mm File
-
-Location: `ios/YourAppName/AppDelegate.mm`
-
-### Step 2: Add These Imports at the Top
-
-```objc
-#import <React/RCTLog.h>
-#import <React/RCTBridge.h>
-#import <objc/runtime.h>
+**Crash Signature:**
+```
+EXC_CRASH (SIGABRT) Abort trap 6
+Stack: facebook::react::ObjCTurboModule::performVoidMethodInvocation(...) (RCTTurboModule.mm:441)
 ```
 
-### Step 3: Add Global Exception Handlers (Before @implementation)
+**When:** Immediately after completing/dismissing Apple "update your Apple ID" prompt during Sign in with Apple flow.
 
-Add these **BEFORE** your `@implementation AppDelegate` line:
+**Root Cause:** A JavaScript → native TurboModule method invocation throws an Objective-C exception, causing React Native to abort with SIGABRT.
 
-```objc
-// ═══════════════════════════════════════════════════════════════════════════
-// 🚨 CRITICAL: GLOBAL OBJECTIVE-C EXCEPTION HANDLER
-// ═══════════════════════════════════════════════════════════════════════════
-// This catches ALL Objective-C exceptions BEFORE they cause SIGABRT
-// Provides detailed diagnostics for TurboModule crashes
-// ═══════════════════════════════════════════════════════════════════════════
+---
 
-void HandleObjectiveCException(NSException *exception) {
-    NSLog(@"\n\n");
-    NSLog(@"═══════════════════════════════════════════════════════════════");
-    NSLog(@"🚨 CAUGHT OBJECTIVE-C EXCEPTION (TurboModule Crash Prevention)");
-    NSLog(@"═══════════════════════════════════════════════════════════════");
-    NSLog(@"Exception Name: %@", exception.name);
-    NSLog(@"Exception Reason: %@", exception.reason);
-    NSLog(@"User Info: %@", exception.userInfo);
-    NSLog(@"───────────────────────────────────────────────────────────────");
-    NSLog(@"Call Stack Symbols:");
-    for (NSString *symbol in [exception callStackSymbols]) {
-        NSLog(@"  %@", symbol);
-    }
-    NSLog(@"═══════════════════════════════════════════════════════════════");
-    NSLog(@"\n\n");
+## Fixes Implemented
+
+### A) Backend Fix - Email/Password 500 Error
+
+**File:** `backend/src/routes/subscription.ts`
+
+**Problem:** 
+- `/api/subscription/status` endpoint crashes with `TypeError: Cannot read property 'toISOString' of undefined`
+- Database `user` table missing `subscription_expires_at` column
+- Code tries to call `.toISOString()` on `undefined` → HTTP 500
+
+**Fix:**
+```typescript
+// BEFORE (crashes):
+expiresAt: expiresAt ? expiresAt.toISOString() : null,
+
+// AFTER (safe):
+const subscriptionExpiresAt = (user as any).subscription_expires_at;
+let expiresAtISO: string | null = null;
+if (subscriptionExpiresAt) {
+  try {
+    const expiresDate = subscriptionExpiresAt instanceof Date 
+      ? subscriptionExpiresAt 
+      : new Date(subscriptionExpiresAt);
     
-    // CRITICAL: Check if this is a TurboModule-related crash
-    NSString *reason = exception.reason;
-    if ([reason containsString:@"TurboModule"] ||
-        [reason containsString:@"performVoidMethodInvocation"] ||
-        [reason containsString:@"NSInvocation"]) {
-        NSLog(@"⚠️ DETECTED: TurboModule invocation failure");
-        NSLog(@"⚠️ This is likely caused by:");
-        NSLog(@"   1. UI API called from background thread");
-        NSLog(@"   2. Signature mismatch between JS and native");
-        NSLog(@"   3. Nil passed to nonnull parameter");
-        NSLog(@"   4. Module loaded before bridge ready");
+    if (!isNaN(expiresDate.getTime())) {
+      expiresAtISO = expiresDate.toISOString();
     }
-    
-    // CRITICAL: Check for common culprits
-    if ([reason containsString:@"CLLocationManager"] ||
-        [reason containsString:@"Location"]) {
-        NSLog(@"⚠️ DETECTED: Location services issue");
-        NSLog(@"⚠️ CLLocationManager MUST be called on main thread");
-    }
-    
-    if ([reason containsString:@"AVAudioSession"] ||
-        [reason containsString:@"Audio"]) {
-        NSLog(@"⚠️ DETECTED: Audio session issue");
-        NSLog(@"⚠️ AVAudioSession MUST be called on main thread");
-    }
-    
-    if ([reason containsString:@"UIKit"] ||
-        [reason containsString:@"UI"]) {
-        NSLog(@"⚠️ DETECTED: UIKit issue");
-        NSLog(@"⚠️ ALL UIKit calls MUST be on main thread");
-    }
+  } catch (dateError) {
+    app.logger.error({ err: dateError }, "Error converting date");
+  }
+}
+```
+
+**Result:** Email/password sign-in no longer returns HTTP 500.
+
+---
+
+### B) iOS Instrumentation - Exception Handlers
+
+**Files Created:**
+- `ios/SeaTimeTracker/AppDelegate+ExceptionHandling.h`
+- `ios/SeaTimeTracker/AppDelegate+ExceptionHandling.m`
+
+**File Modified:**
+- `ios/SeaTimeTracker/AppDelegate.mm`
+
+**What It Does:**
+1. **`NSSetUncaughtExceptionHandler`** - Captures Objective-C exceptions BEFORE SIGABRT
+2. **`RCTSetFatalHandler`** - Captures React Native fatal errors with full context
+
+**Output:** Detailed logs showing:
+- Exception name and reason
+- Call stack symbols
+- Module name and selector being invoked (if available)
+- User info dictionary
+
+**How to Use:**
+1. Rebuild iOS app: `npx expo run:ios`
+2. Trigger Apple Sign-In crash
+3. Check Xcode console for detailed exception logs
+4. Look for lines starting with `🚨 CAUGHT OBJECTIVE-C EXCEPTION`
+
+---
+
+### C) Frontend Defensive Coding
+
+**File:** `contexts/AuthContext.tsx` (already has good error handling)
+
+**Key Protections:**
+- ✅ Try-catch around all native module calls
+- ✅ Timeout protection (10 seconds max for sign-in)
+- ✅ Null checks before accessing Apple credential fields
+- ✅ Graceful error messages for user
+
+**File:** `app/_layout.tsx`
+
+**Key Protections:**
+- ✅ Delayed native module loading (2+ seconds after app mount)
+- ✅ Modules loaded in sequence with delays between each
+- ✅ Try-catch around all module imports
+- ✅ Non-blocking failures (app continues if module fails)
+
+---
+
+## Debugging Workflow
+
+### Step 1: Capture the Exception
+
+1. Install the instrumentation (files above)
+2. Rebuild iOS app
+3. Trigger the crash (Sign in with Apple → complete prompt)
+4. **Check Xcode console immediately** for exception details
+
+### Step 2: Identify the Culprit
+
+Look for these patterns in the exception:
+
+**Pattern 1: UI API on Background Thread**
+```
+Exception: UIKit must be called from main thread
+Module: RCTStoreKit / RCTKeychain / RCTNavigation
+```
+**Fix:** Wrap native calls in `dispatch_async(dispatch_get_main_queue(), ^{ ... })`
+
+**Pattern 2: Nil to Nonnull Parameter**
+```
+Exception: NSInvalidArgumentException
+Reason: *** -[__NSPlaceholderDictionary initWithObjects:forKeys:count:]: attempt to insert nil object
+```
+**Fix:** Add nil checks in native module before passing to APIs
+
+**Pattern 3: Promise Contract Violation**
+```
+Exception: Promise already resolved/rejected
+Module: RCTAppleAuthentication
+```
+**Fix:** Ensure promise is only resolved/rejected once
+
+**Pattern 4: Type Mismatch**
+```
+Exception: NSInvalidArgumentException
+Reason: Expected NSString, got NSNull
+```
+**Fix:** Add type validation in native module
+
+### Step 3: Apply Targeted Fix
+
+Once you identify the failing module/method from the exception logs:
+
+**Option A: Fix the Native Module**
+
+Example for StoreKit calling UI API on wrong thread:
+
+```objective-c
+// BEFORE (crashes):
+RCT_EXPORT_METHOD(purchaseProduct:(NSString *)productId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    SKPayment *payment = [SKPayment paymentWithProductIdentifier:productId];
+    [[SKPaymentQueue defaultQueue] addPayment:payment]; // ❌ UI API on background thread
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 🚨 CRITICAL: REACT NATIVE FATAL ERROR HANDLER
-// ═══════════════════════════════════════════════════════════════════════════
-// This catches RCTFatal errors before they cause SIGABRT
-// ═══════════════════════════════════════════════════════════════════════════
-
-void CustomRCTFatalHandler(NSError *error) {
-    NSLog(@"\n\n");
-    NSLog(@"═══════════════════════════════════════════════════════════════");
-    NSLog(@"🚨 CAUGHT RCTFatal ERROR");
-    NSLog(@"═══════════════════════════════════════════════════════════════");
-    NSLog(@"Domain: %@", error.domain);
-    NSLog(@"Code: %ld", (long)error.code);
-    NSLog(@"Description: %@", error.localizedDescription);
-    NSLog(@"User Info: %@", error.userInfo);
-    NSLog(@"───────────────────────────────────────────────────────────────");
-    
-    // Extract stack trace if available
-    NSArray *stackTrace = error.userInfo[@"RCTJSStackTrace"];
-    if (stackTrace) {
-        NSLog(@"JavaScript Stack Trace:");
-        for (NSDictionary *frame in stackTrace) {
-            NSLog(@"  %@:%@ in %@",
-                  frame[@"file"] ?: @"unknown",
-                  frame[@"lineNumber"] ?: @"?",
-                  frame[@"methodName"] ?: @"<anonymous>");
+// AFTER (safe):
+RCT_EXPORT_METHOD(purchaseProduct:(NSString *)productId
+                  resolver:(RCTPromiseResolveBlock)resolve
+                  rejecter:(RCTPromiseRejectBlock)reject) {
+    @try {
+        if (!productId) {
+            reject(@"E_INVALID_PARAM", @"Product ID cannot be nil", nil);
+            return;
         }
-    }
-    
-    NSLog(@"═══════════════════════════════════════════════════════════════");
-    NSLog(@"\n\n");
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// 🚨 CRITICAL: MAIN THREAD ENFORCEMENT
-// ═══════════════════════════════════════════════════════════════════════════
-// Swizzle common UI methods to detect background thread violations
-// ═══════════════════════════════════════════════════════════════════════════
-
-@interface NSObject (MainThreadCheck)
-@end
-
-@implementation NSObject (MainThreadCheck)
-
-+ (void)load {
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        // Swizzle CLLocationManager init
-        Class locationManagerClass = NSClassFromString(@"CLLocationManager");
-        if (locationManagerClass) {
-            Method originalInit = class_getInstanceMethod(locationManagerClass, @selector(init));
-            Method swizzledInit = class_getInstanceMethod(locationManagerClass, @selector(swizzled_init));
-            if (originalInit && swizzledInit) {
-                method_exchangeImplementations(originalInit, swizzledInit);
+        
+        // ✅ Dispatch to main thread
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                SKPayment *payment = [SKPayment paymentWithProductIdentifier:productId];
+                [[SKPaymentQueue defaultQueue] addPayment:payment];
+                resolve(@YES);
+            } @catch (NSException *mainThreadException) {
+                reject(@"E_PURCHASE_FAILED", mainThreadException.reason, nil);
             }
-        }
-    });
-}
-
-- (instancetype)swizzled_init {
-    if ([self isKindOfClass:NSClassFromString(@"CLLocationManager")]) {
-        if (![NSThread isMainThread]) {
-            NSLog(@"⚠️⚠️⚠️ WARNING: CLLocationManager initialized on BACKGROUND THREAD ⚠️⚠️⚠️");
-            NSLog(@"⚠️ This WILL cause a TurboModule crash!");
-            NSLog(@"⚠️ Stack trace:");
-            for (NSString *symbol in [NSThread callStackSymbols]) {
-                NSLog(@"  %@", symbol);
-            }
-        }
+        });
+    } @catch (NSException *exception) {
+        reject(@"E_NATIVE_CRASH", exception.reason, nil);
     }
-    return [self swizzled_init]; // Call original
-}
-
-@end
-```
-
-### Step 4: Modify didFinishLaunchingWithOptions
-
-Find your `- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions` method and add these lines **AT THE VERY TOP** (before any other code):
-
-```objc
-- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions
-{
-  // ═══════════════════════════════════════════════════════════════════════════
-  // 🚨 CRITICAL: INSTALL EXCEPTION HANDLERS FIRST
-  // ═══════════════════════════════════════════════════════════════════════════
-  // These MUST be installed BEFORE any React Native initialization
-  // ═══════════════════════════════════════════════════════════════════════════
-  
-  NSLog(@"═══════════════════════════════════════════════════════════════");
-  NSLog(@"🚀 APP LAUNCH STARTED");
-  NSLog(@"═══════════════════════════════════════════════════════════════");
-  NSLog(@"Device: %@", [[UIDevice currentDevice] model]);
-  NSLog(@"iOS Version: %@", [[UIDevice currentDevice] systemVersion]);
-  NSLog(@"App Version: %@", [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleShortVersionString"]);
-  NSLog(@"Build: %@", [[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleVersion"]);
-  NSLog(@"═══════════════════════════════════════════════════════════════");
-  
-  // Install global exception handler
-  NSSetUncaughtExceptionHandler(&HandleObjectiveCException);
-  NSLog(@"✅ Installed global Objective-C exception handler");
-  
-  // Install RCTFatal handler
-  RCTSetFatalHandler(CustomRCTFatalHandler);
-  NSLog(@"✅ Installed RCTFatal error handler");
-  
-  // ... rest of your existing didFinishLaunchingWithOptions code ...
-  
-  return YES;
 }
 ```
 
-### Step 5: Add Crash Detection on App Termination
+**Option B: Binary Search to Isolate**
 
-Add this method to your AppDelegate:
+If you can't identify the exact module, use binary search:
 
-```objc
-- (void)applicationWillTerminate:(UIApplication *)application
-{
-  NSLog(@"\n\n");
-  NSLog(@"═══════════════════════════════════════════════════════════════");
-  NSLog(@"⚠️ APP TERMINATING");
-  NSLog(@"═══════════════════════════════════════════════════════════════");
-  NSLog(@"If this appears immediately after launch, it indicates a crash");
-  NSLog(@"Check logs above for exception details");
-  NSLog(@"═══════════════════════════════════════════════════════════════");
-  NSLog(@"\n\n");
-}
-```
+1. Comment out half of the post-login operations
+2. Test if crash still occurs
+3. Narrow down to the specific operation
+4. Apply fix to that operation only
 
 ---
 
-## Step 6: Rebuild and Test
+## Common TurboModule Crash Causes
 
-1. **Clean build folder:** Product → Clean Build Folder (Cmd+Shift+K)
-2. **Delete derived data:** `rm -rf ~/Library/Developer/Xcode/DerivedData/*`
-3. **Rebuild:** Product → Build (Cmd+B)
-4. **Run on device:** Product → Run (Cmd+R)
+### 1. StoreKit (Subscription/IAP)
 
----
+**Symptoms:**
+- Crash after Apple sign-in
+- Crash when checking subscription status
+- Crash when restoring purchases
 
-## Reading the Crash Logs
+**Common Issues:**
+- `SKPaymentQueue` accessed from background thread
+- `SKProductsRequest` delegate methods not on main thread
+- Receipt validation blocking main thread
 
-After implementing these changes, when the app crashes, you'll see detailed logs like:
+**Fixes:**
+- Wrap all StoreKit calls in `dispatch_async(dispatch_get_main_queue(), ^{ ... })`
+- Add `@try/@catch` around all StoreKit operations
+- Validate receipt asynchronously
 
-```
-═══════════════════════════════════════════════════════════════
-🚨 CAUGHT OBJECTIVE-C EXCEPTION (TurboModule Crash Prevention)
-═══════════════════════════════════════════════════════════════
-Exception Name: NSInvalidArgumentException
-Exception Reason: -[RCTModuleData instance]: unrecognized selector sent to instance 0x...
-───────────────────────────────────────────────────────────────
-Call Stack Symbols:
-  0   CoreFoundation    0x00000001a1234567 __exceptionPreprocess + 123
-  1   libobjc.A.dylib   0x00000001a2345678 objc_exception_throw + 56
-  2   YourApp           0x0000000102345678 -[RCTTurboModule performVoidMethodInvocation] + 789
-  ...
-═══════════════════════════════════════════════════════════════
-⚠️ DETECTED: TurboModule invocation failure
-⚠️ This is likely caused by:
-   1. UI API called from background thread
-   2. Signature mismatch between JS and native
-   3. Nil passed to nonnull parameter
-   4. Module loaded before bridge ready
-═══════════════════════════════════════════════════════════════
-```
+### 2. Keychain (Secure Storage)
 
----
+**Symptoms:**
+- Crash when saving credentials
+- Crash when reading biometric data
 
-## Common Fixes Based on Crash Type
+**Common Issues:**
+- Keychain access on background thread
+- Nil values passed to keychain attributes
+- Keychain access group misconfigured
 
-### If you see "CLLocationManager" in the crash:
+**Fixes:**
+- Dispatch keychain operations to main thread
+- Add nil checks before keychain operations
+- Verify keychain access group in entitlements
 
-**Problem:** Location services called from background thread
+### 3. Navigation (React Navigation / Expo Router)
 
-**Fix:** Ensure all location code runs on main thread:
+**Symptoms:**
+- Crash immediately after sign-in
+- Crash when navigating to home screen
 
-```objc
-dispatch_async(dispatch_get_main_queue(), ^{
-    self.locationManager = [[CLLocationManager alloc] init];
-    [self.locationManager requestWhenInUseAuthorization];
-});
-```
+**Common Issues:**
+- Navigation called before React Native bridge ready
+- Multiple navigation calls in quick succession
+- Navigation from background thread
 
-### If you see "AVAudioSession" in the crash:
+**Fixes:**
+- Add delay before navigation (100-200ms)
+- Use `setTimeout` to ensure state updates complete
+- Wrap navigation in try-catch
 
-**Problem:** Audio session called from background thread
+### 4. Apple Authentication
 
-**Fix:** Ensure all audio code runs on main thread:
+**Symptoms:**
+- Crash after completing Apple ID prompt
+- Crash when accessing credential fields
 
-```objc
-dispatch_async(dispatch_get_main_queue(), ^{
-    [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
-});
-```
+**Common Issues:**
+- Accessing `fullName` or `email` when nil
+- Passing nil identity token to backend
+- Promise resolved multiple times
 
-### If you see "UIKit" in the crash:
-
-**Problem:** UI code called from background thread
-
-**Fix:** Wrap ALL UI code in main thread dispatch:
-
-```objc
-dispatch_async(dispatch_get_main_queue(), ^{
-    // Your UI code here
-});
-```
-
----
-
-## Frontend Changes Already Implemented
-
-The following frontend fixes have been applied:
-
-✅ **Lazy loading of all native modules** - No modules load at app startup
-✅ **Aggressive timeouts** - All operations have 2-5 second timeouts
-✅ **Delayed module loading** - Modules load 2-5 seconds after app is stable
-✅ **Non-blocking operations** - All native calls are async with fallbacks
-✅ **Graceful degradation** - App works even if modules fail to load
+**Fixes:**
+- Check for nil before accessing credential fields
+- Validate identity token exists before sending
+- Ensure promise only resolved once
 
 ---
 
 ## Testing Checklist
 
-After implementing the AppDelegate.mm changes:
+After applying fixes, test these scenarios:
 
-- [ ] App launches without crashing
-- [ ] No SIGABRT errors in console
-- [ ] Exception handlers log detailed crash info if crash occurs
-- [ ] Location services work (if used)
-- [ ] Notifications work (if used)
-- [ ] Audio works (if used)
-- [ ] App works on physical device (not just simulator)
-- [ ] App works on iOS 26.2.1 (your reported version)
-
----
-
-## If Crash Still Occurs
-
-1. **Check Xcode console** for the detailed exception logs
-2. **Look for the module name** in the stack trace
-3. **Search for that module** in your codebase
-4. **Ensure it's loaded lazily** (not at file scope)
-5. **Ensure UI calls are on main thread**
-6. **Check method signatures** match between JS and native
+- [ ] Email/password sign-in (should not return 500)
+- [ ] Apple Sign-In with new account (first time)
+- [ ] Apple Sign-In with existing account (returning user)
+- [ ] Apple Sign-In with "Hide My Email" enabled
+- [ ] Apple Sign-In cancellation (should not crash)
+- [ ] Sign-out and sign-in again
+- [ ] Background app and return during Apple prompt
+- [ ] Airplane mode during sign-in (network error handling)
 
 ---
 
-## Additional Resources
+## Verification
 
-- [React Native TurboModules Documentation](https://reactnative.dev/docs/the-new-architecture/pillars-turbomodules)
-- [iOS Main Thread Enforcement](https://developer.apple.com/documentation/uikit/uiapplication/1622936-main)
-- [Objective-C Exception Handling](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/Exceptions/Exceptions.html)
+**Email/Password 500 Fixed:**
+```bash
+# Check backend logs after sign-in
+# Should see: "Subscription status retrieved successfully"
+# Should NOT see: "TypeError: Cannot read property 'toISOString' of undefined"
+```
+
+**Apple Sign-In Crash Fixed:**
+```bash
+# Check Xcode console after Apple sign-in
+# Should see: "Apple authentication successful"
+# Should NOT see: "CAUGHT OBJECTIVE-C EXCEPTION" or "SIGABRT"
+```
+
+---
+
+## Next Steps if Crash Persists
+
+1. **Capture Full Exception Details:**
+   - Run app in Xcode
+   - Trigger crash
+   - Copy full exception log from console
+   - Look for module name and selector
+
+2. **Disable Modules One by One:**
+   - Comment out StoreKit initialization
+   - Comment out keychain operations
+   - Comment out widget updates
+   - Test after each change
+
+3. **Check React Native Version:**
+   - Ensure using React Native 0.81.5 (matches package.json)
+   - Check if New Architecture is enabled
+   - Try disabling New Architecture temporarily for diagnosis
+
+4. **Review Native Dependencies:**
+   - Check `ios/Podfile.lock` for version conflicts
+   - Run `cd ios && pod install --repo-update`
+   - Check for deprecated APIs in native modules
 
 ---
 
 ## Summary
 
-This fix provides:
+**Email/Password 500:** ✅ FIXED - Safe date conversion in subscription endpoint
 
-1. **Detailed crash diagnostics** - Know exactly what's failing
-2. **Main thread enforcement** - Detect background thread violations
-3. **Exception interception** - Catch crashes before SIGABRT
-4. **Module isolation** - Identify which module is causing the crash
+**Apple Sign-In Crash:** 🔧 INSTRUMENTED - Exception handlers will reveal exact cause
 
-Combined with the frontend lazy loading already implemented, this should **completely eliminate** TurboModule startup crashes.
+**Next Action:** Rebuild iOS app, trigger crash, check Xcode console for detailed exception logs showing the exact failing module/method.
 
 ---
 
-**⚠️ IMPORTANT:** After implementing these changes, **rebuild from scratch** and test on a **physical device**. Simulator behavior may differ from real devices.
+## Contact
+
+If crash persists after applying these fixes and reviewing exception logs, provide:
+1. Full exception log from Xcode console
+2. Module name and selector from exception
+3. Steps to reproduce
+4. iOS version and device model
