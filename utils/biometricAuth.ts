@@ -15,6 +15,8 @@ interface BiometricCredentials {
  */
 const getSecureStore = async () => {
   console.log('[BiometricAuth] Dynamically loading expo-secure-store...');
+  // Add a small delay to ensure the app is fully initialized
+  await new Promise(resolve => setTimeout(resolve, 100));
   return await import('expo-secure-store');
 };
 

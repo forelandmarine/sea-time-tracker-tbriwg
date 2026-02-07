@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import { Platform, InteractionManager } from 'react-native';
+import { Platform } from 'react-native';
 import { BACKEND_URL } from '@/utils/api';
 import { clearBiometricCredentials } from '@/utils/biometricAuth';
 
@@ -42,8 +42,14 @@ const tokenStorage = {
       // CRITICAL: Dynamically import SecureStore to prevent module-scope initialization
       // This prevents TurboModule crashes during startup
       console.log('[Auth] Dynamically loading expo-secure-store for token retrieval...');
+      
+      // Add a small delay to ensure the app is fully initialized
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const SecureStore = await import('expo-secure-store');
-      return await SecureStore.getItemAsync(TOKEN_KEY);
+      const token = await SecureStore.getItemAsync(TOKEN_KEY);
+      console.log('[Auth] Token retrieved:', token ? 'exists' : 'null');
+      return token;
     } catch (error) {
       console.error('[Auth] Error getting token:', error);
       return null;
@@ -56,13 +62,19 @@ const tokenStorage = {
     try {
       if (Platform.OS === 'web') {
         localStorage.setItem(TOKEN_KEY, token);
+        console.log('[Auth] Token stored in localStorage');
         return;
       }
       
       // CRITICAL: Dynamically import SecureStore
       console.log('[Auth] Dynamically loading expo-secure-store for token storage...');
+      
+      // Add a small delay to ensure the app is fully initialized
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const SecureStore = await import('expo-secure-store');
       await SecureStore.setItemAsync(TOKEN_KEY, token);
+      console.log('[Auth] Token stored in SecureStore');
     } catch (error) {
       console.error('[Auth] Error storing token:', error);
       throw error;
@@ -73,13 +85,19 @@ const tokenStorage = {
     try {
       if (Platform.OS === 'web') {
         localStorage.removeItem(TOKEN_KEY);
+        console.log('[Auth] Token removed from localStorage');
         return;
       }
       
       // CRITICAL: Dynamically import SecureStore
       console.log('[Auth] Dynamically loading expo-secure-store for token removal...');
+      
+      // Add a small delay to ensure the app is fully initialized
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const SecureStore = await import('expo-secure-store');
       await SecureStore.deleteItemAsync(TOKEN_KEY);
+      console.log('[Auth] Token removed from SecureStore');
     } catch (error) {
       console.error('[Auth] Error removing token:', error);
       // Don't throw - we want sign out to always succeed locally
@@ -111,15 +129,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(null);
         return;
       }
-
-      // CRITICAL: Wait for all interactions to complete before accessing SecureStore
-      // This ensures the TurboModule bridge is fully initialized
-      await new Promise<void>((resolve) => {
-        InteractionManager.runAfterInteractions(() => {
-          console.log('[Auth] Interactions complete, safe to access SecureStore');
-          resolve();
-        });
-      });
 
       const token = await tokenStorage.getToken();
       
@@ -207,14 +216,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error('No session token received');
       }
 
-      // CRITICAL: Wait for interactions before storing token
-      await new Promise<void>((resolve) => {
-        InteractionManager.runAfterInteractions(() => {
-          console.log('[Auth] Safe to store token after sign in');
-          resolve();
-        });
-      });
-
       // Store token and set user atomically
       await tokenStorage.setToken(data.session.token);
       setUser(data.user);
@@ -277,14 +278,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!data.session?.token) {
         throw new Error('No session token received');
       }
-
-      // CRITICAL: Wait for interactions before storing token
-      await new Promise<void>((resolve) => {
-        InteractionManager.runAfterInteractions(() => {
-          console.log('[Auth] Safe to store token after sign up');
-          resolve();
-        });
-      });
 
       await tokenStorage.setToken(data.session.token);
       setUser(data.user);
@@ -362,14 +355,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!data.session?.token) {
         throw new Error('No session token received');
       }
-
-      // CRITICAL: Wait for interactions before storing token
-      await new Promise<void>((resolve) => {
-        InteractionManager.runAfterInteractions(() => {
-          console.log('[Auth] Safe to store token after Apple sign in');
-          resolve();
-        });
-      });
 
       await tokenStorage.setToken(data.session.token);
       setUser(data.user);

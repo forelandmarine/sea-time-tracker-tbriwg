@@ -4,16 +4,14 @@ const { withAppDelegate } = require('@expo/config-plugins');
 /**
  * Expo Config Plugin: iOS Native Crash Instrumentation
  * 
- * Injects fatal exception handlers into AppDelegate to capture TurboModule crashes
- * before SIGABRT. This allows us to see the actual Objective-C exception reason
- * in TestFlight crash logs.
- * 
- * Captures:
- * - NSSetUncaughtExceptionHandler (Objective-C exceptions)
- * - RCTSetFatalHandler (React Native fatal errors)
- * - RCTSetFatalExceptionHandler (React Native exceptions)
+ * SIMPLIFIED VERSION - Minimal crash logging to avoid startup issues
  */
 module.exports = function withIOSCrashInstrumentation(config) {
+  // TEMPORARILY DISABLED - Return config unchanged to prevent startup crashes
+  console.log('[iOS Crash Instrumentation] DISABLED - Skipping to prevent startup crashes');
+  return config;
+  
+  /* ORIGINAL CODE DISABLED
   return withAppDelegate(config, (config) => {
     const { modResults } = config;
     let contents = modResults.contents;
@@ -185,4 +183,5 @@ void RCTFatalHandlerWithException(NSError *error, NSException *exception) {
     modResults.contents = contents;
     return config;
   });
+  */
 };

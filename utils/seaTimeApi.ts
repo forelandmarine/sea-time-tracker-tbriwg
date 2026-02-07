@@ -18,6 +18,8 @@ const LAST_QUERY_TIME_PREFIX = 'vessel_last_query_time_';
  */
 const getSecureStore = async () => {
   console.log('[seaTimeApi] Dynamically loading expo-secure-store...');
+  // Add a small delay to ensure the app is fully initialized
+  await new Promise(resolve => setTimeout(resolve, 100));
   return await import('expo-secure-store');
 };
 

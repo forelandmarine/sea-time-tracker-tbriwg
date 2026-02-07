@@ -1,7 +1,7 @@
 
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { View, ActivityIndicator, StyleSheet, Text, InteractionManager } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Text } from 'react-native';
 import { colors } from '@/styles/commonStyles';
 import React, { useEffect, useState } from 'react';
 import * as seaTimeApi from '@/utils/seaTimeApi';
@@ -11,34 +11,15 @@ export default function Index() {
   const [checkingPathway, setCheckingPathway] = useState(false);
   const [hasDepartment, setHasDepartment] = useState(false);
   const [initialized, setInitialized] = useState(false);
-  const [readyToCheck, setReadyToCheck] = useState(false);
 
-  // Wait for all interactions to complete before checking auth
-  // This ensures native modules are fully initialized
+  // Check auth on mount
   useEffect(() => {
-    console.log('[Index] Waiting for interactions to complete before auth check...');
-    
-    const task = InteractionManager.runAfterInteractions(() => {
-      console.log('[Index] ✅ Interactions complete, ready to check auth');
-      setReadyToCheck(true);
-    });
-
-    return () => task.cancel();
-  }, []);
-
-  // Check auth only after interactions are complete
-  useEffect(() => {
-    if (!readyToCheck) {
-      console.log('[Index] Not ready to check auth yet, waiting...');
-      return;
-    }
-
     console.log('[Index] Starting auth check...');
     checkAuth().finally(() => {
       console.log('[Index] Auth check complete');
       setInitialized(true);
     });
-  }, [readyToCheck, checkAuth]);
+  }, [checkAuth]);
 
   // Check user pathway after auth completes
   useEffect(() => {
@@ -68,14 +49,12 @@ export default function Index() {
   }, [initialized, authLoading, isAuthenticated]);
 
   // Show loading while initializing
-  if (!readyToCheck || !initialized || authLoading || (isAuthenticated && checkingPathway)) {
-    const loadingMessage = !readyToCheck 
-      ? 'Initializing...' 
-      : !initialized 
-        ? 'Checking authentication...' 
-        : checkingPathway 
-          ? 'Loading profile...' 
-          : 'Loading...';
+  if (!initialized || authLoading || (isAuthenticated && checkingPathway)) {
+    const loadingMessage = !initialized 
+      ? 'Checking authentication...' 
+      : checkingPathway 
+        ? 'Loading profile...' 
+        : 'Loading...';
 
     return (
       <View style={styles.container}>

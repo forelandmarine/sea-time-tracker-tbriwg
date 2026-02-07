@@ -21,17 +21,12 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 console.log('[App] ========== APP INITIALIZATION STARTED ==========');
 console.log('[App] Platform:', Platform.OS);
-console.log('[App] React Native Version:', Platform.Version);
-console.log('[App] New Architecture:', (global as any).RN$Bridgeless ? 'ENABLED' : 'DISABLED');
 console.log('[App] Backend URL:', BACKEND_URL);
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
-if (Platform.OS !== 'web') {
-  console.log('[App] Preventing splash screen auto-hide...');
-  SplashScreen.preventAutoHideAsync().catch((err) => {
-    console.warn('[App] Could not prevent splash screen auto-hide:', err);
-  });
-}
+SplashScreen.preventAutoHideAsync().catch((err) => {
+  console.warn('[App] Could not prevent splash screen auto-hide:', err);
+});
 
 export const unstable_settings = {
   initialRouteName: "index",
@@ -40,25 +35,11 @@ export const unstable_settings = {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const [initError, setInitError] = useState<string | null>(null);
-  const [bridgeReady, setBridgeReady] = useState(false);
 
   const [loaded, error] = useFonts({
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     SpaceMono: require("../assets/fonts/SpaceMono-Regular.ttf"),
   });
-
-  // Wait for React Native bridge to be fully ready before allowing any native module calls
-  useEffect(() => {
-    console.log('[App] Waiting for React Native bridge to be ready...');
-    
-    // Use InteractionManager to ensure all animations and interactions are complete
-    const task = InteractionManager.runAfterInteractions(() => {
-      console.log('[App] ✅ React Native bridge is ready');
-      setBridgeReady(true);
-    });
-
-    return () => task.cancel();
-  }, []);
 
   useEffect(() => {
     if (error) {
@@ -71,21 +52,19 @@ function RootLayoutNav() {
   }, [error]);
 
   useEffect(() => {
-    if (loaded && bridgeReady) {
-      console.log('[App] Fonts loaded and bridge ready, hiding splash screen');
+    if (loaded) {
+      console.log('[App] Fonts loaded, hiding splash screen');
       
       if (Platform.OS !== 'web') {
-        // Small delay to ensure everything is truly ready
-        setTimeout(() => {
-          SplashScreen.hideAsync().catch((err) => {
-            console.warn('[App] Error hiding splash screen:', err);
-          });
-        }, 100);
+        // Hide splash screen immediately when fonts are loaded
+        SplashScreen.hideAsync().catch((err) => {
+          console.warn('[App] Error hiding splash screen:', err);
+        });
       }
       
       console.log('[App] ✅ App initialized - Platform:', Platform.OS, 'Backend:', BACKEND_URL ? 'configured' : 'NOT CONFIGURED');
     }
-  }, [loaded, bridgeReady]);
+  }, [loaded]);
 
   // Show error screen if initialization failed
   if (initError) {
@@ -102,14 +81,12 @@ function RootLayoutNav() {
     );
   }
 
-  // Show loading screen while fonts are loading or bridge is not ready
-  if (!loaded || !bridgeReady) {
+  // Show loading screen while fonts are loading
+  if (!loaded) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colorScheme === 'dark' ? '#000' : '#fff' }}>
         <Text style={{ fontSize: 18, color: colorScheme === 'dark' ? '#fff' : '#000', marginBottom: 10 }}>SeaTime Tracker</Text>
-        <Text style={{ fontSize: 14, color: colorScheme === 'dark' ? '#999' : '#666' }}>
-          {!loaded ? 'Loading fonts...' : 'Initializing...'}
-        </Text>
+        <Text style={{ fontSize: 14, color: colorScheme === 'dark' ? '#999' : '#666' }}>Loading...</Text>
       </View>
     );
   }
@@ -407,62 +384,17 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  const [providerError, setProviderError] = useState<string | null>(null);
-
-  useEffect(() => {
-    console.log('[App] Root layout mounted');
-    
-    // Set up global error handler (only on web)
-    if (Platform.OS === 'web') {
-      const errorHandler = (error: ErrorEvent) => {
-        console.error('[App] Global error caught:', error);
-        setProviderError(error.message);
-      };
-
-      window.addEventListener('error', errorHandler);
-      return () => window.removeEventListener('error', errorHandler);
-    }
-  }, []);
-
-  if (providerError) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000', padding: 20 }}>
-        <Text style={{ fontSize: 18, color: 'red', marginBottom: 10, textAlign: 'center' }}>App Error</Text>
-        <Text style={{ fontSize: 14, color: '#999', textAlign: 'center' }}>
-          {providerError}
-        </Text>
-        <Text style={{ fontSize: 12, color: '#666', marginTop: 20, textAlign: 'center' }}>
-          Please restart the app
-        </Text>
-      </View>
-    );
-  }
-
-  // CRITICAL: Wrap providers in try-catch to catch initialization errors
-  try {
-    return (
-      <ErrorBoundary>
-        <AuthProvider>
-          <SubscriptionProvider>
-            <WidgetProvider>
-              <RootLayoutNav />
-            </WidgetProvider>
-          </SubscriptionProvider>
-        </AuthProvider>
-      </ErrorBoundary>
-    );
-  } catch (error: any) {
-    console.error('[App] ❌ CRITICAL ERROR during provider initialization:', error);
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000', padding: 20 }}>
-        <Text style={{ fontSize: 18, color: 'red', marginBottom: 10, textAlign: 'center' }}>Critical Error</Text>
-        <Text style={{ fontSize: 14, color: '#999', textAlign: 'center' }}>
-          {error.message || 'Failed to initialize app'}
-        </Text>
-        <Text style={{ fontSize: 12, color: '#666', marginTop: 20, textAlign: 'center' }}>
-          Please restart the app
-        </Text>
-      </View>
-    );
-  }
+  console.log('[App] Root layout mounted');
+  
+  return (
+    <ErrorBoundary>
+      <AuthProvider>
+        <SubscriptionProvider>
+          <WidgetProvider>
+            <RootLayoutNav />
+          </WidgetProvider>
+        </SubscriptionProvider>
+      </AuthProvider>
+    </ErrorBoundary>
+  );
 }
