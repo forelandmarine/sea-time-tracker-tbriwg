@@ -244,7 +244,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const readyTimer = setTimeout(() => {
       console.log('[Auth] ✅ App is now ready for auth operations (after 3 second delay)');
       appReadyRef.current = true;
-    }, 3000); // 3 second delay to ensure app is stable (was 1.5 seconds)
+    }, 3000); // 3 second delay to ensure bridge/native modules are ready
 
     return () => {
       clearTimeout(readyTimer);
@@ -366,7 +366,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const checkTimer = setTimeout(() => {
       console.log('[Auth] Starting initial auth check (after 4 second delay)...');
       checkAuth();
-    }, 4000); // 4 second delay (was 2 seconds)
+    }, 4000); // 4 second delay
 
     return () => {
       clearTimeout(checkTimer);

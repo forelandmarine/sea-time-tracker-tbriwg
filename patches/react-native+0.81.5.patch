@@ -1,31 +1,26 @@
-
-diff --git a/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/RCTTurboModule.mm b/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/RCTTurboModule.mm
-index 1234567..abcdefg 100644
---- a/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/RCTTurboModule.mm
-+++ b/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/RCTTurboModule.mm
-@@ -438,6 +438,25 @@ - (void)performVoidMethodInvocation:(NSInvocation *)invocation
-                            arguments:(const facebook::jsi::Value *)arguments
-                                count:(size_t)count
- {
-+  // ═══════════════════════════════════════════════════════════════════════════
-+  // 🚨 CRITICAL DIAGNOSTIC LOGGING - TURBOMODULE INVOCATION TRACKING
-+  // ═══════════════════════════════════════════════════════════════════════════
-+  // This logging MUST run in Release/TestFlight builds to identify the exact
-+  // TurboModule and method that causes SIGABRT crashes.
-+  //
-+  // The crash occurs AFTER this log line, so the last logged invocation is
-+  // the culprit. Check device console or crash logs for the last line before abort.
-+  // ═══════════════════════════════════════════════════════════════════════════
-+  
-+  NSString *moduleName = NSStringFromClass([self class]);
-+  NSString *methodName = NSStringFromSelector(invocation.selector);
-+  
+diff --git a/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm b/node_modules/react-native/ReactCommon/react/nativemodule/core/platform/ios/ReactCommon/RCTTurboModule.mm
+index 1111111..2222222 100644
+@@ -351,6 +351,11 @@
+   std::string methodNameStr{methodName};
+   __block int32_t asyncCallCounter = 0;
+ 
++  // Diagnostic logging to identify last TurboModule call before iOS fatal crash.
 +  NSLog(@"═══════════════════════════════════════════════════════════════════════════");
-+  NSLog(@"[TurboModuleInvoke] Module: %@", moduleName);
-+  NSLog(@"[TurboModuleInvoke] Method: %@", methodName);
-+  NSLog(@"[TurboModuleInvoke] Arguments: %lu", (unsigned long)count);
++  NSLog(@"[TurboModuleInvoke] Module: %s", moduleName);
++  NSLog(@"[TurboModuleInvoke] Method: %s", methodName);
 +  NSLog(@"═══════════════════════════════════════════════════════════════════════════");
-+  
-   // Retain the TurboModule instance so that it's not deallocated while the
-   // method invocation is in flight.
-   __weak id<RCTTurboModule> weakSelf = self;
+ 
+   void (^block)() = ^{
+     id<RCTBridgeModule> strongModule = weakModule;
+@@ -421,6 +426,11 @@
+   std::string methodNameStr{methodName};
+   __block int32_t asyncCallCounter = 0;
+ 
++  // Diagnostic logging to identify last TurboModule call before iOS fatal crash.
++  NSLog(@"═══════════════════════════════════════════════════════════════════════════");
++  NSLog(@"[TurboModuleInvoke] Module: %s", moduleName);
++  NSLog(@"[TurboModuleInvoke] Method: %s", methodName);
++  NSLog(@"═══════════════════════════════════════════════════════════════════════════");
+ 
+   void (^block)() = ^{
+     id<RCTBridgeModule> strongModule = weakModule;
