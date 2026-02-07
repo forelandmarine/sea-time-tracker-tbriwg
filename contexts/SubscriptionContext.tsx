@@ -56,6 +56,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }, SUBSCRIPTION_CHECK_TIMEOUT);
 
       try {
+        // FIXED: Correct endpoint path is /api/subscription/status (not /api/subscription)
         console.log('[Subscription] ⚠️ ABOUT TO CALL: authenticatedGet /api/subscription/status');
         const response = await authenticatedGet<SubscriptionStatus>(
           '/api/subscription/status',
