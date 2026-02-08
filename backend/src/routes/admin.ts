@@ -2311,4 +2311,194 @@ export function register(app: App, fastify: FastifyInstance) {
       }
     }
   );
+
+  // PUT /api/admin/update-subscription - Update user subscription status by email
+  fastify.put<{
+    Body: {
+      email: string;
+      subscription_status: string;
+      subscription_expires_at?: string;
+      subscription_product_id?: string;
+      subscription_platform?: string;
+    };
+  }>(
+    '/api/admin/update-subscription',
+    {
+      schema: {
+        description: 'Admin endpoint to update subscription status for a user by email',
+        tags: ['admin'],
+        body: {
+          type: 'object',
+          required: ['email', 'subscription_status'],
+          properties: {
+            email: { type: 'string', format: 'email', description: 'User email' },
+            subscription_status: {
+              type: 'string',
+              enum: ['active', 'inactive', 'trialing', 'expired'],
+              description: 'Subscription status',
+            },
+            subscription_expires_at: {
+              type: 'string',
+              format: 'date-time',
+              description: 'Optional subscription expiration date (ISO 8601)',
+            },
+            subscription_product_id: {
+              type: 'string',
+              description: 'Optional product ID',
+            },
+            subscription_platform: {
+              type: 'string',
+              enum: ['ios', 'android', 'web'],
+              description: 'Optional platform',
+            },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              user: {
+                type: 'object',
+                properties: {
+                  id: { type: 'string' },
+                  email: { type: 'string' },
+                  name: { type: 'string' },
+                  subscription_status: { type: 'string' },
+                  subscription_expires_at: { type: ['string', 'null'], format: 'date-time' },
+                  subscription_product_id: { type: ['string', 'null'] },
+                  subscription_platform: { type: ['string', 'null'] },
+                },
+              },
+            },
+          },
+          400: { type: 'object', properties: { error: { type: 'string' } } },
+          404: { type: 'object', properties: { error: { type: 'string' } } },
+          500: { type: 'object', properties: { error: { type: 'string' } } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const {
+        email,
+        subscription_status,
+        subscription_expires_at,
+        subscription_product_id,
+        subscription_platform,
+      } = request.body;
+
+      app.logger.info(
+        { email, subscription_status },
+        'Admin updating subscription status for user'
+      );
+
+      try {
+        // Validate subscription status
+        const validStatuses = ['active', 'inactive', 'trialing', 'expired'];
+        if (!validStatuses.includes(subscription_status)) {
+          app.logger.warn(
+            { email, subscription_status },
+            'Invalid subscription status provided'
+          );
+          return reply.code(400).send({
+            error: `Invalid subscription status. Must be one of: ${validStatuses.join(', ')}`,
+          });
+        }
+
+        // Find user by email
+        const users = await app.db
+          .select()
+          .from(authSchema.user)
+          .where(eq(authSchema.user.email, email));
+
+        if (users.length === 0) {
+          app.logger.warn({ email }, 'User not found for subscription update');
+          return reply.code(404).send({ error: 'User not found' });
+        }
+
+        const user = users[0];
+
+        // Parse optional expiration date
+        let expiresAt: Date | null = null;
+        if (subscription_expires_at) {
+          try {
+            expiresAt = new Date(subscription_expires_at);
+            if (isNaN(expiresAt.getTime())) {
+              return reply.code(400).send({
+                error: 'Invalid subscription_expires_at date format. Must be ISO 8601.',
+              });
+            }
+          } catch (error) {
+            return reply.code(400).send({
+              error: 'Invalid subscription_expires_at date format. Must be ISO 8601.',
+            });
+          }
+        }
+
+        // Update user subscription
+        const updateData: any = {
+          subscription_status,
+          updatedAt: new Date(),
+        };
+
+        if (subscription_expires_at) {
+          updateData.subscription_expires_at = expiresAt;
+        }
+
+        if (subscription_product_id) {
+          updateData.subscription_product_id = subscription_product_id;
+        }
+
+        if (subscription_platform) {
+          updateData.subscription_platform = subscription_platform;
+        }
+
+        const updatedUsers = await app.db
+          .update(authSchema.user)
+          .set(updateData)
+          .where(eq(authSchema.user.id, user.id))
+          .returning();
+
+        if (updatedUsers.length === 0) {
+          throw new Error('Failed to update user subscription');
+        }
+
+        const updatedUser = updatedUsers[0];
+
+        app.logger.info(
+          {
+            userId: user.id,
+            email,
+            subscription_status,
+            subscription_expires_at: expiresAt?.toISOString(),
+          },
+          'User subscription updated successfully'
+        );
+
+        // Format response
+        const expiresAtString = (updatedUser as any).subscription_expires_at
+          ? new Date((updatedUser as any).subscription_expires_at).toISOString()
+          : null;
+
+        return reply.code(200).send({
+          user: {
+            id: updatedUser.id,
+            email: updatedUser.email,
+            name: updatedUser.name,
+            subscription_status: (updatedUser as any).subscription_status,
+            subscription_expires_at: expiresAtString,
+            subscription_product_id: (updatedUser as any).subscription_product_id || null,
+            subscription_platform: (updatedUser as any).subscription_platform || null,
+          },
+        });
+      } catch (error) {
+        app.logger.error(
+          { err: error, email, subscription_status },
+          'Error updating user subscription'
+        );
+        return reply.code(500).send({
+          error: 'Failed to update user subscription',
+        });
+      }
+    }
+  );
 }
