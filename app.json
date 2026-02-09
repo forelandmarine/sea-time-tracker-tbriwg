@@ -43,6 +43,22 @@
           "icon": "./assets/images/f0500a31-f8b9-4d46-8b57-62c3847deff7.png",
           "color": "#ffffff"
         }
+       [
+        "./plugins/with-revenuecat",
+        {
+          "iosApiKey": "YOUR_IOS_REVENUECAT_API_KEY", // Replace with your actual iOS API key
+          "androidApiKey": "YOUR_ANDROID_REVENUECAT_API_KEY" // Replace with your actual Android API key
+        }
+      ]
+    ],
+    "extra": {
+      // ... existing extra fields
+      "revenueCat": {
+        "iosApiKey": "YOUR_IOS_REVENUECAT_API_KEY", // Replace with your actual iOS API key
+        "androidApiKey": "YOUR_ANDROID_REVENUECAT_API_KEY" // Replace with your actual Android API key
+      }
+    }
+      
       ],
       "expo-apple-authentication"
     ],
