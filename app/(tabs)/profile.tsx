@@ -1226,7 +1226,7 @@ export default function ProfileScreen() {
 
               <TouchableOpacity 
                 style={biometricAvailable ? styles.menuItem : [styles.menuItem, styles.menuItemLast]} 
-                onPress={() => router.push('/customer-center')}
+                onPress={() => router.push('/revenuecat-customer-center')}
               >
                 <IconSymbol
                   ios_icon_name="star.circle"

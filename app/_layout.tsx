@@ -15,6 +15,7 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { RevenueCatProvider } from "@/contexts/RevenueCatContext";
 import { BACKEND_URL } from "@/utils/api";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -169,6 +170,36 @@ function RootLayoutNav() {
               options={{ 
                 headerShown: false,
                 title: "Subscription Diagnostic",
+              }} 
+            />
+
+            {/* RevenueCat Paywall Screen */}
+            <Stack.Screen 
+              name="revenuecat-paywall" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                title: "Subscribe",
+              }} 
+            />
+
+            {/* RevenueCat Customer Center Screen */}
+            <Stack.Screen 
+              name="revenuecat-customer-center" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                title: "Subscription",
+              }} 
+            />
+
+            {/* RevenueCat Diagnostic Screen */}
+            <Stack.Screen 
+              name="revenuecat-diagnostic" 
+              options={{ 
+                headerShown: false,
+                presentation: 'card',
+                title: "RevenueCat Diagnostic",
               }} 
             />
 
@@ -388,9 +419,11 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <WidgetProvider>
-          <RootLayoutNav />
-        </WidgetProvider>
+        <RevenueCatProvider>
+          <WidgetProvider>
+            <RootLayoutNav />
+          </WidgetProvider>
+        </RevenueCatProvider>
       </AuthProvider>
     </ErrorBoundary>
   );
