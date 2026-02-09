@@ -46,8 +46,8 @@
        [
         "./plugins/with-revenuecat",
         {
-          "iosApiKey": "YOUR_IOS_REVENUECAT_API_KEY", // Replace with your actual iOS API key
-          "androidApiKey": "YOUR_ANDROID_REVENUECAT_API_KEY" // Replace with your actual Android API key
+          "iosApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd", // Replace with your actual iOS API key
+          "androidApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd" // Replace with your actual Android API key
         }
       ]
     ],
