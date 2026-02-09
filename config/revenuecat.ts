@@ -5,144 +5,170 @@ import { Platform } from 'react-native';
 /**
  * RevenueCat Configuration
  * 
+ * STANDARD REVENUECAT SETUP FOR EXPO
+ * 
  * This configuration reads API keys from app.json extra config.
- * For sandbox testing, the REVENUECAT_TEST_API_KEY environment variable is used.
  * 
- * HOW TO USE SANDBOX TESTING:
- * 1. Set REVENUECAT_TEST_API_KEY as a secret in your environment
- * 2. The key will be automatically loaded from the environment
- * 3. Run: npx expo prebuild --clean
- * 4. Restart the app: npx expo start --clear
+ * SETUP INSTRUCTIONS:
+ * 1. Get your API keys from https://app.revenuecat.com/
+ *    - iOS: Starts with "appl_" (or "sk_"/"pk_" for test keys)
+ *    - Android: Starts with "goog_" (or "sk_"/"pk_" for test keys)
  * 
- * For production:
- * 1. Go to https://app.revenuecat.com/
- * 2. Navigate to Project Settings → API Keys
- * 3. Copy your iOS API key (starts with "appl_")
- * 4. Copy your Android API key (starts with "goog_")
- * 5. Update app.json with your real API keys
- * 6. Run: npx expo prebuild --clean
- * 7. Restart the app: npx expo start --clear
+ * 2. Update app.json with your API key:
+ *    "extra": {
+ *      "revenueCat": {
+ *        "iosApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd",
+ *        "androidApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd"
+ *      }
+ *    }
+ * 
+ * 3. Add the plugin to app.json:
+ *    "plugins": [
+ *      ["./plugins/with-revenuecat", {
+ *        "iosApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd",
+ *        "androidApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd"
+ *      }]
+ *    ]
+ * 
+ * 4. Run: npx expo prebuild --clean
+ * 5. Restart: npx expo start --clear
  */
 
-export const REVENUECAT_PRODUCT_ID = 'com.forelandmarine.seatime.monthly';
+// Product IDs - Update these to match your RevenueCat product configuration
+export const PRODUCT_IDS = {
+  MONTHLY: 'monthly', // Your monthly subscription product ID
+};
+
+// Entitlement identifier - This is what you check to see if user has access
+export const ENTITLEMENT_ID = 'SeaTime Tracker Pro';
 
 /**
- * Get RevenueCat configuration from app.json
+ * Get RevenueCat API keys from app.json configuration
  */
-export function getRevenueCatConfig() {
+function getApiKey(platform: 'ios' | 'android'): string {
   const extra = Constants.expoConfig?.extra;
   const revenueCatConfig = extra?.revenueCat;
 
-  const iosApiKey = revenueCatConfig?.iosApiKey || '';
-  const androidApiKey = revenueCatConfig?.androidApiKey || '';
+  if (!revenueCatConfig || typeof revenueCatConfig !== 'object') {
+    console.error('[RevenueCat Config] No revenueCat configuration found in app.json extra');
+    return '';
+  }
 
-  console.log('[RevenueCat Config] Platform:', Platform.OS);
-  console.log('[RevenueCat Config] iOS Key Present:', !!iosApiKey);
-  console.log('[RevenueCat Config] Android Key Present:', !!androidApiKey);
-  console.log('[RevenueCat Config] iOS Key Length:', iosApiKey.length);
-  console.log('[RevenueCat Config] Android Key Length:', androidApiKey.length);
+  const key = platform === 'ios' ? revenueCatConfig.iosApiKey : revenueCatConfig.androidApiKey;
+  
+  if (!key || typeof key !== 'string') {
+    console.error(`[RevenueCat Config] No ${platform} API key found in configuration`);
+    return '';
+  }
 
-  return { iosApiKey, androidApiKey };
+  return key;
 }
+
+export const API_KEY_IOS = getApiKey('ios');
+export const API_KEY_ANDROID = getApiKey('android');
+
+// Get the appropriate API key for the current platform
+export const REVENUECAT_API_KEY = Platform.select({
+  ios: API_KEY_IOS,
+  android: API_KEY_ANDROID,
+  default: API_KEY_IOS,
+}) || '';
 
 /**
  * Validate RevenueCat configuration
- * Returns detailed status object
+ * Returns true if configuration is valid
  */
-export function validateRevenueCatConfig() {
-  const { iosApiKey, androidApiKey } = getRevenueCatConfig();
-  const plugins = Constants.expoConfig?.plugins;
+export function validateRevenueCatConfig(): boolean {
+  const iosKey = API_KEY_IOS;
+  const androidKey = API_KEY_ANDROID;
 
-  const status = {
-    pluginInAppJson: false,
-    extraConfigInAppJson: false,
-    iosApiKeyConfigured: false,
-    androidApiKeyConfigured: false,
-    iosKeyLength: 0,
-    androidKeyLength: 0,
-    iosKeyValidFormat: false,
-    androidKeyValidFormat: false,
-    isTestKey: false,
-    isProductionKey: false,
-    pluginIosApiKey: 'NOT SET',
-    pluginAndroidApiKey: 'NOT SET',
-  };
+  console.log('[RevenueCat Config] Validating configuration');
+  console.log('[RevenueCat Config] Platform:', Platform.OS);
+  console.log('[RevenueCat Config] iOS Key Present:', !!iosKey);
+  console.log('[RevenueCat Config] Android Key Present:', !!androidKey);
+  console.log('[RevenueCat Config] iOS Key Length:', iosKey?.length || 0);
+  console.log('[RevenueCat Config] Android Key Length:', androidKey?.length || 0);
 
-  // Check for plugin presence and extract keys from plugin config
-  if (Array.isArray(plugins)) {
-    const rcPlugin = plugins.find(p => Array.isArray(p) && p[0] === './plugins/with-revenuecat');
-    if (rcPlugin && typeof rcPlugin[1] === 'object') {
-      status.pluginInAppJson = true;
-      status.pluginIosApiKey = rcPlugin[1].iosApiKey || 'NOT SET';
-      status.pluginAndroidApiKey = rcPlugin[1].androidApiKey || 'NOT SET';
-      console.log('[RevenueCat Validation] Plugin found in app.json');
-      console.log('[RevenueCat Validation] Plugin iOS Key:', status.pluginIosApiKey);
-      console.log('[RevenueCat Validation] Plugin Android Key:', status.pluginAndroidApiKey);
-    } else {
-      console.warn('[RevenueCat Validation] Plugin NOT found in app.json');
-    }
+  // Check if keys are set
+  if (!iosKey || !androidKey) {
+    console.error('[RevenueCat Config] API keys are missing');
+    return false;
   }
 
-  // Check for extra config presence
-  if (Constants.expoConfig?.extra?.revenueCat) {
-    status.extraConfigInAppJson = true;
-    console.log('[RevenueCat Validation] Extra config found in app.json');
-  } else {
-    console.warn('[RevenueCat Validation] Extra config NOT found in app.json');
+  // Check if keys are placeholders
+  if (iosKey.includes('YOUR_') || androidKey.includes('YOUR_')) {
+    console.error('[RevenueCat Config] API keys are still placeholders');
+    return false;
   }
 
-  // Validate iOS Key
-  if (iosApiKey && iosApiKey !== '$(REVENUECAT_TEST_API_KEY)' && iosApiKey !== 'appl_YOUR_IOS_API_KEY_HERE') {
-    status.iosApiKeyConfigured = true;
-    status.iosKeyLength = iosApiKey.length;
-    status.iosKeyValidFormat = iosApiKey.startsWith('appl_') || iosApiKey.startsWith('sk_') || iosApiKey.startsWith('pk_');
-    console.log('[RevenueCat Validation] iOS Key configured:', status.iosKeyValidFormat ? '✅' : '⚠️');
-  } else {
-    console.warn('[RevenueCat Validation] iOS Key NOT configured or still using placeholder');
+  // Validate key format (more lenient for test keys)
+  const iosValid = iosKey.startsWith('appl_') || iosKey.startsWith('sk_') || iosKey.startsWith('pk_') || iosKey.startsWith('test_');
+  const androidValid = androidKey.startsWith('goog_') || androidKey.startsWith('sk_') || androidKey.startsWith('pk_') || androidKey.startsWith('test_');
+
+  if (!iosValid) {
+    console.warn('[RevenueCat Config] iOS API key format may be invalid:', iosKey.substring(0, 10) + '...');
   }
 
-  // Validate Android Key
-  if (androidApiKey && androidApiKey !== '$(REVENUECAT_TEST_API_KEY)' && androidApiKey !== 'goog_YOUR_ANDROID_API_KEY_HERE') {
-    status.androidApiKeyConfigured = true;
-    status.androidKeyLength = androidApiKey.length;
-    status.androidKeyValidFormat = androidApiKey.startsWith('goog_') || androidApiKey.startsWith('sk_') || androidApiKey.startsWith('pk_');
-    console.log('[RevenueCat Validation] Android Key configured:', status.androidKeyValidFormat ? '✅' : '⚠️');
-  } else {
-    console.warn('[RevenueCat Validation] Android Key NOT configured or still using placeholder');
+  if (!androidValid) {
+    console.warn('[RevenueCat Config] Android API key format may be invalid:', androidKey.substring(0, 10) + '...');
   }
 
-  // Determine if using test or production keys (simplified check)
-  if (status.iosApiKeyConfigured && (iosApiKey.startsWith('sk_') || iosApiKey.startsWith('pk_'))) {
-    status.isTestKey = true;
-    console.log('[RevenueCat Validation] Using TEST/SANDBOX key');
-  } else if (status.iosApiKeyConfigured && iosApiKey.startsWith('appl_')) {
-    status.isProductionKey = true;
-    console.log('[RevenueCat Validation] Using PRODUCTION key');
-  }
+  const isValid = iosValid && androidValid;
+  console.log('[RevenueCat Config] Configuration valid:', isValid);
 
-  return status;
+  return isValid;
 }
 
 /**
  * Get diagnostic information about RevenueCat configuration
  */
 export function getRevenueCatDiagnostics() {
-  const { iosApiKey, androidApiKey } = getRevenueCatConfig();
+  const iosKey = API_KEY_IOS;
+  const androidKey = API_KEY_ANDROID;
   
   return {
+    platform: Platform.OS,
     iosKey: {
-      configured: !!iosApiKey && iosApiKey.length > 0,
-      validFormat: iosApiKey.startsWith('appl_') || iosApiKey.startsWith('sk_') || iosApiKey.startsWith('pk_'),
-      isPlaceholder: iosApiKey.includes('$(') || iosApiKey.includes('YOUR_'),
-      prefix: iosApiKey ? iosApiKey.substring(0, 15) : 'NOT SET',
-      length: iosApiKey ? iosApiKey.length : 0,
+      configured: !!iosKey && iosKey.length > 0,
+      validFormat: iosKey?.startsWith('appl_') || iosKey?.startsWith('sk_') || iosKey?.startsWith('pk_') || iosKey?.startsWith('test_'),
+      isPlaceholder: iosKey?.includes('YOUR_') || false,
+      prefix: iosKey ? iosKey.substring(0, 15) : 'NOT SET',
+      length: iosKey ? iosKey.length : 0,
     },
     androidKey: {
-      configured: !!androidApiKey && androidApiKey.length > 0,
-      validFormat: androidApiKey.startsWith('goog_') || androidApiKey.startsWith('sk_') || androidApiKey.startsWith('pk_'),
-      isPlaceholder: androidApiKey.includes('$(') || androidApiKey.includes('YOUR_'),
-      prefix: androidApiKey ? androidApiKey.substring(0, 15) : 'NOT SET',
-      length: androidApiKey ? androidApiKey.length : 0,
+      configured: !!androidKey && androidKey.length > 0,
+      validFormat: androidKey?.startsWith('goog_') || androidKey?.startsWith('sk_') || androidKey?.startsWith('pk_') || androidKey?.startsWith('test_'),
+      isPlaceholder: androidKey?.includes('YOUR_') || false,
+      prefix: androidKey ? androidKey.substring(0, 15) : 'NOT SET',
+      length: androidKey ? androidKey.length : 0,
     },
+  };
+}
+
+/**
+ * Get detailed validation status for diagnostic screens
+ */
+export function getRevenueCatValidationStatus() {
+  const diagnostics = getRevenueCatDiagnostics();
+  const plugins = Constants.expoConfig?.plugins;
+  const extra = Constants.expoConfig?.extra;
+
+  const hasPlugin = Array.isArray(plugins) && plugins.some((p: any) => 
+    Array.isArray(p) && p[0] === './plugins/with-revenuecat'
+  );
+
+  const hasExtra = !!extra?.revenueCat;
+
+  return {
+    pluginInAppJson: hasPlugin,
+    extraConfigInAppJson: hasExtra,
+    iosApiKeyConfigured: diagnostics.iosKey.configured,
+    androidApiKeyConfigured: diagnostics.androidKey.configured,
+    iosKeyLength: diagnostics.iosKey.length,
+    androidKeyLength: diagnostics.androidKey.length,
+    iosKeyValidFormat: diagnostics.iosKey.validFormat,
+    androidKeyValidFormat: diagnostics.androidKey.validFormat,
+    isTestKey: diagnostics.iosKey.prefix.startsWith('test_') || diagnostics.iosKey.prefix.startsWith('sk_') || diagnostics.iosKey.prefix.startsWith('pk_'),
+    isProductionKey: diagnostics.iosKey.prefix.startsWith('appl_') || diagnostics.androidKey.prefix.startsWith('goog_'),
   };
 }
