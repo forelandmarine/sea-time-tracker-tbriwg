@@ -203,6 +203,10 @@ Please help me configure RevenueCat properly.
     }
   };
 
+  const handleViewDiagnostic = () => {
+    router.push('/revenuecat-diagnostic');
+  };
+
   const formatPrice = (pkg: PurchasesPackage): string => {
     return pkg.product.priceString;
   };
@@ -322,25 +326,31 @@ Please help me configure RevenueCat properly.
           </View>
         </View>
 
-        {/* Configuration Info Banner (for testing) */}
+        {/* Configuration Warning Banner */}
         {hasConfigIssue && (
-          <View style={styles.infoContainer}>
+          <View style={styles.warningContainer}>
             <IconSymbol
-              ios_icon_name="info.circle.fill"
-              android_material_icon_name="info"
+              ios_icon_name="exclamationmark.triangle.fill"
+              android_material_icon_name="warning"
               size={24}
-              color={colors.primary}
+              color={colors.error}
             />
-            <View style={styles.infoTextContainer}>
-              <Text style={styles.infoTitle}>Sandbox Testing Mode</Text>
-              <Text style={styles.infoText}>
-                Using test API key for sandbox purchases. Check diagnostic info for details.
+            <View style={styles.warningTextContainer}>
+              <Text style={styles.warningTitle}>⚠️ Configuration Required</Text>
+              <Text style={styles.warningText}>
+                RevenueCat API keys are not configured. The subscription system will not work until you set up your API keys.
               </Text>
               <TouchableOpacity
                 style={styles.diagnosticButton}
-                onPress={() => setShowDiagnosticModal(true)}
+                onPress={handleViewDiagnostic}
               >
-                <Text style={styles.diagnosticButtonText}>View Diagnostic Info</Text>
+                <Text style={styles.diagnosticButtonText}>View Setup Instructions</Text>
+                <IconSymbol
+                  ios_icon_name="arrow.right"
+                  android_material_icon_name="arrow-forward"
+                  size={16}
+                  color={colors.error}
+                />
               </TouchableOpacity>
             </View>
           </View>
@@ -400,14 +410,14 @@ Please help me configure RevenueCat properly.
               color={colors.error}
             />
             <Text style={styles.noOffersText}>
-              No subscription options available
+              No subscription options at this time
             </Text>
             <Text style={styles.noOffersSubtext}>
-              This usually means RevenueCat is not configured properly or no products are set up in the dashboard.
+              This usually means RevenueCat is not configured properly. Click below to see detailed diagnostic information and setup instructions.
             </Text>
             <TouchableOpacity
               style={styles.setupButton}
-              onPress={() => setShowDiagnosticModal(true)}
+              onPress={handleViewDiagnostic}
             >
               <Text style={styles.setupButtonText}>View Diagnostic Info</Text>
             </TouchableOpacity>
@@ -517,97 +527,6 @@ Please help me configure RevenueCat properly.
           </View>
         </View>
       </Modal>
-
-      {/* Diagnostic Modal */}
-      <Modal
-        visible={showDiagnosticModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDiagnosticModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, styles.diagnosticModalContent]}>
-            <Text style={styles.modalTitle}>RevenueCat Configuration</Text>
-            
-            <ScrollView style={styles.diagnosticScroll}>
-              <View style={styles.diagnosticSection}>
-                <Text style={styles.diagnosticSectionTitle}>Current Status</Text>
-                <Text style={styles.diagnosticText}>
-                  Platform: {diagnosticInfo.platform}
-                </Text>
-                <Text style={styles.diagnosticText}>
-                  Offerings Available: {diagnosticInfo.offerings.available ? 'Yes' : 'No'}
-                </Text>
-                <Text style={styles.diagnosticText}>
-                  Package Count: {diagnosticInfo.offerings.count}
-                </Text>
-              </View>
-
-              <View style={styles.diagnosticSection}>
-                <Text style={styles.diagnosticSectionTitle}>iOS Configuration</Text>
-                <Text style={styles.diagnosticText}>
-                  Configured: {diagnosticInfo.iosKey.configured ? '✅' : '❌'}
-                </Text>
-                <Text style={styles.diagnosticText}>
-                  Valid Format: {diagnosticInfo.iosKey.validFormat ? '✅' : '⚠️'}
-                </Text>
-                <Text style={styles.diagnosticText}>
-                  Is Placeholder: {diagnosticInfo.iosKey.isPlaceholder ? '⚠️ Yes' : '✅ No'}
-                </Text>
-                <Text style={styles.diagnosticText}>
-                  Key Prefix: {diagnosticInfo.iosKey.prefix}
-                </Text>
-                <Text style={styles.diagnosticText}>
-                  Key Length: {diagnosticInfo.iosKey.length} characters
-                </Text>
-              </View>
-
-              <View style={styles.diagnosticSection}>
-                <Text style={styles.diagnosticSectionTitle}>Android Configuration</Text>
-                <Text style={styles.diagnosticText}>
-                  Configured: {diagnosticInfo.androidKey.configured ? '✅' : '❌'}
-                </Text>
-                <Text style={styles.diagnosticText}>
-                  Valid Format: {diagnosticInfo.androidKey.validFormat ? '✅' : '⚠️'}
-                </Text>
-                <Text style={styles.diagnosticText}>
-                  Is Placeholder: {diagnosticInfo.androidKey.isPlaceholder ? '⚠️ Yes' : '✅ No'}
-                </Text>
-                <Text style={styles.diagnosticText}>
-                  Key Prefix: {diagnosticInfo.androidKey.prefix}
-                </Text>
-                <Text style={styles.diagnosticText}>
-                  Key Length: {diagnosticInfo.androidKey.length} characters
-                </Text>
-              </View>
-
-              <View style={styles.diagnosticSection}>
-                <Text style={styles.diagnosticSectionTitle}>Testing Notes</Text>
-                <Text style={styles.diagnosticInstructions}>
-                  • For sandbox testing, use REVENUECAT_TEST_API_KEY environment variable
-                  {'\n'}• The test API key should be set as a secret in your environment
-                  {'\n'}• Restart the app after setting environment variables
-                  {'\n'}• Check that the key is being loaded (see Key Length above)
-                  {'\n\n'}For production deployment:
-                  {'\n'}1. Go to RevenueCat Dashboard (app.revenuecat.com)
-                  {'\n'}2. Navigate to Project Settings → API Keys
-                  {'\n'}3. Copy your iOS API key (starts with appl_)
-                  {'\n'}4. Copy your Android API key (starts with goog_)
-                  {'\n'}5. Update app.json with your real API keys
-                  {'\n'}6. Restart: npx expo start --clear
-                </Text>
-              </View>
-            </ScrollView>
-
-            <TouchableOpacity
-              style={[styles.modalButton, styles.modalConfirmButton]}
-              onPress={() => setShowDiagnosticModal(false)}
-            >
-              <Text style={styles.modalConfirmText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </>
   );
 }
@@ -672,38 +591,41 @@ function createStyles(isDark: boolean) {
       marginLeft: 12,
       flex: 1,
     },
-    infoContainer: {
+    warningContainer: {
       flexDirection: 'row',
-      backgroundColor: isDark ? '#1a2a3a' : '#e3f2fd',
+      backgroundColor: isDark ? '#3a1a1a' : '#ffebee',
       borderRadius: 12,
       padding: 16,
       marginBottom: 24,
       borderWidth: 1,
-      borderColor: colors.primary,
+      borderColor: colors.error,
     },
-    infoTextContainer: {
+    warningTextContainer: {
       flex: 1,
       marginLeft: 12,
     },
-    infoTitle: {
+    warningTitle: {
       fontSize: 16,
       fontWeight: '600',
-      color: colors.primary,
+      color: colors.error,
       marginBottom: 4,
     },
-    infoText: {
+    warningText: {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       lineHeight: 20,
       marginBottom: 8,
     },
     diagnosticButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
       marginTop: 4,
     },
     diagnosticButtonText: {
       fontSize: 14,
-      color: colors.primary,
+      color: colors.error,
       fontWeight: '600',
+      marginRight: 4,
     },
     loadingContainer: {
       alignItems: 'center',
@@ -886,10 +808,6 @@ function createStyles(isDark: boolean) {
       maxWidth: 400,
       alignItems: 'center',
     },
-    diagnosticModalContent: {
-      maxWidth: 500,
-      maxHeight: '80%',
-    },
     modalTitle: {
       fontSize: 20,
       fontWeight: 'bold',
@@ -932,30 +850,6 @@ function createStyles(isDark: boolean) {
       color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '600',
-    },
-    diagnosticScroll: {
-      width: '100%',
-      marginBottom: 16,
-    },
-    diagnosticSection: {
-      marginBottom: 20,
-    },
-    diagnosticSectionTitle: {
-      fontSize: 16,
-      fontWeight: '600',
-      color: isDark ? colors.text : colors.textLight,
-      marginBottom: 8,
-    },
-    diagnosticText: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      marginBottom: 4,
-      lineHeight: 20,
-    },
-    diagnosticInstructions: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
-      lineHeight: 22,
     },
   });
 }
