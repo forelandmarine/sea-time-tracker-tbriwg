@@ -1,5 +1,5 @@
 
-const { withPlugins, withInfoPlist } = require('@expo/config-plugins');
+const { withInfoPlist } = require('@expo/config-plugins');
 
 /**
  * Expo Config Plugin for RevenueCat
@@ -8,9 +8,6 @@ const { withPlugins, withInfoPlist } = require('@expo/config-plugins');
  * - Adds required Info.plist entries
  * - Configures StoreKit capabilities
  * - Reads API key from plugin props (set in app.json)
- * 
- * The API key is passed from app.json plugins configuration and can use
- * environment variables via $(VARIABLE_NAME) syntax.
  */
 function withRevenueCat(config, props) {
   console.log('[RevenueCat Plugin] Configuring with props:', {
