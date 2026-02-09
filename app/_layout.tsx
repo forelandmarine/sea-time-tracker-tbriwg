@@ -173,6 +173,33 @@ function RootLayoutNav() {
               }} 
             />
 
+            {/* Subscription Diagnostic Screen */}
+            <Stack.Screen 
+              name="subscription-diagnostic" 
+              options={{ 
+                headerShown: false,
+                title: "Subscription Diagnostic",
+              }} 
+            />
+
+            {/* RevenueCat Diagnostic Screen */}
+            <Stack.Screen 
+              name="revenuecat-diagnostic" 
+              options={{ 
+                headerShown: false,
+                title: "RevenueCat Diagnostic",
+              }} 
+            />
+
+            {/* Customer Center Screen */}
+            <Stack.Screen 
+              name="customer-center" 
+              options={{ 
+                headerShown: false,
+                title: "Subscription",
+              }} 
+            />
+
             {/* Main app with tabs */}
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 

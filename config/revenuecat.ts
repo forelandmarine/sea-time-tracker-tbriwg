@@ -74,6 +74,14 @@ export const REVENUECAT_API_KEY = Platform.select({
   default: API_KEY_IOS,
 }) || '';
 
+// Export as REVENUECAT_CONFIG for backward compatibility
+export const REVENUECAT_CONFIG = {
+  iosApiKey: API_KEY_IOS,
+  androidApiKey: API_KEY_ANDROID,
+  entitlementID: ENTITLEMENT_ID,
+  productIDs: PRODUCT_IDS,
+};
+
 /**
  * Validate RevenueCat configuration
  * Returns true if configuration is valid
