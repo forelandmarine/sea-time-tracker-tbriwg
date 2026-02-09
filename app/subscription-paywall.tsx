@@ -5,6 +5,7 @@
  * ✅ APPLE APP STORE COMPLIANT
  * ✅ REVENUECAT INTEGRATION
  * ✅ SUBSCRIPTION ENFORCEMENT
+ * ✅ SANDBOX TESTING ENABLED
  * 
  * This screen displays subscription offerings from RevenueCat and handles purchases.
  * Users without an active subscription are blocked from tracking features.
@@ -30,7 +31,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRevenueCat } from '@/contexts/RevenueCatContext';
 import { PurchasesPackage } from 'react-native-purchases';
-import Constants from 'expo-constants';
+import { getRevenueCatDiagnostics } from '@/config/revenuecat';
 
 // COMPLIANCE: Developer URLs (replace with actual URLs before submission)
 const PRIVACY_POLICY_URL = 'https://forelandmarine.com/privacy';
@@ -62,14 +63,9 @@ export default function SubscriptionPaywallScreen() {
     console.log('[SubscriptionPaywall] Has active subscription:', hasActiveSubscription);
     console.log('[SubscriptionPaywall] Offerings:', offerings);
     
-    // Log configuration for debugging
-    const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
-    console.log('[SubscriptionPaywall] RevenueCat config:', {
-      hasIosKey: !!revenueCatConfig?.iosApiKey,
-      hasAndroidKey: !!revenueCatConfig?.androidApiKey,
-      iosKeyPrefix: revenueCatConfig?.iosApiKey?.substring(0, 5),
-      androidKeyPrefix: revenueCatConfig?.androidApiKey?.substring(0, 5),
-    });
+    // Log diagnostic info
+    const diagnostics = getRevenueCatDiagnostics();
+    console.log('[SubscriptionPaywall] Configuration diagnostics:', diagnostics);
   }, [subscriptionStatus, hasActiveSubscription, offerings]);
 
   // Auto-select first package
@@ -164,18 +160,24 @@ export default function SubscriptionPaywallScreen() {
   };
 
   const handleContactSupport = () => {
-    const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
-    const iosKey = revenueCatConfig?.iosApiKey || 'NOT_CONFIGURED';
-    const androidKey = revenueCatConfig?.androidApiKey || 'NOT_CONFIGURED';
+    const diagnostics = getRevenueCatDiagnostics();
     
     const diagnosticInfo = `
 RevenueCat Configuration Issue
 
 Platform: ${Platform.OS}
-iOS API Key: ${iosKey.substring(0, 10)}... (${iosKey.startsWith('appl_') ? 'Valid format' : 'INVALID - should start with appl_'})
-Android API Key: ${androidKey.substring(0, 10)}... (${androidKey.startsWith('goog_') ? 'Valid format' : 'INVALID - should start with goog_'})
+iOS API Key Configured: ${diagnostics.iosKey.configured ? 'Yes' : 'No'}
+iOS API Key Format Valid: ${diagnostics.iosKey.validFormat ? 'Yes' : 'No'}
+iOS API Key Prefix: ${diagnostics.iosKey.prefix}
+iOS API Key Length: ${diagnostics.iosKey.length}
+
+Android API Key Configured: ${diagnostics.androidKey.configured ? 'Yes' : 'No'}
+Android API Key Format Valid: ${diagnostics.androidKey.validFormat ? 'Yes' : 'No'}
+Android API Key Prefix: ${diagnostics.androidKey.prefix}
+Android API Key Length: ${diagnostics.androidKey.length}
+
 Offerings Available: ${offerings ? 'Yes' : 'No'}
-Error: No subscription options available
+Package Count: ${offerings?.availablePackages.length || 0}
 
 Please help me configure RevenueCat properly.
     `.trim();
@@ -220,29 +222,12 @@ Please help me configure RevenueCat properly.
   };
 
   const getDiagnosticInfo = () => {
-    const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
-    const iosKey = revenueCatConfig?.iosApiKey || 'NOT_CONFIGURED';
-    const androidKey = revenueCatConfig?.androidApiKey || 'NOT_CONFIGURED';
-    
-    const iosKeyValid = iosKey.startsWith('appl_');
-    const androidKeyValid = androidKey.startsWith('goog_');
-    const iosKeyIsPlaceholder = iosKey.includes('YOUR_') || iosKey === 'REVENUECAT_TEST_API_KEY';
-    const androidKeyIsPlaceholder = androidKey.includes('YOUR_') || androidKey === 'REVENUECAT_TEST_API_KEY';
+    const diagnostics = getRevenueCatDiagnostics();
     
     return {
       platform: Platform.OS,
-      iosKey: {
-        configured: iosKey !== 'NOT_CONFIGURED',
-        validFormat: iosKeyValid,
-        isPlaceholder: iosKeyIsPlaceholder,
-        prefix: iosKey.substring(0, 10),
-      },
-      androidKey: {
-        configured: androidKey !== 'NOT_CONFIGURED',
-        validFormat: androidKeyValid,
-        isPlaceholder: androidKeyIsPlaceholder,
-        prefix: androidKey.substring(0, 10),
-      },
+      iosKey: diagnostics.iosKey,
+      androidKey: diagnostics.androidKey,
       offerings: {
         available: !!offerings,
         count: offerings?.availablePackages.length || 0,
@@ -255,14 +240,12 @@ Please help me configure RevenueCat properly.
   const statusText = 'Subscription Required';
   const messageText = 'SeaTime Tracker requires an active subscription to track your sea time and generate MCA-compliant reports.';
 
-  // Button is enabled when offerings are available
+  // Purchase button is ALWAYS enabled when offerings are available (for testing)
   const isPurchaseButtonEnabled = !purchasing && offerings && offerings.availablePackages.length > 0;
 
   // Check if configuration issue
   const diagnosticInfo = getDiagnosticInfo();
-  const hasConfigIssue = 
-    (Platform.OS === 'ios' && (!diagnosticInfo.iosKey.validFormat || diagnosticInfo.iosKey.isPlaceholder)) ||
-    (Platform.OS === 'android' && (!diagnosticInfo.androidKey.validFormat || diagnosticInfo.androidKey.isPlaceholder));
+  const hasConfigIssue = !diagnosticInfo.iosKey.configured || !diagnosticInfo.androidKey.configured;
 
   return (
     <>
@@ -339,19 +322,19 @@ Please help me configure RevenueCat properly.
           </View>
         </View>
 
-        {/* Configuration Warning */}
+        {/* Configuration Info Banner (for testing) */}
         {hasConfigIssue && (
-          <View style={styles.warningContainer}>
+          <View style={styles.infoContainer}>
             <IconSymbol
-              ios_icon_name="exclamationmark.triangle.fill"
-              android_material_icon_name="warning"
+              ios_icon_name="info.circle.fill"
+              android_material_icon_name="info"
               size={24}
-              color={colors.warning}
+              color={colors.primary}
             />
-            <View style={styles.warningTextContainer}>
-              <Text style={styles.warningTitle}>Configuration Required</Text>
-              <Text style={styles.warningText}>
-                RevenueCat API keys need to be configured. Please check the setup instructions.
+            <View style={styles.infoTextContainer}>
+              <Text style={styles.infoTitle}>Sandbox Testing Mode</Text>
+              <Text style={styles.infoText}>
+                Using test API key for sandbox purchases. Check diagnostic info for details.
               </Text>
               <TouchableOpacity
                 style={styles.diagnosticButton}
@@ -420,16 +403,13 @@ Please help me configure RevenueCat properly.
               No subscription options available
             </Text>
             <Text style={styles.noOffersSubtext}>
-              This usually means RevenueCat API keys are not configured properly.
-            </Text>
-            <Text style={styles.noOffersSubtext}>
-              Please contact support or check the setup instructions.
+              This usually means RevenueCat is not configured properly or no products are set up in the dashboard.
             </Text>
             <TouchableOpacity
               style={styles.setupButton}
               onPress={() => setShowDiagnosticModal(true)}
             >
-              <Text style={styles.setupButtonText}>View Setup Instructions</Text>
+              <Text style={styles.setupButtonText}>View Diagnostic Info</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -447,7 +427,9 @@ Please help me configure RevenueCat properly.
             {purchasing ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.buttonText}>Subscribe Now</Text>
+              <Text style={styles.buttonText}>
+                {isPurchaseButtonEnabled ? 'Subscribe Now' : 'Loading...'}
+              </Text>
             )}
           </TouchableOpacity>
 
@@ -567,13 +549,16 @@ Please help me configure RevenueCat properly.
                   Configured: {diagnosticInfo.iosKey.configured ? '✅' : '❌'}
                 </Text>
                 <Text style={styles.diagnosticText}>
-                  Valid Format: {diagnosticInfo.iosKey.validFormat ? '✅' : '❌ (should start with appl_)'}
+                  Valid Format: {diagnosticInfo.iosKey.validFormat ? '✅' : '⚠️'}
                 </Text>
                 <Text style={styles.diagnosticText}>
-                  Is Placeholder: {diagnosticInfo.iosKey.isPlaceholder ? '❌ Yes' : '✅ No'}
+                  Is Placeholder: {diagnosticInfo.iosKey.isPlaceholder ? '⚠️ Yes' : '✅ No'}
                 </Text>
                 <Text style={styles.diagnosticText}>
-                  Key Prefix: {diagnosticInfo.iosKey.prefix}...
+                  Key Prefix: {diagnosticInfo.iosKey.prefix}
+                </Text>
+                <Text style={styles.diagnosticText}>
+                  Key Length: {diagnosticInfo.iosKey.length} characters
                 </Text>
               </View>
 
@@ -583,26 +568,33 @@ Please help me configure RevenueCat properly.
                   Configured: {diagnosticInfo.androidKey.configured ? '✅' : '❌'}
                 </Text>
                 <Text style={styles.diagnosticText}>
-                  Valid Format: {diagnosticInfo.androidKey.validFormat ? '✅' : '❌ (should start with goog_)'}
+                  Valid Format: {diagnosticInfo.androidKey.validFormat ? '✅' : '⚠️'}
                 </Text>
                 <Text style={styles.diagnosticText}>
-                  Is Placeholder: {diagnosticInfo.androidKey.isPlaceholder ? '❌ Yes' : '✅ No'}
+                  Is Placeholder: {diagnosticInfo.androidKey.isPlaceholder ? '⚠️ Yes' : '✅ No'}
                 </Text>
                 <Text style={styles.diagnosticText}>
-                  Key Prefix: {diagnosticInfo.androidKey.prefix}...
+                  Key Prefix: {diagnosticInfo.androidKey.prefix}
+                </Text>
+                <Text style={styles.diagnosticText}>
+                  Key Length: {diagnosticInfo.androidKey.length} characters
                 </Text>
               </View>
 
               <View style={styles.diagnosticSection}>
-                <Text style={styles.diagnosticSectionTitle}>Setup Instructions</Text>
+                <Text style={styles.diagnosticSectionTitle}>Testing Notes</Text>
                 <Text style={styles.diagnosticInstructions}>
-                  1. Go to RevenueCat Dashboard (app.revenuecat.com)
+                  • For sandbox testing, use REVENUECAT_TEST_API_KEY environment variable
+                  {'\n'}• The test API key should be set as a secret in your environment
+                  {'\n'}• Restart the app after setting environment variables
+                  {'\n'}• Check that the key is being loaded (see Key Length above)
+                  {'\n\n'}For production deployment:
+                  {'\n'}1. Go to RevenueCat Dashboard (app.revenuecat.com)
                   {'\n'}2. Navigate to Project Settings → API Keys
                   {'\n'}3. Copy your iOS API key (starts with appl_)
                   {'\n'}4. Copy your Android API key (starts with goog_)
                   {'\n'}5. Update app.json with your real API keys
-                  {'\n'}6. Restart the app with: npx expo start --clear
-                  {'\n\n'}See REVENUECAT_SETUP_INSTRUCTIONS.md for detailed steps.
+                  {'\n'}6. Restart: npx expo start --clear
                 </Text>
               </View>
             </ScrollView>
@@ -680,26 +672,26 @@ function createStyles(isDark: boolean) {
       marginLeft: 12,
       flex: 1,
     },
-    warningContainer: {
+    infoContainer: {
       flexDirection: 'row',
-      backgroundColor: isDark ? '#3a2a1a' : '#fff3cd',
+      backgroundColor: isDark ? '#1a2a3a' : '#e3f2fd',
       borderRadius: 12,
       padding: 16,
       marginBottom: 24,
       borderWidth: 1,
-      borderColor: colors.warning,
+      borderColor: colors.primary,
     },
-    warningTextContainer: {
+    infoTextContainer: {
       flex: 1,
       marginLeft: 12,
     },
-    warningTitle: {
+    infoTitle: {
       fontSize: 16,
       fontWeight: '600',
-      color: colors.warning,
+      color: colors.primary,
       marginBottom: 4,
     },
-    warningText: {
+    infoText: {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       lineHeight: 20,
