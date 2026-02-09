@@ -4,12 +4,12 @@
  * 
  * This screen helps diagnose RevenueCat configuration issues by showing:
  * - Current API key configuration status
- * - Environment variable status
  * - Plugin configuration status
  * - Step-by-step setup instructions
+ * - Real-time validation
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,11 +20,17 @@ import {
   Platform,
   Linking,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { colors } from '@/styles/commonStyles';
 import { IconSymbol } from '@/components/IconSymbol';
-import { getRevenueCatDiagnostics, REVENUECAT_CONFIG } from '@/config/revenuecat';
+import { 
+  getRevenueCatDiagnostics, 
+  getRevenueCatValidationStatus,
+  REVENUECAT_CONFIG,
+  validateRevenueCatConfig 
+} from '@/config/revenuecat';
 import Constants from 'expo-constants';
 
 export default function RevenueCatDiagnosticScreen() {
@@ -32,32 +38,49 @@ export default function RevenueCatDiagnosticScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const [showRawConfig, setShowRawConfig] = useState(false);
+  const [validating, setValidating] = useState(true);
+  const [validationStatus, setValidationStatus] = useState<any>(null);
+
+  useEffect(() => {
+    // Run validation
+    const runValidation = async () => {
+      setValidating(true);
+      
+      // Give it a moment to ensure config is loaded
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const isValid = validateRevenueCatConfig();
+      const status = getRevenueCatValidationStatus();
+      
+      console.log('[Diagnostic] Validation complete:', isValid);
+      console.log('[Diagnostic] Status:', status);
+      
+      setValidationStatus(status);
+      setValidating(false);
+    };
+
+    runValidation();
+  }, []);
 
   const diagnostics = getRevenueCatDiagnostics();
   const appConfig = Constants.expoConfig;
 
-  const hasRevenueCatPlugin = appConfig?.plugins?.some((plugin: any) => {
-    if (typeof plugin === 'string') {
-      return plugin.includes('revenuecat');
-    }
-    if (Array.isArray(plugin)) {
-      return plugin[0]?.includes('revenuecat');
-    }
-    return false;
-  });
-
-  const hasRevenueCatExtra = !!appConfig?.extra?.revenueCat;
-
-  const configStatus = {
-    pluginConfigured: hasRevenueCatPlugin,
-    extraConfigured: hasRevenueCatExtra,
-    iosKeySet: diagnostics.iosKey.configured,
-    androidKeySet: diagnostics.androidKey.configured,
-    iosKeyValid: diagnostics.iosKey.validFormat,
-    androidKeyValid: diagnostics.androidKey.validFormat,
+  const configStatus = validationStatus || {
+    pluginInAppJson: false,
+    extraConfigInAppJson: false,
+    iosApiKeyConfigured: false,
+    androidApiKeyConfigured: false,
+    iosKeyValidFormat: false,
+    androidKeyValidFormat: false,
   };
 
-  const allConfigured = Object.values(configStatus).every(Boolean);
+  const allConfigured = 
+    configStatus.pluginInAppJson &&
+    configStatus.extraConfigInAppJson &&
+    configStatus.iosApiKeyConfigured &&
+    configStatus.androidApiKeyConfigured &&
+    configStatus.iosKeyValidFormat &&
+    configStatus.androidKeyValidFormat;
 
   const handleOpenRevenueCatDashboard = () => {
     Linking.openURL('https://app.revenuecat.com/');
@@ -71,22 +94,22 @@ Add this to your app.json:
 [
   "./plugins/with-revenuecat",
   {
-    "iosApiKey": "$(REVENUECAT_TEST_API_KEY)",
-    "androidApiKey": "$(REVENUECAT_TEST_API_KEY)"
+    "iosApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd",
+    "androidApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd"
   }
 ]
 
 2. In the "extra" section, add:
 "revenueCat": {
-  "iosApiKey": "$(REVENUECAT_TEST_API_KEY)",
-  "androidApiKey": "$(REVENUECAT_TEST_API_KEY)"
+  "iosApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd",
+  "androidApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd"
 }
 
-3. Set your environment variable:
-export REVENUECAT_TEST_API_KEY="your_api_key_here"
-
-4. Restart the app:
+3. Restart the app:
 npx expo start --clear
+
+4. For native builds, run:
+npx expo prebuild --clean
     `.trim();
 
     if (Platform.OS === 'web') {
@@ -97,11 +120,45 @@ npx expo start --clear
     }
   };
 
+  const handleRevalidate = () => {
+    setValidating(true);
+    setTimeout(() => {
+      const isValid = validateRevenueCatConfig();
+      const status = getRevenueCatValidationStatus();
+      setValidationStatus(status);
+      setValidating(false);
+      
+      Alert.alert(
+        isValid ? 'Configuration Valid' : 'Configuration Invalid',
+        isValid 
+          ? 'RevenueCat is properly configured!' 
+          : 'Please check the configuration issues below.'
+      );
+    }, 500);
+  };
+
   const styles = createStyles(isDark);
 
   const statusIcon = allConfigured ? 'check-circle' : 'error';
   const statusColor = allConfigured ? colors.success : colors.error;
-  const statusText = allConfigured ? 'Configuration Complete' : 'Configuration Incomplete';
+  const statusText = allConfigured ? 'Configuration Complete ✅' : 'Configuration Incomplete ⚠️';
+
+  if (validating) {
+    return (
+      <>
+        <Stack.Screen
+          options={{
+            title: 'RevenueCat Diagnostic',
+            headerShown: true,
+          }}
+        />
+        <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={[styles.title, { marginTop: 16 }]}>Validating Configuration...</Text>
+        </View>
+      </>
+    );
+  }
 
   return (
     <>
@@ -120,58 +177,125 @@ npx expo start --clear
             color={statusColor}
           />
           <Text style={[styles.title, { color: statusColor }]}>{statusText}</Text>
+          
+          <TouchableOpacity
+            style={styles.revalidateButton}
+            onPress={handleRevalidate}
+          >
+            <IconSymbol
+              ios_icon_name="arrow.clockwise"
+              android_material_icon_name="refresh"
+              size={20}
+              color={colors.primary}
+            />
+            <Text style={styles.revalidateText}>Revalidate</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Configuration Status */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Configuration Status</Text>
+          <Text style={styles.sectionTitle}>Configuration Checklist</Text>
           
           <View style={styles.statusItem}>
             <IconSymbol
-              ios_icon_name={configStatus.pluginConfigured ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
-              android_material_icon_name={configStatus.pluginConfigured ? 'check-circle' : 'cancel'}
+              ios_icon_name={configStatus.pluginInAppJson ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
+              android_material_icon_name={configStatus.pluginInAppJson ? 'check-circle' : 'cancel'}
               size={24}
-              color={configStatus.pluginConfigured ? colors.success : colors.error}
+              color={configStatus.pluginInAppJson ? colors.success : colors.error}
             />
-            <Text style={styles.statusText}>
-              RevenueCat Plugin in app.json
-            </Text>
+            <View style={styles.statusTextContainer}>
+              <Text style={styles.statusText}>RevenueCat Plugin in app.json</Text>
+              {!configStatus.pluginInAppJson && (
+                <Text style={styles.statusSubtext}>
+                  Add ["./plugins/with-revenuecat", {'{'}...{'}'}] to plugins array
+                </Text>
+              )}
+            </View>
           </View>
 
           <View style={styles.statusItem}>
             <IconSymbol
-              ios_icon_name={configStatus.extraConfigured ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
-              android_material_icon_name={configStatus.extraConfigured ? 'check-circle' : 'cancel'}
+              ios_icon_name={configStatus.extraConfigInAppJson ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
+              android_material_icon_name={configStatus.extraConfigInAppJson ? 'check-circle' : 'cancel'}
               size={24}
-              color={configStatus.extraConfigured ? colors.success : colors.error}
+              color={configStatus.extraConfigInAppJson ? colors.success : colors.error}
             />
-            <Text style={styles.statusText}>
-              RevenueCat Extra Config in app.json
-            </Text>
+            <View style={styles.statusTextContainer}>
+              <Text style={styles.statusText}>RevenueCat Extra Config in app.json</Text>
+              {!configStatus.extraConfigInAppJson && (
+                <Text style={styles.statusSubtext}>
+                  Add revenueCat object to extra section
+                </Text>
+              )}
+            </View>
           </View>
 
           <View style={styles.statusItem}>
             <IconSymbol
-              ios_icon_name={configStatus.iosKeySet ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
-              android_material_icon_name={configStatus.iosKeySet ? 'check-circle' : 'cancel'}
+              ios_icon_name={configStatus.iosApiKeyConfigured ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
+              android_material_icon_name={configStatus.iosApiKeyConfigured ? 'check-circle' : 'cancel'}
               size={24}
-              color={configStatus.iosKeySet ? colors.success : colors.error}
+              color={configStatus.iosApiKeyConfigured ? colors.success : colors.error}
             />
-            <Text style={styles.statusText}>
-              iOS API Key Configured
-            </Text>
+            <View style={styles.statusTextContainer}>
+              <Text style={styles.statusText}>iOS API Key Configured</Text>
+              {configStatus.iosApiKeyConfigured && (
+                <Text style={styles.statusSubtext}>
+                  {configStatus.iosKeyPrefix}... ({configStatus.iosKeyLength} chars)
+                </Text>
+              )}
+            </View>
           </View>
 
           <View style={styles.statusItem}>
             <IconSymbol
-              ios_icon_name={configStatus.androidKeySet ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
-              android_material_icon_name={configStatus.androidKeySet ? 'check-circle' : 'cancel'}
+              ios_icon_name={configStatus.androidApiKeyConfigured ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
+              android_material_icon_name={configStatus.androidApiKeyConfigured ? 'check-circle' : 'cancel'}
               size={24}
-              color={configStatus.androidKeySet ? colors.success : colors.error}
+              color={configStatus.androidApiKeyConfigured ? colors.success : colors.error}
             />
-            <Text style={styles.statusText}>
-              Android API Key Configured
-            </Text>
+            <View style={styles.statusTextContainer}>
+              <Text style={styles.statusText}>Android API Key Configured</Text>
+              {configStatus.androidApiKeyConfigured && (
+                <Text style={styles.statusSubtext}>
+                  {configStatus.androidKeyPrefix}... ({configStatus.androidKeyLength} chars)
+                </Text>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.statusItem}>
+            <IconSymbol
+              ios_icon_name={configStatus.iosKeyValidFormat ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
+              android_material_icon_name={configStatus.iosKeyValidFormat ? 'check-circle' : 'cancel'}
+              size={24}
+              color={configStatus.iosKeyValidFormat ? colors.success : colors.error}
+            />
+            <View style={styles.statusTextContainer}>
+              <Text style={styles.statusText}>iOS Key Format Valid</Text>
+              {!configStatus.iosKeyValidFormat && (
+                <Text style={styles.statusSubtext}>
+                  Should start with: appl_, test_, sk_, or pk_
+                </Text>
+              )}
+            </View>
+          </View>
+
+          <View style={styles.statusItem}>
+            <IconSymbol
+              ios_icon_name={configStatus.androidKeyValidFormat ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
+              android_material_icon_name={configStatus.androidKeyValidFormat ? 'check-circle' : 'cancel'}
+              size={24}
+              color={configStatus.androidKeyValidFormat ? colors.success : colors.error}
+            />
+            <View style={styles.statusTextContainer}>
+              <Text style={styles.statusText}>Android Key Format Valid</Text>
+              {!configStatus.androidKeyValidFormat && (
+                <Text style={styles.statusSubtext}>
+                  Should start with: goog_, test_, sk_, or pk_
+                </Text>
+              )}
+            </View>
           </View>
         </View>
 
@@ -185,52 +309,36 @@ npx expo start --clear
           </View>
 
           <View style={styles.configItem}>
+            <Text style={styles.configLabel}>Key Type:</Text>
+            <Text style={styles.configValue}>
+              {configStatus.isTestKey ? 'Test Key' : configStatus.isProductionKey ? 'Production Key' : 'Unknown'}
+            </Text>
+          </View>
+
+          <View style={styles.configItem}>
             <Text style={styles.configLabel}>iOS API Key:</Text>
             <Text style={styles.configValue}>
-              {diagnostics.iosKey.configured ? diagnostics.iosKey.prefix : 'NOT SET'}
-            </Text>
-          </View>
-
-          <View style={styles.configItem}>
-            <Text style={styles.configLabel}>iOS Key Length:</Text>
-            <Text style={styles.configValue}>
-              {diagnostics.iosKey.length} characters
-            </Text>
-          </View>
-
-          <View style={styles.configItem}>
-            <Text style={styles.configLabel}>iOS Key Valid Format:</Text>
-            <Text style={[styles.configValue, { color: diagnostics.iosKey.validFormat ? colors.success : colors.error }]}>
-              {diagnostics.iosKey.validFormat ? 'Yes' : 'No'}
+              {diagnostics.iosKey.configured ? diagnostics.iosKey.prefix + '...' : 'NOT SET'}
             </Text>
           </View>
 
           <View style={styles.configItem}>
             <Text style={styles.configLabel}>Android API Key:</Text>
             <Text style={styles.configValue}>
-              {diagnostics.androidKey.configured ? diagnostics.androidKey.prefix : 'NOT SET'}
+              {diagnostics.androidKey.configured ? diagnostics.androidKey.prefix + '...' : 'NOT SET'}
             </Text>
           </View>
 
           <View style={styles.configItem}>
-            <Text style={styles.configLabel}>Android Key Length:</Text>
-            <Text style={styles.configValue}>
-              {diagnostics.androidKey.length} characters
-            </Text>
-          </View>
-
-          <View style={styles.configItem}>
-            <Text style={styles.configLabel}>Android Key Valid Format:</Text>
-            <Text style={[styles.configValue, { color: diagnostics.androidKey.validFormat ? colors.success : colors.error }]}>
-              {diagnostics.androidKey.validFormat ? 'Yes' : 'No'}
-            </Text>
+            <Text style={styles.configLabel}>Entitlement ID:</Text>
+            <Text style={styles.configValue}>{REVENUECAT_CONFIG.entitlementID}</Text>
           </View>
         </View>
 
         {/* Setup Instructions */}
         {!allConfigured && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Setup Instructions</Text>
+            <Text style={styles.sectionTitle}>🔧 Setup Instructions</Text>
             
             <View style={styles.instructionStep}>
               <Text style={styles.stepNumber}>1</Text>
@@ -257,19 +365,9 @@ npx expo start --clear
             <View style={styles.instructionStep}>
               <Text style={styles.stepNumber}>2</Text>
               <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Create the Plugin File</Text>
-                <Text style={styles.stepText}>
-                  Create plugins/with-revenuecat.js with the RevenueCat plugin code
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.instructionStep}>
-              <Text style={styles.stepNumber}>3</Text>
-              <View style={styles.stepContent}>
                 <Text style={styles.stepTitle}>Update app.json</Text>
                 <Text style={styles.stepText}>
-                  Add RevenueCat plugin and extra configuration to app.json
+                  Add RevenueCat plugin and extra configuration
                 </Text>
                 <TouchableOpacity
                   style={styles.linkButton}
@@ -287,30 +385,41 @@ npx expo start --clear
             </View>
 
             <View style={styles.instructionStep}>
-              <Text style={styles.stepNumber}>4</Text>
-              <View style={styles.stepContent}>
-                <Text style={styles.stepTitle}>Set Environment Variable</Text>
-                <Text style={styles.stepText}>
-                  Set REVENUECAT_TEST_API_KEY in your environment
-                </Text>
-                <Text style={styles.codeText}>
-                  export REVENUECAT_TEST_API_KEY="your_key_here"
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.instructionStep}>
-              <Text style={styles.stepNumber}>5</Text>
+              <Text style={styles.stepNumber}>3</Text>
               <View style={styles.stepContent}>
                 <Text style={styles.stepTitle}>Restart the App</Text>
                 <Text style={styles.stepText}>
                   Clear cache and restart Expo
                 </Text>
-                <Text style={styles.codeText}>
-                  npx expo start --clear
-                </Text>
+                <Text style={styles.codeText}>npx expo start --clear</Text>
               </View>
             </View>
+
+            <View style={styles.instructionStep}>
+              <Text style={styles.stepNumber}>4</Text>
+              <View style={styles.stepContent}>
+                <Text style={styles.stepTitle}>For Native Builds</Text>
+                <Text style={styles.stepText}>
+                  Rebuild native projects (iOS/Android only)
+                </Text>
+                <Text style={styles.codeText}>npx expo prebuild --clean</Text>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Success Message */}
+        {allConfigured && (
+          <View style={[styles.section, { backgroundColor: colors.success + '20' }]}>
+            <Text style={[styles.sectionTitle, { color: colors.success }]}>
+              ✅ Configuration Complete!
+            </Text>
+            <Text style={styles.successText}>
+              RevenueCat is properly configured. You can now:
+            </Text>
+            <Text style={styles.successBullet}>• View and purchase subscriptions</Text>
+            <Text style={styles.successBullet}>• Restore previous purchases</Text>
+            <Text style={styles.successBullet}>• Manage subscriptions in Customer Center</Text>
           </View>
         )}
 
@@ -321,7 +430,7 @@ npx expo start --clear
             onPress={() => setShowRawConfig(!showRawConfig)}
           >
             <Text style={styles.toggleButtonText}>
-              {showRawConfig ? 'Hide' : 'Show'} Raw Configuration
+              {showRawConfig ? 'Hide' : 'Show'} Raw Configuration (Debug)
             </Text>
             <IconSymbol
               ios_icon_name={showRawConfig ? 'chevron.up' : 'chevron.down'}
@@ -336,10 +445,9 @@ npx expo start --clear
               <Text style={styles.rawConfigText}>
                 {JSON.stringify(
                   {
-                    plugin: hasRevenueCatPlugin,
-                    extra: hasRevenueCatExtra,
-                    config: REVENUECAT_CONFIG,
+                    validationStatus: configStatus,
                     diagnostics,
+                    config: REVENUECAT_CONFIG,
                   },
                   null,
                   2
@@ -355,7 +463,7 @@ npx expo start --clear
             style={[styles.button, styles.primaryButton]}
             onPress={() => router.back()}
           >
-            <Text style={styles.buttonText}>Back to Paywall</Text>
+            <Text style={styles.buttonText}>Back</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -391,6 +499,21 @@ function createStyles(isDark: boolean) {
       marginTop: 16,
       textAlign: 'center',
     },
+    revalidateButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      backgroundColor: colors.primary + '20',
+      borderRadius: 8,
+    },
+    revalidateText: {
+      fontSize: 14,
+      color: colors.primary,
+      fontWeight: '600',
+      marginLeft: 8,
+    },
     section: {
       backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
@@ -405,14 +528,23 @@ function createStyles(isDark: boolean) {
     },
     statusItem: {
       flexDirection: 'row',
-      alignItems: 'center',
-      marginBottom: 12,
+      alignItems: 'flex-start',
+      marginBottom: 16,
+    },
+    statusTextContainer: {
+      flex: 1,
+      marginLeft: 12,
     },
     statusText: {
       fontSize: 16,
       color: isDark ? colors.text : colors.textLight,
-      marginLeft: 12,
-      flex: 1,
+      fontWeight: '500',
+    },
+    statusSubtext: {
+      fontSize: 13,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginTop: 4,
+      fontStyle: 'italic',
     },
     configItem: {
       flexDirection: 'row',
@@ -432,6 +564,8 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       color: isDark ? colors.text : colors.textLight,
       fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+      maxWidth: '60%',
+      textAlign: 'right',
     },
     instructionStep: {
       flexDirection: 'row',
@@ -483,6 +617,17 @@ function createStyles(isDark: boolean) {
       color: colors.primary,
       fontWeight: '600',
       marginRight: 4,
+    },
+    successText: {
+      fontSize: 14,
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 12,
+    },
+    successBullet: {
+      fontSize: 14,
+      color: isDark ? colors.text : colors.textLight,
+      marginLeft: 8,
+      marginBottom: 4,
     },
     toggleButton: {
       flexDirection: 'row',
