@@ -8,6 +8,8 @@
  * 
  * This screen displays subscription offerings from RevenueCat and handles purchases.
  * Users without an active subscription are blocked from tracking features.
+ * 
+ * TESTING: Button is always enabled when offerings are available for testing purposes
  */
 
 import React, { useState, useEffect } from 'react';
@@ -65,6 +67,7 @@ export default function SubscriptionPaywallScreen() {
   useEffect(() => {
     if (offerings && offerings.availablePackages.length > 0 && !selectedPackage) {
       setSelectedPackage(offerings.availablePackages[0]);
+      console.log('[SubscriptionPaywall] Auto-selected first package:', offerings.availablePackages[0].identifier);
     }
   }, [offerings, selectedPackage]);
 
@@ -196,6 +199,9 @@ export default function SubscriptionPaywallScreen() {
   const statusText = 'Subscription Required';
   const messageText = 'SeaTime Tracker requires an active subscription to track your sea time and generate MCA-compliant reports.';
 
+  // Button is enabled when offerings are available (for testing)
+  const isPurchaseButtonEnabled = !purchasing && offerings && offerings.availablePackages.length > 0;
+
   return (
     <>
       <Stack.Screen
@@ -291,7 +297,10 @@ export default function SubscriptionPaywallScreen() {
                     styles.packageCard,
                     isSelected && styles.packageCardSelected,
                   ]}
-                  onPress={() => setSelectedPackage(pkg)}
+                  onPress={() => {
+                    setSelectedPackage(pkg);
+                    console.log('[SubscriptionPaywall] Selected package:', pkg.identifier);
+                  }}
                 >
                   <View style={styles.packageHeader}>
                     <Text style={styles.packageTitle}>{pkg.product.title}</Text>
@@ -329,10 +338,10 @@ export default function SubscriptionPaywallScreen() {
             style={[
               styles.button,
               styles.primaryButton,
-              (purchasing || !selectedPackage) && styles.buttonDisabled,
+              !isPurchaseButtonEnabled && styles.buttonDisabled,
             ]}
             onPress={handlePurchase}
-            disabled={purchasing || !selectedPackage}
+            disabled={!isPurchaseButtonEnabled}
           >
             {purchasing ? (
               <ActivityIndicator color="#FFFFFF" />

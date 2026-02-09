@@ -11,14 +11,16 @@ import Constants from 'expo-constants';
  * Android API Key: Found in RevenueCat Dashboard → Project Settings → API Keys
  * 
  * For security, these should be configured in app.json under extra.revenueCat
+ * 
+ * TESTING: Using REVENUECAT_TEST_API_KEY for subscription testing
  */
 
 export const REVENUECAT_CONFIG = {
   // iOS API Key (starts with "appl_")
-  iosApiKey: Constants.expoConfig?.extra?.revenueCat?.iosApiKey || 'appl_YOUR_IOS_API_KEY_HERE',
+  iosApiKey: Constants.expoConfig?.extra?.revenueCat?.iosApiKey || 'REVENUECAT_TEST_API_KEY',
   
   // Android API Key (starts with "goog_")
-  androidApiKey: Constants.expoConfig?.extra?.revenueCat?.androidApiKey || 'goog_YOUR_ANDROID_API_KEY_HERE',
+  androidApiKey: Constants.expoConfig?.extra?.revenueCat?.androidApiKey || 'REVENUECAT_TEST_API_KEY',
   
   // Entitlement identifier (configured in RevenueCat dashboard)
   entitlementId: 'premium',
@@ -38,13 +40,19 @@ export const REVENUECAT_CONFIG = {
 export function validateRevenueCatConfig(): boolean {
   const { iosApiKey, androidApiKey } = REVENUECAT_CONFIG;
   
-  // Check if API keys are still placeholders
+  // Check if API keys are still placeholders (but allow test key)
   if (iosApiKey.includes('YOUR_') || androidApiKey.includes('YOUR_')) {
     console.warn('[RevenueCat] API keys not configured. Please update config/revenuecat.ts or app.json');
     return false;
   }
   
-  // Check if API keys have correct format
+  // Allow test API key for testing
+  if (iosApiKey === 'REVENUECAT_TEST_API_KEY' || androidApiKey === 'REVENUECAT_TEST_API_KEY') {
+    console.log('[RevenueCat] Using test API key for subscription testing');
+    return true;
+  }
+  
+  // Check if API keys have correct format for production
   if (!iosApiKey.startsWith('appl_')) {
     console.error('[RevenueCat] Invalid iOS API key format. Should start with "appl_"');
     return false;
