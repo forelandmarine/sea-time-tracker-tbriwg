@@ -24,9 +24,10 @@ export const REVENUECAT_CONFIG = {
   entitlementId: 'premium',
   
   // Product identifiers (must match App Store Connect and RevenueCat)
+  // CRITICAL: This MUST match the product ID in App Store Connect
   products: {
-    monthly: 'seatime_monthly',
-    annual: 'seatime_annual',
+    monthly: 'com.forelandmarine.seatime.monthly',
+    annual: 'com.forelandmarine.seatime.annual',
   },
 };
 
