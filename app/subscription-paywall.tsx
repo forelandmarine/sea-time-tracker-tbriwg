@@ -8,8 +8,6 @@
  * 
  * This screen displays subscription offerings from RevenueCat and handles purchases.
  * Users without an active subscription are blocked from tracking features.
- * 
- * TESTING: Button is always enabled when offerings are available for testing purposes
  */
 
 import React, { useState, useEffect } from 'react';
@@ -32,6 +30,7 @@ import { IconSymbol } from '@/components/IconSymbol';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRevenueCat } from '@/contexts/RevenueCatContext';
 import { PurchasesPackage } from 'react-native-purchases';
+import Constants from 'expo-constants';
 
 // COMPLIANCE: Developer URLs (replace with actual URLs before submission)
 const PRIVACY_POLICY_URL = 'https://forelandmarine.com/privacy';
@@ -45,6 +44,7 @@ export default function SubscriptionPaywallScreen() {
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [showSignOutModal, setShowSignOutModal] = useState(false);
+  const [showDiagnosticModal, setShowDiagnosticModal] = useState(false);
   const [selectedPackage, setSelectedPackage] = useState<PurchasesPackage | null>(null);
   const { signOut } = useAuth();
   const {
@@ -61,6 +61,15 @@ export default function SubscriptionPaywallScreen() {
     console.log('[SubscriptionPaywall] Subscription status:', subscriptionStatus);
     console.log('[SubscriptionPaywall] Has active subscription:', hasActiveSubscription);
     console.log('[SubscriptionPaywall] Offerings:', offerings);
+    
+    // Log configuration for debugging
+    const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
+    console.log('[SubscriptionPaywall] RevenueCat config:', {
+      hasIosKey: !!revenueCatConfig?.iosApiKey,
+      hasAndroidKey: !!revenueCatConfig?.androidApiKey,
+      iosKeyPrefix: revenueCatConfig?.iosApiKey?.substring(0, 5),
+      androidKeyPrefix: revenueCatConfig?.androidApiKey?.substring(0, 5),
+    });
   }, [subscriptionStatus, hasActiveSubscription, offerings]);
 
   // Auto-select first package
@@ -155,11 +164,27 @@ export default function SubscriptionPaywallScreen() {
   };
 
   const handleContactSupport = () => {
-    const emailUrl = `mailto:${SUPPORT_EMAIL}?subject=SeaTime Tracker Subscription Inquiry`;
+    const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
+    const iosKey = revenueCatConfig?.iosApiKey || 'NOT_CONFIGURED';
+    const androidKey = revenueCatConfig?.androidApiKey || 'NOT_CONFIGURED';
+    
+    const diagnosticInfo = `
+RevenueCat Configuration Issue
+
+Platform: ${Platform.OS}
+iOS API Key: ${iosKey.substring(0, 10)}... (${iosKey.startsWith('appl_') ? 'Valid format' : 'INVALID - should start with appl_'})
+Android API Key: ${androidKey.substring(0, 10)}... (${androidKey.startsWith('goog_') ? 'Valid format' : 'INVALID - should start with goog_'})
+Offerings Available: ${offerings ? 'Yes' : 'No'}
+Error: No subscription options available
+
+Please help me configure RevenueCat properly.
+    `.trim();
+    
+    const emailUrl = `mailto:${SUPPORT_EMAIL}?subject=SeaTime Tracker - RevenueCat Configuration Issue&body=${encodeURIComponent(diagnosticInfo)}`;
     Linking.openURL(emailUrl).catch(() => {
       Alert.alert(
         'Contact Support',
-        `Please email us at ${SUPPORT_EMAIL} for assistance.`,
+        `Please email us at ${SUPPORT_EMAIL} with the following information:\n\n${diagnosticInfo}`,
         [{ text: 'OK' }]
       );
     });
@@ -194,13 +219,50 @@ export default function SubscriptionPaywallScreen() {
     }
   };
 
+  const getDiagnosticInfo = () => {
+    const revenueCatConfig = Constants.expoConfig?.extra?.revenueCat;
+    const iosKey = revenueCatConfig?.iosApiKey || 'NOT_CONFIGURED';
+    const androidKey = revenueCatConfig?.androidApiKey || 'NOT_CONFIGURED';
+    
+    const iosKeyValid = iosKey.startsWith('appl_');
+    const androidKeyValid = androidKey.startsWith('goog_');
+    const iosKeyIsPlaceholder = iosKey.includes('YOUR_') || iosKey === 'REVENUECAT_TEST_API_KEY';
+    const androidKeyIsPlaceholder = androidKey.includes('YOUR_') || androidKey === 'REVENUECAT_TEST_API_KEY';
+    
+    return {
+      platform: Platform.OS,
+      iosKey: {
+        configured: iosKey !== 'NOT_CONFIGURED',
+        validFormat: iosKeyValid,
+        isPlaceholder: iosKeyIsPlaceholder,
+        prefix: iosKey.substring(0, 10),
+      },
+      androidKey: {
+        configured: androidKey !== 'NOT_CONFIGURED',
+        validFormat: androidKeyValid,
+        isPlaceholder: androidKeyIsPlaceholder,
+        prefix: androidKey.substring(0, 10),
+      },
+      offerings: {
+        available: !!offerings,
+        count: offerings?.availablePackages.length || 0,
+      },
+    };
+  };
+
   const styles = createStyles(isDark);
 
   const statusText = 'Subscription Required';
   const messageText = 'SeaTime Tracker requires an active subscription to track your sea time and generate MCA-compliant reports.';
 
-  // Button is enabled when offerings are available (for testing)
+  // Button is enabled when offerings are available
   const isPurchaseButtonEnabled = !purchasing && offerings && offerings.availablePackages.length > 0;
+
+  // Check if configuration issue
+  const diagnosticInfo = getDiagnosticInfo();
+  const hasConfigIssue = 
+    (Platform.OS === 'ios' && (!diagnosticInfo.iosKey.validFormat || diagnosticInfo.iosKey.isPlaceholder)) ||
+    (Platform.OS === 'android' && (!diagnosticInfo.androidKey.validFormat || diagnosticInfo.androidKey.isPlaceholder));
 
   return (
     <>
@@ -277,6 +339,30 @@ export default function SubscriptionPaywallScreen() {
           </View>
         </View>
 
+        {/* Configuration Warning */}
+        {hasConfigIssue && (
+          <View style={styles.warningContainer}>
+            <IconSymbol
+              ios_icon_name="exclamationmark.triangle.fill"
+              android_material_icon_name="warning"
+              size={24}
+              color={colors.warning}
+            />
+            <View style={styles.warningTextContainer}>
+              <Text style={styles.warningTitle}>Configuration Required</Text>
+              <Text style={styles.warningText}>
+                RevenueCat API keys need to be configured. Please check the setup instructions.
+              </Text>
+              <TouchableOpacity
+                style={styles.diagnosticButton}
+                onPress={() => setShowDiagnosticModal(true)}
+              >
+                <Text style={styles.diagnosticButtonText}>View Diagnostic Info</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Subscription Packages */}
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -324,12 +410,27 @@ export default function SubscriptionPaywallScreen() {
           </View>
         ) : (
           <View style={styles.noOffersContainer}>
+            <IconSymbol
+              ios_icon_name="exclamationmark.circle.fill"
+              android_material_icon_name="error"
+              size={48}
+              color={colors.error}
+            />
             <Text style={styles.noOffersText}>
-              No subscription options available at this time.
+              No subscription options available
             </Text>
             <Text style={styles.noOffersSubtext}>
-              Please contact support for assistance.
+              This usually means RevenueCat API keys are not configured properly.
             </Text>
+            <Text style={styles.noOffersSubtext}>
+              Please contact support or check the setup instructions.
+            </Text>
+            <TouchableOpacity
+              style={styles.setupButton}
+              onPress={() => setShowDiagnosticModal(true)}
+            >
+              <Text style={styles.setupButtonText}>View Setup Instructions</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -434,6 +535,87 @@ export default function SubscriptionPaywallScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Diagnostic Modal */}
+      <Modal
+        visible={showDiagnosticModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDiagnosticModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, styles.diagnosticModalContent]}>
+            <Text style={styles.modalTitle}>RevenueCat Configuration</Text>
+            
+            <ScrollView style={styles.diagnosticScroll}>
+              <View style={styles.diagnosticSection}>
+                <Text style={styles.diagnosticSectionTitle}>Current Status</Text>
+                <Text style={styles.diagnosticText}>
+                  Platform: {diagnosticInfo.platform}
+                </Text>
+                <Text style={styles.diagnosticText}>
+                  Offerings Available: {diagnosticInfo.offerings.available ? 'Yes' : 'No'}
+                </Text>
+                <Text style={styles.diagnosticText}>
+                  Package Count: {diagnosticInfo.offerings.count}
+                </Text>
+              </View>
+
+              <View style={styles.diagnosticSection}>
+                <Text style={styles.diagnosticSectionTitle}>iOS Configuration</Text>
+                <Text style={styles.diagnosticText}>
+                  Configured: {diagnosticInfo.iosKey.configured ? '✅' : '❌'}
+                </Text>
+                <Text style={styles.diagnosticText}>
+                  Valid Format: {diagnosticInfo.iosKey.validFormat ? '✅' : '❌ (should start with appl_)'}
+                </Text>
+                <Text style={styles.diagnosticText}>
+                  Is Placeholder: {diagnosticInfo.iosKey.isPlaceholder ? '❌ Yes' : '✅ No'}
+                </Text>
+                <Text style={styles.diagnosticText}>
+                  Key Prefix: {diagnosticInfo.iosKey.prefix}...
+                </Text>
+              </View>
+
+              <View style={styles.diagnosticSection}>
+                <Text style={styles.diagnosticSectionTitle}>Android Configuration</Text>
+                <Text style={styles.diagnosticText}>
+                  Configured: {diagnosticInfo.androidKey.configured ? '✅' : '❌'}
+                </Text>
+                <Text style={styles.diagnosticText}>
+                  Valid Format: {diagnosticInfo.androidKey.validFormat ? '✅' : '❌ (should start with goog_)'}
+                </Text>
+                <Text style={styles.diagnosticText}>
+                  Is Placeholder: {diagnosticInfo.androidKey.isPlaceholder ? '❌ Yes' : '✅ No'}
+                </Text>
+                <Text style={styles.diagnosticText}>
+                  Key Prefix: {diagnosticInfo.androidKey.prefix}...
+                </Text>
+              </View>
+
+              <View style={styles.diagnosticSection}>
+                <Text style={styles.diagnosticSectionTitle}>Setup Instructions</Text>
+                <Text style={styles.diagnosticInstructions}>
+                  1. Go to RevenueCat Dashboard (app.revenuecat.com)
+                  {'\n'}2. Navigate to Project Settings → API Keys
+                  {'\n'}3. Copy your iOS API key (starts with appl_)
+                  {'\n'}4. Copy your Android API key (starts with goog_)
+                  {'\n'}5. Update app.json with your real API keys
+                  {'\n'}6. Restart the app with: npx expo start --clear
+                  {'\n\n'}See REVENUECAT_SETUP_INSTRUCTIONS.md for detailed steps.
+                </Text>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.modalButton, styles.modalConfirmButton]}
+              onPress={() => setShowDiagnosticModal(false)}
+            >
+              <Text style={styles.modalConfirmText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -498,6 +680,39 @@ function createStyles(isDark: boolean) {
       marginLeft: 12,
       flex: 1,
     },
+    warningContainer: {
+      flexDirection: 'row',
+      backgroundColor: isDark ? '#3a2a1a' : '#fff3cd',
+      borderRadius: 12,
+      padding: 16,
+      marginBottom: 24,
+      borderWidth: 1,
+      borderColor: colors.warning,
+    },
+    warningTextContainer: {
+      flex: 1,
+      marginLeft: 12,
+    },
+    warningTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.warning,
+      marginBottom: 4,
+    },
+    warningText: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      lineHeight: 20,
+      marginBottom: 8,
+    },
+    diagnosticButton: {
+      marginTop: 4,
+    },
+    diagnosticButtonText: {
+      fontSize: 14,
+      color: colors.primary,
+      fontWeight: '600',
+    },
     loadingContainer: {
       alignItems: 'center',
       padding: 40,
@@ -552,17 +767,36 @@ function createStyles(isDark: boolean) {
     noOffersContainer: {
       alignItems: 'center',
       padding: 40,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
+      borderRadius: 16,
+      marginBottom: 24,
     },
     noOffersText: {
-      fontSize: 16,
+      fontSize: 18,
+      fontWeight: '600',
       color: isDark ? colors.text : colors.textLight,
       textAlign: 'center',
+      marginTop: 16,
       marginBottom: 8,
     },
     noOffersSubtext: {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       textAlign: 'center',
+      marginBottom: 4,
+      lineHeight: 20,
+    },
+    setupButton: {
+      marginTop: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 24,
+      backgroundColor: colors.primary,
+      borderRadius: 8,
+    },
+    setupButtonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '600',
     },
     buttonContainer: {
       marginBottom: 24,
@@ -660,6 +894,10 @@ function createStyles(isDark: boolean) {
       maxWidth: 400,
       alignItems: 'center',
     },
+    diagnosticModalContent: {
+      maxWidth: 500,
+      maxHeight: '80%',
+    },
     modalTitle: {
       fontSize: 20,
       fontWeight: 'bold',
@@ -702,6 +940,30 @@ function createStyles(isDark: boolean) {
       color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '600',
+    },
+    diagnosticScroll: {
+      width: '100%',
+      marginBottom: 16,
+    },
+    diagnosticSection: {
+      marginBottom: 20,
+    },
+    diagnosticSectionTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 8,
+    },
+    diagnosticText: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 4,
+      lineHeight: 20,
+    },
+    diagnosticInstructions: {
+      fontSize: 14,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      lineHeight: 22,
     },
   });
 }
