@@ -1,8 +1,15 @@
 
-import { useCallback } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useRevenueCat } from '@/contexts/RevenueCatContext';
+import { authenticatedGet, authenticatedPatch } from '@/utils/api';
+
+interface SubscriptionStatus {
+  status: 'active' | 'inactive' | 'trial' | 'expired';
+  expiresAt: string | null;
+  productId: string | null;
+  isTrialActive: boolean;
+}
 
 /**
  * Hook to enforce subscription requirements for premium features
@@ -24,11 +31,33 @@ import { useRevenueCat } from '@/contexts/RevenueCatContext';
  */
 export function useSubscriptionEnforcement() {
   const router = useRouter();
-  const { hasActiveSubscription, subscriptionStatus, checkSubscription } = useRevenueCat();
+  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>({
+    status: 'inactive',
+    expiresAt: null,
+    productId: null,
+    isTrialActive: false,
+  });
+  const [hasActiveSubscription, setHasActiveSubscription] = useState(false);
+
+  // Check subscription status on mount
+  useEffect(() => {
+    checkSubscription();
+  }, []);
+
+  const checkSubscription = useCallback(async () => {
+    try {
+      const response = await authenticatedGet<SubscriptionStatus>('/api/subscription/status');
+      setSubscriptionStatus(response);
+      setHasActiveSubscription(response.status === 'active' || response.status === 'trial');
+    } catch (error: any) {
+      console.error('[SubscriptionEnforcement] Failed to check subscription:', error);
+      setHasActiveSubscription(false);
+    }
+  }, []);
 
   /**
    * Check if user has an active subscription
-   * If not, show alert and redirect to paywall
+   * If not, show alert and redirect to subscription management
    * Returns true if subscription is active, false otherwise
    */
   const requireSubscription = useCallback((featureName?: string): boolean => {
@@ -50,17 +79,17 @@ export function useSubscriptionEnforcement() {
           style: 'cancel',
         },
         {
-          text: 'Subscribe',
+          text: 'Learn More',
           onPress: () => {
-            console.log('[SubscriptionEnforcement] Redirecting to subscription paywall');
-            router.push('/subscription-paywall');
+            console.log('[SubscriptionEnforcement] User wants to learn more about subscriptions');
+            // User can contact support or check subscription status
           },
         },
       ]
     );
 
     return false;
-  }, [hasActiveSubscription, subscriptionStatus, router]);
+  }, [hasActiveSubscription, subscriptionStatus]);
 
   /**
    * Handle subscription-related API errors (403 SUBSCRIPTION_REQUIRED)
@@ -92,21 +121,14 @@ export function useSubscriptionEnforcement() {
       'Your subscription has expired or is inactive. Please renew your subscription to continue using this feature.',
       [
         {
-          text: 'Cancel',
+          text: 'OK',
           style: 'cancel',
-        },
-        {
-          text: 'Manage Subscription',
-          onPress: () => {
-            console.log('[SubscriptionEnforcement] Redirecting to subscription paywall');
-            router.push('/subscription-paywall');
-          },
         },
       ]
     );
 
     return true;
-  }, [checkSubscription, router]);
+  }, [checkSubscription]);
 
   /**
    * Check if user has an active subscription without showing alert
@@ -123,7 +145,6 @@ export function useSubscriptionEnforcement() {
     try {
       console.log('[SubscriptionEnforcement] Pausing vessel tracking');
       
-      const { authenticatedPatch } = await import('@/utils/api');
       const response = await authenticatedPatch<{ success: boolean; vesselsDeactivated: number }>(
         '/api/subscription/pause-tracking',
         {}
@@ -143,5 +164,6 @@ export function useSubscriptionEnforcement() {
     hasSubscription,
     pauseTracking,
     subscriptionStatus,
+    checkSubscription,
   };
 }
