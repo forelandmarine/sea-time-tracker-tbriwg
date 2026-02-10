@@ -12,17 +12,19 @@ import {
   Alert,
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/IconSymbol';
 import { colors } from '@/styles/commonStyles';
 import { REVENUECAT_CONFIG } from '@/config/revenuecat';
 import { useRevenueCat } from '@/contexts/RevenueCatContext';
 import Constants from 'expo-constants';
 
-const createStyles = (isDark: boolean) =>
+const createStyles = (isDark: boolean, topInset: number) =>
   StyleSheet.create({
     container: {
       flex: 1,
       backgroundColor: isDark ? colors.background : '#f5f5f5',
+      paddingTop: topInset,
     },
     scrollContent: {
       padding: 20,
@@ -140,7 +142,7 @@ const createStyles = (isDark: boolean) =>
       marginTop: 8,
     },
     codeText: {
-      fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+      fontFamily: 'Courier',
       fontSize: 12,
       color: isDark ? '#4CAF50' : '#2e7d32',
     },
@@ -188,7 +190,8 @@ const createStyles = (isDark: boolean) =>
 export default function RevenueCatDiagnosticScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
-  const styles = createStyles(isDark);
+  const insets = useSafeAreaInsets();
+  const styles = createStyles(isDark, insets.top);
   const router = useRouter();
 
   const {
@@ -284,7 +287,7 @@ export default function RevenueCatDiagnosticScreen() {
           {overallStatus ? (
             <View style={styles.successBox}>
               <Text style={styles.successText}>
-                ✅ RevenueCat is properly configured and initialized for {Platform.OS}
+                ✅ RevenueCat is properly configured and initialized for iOS
               </Text>
             </View>
           ) : (
@@ -302,11 +305,11 @@ export default function RevenueCatDiagnosticScreen() {
 
           <View style={styles.infoRow}>
             <Text style={styles.infoLabel}>Current Platform</Text>
-            <Text style={styles.infoValue}>{Platform.OS}</Text>
+            <Text style={styles.infoValue}>iOS</Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Platform Version</Text>
+            <Text style={styles.infoLabel}>iOS Version</Text>
             <Text style={styles.infoValue}>{Platform.Version}</Text>
           </View>
 
@@ -349,20 +352,6 @@ export default function RevenueCatDiagnosticScreen() {
 
           <View style={styles.checkItem}>
             <IconSymbol
-              ios_icon_name={androidKeyValid ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
-              android_material_icon_name={androidKeyValid ? 'check-circle' : 'error'}
-              size={24}
-              color={androidKeyValid ? '#4CAF50' : '#f44336'}
-              style={styles.checkIcon}
-            />
-            <Text style={styles.checkText}>
-              Android API Key: {androidKeyValid ? 'Valid' : 'Missing or Invalid'}
-              {diagnostics?.androidKey?.isPlaceholder && ' (Placeholder detected)'}
-            </Text>
-          </View>
-
-          <View style={styles.checkItem}>
-            <IconSymbol
               ios_icon_name={isInitialized ? 'checkmark.circle.fill' : 'xmark.circle.fill'}
               android_material_icon_name={isInitialized ? 'check-circle' : 'error'}
               size={24}
@@ -373,33 +362,25 @@ export default function RevenueCatDiagnosticScreen() {
               SDK Initialized: {isInitialized ? 'Yes' : 'No'}
             </Text>
           </View>
-
-          {Platform.OS === 'web' && (
-            <View style={styles.warningBox}>
-              <Text style={styles.warningText}>
-                ⚠️ RevenueCat is not fully supported on web. This is expected behavior.
-              </Text>
-            </View>
-          )}
         </View>
 
         {/* API Keys Details */}
         {diagnostics && (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>API Keys Details</Text>
+            <Text style={styles.sectionTitle}>iOS API Key Details</Text>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>iOS Key Prefix</Text>
+              <Text style={styles.infoLabel}>Key Prefix</Text>
               <Text style={styles.infoValue}>{diagnostics.iosKey.prefix}</Text>
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>iOS Key Length</Text>
+              <Text style={styles.infoLabel}>Key Length</Text>
               <Text style={styles.infoValue}>{diagnostics.iosKey.length} chars</Text>
             </View>
 
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>iOS Key Format</Text>
+              <Text style={styles.infoLabel}>Key Format</Text>
               <View style={[
                 styles.statusBadge,
                 diagnostics.iosKey.validFormat ? styles.statusBadgeSuccess : styles.statusBadgeError
@@ -410,37 +391,15 @@ export default function RevenueCatDiagnosticScreen() {
               </View>
             </View>
 
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Android Key Prefix</Text>
-              <Text style={styles.infoValue}>{diagnostics.androidKey.prefix}</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Android Key Length</Text>
-              <Text style={styles.infoValue}>{diagnostics.androidKey.length} chars</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Android Key Format</Text>
-              <View style={[
-                styles.statusBadge,
-                diagnostics.androidKey.validFormat ? styles.statusBadgeSuccess : styles.statusBadgeError
-              ]}>
-                <Text style={styles.statusBadgeText}>
-                  {diagnostics.androidKey.validFormat ? 'Valid' : 'Invalid'}
-                </Text>
-              </View>
-            </View>
-
             <View style={[styles.infoRow, styles.infoRowLast]}>
               <Text style={styles.infoLabel}>Entitlement ID</Text>
               <Text style={styles.infoValue}>{REVENUECAT_CONFIG.entitlementID}</Text>
             </View>
 
-            {(!iosKeyValid || !androidKeyValid) && (
+            {!iosKeyValid && (
               <View style={styles.warningBox}>
                 <Text style={styles.warningText}>
-                  ⚠️ API keys should start with 'appl_' (iOS) or 'goog_' (Android), or 'test_' for testing.
+                  ⚠️ iOS API keys should start with 'appl_' or 'test_' for testing.
                 </Text>
               </View>
             )}
@@ -536,14 +495,13 @@ export default function RevenueCatDiagnosticScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Setup Instructions</Text>
             <Text style={styles.checkText}>
-              To configure RevenueCat, you need to add your API keys to app.json:
+              To configure RevenueCat for iOS, add your API key to app.json:
             </Text>
             <View style={styles.codeBlock}>
               <Text style={styles.codeText}>
 {`"extra": {
   "revenueCat": {
-    "iosApiKey": "appl_YOUR_IOS_KEY",
-    "androidApiKey": "goog_YOUR_ANDROID_KEY"
+    "iosApiKey": "appl_YOUR_IOS_KEY"
   }
 }`}
               </Text>
@@ -551,10 +509,11 @@ export default function RevenueCatDiagnosticScreen() {
             <View style={styles.warningBox}>
               <Text style={styles.warningText}>
                 📝 Steps to fix:{'\n'}
-                1. Get your API keys from RevenueCat dashboard{'\n'}
-                2. Update app.json with your actual keys{'\n'}
+                1. Get your iOS API key from RevenueCat dashboard{'\n'}
+                2. Update app.json with your actual key{'\n'}
                 3. Run: npx expo prebuild --clean{'\n'}
-                4. Rebuild your app
+                4. Run: cd ios && pod install && cd ..{'\n'}
+                5. Rebuild your app
               </Text>
             </View>
           </View>
@@ -567,10 +526,12 @@ export default function RevenueCatDiagnosticScreen() {
             <View style={styles.warningBox}>
               <Text style={styles.warningText}>
                 SDK is not initialized despite valid configuration. This could mean:{'\n\n'}
-                • You're running on web (not supported){'\n'}
                 • Native modules need to be rebuilt{'\n'}
-                • There's an initialization error (check logs){'\n\n'}
-                Try rebuilding the app with: npx expo prebuild --clean
+                • There's an initialization error (check logs){'\n'}
+                • StoreKit configuration is missing{'\n\n'}
+                Try rebuilding the app with:{'\n'}
+                npx expo prebuild --clean{'\n'}
+                cd ios && pod install && cd ..
               </Text>
             </View>
           </View>
