@@ -131,6 +131,11 @@ export default function PaywallScreen() {
     router.back();
   };
 
+  const handleAdminMenu = () => {
+    console.log('[Paywall] User tapped Admin button - navigating to admin menu');
+    router.push('/admin-menu');
+  };
+
   // Handle app store links for web
   const handleDownloadApp = () => {
     const iosUrl = "https://apps.apple.com/app/seatime-tracker";
@@ -151,6 +156,16 @@ export default function PaywallScreen() {
   if (isSubscribed) {
     return (
       <SafeAreaView style={styles.container}>
+        {/* Admin Button - Top Left */}
+        <TouchableOpacity style={styles.adminButton} onPress={handleAdminMenu}>
+          <IconSymbol
+            ios_icon_name="wrench.fill"
+            android_material_icon_name="settings"
+            size={20}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+
         {/* Close Button - Always visible */}
         <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
           <IconSymbol
@@ -184,6 +199,16 @@ export default function PaywallScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
+        {/* Admin Button - Top Left */}
+        <TouchableOpacity style={styles.adminButton} onPress={handleAdminMenu}>
+          <IconSymbol
+            ios_icon_name="wrench.fill"
+            android_material_icon_name="settings"
+            size={20}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+
         {/* Close Button - Always visible */}
         <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
           <IconSymbol
@@ -204,6 +229,16 @@ export default function PaywallScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Admin Button - Top Left */}
+      <TouchableOpacity style={styles.adminButton} onPress={handleAdminMenu}>
+        <IconSymbol
+          ios_icon_name="wrench.fill"
+          android_material_icon_name="settings"
+          size={20}
+          color={colors.textSecondary}
+        />
+      </TouchableOpacity>
+
       {/* Close Button - Always visible and prominent */}
       <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
         <IconSymbol
@@ -444,6 +479,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.textSecondary,
     marginTop: 16,
+  },
+  adminButton: {
+    position: "absolute",
+    top: 60,
+    left: 20,
+    zIndex: 10,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.cardBackground,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   closeButton: {
     position: "absolute",
