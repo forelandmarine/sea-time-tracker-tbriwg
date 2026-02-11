@@ -379,8 +379,8 @@ export default function SeaTimeScreen() {
   };
 
   const handleSubscribePress = () => {
-    console.log('[Home] User tapped subscribe button, navigating to subscription diagnostic');
-    router.push('/subscription-diagnostic');
+    console.log('[Home] User tapped subscribe button, navigating to paywall');
+    router.push('/paywall');
   };
 
   const convertToDMS = (decimal: number, isLatitude: boolean): string => {

@@ -395,6 +395,11 @@ export default function SeaTimeScreen() {
     router.push('/user-profile');
   };
 
+  const handleSubscribePress = () => {
+    console.log('[Home] User tapped subscribe button, navigating to paywall');
+    router.push('/paywall');
+  };
+
   const convertToDMS = (decimal: number, isLatitude: boolean): string => {
     const absolute = Math.abs(decimal);
     const degrees = Math.floor(absolute);
@@ -496,10 +501,22 @@ export default function SeaTimeScreen() {
               <View style={styles.subscriptionBannerTextContainer}>
                 <Text style={styles.subscriptionBannerTitle}>Vessel Tracking Paused</Text>
                 <Text style={styles.subscriptionBannerMessage}>
-                  Your subscription is inactive. Vessel tracking has been paused. Please contact support to resume automatic sea time tracking.
+                  Your subscription is inactive. Vessel tracking has been paused. Subscribe to resume automatic sea time tracking.
                 </Text>
               </View>
             </View>
+            <TouchableOpacity 
+              style={styles.subscriptionBannerButton}
+              onPress={handleSubscribePress}
+            >
+              <Text style={styles.subscriptionBannerButtonText}>Subscribe Now</Text>
+              <IconSymbol
+                ios_icon_name="arrow.right"
+                android_material_icon_name="arrow-forward"
+                size={18}
+                color="#fff"
+              />
+            </TouchableOpacity>
           </View>
         )}
 
@@ -1012,6 +1029,7 @@ function createStyles(isDark: boolean) {
       flexDirection: 'row',
       alignItems: 'flex-start',
       gap: 12,
+      marginBottom: 12,
     },
     subscriptionBannerTextContainer: {
       flex: 1,
@@ -1026,6 +1044,20 @@ function createStyles(isDark: boolean) {
       fontSize: 14,
       color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       lineHeight: 20,
+    },
+    subscriptionBannerButton: {
+      backgroundColor: colors.primary,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 14,
+      borderRadius: 8,
+      gap: 8,
+    },
+    subscriptionBannerButtonText: {
+      color: '#fff',
+      fontSize: 16,
+      fontWeight: 'bold',
     },
     section: {
       padding: 16,
