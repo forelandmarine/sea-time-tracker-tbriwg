@@ -1,9 +1,15 @@
 
 /**
  * SeaTime Tracker Paywall Screen
+ * iOS App Store Guideline 3.1.1 Compliant
  *
- * Clean subscription interface for SeaTime Tracker Pro
- * This screen can always be dismissed - users can access their profile without subscribing
+ * Compliance features:
+ * - Always dismissible (close button + "Maybe Later")
+ * - Clear pricing before purchase
+ * - Restore purchases easily accessible
+ * - Terms and privacy links
+ * - No external payment methods
+ * - Subscription terms clearly stated
  */
 
 import React, { useState } from "react";
@@ -137,10 +143,25 @@ export default function PaywallScreen() {
     router.push('/admin-menu');
   };
 
+  // Handle legal links
+  const handleTermsPress = () => {
+    const termsUrl = "https://www.forelandmarine.com/terms";
+    Linking.openURL(termsUrl).catch(() => {
+      Alert.alert("Error", "Could not open Terms of Service");
+    });
+  };
+
+  const handlePrivacyPress = () => {
+    const privacyUrl = "https://www.forelandmarine.com/privacy";
+    Linking.openURL(privacyUrl).catch(() => {
+      Alert.alert("Error", "Could not open Privacy Policy");
+    });
+  };
+
   // Handle app store links for web
   const handleDownloadApp = () => {
     const iosUrl = "https://apps.apple.com/app/seatime-tracker";
-    const androidUrl = "https://play.google.com/store/apps/details?id=com.seatimetracker";
+    const androidUrl = "https://play.google.com/store/apps/details?id=com.forelandmarine.seatimetracker";
 
     Alert.alert(
       "Download SeaTime Tracker",
@@ -184,7 +205,7 @@ export default function PaywallScreen() {
             size={80}
             color={colors.success}
           />
-          <Text style={styles.subscribedTitle}>You're a Pro Member! ⚓</Text>
+          <Text style={styles.subscribedTitle}>You&apos;re a Pro Member! ⚓</Text>
           <Text style={styles.subscribedSubtitle}>
             You have full access to all SeaTime Tracker Pro features.
           </Text>
@@ -360,6 +381,10 @@ export default function PaywallScreen() {
             <Text style={styles.packagesTitle}>Choose Your Plan</Text>
             {packages.map((pkg) => {
               const isSelected = selectedPackage?.identifier === pkg.identifier;
+              const priceString = pkg.product.priceString;
+              const productTitle = pkg.product.title;
+              const hasIntroPrice = pkg.product.introPrice !== null;
+              
               return (
                 <TouchableOpacity
                   key={pkg.identifier}
@@ -371,8 +396,8 @@ export default function PaywallScreen() {
                 >
                   <View style={styles.packageHeader}>
                     <View style={styles.packageTitleContainer}>
-                      <Text style={styles.packageTitle}>{pkg.product.title}</Text>
-                      {pkg.product.introPrice && (
+                      <Text style={styles.packageTitle}>{productTitle}</Text>
+                      {hasIntroPrice && (
                         <View style={styles.trialBadge}>
                           <Text style={styles.trialBadgeText}>FREE TRIAL</Text>
                         </View>
@@ -388,7 +413,7 @@ export default function PaywallScreen() {
                     )}
                   </View>
                   <Text style={styles.packagePrice}>
-                    {pkg.product.priceString}
+                    {priceString}
                   </Text>
                   {pkg.product.description && (
                     <Text style={styles.packageDescription}>
@@ -455,15 +480,22 @@ export default function PaywallScreen() {
               {purchasing ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.primaryButtonText}>
-                  {selectedPackage
-                    ? `Subscribe for ${selectedPackage.product.priceString}`
-                    : "Select a plan"}
-                </Text>
+                <>
+                  {selectedPackage && (
+                    <Text style={styles.primaryButtonText}>
+                      Subscribe for {selectedPackage.product.priceString}
+                    </Text>
+                  )}
+                  {!selectedPackage && (
+                    <Text style={styles.primaryButtonText}>
+                      Select a plan
+                    </Text>
+                  )}
+                </>
               )}
             </TouchableOpacity>
 
-            {/* Restore Button */}
+            {/* Restore Button - Prominent for App Store compliance */}
             <TouchableOpacity
               style={styles.secondaryButton}
               onPress={handleRestore}
@@ -476,7 +508,7 @@ export default function PaywallScreen() {
               )}
             </TouchableOpacity>
 
-            {/* Maybe Later Button */}
+            {/* Maybe Later Button - Required for App Store compliance */}
             <TouchableOpacity
               style={styles.tertiaryButton}
               onPress={handleClose}
@@ -484,13 +516,25 @@ export default function PaywallScreen() {
               <Text style={styles.tertiaryButtonText}>Maybe Later</Text>
             </TouchableOpacity>
 
-            {/* Legal Text */}
+            {/* Subscription Terms - Required for App Store compliance */}
             <Text style={styles.legalText}>
               Payment will be charged to your{" "}
-              {Platform.OS === "ios" ? "Apple ID" : "Google Play"} account.
-              Subscription automatically renews unless canceled at least 24 hours
-              before the end of the current period.
+              {Platform.OS === "ios" ? "Apple ID" : "Google Play"} account at confirmation of purchase.
+              Subscription automatically renews unless auto-renew is turned off at least 24 hours before the end of the current period.
+              Your account will be charged for renewal within 24 hours prior to the end of the current period.
+              You can manage and cancel your subscriptions by going to your account settings on the App Store after purchase.
             </Text>
+
+            {/* Legal Links - Required for App Store compliance */}
+            <View style={styles.legalLinks}>
+              <TouchableOpacity onPress={handleTermsPress}>
+                <Text style={styles.legalLinkText}>Terms of Service</Text>
+              </TouchableOpacity>
+              <Text style={styles.legalLinkSeparator}>•</Text>
+              <TouchableOpacity onPress={handlePrivacyPress}>
+                <Text style={styles.legalLinkText}>Privacy Policy</Text>
+              </TouchableOpacity>
+            </View>
           </>
         )}
       </View>
@@ -755,5 +799,22 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: "center",
     lineHeight: 16,
+    marginTop: 8,
+  },
+  legalLinks: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 4,
+  },
+  legalLinkText: {
+    fontSize: 12,
+    color: colors.primary,
+    textDecorationLine: "underline",
+  },
+  legalLinkSeparator: {
+    fontSize: 12,
+    color: colors.textSecondary,
   },
 });
