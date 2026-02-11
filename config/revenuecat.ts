@@ -12,14 +12,13 @@ import { Platform } from 'react-native';
  * - Configuration validation
  */
 
-// Get API keys from app.json extra config or use the test key directly
+// Get API keys from app.json extra.revenueCat config
 const getRevenueCatConfig = () => {
   const extra = Constants.expoConfig?.extra;
+  const revenueCatConfig = extra?.revenueCat || {};
   
-  // Try to get from extra.revenueCat first, then fall back to the test key
-  const testKey = 'test_gKMHKEpYSkTiLUtgKWHRbAXGcGd';
-  const iosApiKey = extra?.revenueCat?.iosApiKey || extra?.REVENUECAT_API_KEY || testKey;
-  const androidApiKey = extra?.revenueCat?.androidApiKey || extra?.REVENUECAT_API_KEY || testKey;
+  const iosApiKey = revenueCatConfig.iosApiKey || '';
+  const androidApiKey = revenueCatConfig.androidApiKey || '';
   
   console.log('[RevenueCat Config] Loading configuration');
   console.log('[RevenueCat Config] iOS API Key configured:', !!iosApiKey);
@@ -45,7 +44,8 @@ export const REVENUECAT_CONFIG = {
   
   // Product identifiers (must match App Store Connect / Google Play Console)
   productIDs: {
-    MONTHLY: 'monthly',
+    MONTHLY: 'seatime_monthly',
+    ANNUAL: 'seatime_annual',
   },
   
   // Helper to get the correct API key for current platform

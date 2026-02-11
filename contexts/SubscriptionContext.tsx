@@ -1,3 +1,4 @@
+
 /**
  * RevenueCat Subscription Context (Anonymous Mode)
  *
@@ -35,13 +36,12 @@ import Purchases, {
 } from "react-native-purchases";
 import Constants from "expo-constants";
 
-// Read API keys from app.json (expo.extra)
+// Read API keys from app.json (expo.extra.revenueCat)
 const extra = Constants.expoConfig?.extra || {};
-const IOS_API_KEY = extra.revenueCatApiKeyIos || "";
-const ANDROID_API_KEY = extra.revenueCatApiKeyAndroid || "";
-const TEST_IOS_API_KEY = extra.revenueCatTestApiKeyIos || "";
-const TEST_ANDROID_API_KEY = extra.revenueCatTestApiKeyAndroid || "";
-const ENTITLEMENT_ID = extra.revenueCatEntitlementId || "pro";
+const revenueCatConfig = extra.revenueCat || {};
+const IOS_API_KEY = revenueCatConfig.iosApiKey || "";
+const ANDROID_API_KEY = revenueCatConfig.androidApiKey || "";
+const ENTITLEMENT_ID = "SeaTime Tracker Pro";
 
 // Check if running on web
 const isWeb = Platform.OS === "web";
@@ -86,8 +86,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
   // Fetch offerings via REST API for web platform
   const fetchOfferingsViaRest = async () => {
     try {
-      // Use any available test key for REST API (test keys work for both platforms)
-      const apiKey = TEST_IOS_API_KEY || TEST_ANDROID_API_KEY || IOS_API_KEY || ANDROID_API_KEY;
+      const apiKey = IOS_API_KEY || ANDROID_API_KEY;
       if (!apiKey) {
         console.warn("[RevenueCat] No API key available for web REST API");
         return;
@@ -109,8 +108,6 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
         return;
       }
 
-      // Note: REST API returns subscriber info, not offerings directly
-      // For web preview, we'll show a message to download the app
       console.log("[RevenueCat] Web mode: SDK not available, showing download prompt");
     } catch (error) {
       console.warn("[RevenueCat] Web REST API fetch failed:", error);
@@ -133,25 +130,21 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
         // Use DEBUG log level in development, INFO in production
         Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.INFO);
 
-        // Get API key based on platform and environment
-        // In development (__DEV__), use ANY available test key (test store works for all platforms)
-        // This allows Expo Go to work on iOS even without a platform-specific test key
-        const testKey = TEST_IOS_API_KEY || TEST_ANDROID_API_KEY;
-        const productionKey = Platform.OS === "ios" ? IOS_API_KEY : ANDROID_API_KEY;
-        const apiKey = __DEV__ && testKey ? testKey : productionKey;
+        // Get API key based on platform
+        const apiKey = Platform.OS === "ios" ? IOS_API_KEY : ANDROID_API_KEY;
 
         if (!apiKey) {
           console.warn(
             "[RevenueCat] API key not provided for this platform. " +
-            "Please add revenueCatApiKeyIos/revenueCatApiKeyAndroid to app.json extra."
+            "Please add revenueCat.iosApiKey/androidApiKey to app.json extra."
           );
           setLoading(false);
           return;
         }
 
-        if (__DEV__) {
-          console.log("[RevenueCat] Initializing in DEV mode with key:", apiKey.substring(0, 10) + "...");
-        }
+        console.log("[RevenueCat] Initializing with key:", apiKey.substring(0, 10) + "...");
+        console.log("[RevenueCat] Platform:", Platform.OS);
+        console.log("[RevenueCat] Entitlement ID:", ENTITLEMENT_ID);
 
         await Purchases.configure({ apiKey });
 
@@ -161,6 +154,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
             const hasEntitlement =
               typeof customerInfo.entitlements.active[ENTITLEMENT_ID] !==
               "undefined";
+            console.log("[RevenueCat] Subscription status updated:", hasEntitlement);
             setIsSubscribed(hasEntitlement);
           }
         );
@@ -190,12 +184,17 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
   const fetchOfferings = async () => {
     if (isWeb) return;
     try {
+      console.log("[RevenueCat] Fetching offerings...");
       const fetchedOfferings = await Purchases.getOfferings();
       setOfferings(fetchedOfferings);
 
       if (fetchedOfferings.current) {
+        console.log("[RevenueCat] Current offering found:", fetchedOfferings.current.identifier);
+        console.log("[RevenueCat] Available packages:", fetchedOfferings.current.availablePackages.length);
         setCurrentOffering(fetchedOfferings.current);
         setPackages(fetchedOfferings.current.availablePackages);
+      } else {
+        console.warn("[RevenueCat] No current offering available");
       }
     } catch (error) {
       console.error("[RevenueCat] Failed to fetch offerings:", error);
@@ -205,9 +204,12 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
   const checkSubscription = async () => {
     if (isWeb) return;
     try {
+      console.log("[RevenueCat] Checking subscription status...");
       const customerInfo = await Purchases.getCustomerInfo();
       const hasEntitlement =
         typeof customerInfo.entitlements.active[ENTITLEMENT_ID] !== "undefined";
+      console.log("[RevenueCat] Subscription active:", hasEntitlement);
+      console.log("[RevenueCat] Active entitlements:", Object.keys(customerInfo.entitlements.active));
       setIsSubscribed(hasEntitlement);
     } catch (error) {
       console.error("[RevenueCat] Failed to check subscription:", error);
@@ -221,9 +223,11 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
       return false;
     }
     try {
+      console.log("[RevenueCat] Purchasing package:", pkg.identifier);
       const { customerInfo } = await Purchases.purchasePackage(pkg);
       const hasEntitlement =
         typeof customerInfo.entitlements.active[ENTITLEMENT_ID] !== "undefined";
+      console.log("[RevenueCat] Purchase completed. Subscription active:", hasEntitlement);
       setIsSubscribed(hasEntitlement);
       return hasEntitlement;
     } catch (error: any) {
@@ -232,6 +236,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
         console.error("[RevenueCat] Purchase failed:", error);
         throw error;
       }
+      console.log("[RevenueCat] Purchase cancelled by user");
       return false;
     }
   };
@@ -242,9 +247,11 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
       return false;
     }
     try {
+      console.log("[RevenueCat] Restoring purchases...");
       const customerInfo = await Purchases.restorePurchases();
       const hasEntitlement =
         typeof customerInfo.entitlements.active[ENTITLEMENT_ID] !== "undefined";
+      console.log("[RevenueCat] Restore completed. Subscription active:", hasEntitlement);
       setIsSubscribed(hasEntitlement);
       return hasEntitlement;
     } catch (error) {
