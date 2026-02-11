@@ -1,9 +1,9 @@
+
 /**
- * Paywall Screen
+ * SeaTime Tracker Paywall Screen
  *
  * Shows subscription options and handles purchases.
  * On web, displays features and prompts user to download the app.
- * Customize the FEATURES array and styling for your app.
  */
 
 import React, { useState } from "react";
@@ -21,39 +21,43 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { PurchasesPackage } from "react-native-purchases";
-
+import { IconSymbol } from "@/components/IconSymbol";
 import { useSubscription } from "@/contexts/SubscriptionContext";
+import { colors } from "@/styles/commonStyles";
 
-// Customize: Your app's premium features
+// SeaTime Tracker Premium Features
 const FEATURES = [
   {
-    icon: "star",
-    title: "Premium Feature 1",
-    description: "Description of your first premium feature",
+    icon: "directions-boat",
+    title: "Unlimited Vessel Tracking",
+    description: "Track as many vessels as you need with real-time AIS data monitoring",
   },
   {
-    icon: "zap",
-    title: "Premium Feature 2",
-    description: "Description of your second premium feature",
+    icon: "schedule",
+    title: "Automatic Sea Time Recording",
+    description: "Automatically detect and log your days at sea with 4+ hour detection",
   },
   {
-    icon: "shield",
-    title: "Premium Feature 3",
-    description: "Description of your third premium feature",
+    icon: "description",
+    title: "MCA-Compliant Reports",
+    description: "Generate professional PDF and CSV reports for sea service testimonials",
   },
   {
-    icon: "cloud",
-    title: "Premium Feature 4",
-    description: "Description of your fourth premium feature",
+    icon: "cloud-sync",
+    title: "Cloud Sync & Backup",
+    description: "Your sea time data is securely backed up and synced across devices",
+  },
+  {
+    icon: "notifications",
+    title: "Smart Notifications",
+    description: "Get notified when vessel movement is detected for confirmation",
+  },
+  {
+    icon: "verified",
+    title: "MCA Compliance Checks",
+    description: "Automatic validation of entries against MCA requirements",
   },
 ];
-
-// Customize: Your app's colors
-const colors = {
-  primary: "#007AFF",
-  success: "#34C759",
-  warning: "#FF9500",
-};
 
 export default function PaywallScreen() {
   const router = useRouter();
@@ -88,9 +92,11 @@ export default function PaywallScreen() {
       setPurchasing(true);
       const success = await purchasePackage(selectedPackage);
       if (success) {
-        Alert.alert("Welcome!", "Thank you for your purchase.", [
-          { text: "OK", onPress: () => router.back() },
-        ]);
+        Alert.alert(
+          "Welcome Aboard! ⚓",
+          "Thank you for upgrading to SeaTime Tracker Pro. Your sea time tracking is now active.",
+          [{ text: "Start Tracking", onPress: () => router.back() }]
+        );
       }
     } catch (error: any) {
       Alert.alert("Purchase Failed", error.message || "Please try again.");
@@ -105,13 +111,15 @@ export default function PaywallScreen() {
       setRestoring(true);
       const restored = await restorePurchases();
       if (restored) {
-        Alert.alert("Restored!", "Your subscription has been restored.", [
-          { text: "OK", onPress: () => router.back() },
-        ]);
+        Alert.alert(
+          "Subscription Restored! ⚓",
+          "Your SeaTime Tracker Pro subscription has been restored.",
+          [{ text: "Continue", onPress: () => router.back() }]
+        );
       } else {
         Alert.alert(
           "No Purchases Found",
-          "We couldn't find any previous purchases."
+          "We couldn't find any previous purchases for this account."
         );
       }
     } catch (error: any) {
@@ -128,12 +136,11 @@ export default function PaywallScreen() {
   // Handle app store links for web
   const handleDownloadApp = () => {
     // TODO: Replace with your actual app store URLs
-    const iosUrl = "https://apps.apple.com/app/your-app-id";
-    const androidUrl = "https://play.google.com/store/apps/details?id=your.app.id";
+    const iosUrl = "https://apps.apple.com/app/seatime-tracker";
+    const androidUrl = "https://play.google.com/store/apps/details?id=com.seatimetracker";
 
-    // On web, we can't detect which device the user has, so show both options
     Alert.alert(
-      "Download the App",
+      "Download SeaTime Tracker",
       "To subscribe, please download our app from your device's app store.",
       [
         { text: "App Store (iOS)", onPress: () => Linking.openURL(iosUrl) },
@@ -148,12 +155,18 @@ export default function PaywallScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.centeredContainer}>
-          <Text style={styles.title}>You're Subscribed!</Text>
-          <Text style={styles.subtitle}>
-            You have access to all premium features.
+          <IconSymbol
+            ios_icon_name="checkmark.seal.fill"
+            android_material_icon_name="verified"
+            size={80}
+            color={colors.success}
+          />
+          <Text style={styles.subscribedTitle}>You're a Pro Member! ⚓</Text>
+          <Text style={styles.subscribedSubtitle}>
+            You have full access to all SeaTime Tracker Pro features.
           </Text>
           <TouchableOpacity style={styles.primaryButton} onPress={handleClose}>
-            <Text style={styles.primaryButtonText}>Close</Text>
+            <Text style={styles.primaryButtonText}>Continue Tracking</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -166,7 +179,7 @@ export default function PaywallScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.centeredContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Loading...</Text>
+          <Text style={styles.loadingText}>Loading subscription options...</Text>
         </View>
       </SafeAreaView>
     );
@@ -176,7 +189,12 @@ export default function PaywallScreen() {
     <SafeAreaView style={styles.container}>
       {/* Close Button */}
       <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
-        <Text style={styles.closeButtonText}>x</Text>
+        <IconSymbol
+          ios_icon_name="xmark"
+          android_material_icon_name="close"
+          size={20}
+          color={colors.textSecondary}
+        />
       </TouchableOpacity>
 
       <ScrollView
@@ -186,9 +204,15 @@ export default function PaywallScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>Upgrade to Premium</Text>
+          <IconSymbol
+            ios_icon_name="anchor.fill"
+            android_material_icon_name="anchor"
+            size={60}
+            color={colors.primary}
+          />
+          <Text style={styles.title}>SeaTime Tracker Pro</Text>
           <Text style={styles.subtitle}>
-            Unlock all features and get the most out of the app
+            Professional sea time tracking for maritime professionals
           </Text>
         </View>
 
@@ -197,7 +221,12 @@ export default function PaywallScreen() {
           {FEATURES.map((feature, index) => (
             <View key={index} style={styles.featureRow}>
               <View style={styles.featureIcon}>
-                <Text style={styles.featureIconText}>{feature.icon}</Text>
+                <IconSymbol
+                  ios_icon_name="checkmark.circle.fill"
+                  android_material_icon_name={feature.icon}
+                  size={24}
+                  color={colors.primary}
+                />
               </View>
               <View style={styles.featureText}>
                 <Text style={styles.featureTitle}>{feature.title}</Text>
@@ -212,10 +241,16 @@ export default function PaywallScreen() {
         {/* Web platform message */}
         {isWeb && (
           <View style={styles.webMessageContainer}>
-            <Text style={styles.webMessageTitle}>📱 Download the App</Text>
+            <IconSymbol
+              ios_icon_name="iphone"
+              android_material_icon_name="phone-iphone"
+              size={40}
+              color={colors.primary}
+            />
+            <Text style={styles.webMessageTitle}>Download the App</Text>
             <Text style={styles.webMessageText}>
               In-app purchases are only available in our mobile app.
-              Download the app to subscribe and unlock all premium features.
+              Download SeaTime Tracker to subscribe and start tracking your sea time.
             </Text>
           </View>
         )}
@@ -223,6 +258,7 @@ export default function PaywallScreen() {
         {/* Package Selection - only show on native */}
         {!isWeb && packages.length > 0 && (
           <View style={styles.packagesContainer}>
+            <Text style={styles.packagesTitle}>Choose Your Plan</Text>
             {packages.map((pkg) => {
               const isSelected = selectedPackage?.identifier === pkg.identifier;
               return (
@@ -235,8 +271,22 @@ export default function PaywallScreen() {
                   onPress={() => setSelectedPackage(pkg)}
                 >
                   <View style={styles.packageHeader}>
-                    <Text style={styles.packageTitle}>{pkg.product.title}</Text>
-                    {isSelected && <Text style={styles.checkmark}>check</Text>}
+                    <View style={styles.packageTitleContainer}>
+                      <Text style={styles.packageTitle}>{pkg.product.title}</Text>
+                      {pkg.product.introPrice && (
+                        <View style={styles.trialBadge}>
+                          <Text style={styles.trialBadgeText}>FREE TRIAL</Text>
+                        </View>
+                      )}
+                    </View>
+                    {isSelected && (
+                      <IconSymbol
+                        ios_icon_name="checkmark.circle.fill"
+                        android_material_icon_name="check-circle"
+                        size={24}
+                        color={colors.primary}
+                      />
+                    )}
                   </View>
                   <Text style={styles.packagePrice}>
                     {pkg.product.priceString}
@@ -255,8 +305,17 @@ export default function PaywallScreen() {
         {/* No packages available - only show on native */}
         {!isWeb && packages.length === 0 && !loading && (
           <View style={styles.noPackagesContainer}>
+            <IconSymbol
+              ios_icon_name="exclamationmark.triangle"
+              android_material_icon_name="warning"
+              size={48}
+              color={colors.warning}
+            />
             <Text style={styles.noPackagesText}>
               No subscription options available at this time.
+            </Text>
+            <Text style={styles.noPackagesSubtext}>
+              Please check your internet connection and try again.
             </Text>
           </View>
         )}
@@ -318,7 +377,8 @@ export default function PaywallScreen() {
               Payment will be charged to your{" "}
               {Platform.OS === "ios" ? "Apple ID" : "Google Play"} account.
               Subscription automatically renews unless canceled at least 24 hours
-              before the end of the current period.
+              before the end of the current period. Manage your subscription in
+              your account settings.
             </Text>
           </>
         )}
@@ -330,7 +390,7 @@ export default function PaywallScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: colors.background,
   },
   centeredContainer: {
     flex: 1,
@@ -339,9 +399,21 @@ const styles = StyleSheet.create({
     padding: 32,
     gap: 16,
   },
+  subscribedTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: colors.text,
+    textAlign: "center",
+    marginTop: 16,
+  },
+  subscribedSubtitle: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    textAlign: "center",
+  },
   loadingText: {
     fontSize: 16,
-    color: "#666",
+    color: colors.textSecondary,
     marginTop: 16,
   },
   closeButton: {
@@ -349,24 +421,21 @@ const styles = StyleSheet.create({
     top: 60,
     right: 20,
     zIndex: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#f0f0f0",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.cardBackground,
     justifyContent: "center",
     alignItems: "center",
-  },
-  closeButtonText: {
-    fontSize: 18,
-    color: "#666",
-    lineHeight: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 24,
-    paddingTop: 60,
+    paddingTop: 80,
   },
   header: {
     alignItems: "center",
@@ -375,34 +444,34 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: "bold",
-    color: "#000",
+    color: colors.text,
     textAlign: "center",
+    marginTop: 16,
   },
   subtitle: {
     fontSize: 16,
-    color: "#666",
+    color: colors.textSecondary,
     textAlign: "center",
     marginTop: 8,
   },
   featuresContainer: {
-    gap: 16,
+    gap: 20,
     marginBottom: 32,
   },
   featureRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     gap: 16,
   },
   featureIcon: {
     width: 48,
     height: 48,
     borderRadius: 12,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: colors.cardBackground,
     justifyContent: "center",
     alignItems: "center",
-  },
-  featureIconText: {
-    fontSize: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   featureText: {
     flex: 1,
@@ -410,79 +479,109 @@ const styles = StyleSheet.create({
   featureTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#000",
+    color: colors.text,
   },
   featureDescription: {
     fontSize: 14,
-    color: "#666",
-    marginTop: 2,
+    color: colors.textSecondary,
+    marginTop: 4,
+    lineHeight: 20,
   },
   packagesContainer: {
     gap: 12,
+    marginBottom: 16,
+  },
+  packagesTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: 8,
   },
   packageCard: {
     borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    backgroundColor: "#fff",
+    padding: 20,
+    borderWidth: 2,
+    borderColor: colors.border,
+    backgroundColor: colors.cardBackground,
   },
   packageCardSelected: {
     borderColor: colors.primary,
-    borderWidth: 2,
+    backgroundColor: colors.cardBackground,
   },
   packageHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    marginBottom: 8,
+  },
+  packageTitleContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
   },
   packageTitle: {
     fontSize: 18,
     fontWeight: "600",
-    color: "#000",
+    color: colors.text,
   },
-  checkmark: {
-    fontSize: 20,
-    color: colors.primary,
+  trialBadge: {
+    backgroundColor: colors.success,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  trialBadgeText: {
+    fontSize: 10,
+    fontWeight: "bold",
+    color: "#fff",
   },
   packagePrice: {
     fontSize: 24,
     fontWeight: "bold",
     color: colors.primary,
-    marginTop: 8,
+    marginBottom: 4,
   },
   packageDescription: {
     fontSize: 14,
-    color: "#666",
-    marginTop: 4,
+    color: colors.textSecondary,
+    lineHeight: 20,
   },
   noPackagesContainer: {
-    padding: 24,
+    padding: 32,
     alignItems: "center",
+    gap: 12,
   },
   noPackagesText: {
     fontSize: 16,
-    color: "#666",
+    color: colors.text,
+    textAlign: "center",
+    fontWeight: "600",
+  },
+  noPackagesSubtext: {
+    fontSize: 14,
+    color: colors.textSecondary,
     textAlign: "center",
   },
   webMessageContainer: {
-    backgroundColor: "#F0F7FF",
+    backgroundColor: colors.cardBackground,
     borderRadius: 12,
-    padding: 20,
+    padding: 24,
     marginBottom: 24,
     borderWidth: 1,
-    borderColor: "#D0E3FF",
+    borderColor: colors.border,
+    alignItems: "center",
+    gap: 12,
   },
   webMessageTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: "600",
-    color: "#000",
-    marginBottom: 8,
+    color: colors.text,
     textAlign: "center",
   },
   webMessageText: {
     fontSize: 14,
-    color: "#666",
+    color: colors.textSecondary,
     textAlign: "center",
     lineHeight: 20,
   },
@@ -490,6 +589,9 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 32,
     gap: 12,
+    backgroundColor: colors.cardBackground,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   primaryButton: {
     backgroundColor: colors.primary,
@@ -512,10 +614,11 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: 16,
     color: colors.primary,
+    fontWeight: "600",
   },
   legalText: {
     fontSize: 11,
-    color: "#999",
+    color: colors.textSecondary,
     textAlign: "center",
     lineHeight: 16,
   },
