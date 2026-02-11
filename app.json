@@ -43,21 +43,13 @@
           "icon": "./assets/images/f0500a31-f8b9-4d46-8b57-62c3847deff7.png",
           "color": "#ffffff"
         }
+      ],
+      [
         "./plugins/with-revenuecat",
         {
-          "iosApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd", // Replace with your actual iOS API key
-          "androidApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd" // Replace with your actual Android API key
+          "iosApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd",
+          "androidApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd"
         }
-      ]
-    ],
-    "extra": {
-      // ... existing extra fields
-      "revenueCat": {
-        "iosApiKey": "YOUR_IOS_REVENUECAT_API_KEY", // Replace with your actual iOS API key
-        "androidApiKey": "YOUR_ANDROID_REVENUECAT_API_KEY" // Replace with your actual Android API key
-      }
-    }
-      
       ],
       "expo-apple-authentication"
     ],
@@ -69,6 +61,10 @@
         "origin": false
       },
       "backendUrl": "https://uukpkcag4nsq8q632k643ztvus28frfe.app.specular.dev",
+      "revenueCat": {
+        "iosApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd",
+        "androidApiKey": "test_gKMHKEpYSkTiLUtgKWHRbAXGcGd"
+      },
       "eas": {
         "projectId": "d982d462-52e2-493e-a176-8f75b09d5ef9"
       }
