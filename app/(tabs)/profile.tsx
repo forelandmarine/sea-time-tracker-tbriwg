@@ -1228,7 +1228,7 @@ export default function ProfileScreen() {
               </TouchableOpacity>
 
               <TouchableOpacity 
-                style={biometricAvailable ? styles.menuItem : [styles.menuItem, styles.menuItemLast]} 
+                style={styles.menuItem} 
                 onPress={() => router.push('/revenuecat-customer-center')}
               >
                 <IconSymbol
@@ -1239,6 +1239,27 @@ export default function ProfileScreen() {
                   style={styles.menuItemIcon}
                 />
                 <Text style={styles.menuItemText}>Subscription</Text>
+                <IconSymbol
+                  ios_icon_name="chevron.right"
+                  android_material_icon_name="arrow-forward"
+                  size={20}
+                  color={colors.textSecondary}
+                  style={styles.menuItemChevron}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={biometricAvailable ? styles.menuItem : [styles.menuItem, styles.menuItemLast]} 
+                onPress={() => router.push('/admin-menu')}
+              >
+                <IconSymbol
+                  ios_icon_name="wrench"
+                  android_material_icon_name="settings"
+                  size={24}
+                  color={colors.primary}
+                  style={styles.menuItemIcon}
+                />
+                <Text style={styles.menuItemText}>Admin Tools</Text>
                 <IconSymbol
                   ios_icon_name="chevron.right"
                   android_material_icon_name="arrow-forward"
