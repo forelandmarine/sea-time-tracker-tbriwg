@@ -2,8 +2,7 @@
 /**
  * SeaTime Tracker Paywall Screen
  *
- * Shows subscription options and handles purchases.
- * On web, displays features and prompts user to download the app.
+ * Clean subscription interface for SeaTime Tracker Pro
  */
 
 import React, { useState } from "react";
@@ -30,39 +29,37 @@ const FEATURES = [
   {
     icon: "directions-boat",
     title: "Unlimited Vessel Tracking",
-    description: "Track as many vessels as you need with real-time AIS data monitoring",
+    description: "Track as many vessels as you need with real-time AIS data",
   },
   {
     icon: "schedule",
     title: "Automatic Sea Time Recording",
-    description: "Automatically detect and log your days at sea with 4+ hour detection",
+    description: "Automatically detect and log your days at sea",
   },
   {
     icon: "description",
     title: "MCA-Compliant Reports",
-    description: "Generate professional PDF and CSV reports for sea service testimonials",
+    description: "Generate professional PDF and CSV reports",
   },
   {
     icon: "cloud-sync",
     title: "Cloud Sync & Backup",
-    description: "Your sea time data is securely backed up and synced across devices",
+    description: "Your data is securely backed up across devices",
   },
   {
     icon: "notifications",
     title: "Smart Notifications",
-    description: "Get notified when vessel movement is detected for confirmation",
+    description: "Get notified when vessel movement is detected",
   },
   {
     icon: "verified",
     title: "MCA Compliance Checks",
-    description: "Automatic validation of entries against MCA requirements",
+    description: "Automatic validation against MCA requirements",
   },
 ];
 
 export default function PaywallScreen() {
   const router = useRouter();
-
-  // Get subscription state and methods from context
   const {
     packages,
     loading,
@@ -72,8 +69,7 @@ export default function PaywallScreen() {
     restorePurchases,
   } = useSubscription();
 
-  const [selectedPackage, setSelectedPackage] =
-    useState<PurchasesPackage | null>(packages[0] || null);
+  const [selectedPackage, setSelectedPackage] = useState<PurchasesPackage | null>(packages[0] || null);
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
@@ -94,7 +90,7 @@ export default function PaywallScreen() {
       if (success) {
         Alert.alert(
           "Welcome Aboard! ⚓",
-          "Thank you for upgrading to SeaTime Tracker Pro. Your sea time tracking is now active.",
+          "Thank you for upgrading to SeaTime Tracker Pro.",
           [{ text: "Start Tracking", onPress: () => router.back() }]
         );
       }
@@ -135,7 +131,6 @@ export default function PaywallScreen() {
 
   // Handle app store links for web
   const handleDownloadApp = () => {
-    // TODO: Replace with your actual app store URLs
     const iosUrl = "https://apps.apple.com/app/seatime-tracker";
     const androidUrl = "https://play.google.com/store/apps/details?id=com.seatimetracker";
 
@@ -150,7 +145,7 @@ export default function PaywallScreen() {
     );
   };
 
-  // Already subscribed - show confirmation
+  // Already subscribed
   if (isSubscribed) {
     return (
       <SafeAreaView style={styles.container}>
@@ -334,7 +329,6 @@ export default function PaywallScreen() {
             </TouchableOpacity>
             <Text style={styles.legalText}>
               Subscriptions are managed through the App Store or Google Play.
-              Download our app to subscribe and access premium features.
             </Text>
           </>
         ) : (
@@ -372,13 +366,12 @@ export default function PaywallScreen() {
               )}
             </TouchableOpacity>
 
-            {/* Legal Text - Required by App Store */}
+            {/* Legal Text */}
             <Text style={styles.legalText}>
               Payment will be charged to your{" "}
               {Platform.OS === "ios" ? "Apple ID" : "Google Play"} account.
               Subscription automatically renews unless canceled at least 24 hours
-              before the end of the current period. Manage your subscription in
-              your account settings.
+              before the end of the current period.
             </Text>
           </>
         )}
