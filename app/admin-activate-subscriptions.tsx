@@ -24,47 +24,48 @@ function createStyles(isDark: boolean) {
   return StyleSheet.create({
     container: {
       flex: 1,
-      backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+      backgroundColor: isDark ? colors.background : colors.backgroundLight,
     },
     scrollContent: {
       padding: 20,
     },
     title: {
-      fontSize: 24,
+      fontSize: 28,
       fontWeight: 'bold',
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       marginBottom: 8,
     },
     subtitle: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
+      fontSize: 16,
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
       marginBottom: 24,
+      lineHeight: 22,
     },
     section: {
-      marginBottom: 24,
+      marginBottom: 32,
     },
     sectionTitle: {
-      fontSize: 18,
-      fontWeight: '600',
-      color: isDark ? colors.textDark : colors.textLight,
-      marginBottom: 12,
+      fontSize: 20,
+      fontWeight: '700',
+      color: isDark ? colors.text : colors.textLight,
+      marginBottom: 16,
     },
     input: {
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
       padding: 16,
       fontSize: 16,
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: isDark ? '#333' : '#e0e0e0',
+      borderColor: isDark ? colors.border : colors.borderLight,
     },
     pickerContainer: {
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
       marginBottom: 12,
       borderWidth: 1,
-      borderColor: isDark ? '#333' : '#e0e0e0',
+      borderColor: isDark ? colors.border : colors.borderLight,
       overflow: 'hidden',
     },
     pickerButton: {
@@ -75,28 +76,29 @@ function createStyles(isDark: boolean) {
     },
     pickerButtonText: {
       fontSize: 16,
-      color: isDark ? colors.textDark : colors.textLight,
+      fontWeight: '500',
+      color: isDark ? colors.text : colors.textLight,
     },
     pickerOptions: {
       borderTopWidth: 1,
-      borderTopColor: isDark ? '#333' : '#e0e0e0',
+      borderTopColor: isDark ? colors.border : colors.borderLight,
     },
     pickerOption: {
       padding: 16,
       borderBottomWidth: 1,
-      borderBottomColor: isDark ? '#333' : '#e0e0e0',
+      borderBottomColor: isDark ? colors.border : colors.borderLight,
     },
     pickerOptionText: {
       fontSize: 16,
-      color: isDark ? colors.textDark : colors.textLight,
+      color: isDark ? colors.text : colors.textLight,
     },
     pickerOptionSelected: {
-      backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5',
+      backgroundColor: isDark ? '#2A3F54' : '#E3F2FD',
     },
     button: {
       backgroundColor: colors.primary,
       borderRadius: 12,
-      padding: 16,
+      padding: 18,
       alignItems: 'center',
       marginBottom: 12,
     },
@@ -104,14 +106,14 @@ function createStyles(isDark: boolean) {
       opacity: 0.5,
     },
     buttonText: {
-      color: '#fff',
-      fontSize: 16,
-      fontWeight: '600',
+      color: '#FFFFFF',
+      fontSize: 17,
+      fontWeight: '700',
     },
     sandboxButton: {
-      backgroundColor: isDark ? colors.cardDark : colors.cardLight,
+      backgroundColor: isDark ? colors.cardBackground : colors.card,
       borderRadius: 12,
-      padding: 16,
+      padding: 18,
       alignItems: 'center',
       marginBottom: 12,
       borderWidth: 2,
@@ -119,30 +121,42 @@ function createStyles(isDark: boolean) {
     },
     sandboxButtonText: {
       color: colors.primary,
-      fontSize: 16,
-      fontWeight: '600',
+      fontSize: 17,
+      fontWeight: '700',
     },
     infoBox: {
-      backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5',
+      backgroundColor: isDark ? '#1A2F3F' : '#E3F2FD',
       borderRadius: 12,
       padding: 16,
-      marginBottom: 12,
+      marginBottom: 16,
+      borderWidth: 1,
+      borderColor: isDark ? colors.border : colors.borderLight,
     },
     infoText: {
-      fontSize: 14,
-      color: isDark ? colors.textSecondaryDark : colors.textSecondaryLight,
-      lineHeight: 20,
+      fontSize: 15,
+      color: isDark ? colors.text : colors.textLight,
+      lineHeight: 22,
     },
     successBox: {
-      backgroundColor: isDark ? '#1a3a1a' : '#e8f5e9',
+      backgroundColor: isDark ? '#1B3A2F' : '#E8F5E9',
       borderRadius: 12,
       padding: 16,
       marginBottom: 12,
+      borderWidth: 1,
+      borderColor: isDark ? colors.success : '#81C784',
     },
     successText: {
+      fontSize: 15,
+      color: isDark ? '#81C784' : '#2E7D32',
+      lineHeight: 22,
+      fontWeight: '500',
+    },
+    label: {
       fontSize: 14,
-      color: isDark ? '#4caf50' : '#2e7d32',
-      lineHeight: 20,
+      fontWeight: '600',
+      color: isDark ? colors.textSecondary : colors.textSecondaryLight,
+      marginBottom: 8,
+      marginTop: 4,
     },
   });
 }
@@ -286,9 +300,9 @@ export default function AdminActivateSubscriptionsScreen() {
         options={{
           title: 'Activate Subscriptions',
           headerStyle: {
-            backgroundColor: isDark ? colors.backgroundDark : colors.backgroundLight,
+            backgroundColor: isDark ? colors.background : colors.backgroundLight,
           },
-          headerTintColor: isDark ? colors.textDark : colors.textLight,
+          headerTintColor: isDark ? colors.text : colors.textLight,
         }}
       />
       <KeyboardAvoidingView
@@ -327,10 +341,12 @@ export default function AdminActivateSubscriptionsScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Custom Subscription Update</Text>
+            
+            <Text style={styles.label}>User Email</Text>
             <TextInput
               style={styles.input}
-              placeholder="User Email"
-              placeholderTextColor={isDark ? '#666' : '#999'}
+              placeholder="Enter user email address"
+              placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
               value={email}
               onChangeText={setEmail}
               keyboardType="email-address"
@@ -338,18 +354,19 @@ export default function AdminActivateSubscriptionsScreen() {
               editable={!loading}
             />
 
+            <Text style={styles.label}>Subscription Status</Text>
             <View style={styles.pickerContainer}>
               <TouchableOpacity
                 style={styles.pickerButton}
                 onPress={() => setShowStatusPicker(!showStatusPicker)}
                 disabled={loading}
               >
-                <Text style={styles.pickerButtonText}>Status: {selectedStatusLabel}</Text>
+                <Text style={styles.pickerButtonText}>{selectedStatusLabel}</Text>
                 <IconSymbol
                   ios_icon_name={showStatusPicker ? 'chevron.up' : 'chevron.down'}
-                  android_material_icon_name={showStatusPicker ? 'arrow-upward' : 'arrow-downward'}
-                  size={20}
-                  color={isDark ? colors.textDark : colors.textLight}
+                  android_material_icon_name={showStatusPicker ? 'arrow-drop-up' : 'arrow-drop-down'}
+                  size={24}
+                  color={isDark ? colors.text : colors.textLight}
                 />
               </TouchableOpacity>
               {showStatusPicker && (
@@ -376,37 +393,40 @@ export default function AdminActivateSubscriptionsScreen() {
               )}
             </View>
 
+            <Text style={styles.label}>Expires in Days</Text>
             <TextInput
               style={styles.input}
-              placeholder="Expires in Days (e.g., 365)"
-              placeholderTextColor={isDark ? '#666' : '#999'}
+              placeholder="365"
+              placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
               value={expiresInDays}
               onChangeText={setExpiresInDays}
               keyboardType="number-pad"
               editable={!loading}
             />
 
+            <Text style={styles.label}>Product ID (Optional)</Text>
             <TextInput
               style={styles.input}
-              placeholder="Product ID (optional)"
-              placeholderTextColor={isDark ? '#666' : '#999'}
+              placeholder="seatime_pro_annual"
+              placeholderTextColor={isDark ? colors.textSecondary : colors.textSecondaryLight}
               value={productId}
               onChangeText={setProductId}
               editable={!loading}
             />
 
+            <Text style={styles.label}>Platform</Text>
             <View style={styles.pickerContainer}>
               <TouchableOpacity
                 style={styles.pickerButton}
                 onPress={() => setShowPlatformPicker(!showPlatformPicker)}
                 disabled={loading}
               >
-                <Text style={styles.pickerButtonText}>Platform: {selectedPlatformLabel}</Text>
+                <Text style={styles.pickerButtonText}>{selectedPlatformLabel}</Text>
                 <IconSymbol
                   ios_icon_name={showPlatformPicker ? 'chevron.up' : 'chevron.down'}
-                  android_material_icon_name={showPlatformPicker ? 'arrow-upward' : 'arrow-downward'}
-                  size={20}
-                  color={isDark ? colors.textDark : colors.textLight}
+                  android_material_icon_name={showPlatformPicker ? 'arrow-drop-up' : 'arrow-drop-down'}
+                  size={24}
+                  color={isDark ? colors.text : colors.textLight}
                 />
               </TouchableOpacity>
               {showPlatformPicker && (
@@ -439,7 +459,7 @@ export default function AdminActivateSubscriptionsScreen() {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#fff" />
+                <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.buttonText}>Update Subscription</Text>
               )}
