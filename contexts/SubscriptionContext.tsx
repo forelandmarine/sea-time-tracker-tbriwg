@@ -1,171 +1,269 @@
+/**
+ * RevenueCat Subscription Context (Anonymous Mode)
+ *
+ * Provides subscription management for Expo + React Native apps.
+ * Reads API keys from app.json (expo.extra) automatically.
+ *
+ * Supports:
+ * - Native iOS/Android via RevenueCat SDK
+ * - Web preview via RevenueCat REST API (read-only pricing display)
+ * - Expo Go via test store keys
+ *
+ * NOTE: Running in anonymous mode - purchases won't sync across devices.
+ * To enable cross-device sync:
+ * 1. Set up authentication with setup_auth
+ * 2. Re-run setup_revenuecat to upgrade this file
+ *
+ * SETUP:
+ * 1. Wrap your app with <SubscriptionProvider>
+ * 2. Run: pnpm install react-native-purchases && npx expo prebuild
+ */
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import { Platform } from 'react-native';
-import { useAuth } from './AuthContext';
-import { authenticatedGet } from '@/utils/api';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from "react";
+import { Platform } from "react-native";
+import Purchases, {
+  PurchasesOfferings,
+  PurchasesOffering,
+  PurchasesPackage,
+  LOG_LEVEL,
+} from "react-native-purchases";
+import Constants from "expo-constants";
 
-// CRITICAL: Aggressive timeout to prevent blocking
-const SUBSCRIPTION_CHECK_TIMEOUT = 1500; // 1.5 seconds max
+// Read API keys from app.json (expo.extra)
+const extra = Constants.expoConfig?.extra || {};
+const IOS_API_KEY = extra.revenueCatApiKeyIos || "";
+const ANDROID_API_KEY = extra.revenueCatApiKeyAndroid || "";
+const TEST_IOS_API_KEY = extra.revenueCatTestApiKeyIos || "";
+const TEST_ANDROID_API_KEY = extra.revenueCatTestApiKeyAndroid || "";
+const ENTITLEMENT_ID = extra.revenueCatEntitlementId || "pro";
 
-interface SubscriptionStatus {
-  status: 'active' | 'inactive' | 'pending';
-  expiresAt: string | null;
-  productId: string | null;
-}
+// Check if running on web
+const isWeb = Platform.OS === "web";
 
 interface SubscriptionContextType {
-  subscriptionStatus: SubscriptionStatus;
+  /** Whether the user has an active subscription */
+  isSubscribed: boolean;
+  /** All offerings from RevenueCat */
+  offerings: PurchasesOfferings | null;
+  /** The current/default offering */
+  currentOffering: PurchasesOffering | null;
+  /** Available packages in the current offering */
+  packages: PurchasesPackage[];
+  /** Loading state during initialization */
   loading: boolean;
+  /** Whether running on web (purchases not available) */
+  isWeb: boolean;
+  /** Purchase a package - returns true if successful */
+  purchasePackage: (pkg: PurchasesPackage) => Promise<boolean>;
+  /** Restore previous purchases - returns true if subscription found */
+  restorePurchases: () => Promise<boolean>;
+  /** Manually re-check subscription status */
   checkSubscription: () => Promise<void>;
 }
 
-const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
+const SubscriptionContext = createContext<SubscriptionContextType | undefined>(
+  undefined
+);
 
-export function SubscriptionProvider({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
-  const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>({
-    status: 'inactive',
-    expiresAt: null,
-    productId: null,
-  });
-  
-  // CRITICAL: Start with loading=false to never block startup
-  const [loading, setLoading] = useState(false);
-  
-  // CRITICAL: Prevent concurrent checks
-  const checkInProgress = useRef(false);
+interface SubscriptionProviderProps {
+  children: ReactNode;
+}
 
-  const checkSubscription = useCallback(async () => {
-    console.log('[Subscription] Checking subscription status');
-    
-    // Prevent concurrent checks
-    if (checkInProgress.current) {
-      console.log('[Subscription] Check already in progress, skipping');
-      return;
-    }
+export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [offerings, setOfferings] = useState<PurchasesOfferings | null>(null);
+  const [currentOffering, setCurrentOffering] =
+    useState<PurchasesOffering | null>(null);
+  const [packages, setPackages] = useState<PurchasesPackage[]>([]);
+  const [loading, setLoading] = useState(true);
 
-    checkInProgress.current = true;
-    setLoading(true);
-
+  // Fetch offerings via REST API for web platform
+  const fetchOfferingsViaRest = async () => {
     try {
-      console.log('[Subscription] Platform:', Platform.OS);
-      
-      // CRITICAL: Aggressive timeout with AbortController
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        console.warn('[Subscription] Check timeout after', SUBSCRIPTION_CHECK_TIMEOUT, 'ms, aborting');
-        controller.abort();
-      }, SUBSCRIPTION_CHECK_TIMEOUT);
+      // Use any available test key for REST API (test keys work for both platforms)
+      const apiKey = TEST_IOS_API_KEY || TEST_ANDROID_API_KEY || IOS_API_KEY || ANDROID_API_KEY;
+      if (!apiKey) {
+        console.warn("[RevenueCat] No API key available for web REST API");
+        return;
+      }
 
+      // Fetch offerings from RevenueCat REST API
+      const response = await fetch(
+        "https://api.revenuecat.com/v1/subscribers/$RCAnonymousID:web_preview",
+        {
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        console.warn("[RevenueCat] REST API request failed:", response.status);
+        return;
+      }
+
+      // Note: REST API returns subscriber info, not offerings directly
+      // For web preview, we'll show a message to download the app
+      console.log("[RevenueCat] Web mode: SDK not available, showing download prompt");
+    } catch (error) {
+      console.warn("[RevenueCat] Web REST API fetch failed:", error);
+    }
+  };
+
+  // Initialize RevenueCat on mount
+  useEffect(() => {
+    let customerInfoListener: { remove: () => void } | null = null;
+
+    const initRevenueCat = async () => {
       try {
-        const response = await authenticatedGet<SubscriptionStatus>(
-          '/api/subscription/status',
-          { signal: controller.signal }
+        // Web platform: SDK doesn't work, use REST API for basic info
+        if (isWeb) {
+          await fetchOfferingsViaRest();
+          setLoading(false);
+          return;
+        }
+
+        // Use DEBUG log level in development, INFO in production
+        Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.INFO);
+
+        // Get API key based on platform and environment
+        // In development (__DEV__), use ANY available test key (test store works for all platforms)
+        // This allows Expo Go to work on iOS even without a platform-specific test key
+        const testKey = TEST_IOS_API_KEY || TEST_ANDROID_API_KEY;
+        const productionKey = Platform.OS === "ios" ? IOS_API_KEY : ANDROID_API_KEY;
+        const apiKey = __DEV__ && testKey ? testKey : productionKey;
+
+        if (!apiKey) {
+          console.warn(
+            "[RevenueCat] API key not provided for this platform. " +
+            "Please add revenueCatApiKeyIos/revenueCatApiKeyAndroid to app.json extra."
+          );
+          setLoading(false);
+          return;
+        }
+
+        if (__DEV__) {
+          console.log("[RevenueCat] Initializing in DEV mode with key:", apiKey.substring(0, 10) + "...");
+        }
+
+        await Purchases.configure({ apiKey });
+
+        // Listen for real-time subscription changes (e.g., purchase from another device)
+        customerInfoListener = Purchases.addCustomerInfoUpdateListener(
+          (customerInfo) => {
+            const hasEntitlement =
+              typeof customerInfo.entitlements.active[ENTITLEMENT_ID] !==
+              "undefined";
+            setIsSubscribed(hasEntitlement);
+          }
         );
 
-        clearTimeout(timeoutId);
+        // Fetch available products/packages
+        await fetchOfferings();
 
-        console.log('[Subscription] API call completed');
-        console.log('[Subscription] Response:', response);
-
-        // CRITICAL: Validate response structure before using it
-        if (!response || typeof response !== 'object') {
-          console.error('[Subscription] Invalid response type:', typeof response);
-          throw new Error('Invalid response from subscription API');
-        }
-
-        // Validate status field
-        const status = response.status;
-        if (status !== 'active' && status !== 'inactive' && status !== 'pending') {
-          console.warn('[Subscription] Invalid status value:', status, '- defaulting to inactive');
-          response.status = 'inactive';
-        }
-
-        // Validate expiresAt field
-        if (response.expiresAt !== null && typeof response.expiresAt !== 'string') {
-          console.warn('[Subscription] Invalid expiresAt type:', typeof response.expiresAt, '- setting to null');
-          response.expiresAt = null;
-        }
-
-        // Validate productId field
-        if (response.productId !== null && typeof response.productId !== 'string') {
-          console.warn('[Subscription] Invalid productId type:', typeof response.productId, '- setting to null');
-          response.productId = null;
-        }
-
-        console.log('[Subscription] Status validated:', response.status);
-        setSubscriptionStatus(response);
-      } catch (fetchError: any) {
-        clearTimeout(timeoutId);
-        
-        if (fetchError.name === 'AbortError') {
-          console.warn('[Subscription] Check aborted due to timeout');
-        } else {
-          console.error('[Subscription] Check error:', fetchError.message);
-        }
-        
-        // CRITICAL: Default to inactive on error - NEVER block the app
-        console.log('[Subscription] Defaulting to inactive status due to error');
-        setSubscriptionStatus({
-          status: 'inactive',
-          expiresAt: null,
-          productId: null,
-        });
+        // Check initial subscription status
+        await checkSubscription();
+      } catch (error) {
+        console.error("[RevenueCat] Failed to initialize:", error);
+      } finally {
+        setLoading(false);
       }
-    } catch (error: any) {
-      console.error('[Subscription] Check failed:', error);
-      
-      // CRITICAL: Default to inactive on error - NEVER block the app
-      setSubscriptionStatus({
-        status: 'inactive',
-        expiresAt: null,
-        productId: null,
-      });
-    } finally {
-      setLoading(false);
-      checkInProgress.current = false;
-      console.log('[Subscription] Check completed');
-    }
+    };
+
+    initRevenueCat();
+
+    // Cleanup listener on unmount
+    return () => {
+      if (customerInfoListener) {
+        customerInfoListener.remove();
+      }
+    };
   }, []);
 
-  // NON-BLOCKING SUBSCRIPTION CHECK
-  // Subscription check should NEVER block authentication or app startup
-  // If it fails, the app continues with 'inactive' status
-  useEffect(() => {
-    console.log('[Subscription] useEffect triggered');
-    console.log('[Subscription] isAuthenticated:', isAuthenticated);
-    
-    if (!isAuthenticated) {
-      console.log('[Subscription] User not authenticated, skipping check');
-      setSubscriptionStatus({
-        status: 'inactive',
-        expiresAt: null,
-        productId: null,
-      });
-      return;
+  const fetchOfferings = async () => {
+    if (isWeb) return;
+    try {
+      const fetchedOfferings = await Purchases.getOfferings();
+      setOfferings(fetchedOfferings);
+
+      if (fetchedOfferings.current) {
+        setCurrentOffering(fetchedOfferings.current);
+        setPackages(fetchedOfferings.current.availablePackages);
+      }
+    } catch (error) {
+      console.error("[RevenueCat] Failed to fetch offerings:", error);
     }
+  };
 
-    console.log('[Subscription] User authenticated, scheduling subscription check');
-    console.log('[Subscription] This check is NON-BLOCKING - app will continue even if it fails');
-    
-    // CRITICAL: Delay subscription check to not block startup
-    const checkTimer = setTimeout(() => {
-      console.log('[Subscription] Executing delayed subscription check (after 2 seconds)');
-      checkSubscription().catch((error) => {
-        console.error('[Subscription] Subscription check failed (non-blocking):', error);
-      });
-    }, 2000); // 2 second delay
+  const checkSubscription = async () => {
+    if (isWeb) return;
+    try {
+      const customerInfo = await Purchases.getCustomerInfo();
+      const hasEntitlement =
+        typeof customerInfo.entitlements.active[ENTITLEMENT_ID] !== "undefined";
+      setIsSubscribed(hasEntitlement);
+    } catch (error) {
+      console.error("[RevenueCat] Failed to check subscription:", error);
+      setIsSubscribed(false);
+    }
+  };
 
-    return () => {
-      clearTimeout(checkTimer);
-    };
-  }, [isAuthenticated, checkSubscription]);
+  const purchasePackage = async (pkg: PurchasesPackage): Promise<boolean> => {
+    if (isWeb) {
+      console.warn("[RevenueCat] Purchases not available on web");
+      return false;
+    }
+    try {
+      const { customerInfo } = await Purchases.purchasePackage(pkg);
+      const hasEntitlement =
+        typeof customerInfo.entitlements.active[ENTITLEMENT_ID] !== "undefined";
+      setIsSubscribed(hasEntitlement);
+      return hasEntitlement;
+    } catch (error: any) {
+      // Don't treat user cancellation as an error
+      if (!error.userCancelled) {
+        console.error("[RevenueCat] Purchase failed:", error);
+        throw error;
+      }
+      return false;
+    }
+  };
+
+  const restorePurchases = async (): Promise<boolean> => {
+    if (isWeb) {
+      console.warn("[RevenueCat] Restore not available on web");
+      return false;
+    }
+    try {
+      const customerInfo = await Purchases.restorePurchases();
+      const hasEntitlement =
+        typeof customerInfo.entitlements.active[ENTITLEMENT_ID] !== "undefined";
+      setIsSubscribed(hasEntitlement);
+      return hasEntitlement;
+    } catch (error) {
+      console.error("[RevenueCat] Restore failed:", error);
+      throw error;
+    }
+  };
 
   return (
     <SubscriptionContext.Provider
       value={{
-        subscriptionStatus,
+        isSubscribed,
+        offerings,
+        currentOffering,
+        packages,
         loading,
+        isWeb,
+        purchasePackage,
+        restorePurchases,
         checkSubscription,
       }}
     >
@@ -174,10 +272,22 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * Hook to access subscription state and methods.
+ *
+ * @example
+ * const { isSubscribed, purchasePackage, packages, isWeb } = useSubscription();
+ *
+ * if (!isSubscribed) {
+ *   return <Button onPress={() => router.push("/paywall")}>Upgrade</Button>;
+ * }
+ */
 export function useSubscription() {
   const context = useContext(SubscriptionContext);
   if (context === undefined) {
-    throw new Error('useSubscription must be used within SubscriptionProvider');
+    throw new Error(
+      "useSubscription must be used within SubscriptionProvider"
+    );
   }
   return context;
 }

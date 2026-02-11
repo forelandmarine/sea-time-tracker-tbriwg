@@ -16,6 +16,7 @@ import { StatusBar } from "expo-status-bar";
 import { WidgetProvider } from "@/contexts/WidgetContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { RevenueCatProvider } from "@/contexts/RevenueCatContext";
+import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { BACKEND_URL } from "@/utils/api";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
@@ -131,7 +132,8 @@ function RootLayoutNav() {
   };
 
   return (
-    <>
+    <SubscriptionProvider>
+      <>
       <StatusBar style="auto" animated />
       <ThemeProvider
         value={colorScheme === "dark" ? CustomDarkTheme : CustomDefaultTheme}
@@ -410,6 +412,7 @@ function RootLayoutNav() {
         </GestureHandlerRootView>
       </ThemeProvider>
     </>
+    </SubscriptionProvider>
   );
 }
 
