@@ -3,6 +3,7 @@
  * SeaTime Tracker Paywall Screen
  *
  * Clean subscription interface for SeaTime Tracker Pro
+ * This screen can always be dismissed - users can access their profile without subscribing
  */
 
 import React, { useState } from "react";
@@ -126,6 +127,7 @@ export default function PaywallScreen() {
   };
 
   const handleClose = () => {
+    console.log('[Paywall] User closed paywall - returning to previous screen');
     router.back();
   };
 
@@ -149,6 +151,16 @@ export default function PaywallScreen() {
   if (isSubscribed) {
     return (
       <SafeAreaView style={styles.container}>
+        {/* Close Button - Always visible */}
+        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+          <IconSymbol
+            ios_icon_name="xmark"
+            android_material_icon_name="close"
+            size={20}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+
         <View style={styles.centeredContainer}>
           <IconSymbol
             ios_icon_name="checkmark.seal.fill"
@@ -172,6 +184,16 @@ export default function PaywallScreen() {
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
+        {/* Close Button - Always visible */}
+        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+          <IconSymbol
+            ios_icon_name="xmark"
+            android_material_icon_name="close"
+            size={20}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+
         <View style={styles.centeredContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading subscription options...</Text>
@@ -182,7 +204,7 @@ export default function PaywallScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Close Button */}
+      {/* Close Button - Always visible and prominent */}
       <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
         <IconSymbol
           ios_icon_name="xmark"
@@ -327,6 +349,12 @@ export default function PaywallScreen() {
             >
               <Text style={styles.primaryButtonText}>Download App to Subscribe</Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.secondaryButton}
+              onPress={handleClose}
+            >
+              <Text style={styles.secondaryButtonText}>Maybe Later</Text>
+            </TouchableOpacity>
             <Text style={styles.legalText}>
               Subscriptions are managed through the App Store or Google Play.
             </Text>
@@ -364,6 +392,14 @@ export default function PaywallScreen() {
               ) : (
                 <Text style={styles.secondaryButtonText}>Restore Purchases</Text>
               )}
+            </TouchableOpacity>
+
+            {/* Maybe Later Button */}
+            <TouchableOpacity
+              style={styles.tertiaryButton}
+              onPress={handleClose}
+            >
+              <Text style={styles.tertiaryButtonText}>Maybe Later</Text>
             </TouchableOpacity>
 
             {/* Legal Text */}
@@ -608,6 +644,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.primary,
     fontWeight: "600",
+  },
+  tertiaryButton: {
+    paddingVertical: 12,
+    alignItems: "center",
+  },
+  tertiaryButtonText: {
+    fontSize: 16,
+    color: colors.textSecondary,
+    fontWeight: "500",
   },
   legalText: {
     fontSize: 11,
