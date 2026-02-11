@@ -66,6 +66,7 @@ export default function PaywallScreen() {
     loading,
     isSubscribed,
     isWeb,
+    isConfigured,
     purchasePackage,
     restorePurchases,
   } = useSubscription();
@@ -227,6 +228,52 @@ export default function PaywallScreen() {
     );
   }
 
+  // Not configured - show helpful message
+  if (!isWeb && !isConfigured) {
+    return (
+      <SafeAreaView style={styles.container}>
+        {/* Admin Button - Top Left */}
+        <TouchableOpacity style={styles.adminButton} onPress={handleAdminMenu}>
+          <IconSymbol
+            ios_icon_name="wrench.fill"
+            android_material_icon_name="settings"
+            size={20}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+
+        {/* Close Button - Always visible */}
+        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+          <IconSymbol
+            ios_icon_name="xmark"
+            android_material_icon_name="close"
+            size={20}
+            color={colors.textSecondary}
+          />
+        </TouchableOpacity>
+
+        <View style={styles.centeredContainer}>
+          <IconSymbol
+            ios_icon_name="exclamationmark.triangle"
+            android_material_icon_name="warning"
+            size={80}
+            color={colors.warning}
+          />
+          <Text style={styles.subscribedTitle}>Subscriptions Not Available</Text>
+          <Text style={styles.subscribedSubtitle}>
+            RevenueCat is not properly configured. Please contact support or use the admin menu to activate a test subscription.
+          </Text>
+          <TouchableOpacity style={styles.primaryButton} onPress={handleAdminMenu}>
+            <Text style={styles.primaryButtonText}>Open Admin Menu</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.tertiaryButton} onPress={handleClose}>
+            <Text style={styles.tertiaryButtonText}>Maybe Later</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Admin Button - Top Left */}
@@ -355,7 +402,7 @@ export default function PaywallScreen() {
         )}
 
         {/* No packages available - only show on native */}
-        {!isWeb && packages.length === 0 && !loading && (
+        {!isWeb && packages.length === 0 && !loading && isConfigured && (
           <View style={styles.noPackagesContainer}>
             <IconSymbol
               ios_icon_name="exclamationmark.triangle"
@@ -367,7 +414,7 @@ export default function PaywallScreen() {
               No subscription options available at this time.
             </Text>
             <Text style={styles.noPackagesSubtext}>
-              Please check your internet connection and try again.
+              Please check your internet connection and try again, or use the admin menu to activate a test subscription.
             </Text>
           </View>
         )}

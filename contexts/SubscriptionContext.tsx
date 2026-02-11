@@ -41,10 +41,20 @@ const extra = Constants.expoConfig?.extra || {};
 const revenueCatConfig = extra.revenueCat || {};
 const IOS_API_KEY = revenueCatConfig.iosApiKey || "";
 const ANDROID_API_KEY = revenueCatConfig.androidApiKey || "";
-const ENTITLEMENT_ID = "SeaTime Tracker Pro";
+const ENTITLEMENT_ID = revenueCatConfig.entitlementId || "SeaTime Tracker Pro";
 
 // Check if running on web
 const isWeb = Platform.OS === "web";
+
+// Validate API key format
+const isValidApiKey = (key: string): boolean => {
+  if (!key || key.length === 0) return false;
+  // Check for placeholder values
+  if (key.includes("YOUR_") || key.includes("_HERE")) return false;
+  // Check for valid prefixes
+  const validPrefixes = ["appl_", "goog_", "test_"];
+  return validPrefixes.some(prefix => key.startsWith(prefix));
+};
 
 interface SubscriptionContextType {
   /** Whether the user has an active subscription */
@@ -59,6 +69,8 @@ interface SubscriptionContextType {
   loading: boolean;
   /** Whether running on web (purchases not available) */
   isWeb: boolean;
+  /** Whether RevenueCat is properly configured */
+  isConfigured: boolean;
   /** Purchase a package - returns true if successful */
   purchasePackage: (pkg: PurchasesPackage) => Promise<boolean>;
   /** Restore previous purchases - returns true if subscription found */
@@ -82,13 +94,14 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
     useState<PurchasesOffering | null>(null);
   const [packages, setPackages] = useState<PurchasesPackage[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isConfigured, setIsConfigured] = useState(false);
 
   // Fetch offerings via REST API for web platform
   const fetchOfferingsViaRest = async () => {
     try {
       const apiKey = IOS_API_KEY || ANDROID_API_KEY;
-      if (!apiKey) {
-        console.warn("[RevenueCat] No API key available for web REST API");
+      if (!apiKey || !isValidApiKey(apiKey)) {
+        console.warn("[RevenueCat] No valid API key available for web REST API");
         return;
       }
 
@@ -124,29 +137,38 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
         if (isWeb) {
           await fetchOfferingsViaRest();
           setLoading(false);
+          setIsConfigured(false);
+          return;
+        }
+
+        // Get API key based on platform
+        const apiKey = Platform.OS === "ios" ? IOS_API_KEY : ANDROID_API_KEY;
+
+        // Validate API key
+        if (!isValidApiKey(apiKey)) {
+          console.warn(
+            "[RevenueCat] Invalid or missing API key for platform:", Platform.OS
+          );
+          console.warn(
+            "[RevenueCat] Please add a valid revenueCat API key to app.json extra."
+          );
+          console.warn(
+            "[RevenueCat] iOS keys start with 'appl_', Android keys start with 'goog_', test keys start with 'test_'"
+          );
+          setLoading(false);
+          setIsConfigured(false);
           return;
         }
 
         // Use DEBUG log level in development, INFO in production
         Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.INFO);
 
-        // Get API key based on platform
-        const apiKey = Platform.OS === "ios" ? IOS_API_KEY : ANDROID_API_KEY;
-
-        if (!apiKey) {
-          console.warn(
-            "[RevenueCat] API key not provided for this platform. " +
-            "Please add revenueCat.iosApiKey/androidApiKey to app.json extra."
-          );
-          setLoading(false);
-          return;
-        }
-
         console.log("[RevenueCat] Initializing with key:", apiKey.substring(0, 10) + "...");
         console.log("[RevenueCat] Platform:", Platform.OS);
         console.log("[RevenueCat] Entitlement ID:", ENTITLEMENT_ID);
 
         await Purchases.configure({ apiKey });
+        setIsConfigured(true);
 
         // Listen for real-time subscription changes (e.g., purchase from another device)
         customerInfoListener = Purchases.addCustomerInfoUpdateListener(
@@ -166,6 +188,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
         await checkSubscription();
       } catch (error) {
         console.error("[RevenueCat] Failed to initialize:", error);
+        setIsConfigured(false);
       } finally {
         setLoading(false);
       }
@@ -182,7 +205,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
   }, []);
 
   const fetchOfferings = async () => {
-    if (isWeb) return;
+    if (isWeb || !isConfigured) return;
     try {
       console.log("[RevenueCat] Fetching offerings...");
       const fetchedOfferings = await Purchases.getOfferings();
@@ -202,7 +225,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
   };
 
   const checkSubscription = async () => {
-    if (isWeb) return;
+    if (isWeb || !isConfigured) return;
     try {
       console.log("[RevenueCat] Checking subscription status...");
       const customerInfo = await Purchases.getCustomerInfo();
@@ -218,8 +241,8 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
   };
 
   const purchasePackage = async (pkg: PurchasesPackage): Promise<boolean> => {
-    if (isWeb) {
-      console.warn("[RevenueCat] Purchases not available on web");
+    if (isWeb || !isConfigured) {
+      console.warn("[RevenueCat] Purchases not available");
       return false;
     }
     try {
@@ -242,8 +265,8 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
   };
 
   const restorePurchases = async (): Promise<boolean> => {
-    if (isWeb) {
-      console.warn("[RevenueCat] Restore not available on web");
+    if (isWeb || !isConfigured) {
+      console.warn("[RevenueCat] Restore not available");
       return false;
     }
     try {
@@ -269,6 +292,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
         packages,
         loading,
         isWeb,
+        isConfigured,
         purchasePackage,
         restorePurchases,
         checkSubscription,
@@ -283,7 +307,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
  * Hook to access subscription state and methods.
  *
  * @example
- * const { isSubscribed, purchasePackage, packages, isWeb } = useSubscription();
+ * const { isSubscribed, purchasePackage, packages, isWeb, isConfigured } = useSubscription();
  *
  * if (!isSubscribed) {
  *   return <Button onPress={() => router.push("/paywall")}>Upgrade</Button>;
