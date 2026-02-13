@@ -21,6 +21,8 @@ import {
 import { colors } from '@/styles/commonStyles';
 import * as seaTimeApi from '@/utils/seaTimeApi';
 import { useGlobalRefresh } from '@/hooks/useGlobalRefresh';
+import { useSubscriptionEnforcement } from '@/hooks/useSubscriptionEnforcement';
+import { SubscriptionPromptModal } from '@/components/SubscriptionPromptModal';
 
 interface Vessel {
   id: string;
@@ -79,6 +81,7 @@ export default function VesselDetailScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const styles = createStyles(isDark);
+  const { requireSubscription, subscriptionPromptProps } = useSubscriptionEnforcement();
 
   const [vessel, setVessel] = useState<Vessel | null>(null);
   const [seaTimeEntries, setSeaTimeEntries] = useState<SeaTimeEntry[]>([]);
@@ -216,6 +219,11 @@ export default function VesselDetailScreen() {
 
   const handleActivateVessel = () => {
     if (!vessel) return;
+
+    // Check subscription before showing confirmation
+    if (!requireSubscription('vessel activation')) {
+      return;
+    }
 
     Alert.alert(
       'Activate Vessel',
@@ -897,6 +905,9 @@ export default function VesselDetailScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      {/* Subscription Prompt Modal */}
+      <SubscriptionPromptModal {...subscriptionPromptProps} />
 
       {/* Edit Particulars Modal */}
       <Modal visible={editModalVisible} animationType="slide" transparent={true}>
