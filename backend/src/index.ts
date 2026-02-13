@@ -43,6 +43,9 @@ import * as subscriptionRoutes from './routes/subscription.js';
 // Import scheduler service
 import { startScheduler } from './services/scheduler.js';
 
+// Import seed utilities
+import { seedTestUser, seedSandboxUser } from './utils/seed.js';
+
 // Combine schemas for full database type support (app + auth)
 const schema = { ...appSchema, ...authSchema };
 
@@ -90,8 +93,13 @@ app.fastify.addHook('onReady', async () => {
     // Test database connection by querying vessels table
     const vessels = await app.db.select().from(appSchema.vessels);
     app.logger.info({ vesselCount: vessels.length }, 'Database connection verified');
+
+    // Seed test users for development/testing
+    app.logger.info('Seeding development test users');
+    await seedTestUser(app);
+    await seedSandboxUser(app);
   } catch (error) {
-    app.logger.warn({ err: error }, 'Database connection test failed - will attempt to connect on first query');
+    app.logger.warn({ err: error }, 'Database connection test failed or seeding error - will attempt to connect on first query');
   }
 });
 

@@ -221,53 +221,67 @@ export function register(app: App, fastify: FastifyInstance) {
     async (request, reply) => {
       const { email, password } = request.body;
 
-      app.logger.info({ email }, 'Sign-in attempt');
+      app.logger.info({ email }, 'Sign-in attempt received');
 
       try {
         // Find user
+        app.logger.debug({ email }, 'Querying database for user');
         const users = await app.db
           .select()
           .from(authSchema.user)
           .where(eq(authSchema.user.email, email));
 
         if (users.length === 0) {
-          app.logger.warn({ email }, 'Sign-in failed: user not found');
+          app.logger.warn({ email }, 'Sign-in failed: user not found in database');
           return reply.code(401).send({
             error: 'Invalid email or password',
           });
         }
 
         const user = users[0];
+        app.logger.debug({ email, userId: user.id }, 'User found in database');
 
         // Find account with password
+        app.logger.debug({ userId: user.id }, 'Querying for password account');
         const accounts = await app.db
           .select()
           .from(authSchema.account)
           .where(eq(authSchema.account.userId, user.id));
 
-        if (accounts.length === 0 || !accounts[0].password) {
-          app.logger.warn({ email }, 'Sign-in failed: no password configured');
+        if (accounts.length === 0) {
+          app.logger.warn({ email, userId: user.id }, 'Sign-in failed: no account found for user');
+          return reply.code(401).send({
+            error: 'Invalid email or password',
+          });
+        }
+
+        if (!accounts[0].password) {
+          app.logger.warn({ email, userId: user.id }, 'Sign-in failed: no password configured on account');
           return reply.code(401).send({
             error: 'Invalid email or password',
           });
         }
 
         const account = accounts[0];
+        app.logger.debug({ email, userId: user.id }, 'Password account found');
 
         // Verify password
+        app.logger.debug({ email }, 'Verifying password');
         if (!verifyPassword(password, account.password)) {
-          app.logger.warn({ email }, 'Sign-in failed: incorrect password');
+          app.logger.warn({ email, userId: user.id }, 'Sign-in failed: password verification failed');
           return reply.code(401).send({
             error: 'Invalid email or password',
           });
         }
 
-        app.logger.info({ email, userId: user.id }, 'Password verified');
+        app.logger.info({ email, userId: user.id }, 'Password verification successful');
 
         // Ensure user has notification schedule
+        app.logger.debug({ userId: user.id }, 'Ensuring user notification schedule');
         await ensureUserNotificationSchedule(app, user.id);
 
         // Create session
+        app.logger.debug({ userId: user.id }, 'Creating session');
         const sessionId = crypto.randomUUID();
         const token = crypto.randomBytes(32).toString('hex');
         const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
@@ -282,7 +296,7 @@ export function register(app: App, fastify: FastifyInstance) {
           })
           .returning();
 
-        app.logger.info({ email, sessionId }, 'Session created');
+        app.logger.info({ email, userId: user.id, sessionId }, 'Session created successfully');
 
         return reply.code(200).send({
           user: {
@@ -301,7 +315,7 @@ export function register(app: App, fastify: FastifyInstance) {
           },
         });
       } catch (error) {
-        app.logger.error({ err: error, email }, 'Sign-in error');
+        app.logger.error({ err: error, email }, 'Sign-in error: database or processing error');
         return reply.code(401).send({
           error: 'Authentication failed',
         });
