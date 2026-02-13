@@ -91,7 +91,6 @@ export default function AuthScreen() {
       console.log('[AuthScreen] Biometric authentication successful, signing in...');
       await signIn(credentials.email, credentials.password);
       console.log('[AuthScreen] Sign in successful, navigating to index for subscription check');
-      // CRITICAL FIX: Navigate to / instead of /(tabs) to trigger subscription check
       router.replace('/');
     } catch (error: any) {
       console.error('[AuthScreen] Biometric sign in failed:', error);
@@ -103,7 +102,7 @@ export default function AuthScreen() {
 
   const handleEmailAuth = async () => {
     if (!BACKEND_URL) {
-      showError('Backend not configured');
+      showError('Backend not configured. Please contact support.');
       return;
     }
 
@@ -117,12 +116,18 @@ export default function AuthScreen() {
       return;
     }
 
+    console.log('[AuthScreen] User tapped', isSignUp ? 'Sign Up' : 'Sign In', 'button');
+    console.log('[AuthScreen] Email:', email);
+    console.log('[AuthScreen] Backend URL:', BACKEND_URL);
+    
     setLoading(true);
     
     try {
       if (isSignUp) {
+        console.log('[AuthScreen] Calling signUp...');
         await signUp(email, password, name || 'User');
       } else {
+        console.log('[AuthScreen] Calling signIn...');
         await signIn(email, password);
       }
 
@@ -137,19 +142,26 @@ export default function AuthScreen() {
       }
 
       console.log('[AuthScreen] Auth successful, navigating to index for subscription check');
-      // CRITICAL FIX: Navigate to / instead of /(tabs) to trigger subscription check
       router.replace('/');
     } catch (error: any) {
       console.error('[AuthScreen] Auth failed:', error);
+      console.error('[AuthScreen] Error type:', typeof error);
+      console.error('[AuthScreen] Error message:', error.message);
+      console.error('[AuthScreen] Error stack:', error.stack);
       
       let errorMsg = error.message || 'Authentication failed';
       
+      // Parse common error messages
       if (errorMsg.includes('<!DOCTYPE') || errorMsg.includes('<html')) {
-        errorMsg = 'Server error. Please try again later.';
+        errorMsg = 'Server error (500). The backend may be experiencing issues. Please try again later.';
       } else if (errorMsg.includes('Network') || errorMsg.includes('fetch')) {
-        errorMsg = 'Cannot connect to server. Check your connection.';
+        errorMsg = 'Cannot connect to server. Please check your internet connection.';
       } else if (errorMsg.includes('timeout') || errorMsg.includes('timed out')) {
-        errorMsg = 'Request timed out. Please try again.';
+        errorMsg = 'Request timed out. The server may be slow or unreachable. Please try again.';
+      } else if (errorMsg.includes('401')) {
+        errorMsg = 'Invalid email or password. Please check your credentials.';
+      } else if (errorMsg.includes('400')) {
+        errorMsg = 'Invalid request. Please check your email and password format.';
       }
       
       showError(errorMsg);
@@ -193,7 +205,6 @@ export default function AuthScreen() {
       await signInWithApple(credential.identityToken, appleUserData);
       
       console.log('[AuthScreen] Apple sign in successful, navigating to index for subscription check');
-      // CRITICAL FIX: Navigate to / instead of /(tabs) to trigger subscription check
       router.replace('/');
     } catch (error: any) {
       console.error('[AuthScreen] Apple sign in failed:', error);
