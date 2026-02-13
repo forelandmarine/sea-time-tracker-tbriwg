@@ -211,11 +211,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     console.log('[Auth] Sign in attempt for:', email);
+    console.log('[Auth] Backend URL:', BACKEND_URL);
     setLoading(true);
     
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+      
+      console.log('[Auth] Sending sign-in request to:', `${BACKEND_URL}/api/auth/sign-in/email`);
       
       const response = await fetch(`${BACKEND_URL}/api/auth/sign-in/email`, {
         method: 'POST',
@@ -227,26 +230,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearTimeout(timeoutId);
 
       console.log('[Auth] Sign in response status:', response.status);
+      console.log('[Auth] Sign in response headers:', Object.fromEntries(response.headers.entries()));
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[Auth] Sign in failed with status:', response.status, 'body:', errorText);
+        const contentType = response.headers.get('content-type');
+        console.error('[Auth] Sign in failed - Status:', response.status, 'Content-Type:', contentType);
         
+        let errorText = '';
+        try {
+          errorText = await response.text();
+          console.error('[Auth] Sign in error response body:', errorText.substring(0, 500));
+        } catch (textError) {
+          console.error('[Auth] Could not read error response body:', textError);
+        }
+        
+        // Check if response is HTML (500 error page)
+        if (contentType?.includes('text/html') || errorText.includes('<!DOCTYPE') || errorText.includes('<html')) {
+          console.error('[Auth] Received HTML error page instead of JSON - Backend returned 500 error');
+          throw new Error('Server error (500). The backend encountered an internal error. Please try again or contact support if the issue persists.');
+        }
+        
+        // Try to parse JSON error
         let errorData;
         try {
           errorData = JSON.parse(errorText);
-        } catch {
-          throw new Error(`Login failed: ${errorText || response.statusText}`);
+          console.error('[Auth] Parsed error data:', errorData);
+        } catch (parseError) {
+          console.error('[Auth] Could not parse error as JSON:', parseError);
+          throw new Error(`Login failed (${response.status}): ${errorText || response.statusText}`);
         }
-        throw new Error(errorData.error || errorData.message || 'Login failed');
+        
+        throw new Error(errorData.error || errorData.message || `Login failed (${response.status})`);
       }
 
       const data = await response.json();
-      console.log('[Auth] Sign in response data received');
+      console.log('[Auth] Sign in response data received, has session:', !!data.session);
+      console.log('[Auth] Sign in response data has token:', !!data.session?.token);
 
       if (!data.session?.token) {
-        console.error('[Auth] No session token in response:', data);
-        throw new Error('No session token received');
+        console.error('[Auth] No session token in response:', JSON.stringify(data, null, 2));
+        throw new Error('No session token received from server');
       }
 
       // Store token
@@ -284,7 +307,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log('[Auth] Sign in successful:', data.user.email);
     } catch (error: any) {
-      console.error('[Auth] Sign in failed:', error);
+      console.error('[Auth] Sign in failed - Error name:', error.name);
+      console.error('[Auth] Sign in failed - Error message:', error.message);
+      console.error('[Auth] Sign in failed - Error stack:', error.stack);
       
       if (error.name === 'AbortError') {
         throw new Error('Request timed out. Please try again.');
