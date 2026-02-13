@@ -51,7 +51,7 @@ const isValidApiKey = (key: string): boolean => {
   if (!key || key.length === 0) return false;
   // Check for placeholder values
   if (key.includes("YOUR_") || key.includes("_HERE")) return false;
-  // Check for valid prefixes
+  // Check for valid prefixes (production or test keys)
   const validPrefixes = ["appl_", "goog_", "test_"];
   return validPrefixes.some(prefix => key.startsWith(prefix));
 };
@@ -144,6 +144,13 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
         // Get API key based on platform
         const apiKey = Platform.OS === "ios" ? IOS_API_KEY : ANDROID_API_KEY;
 
+        // Log configuration for debugging
+        console.log("[RevenueCat] Initializing...");
+        console.log("[RevenueCat] Platform:", Platform.OS);
+        console.log("[RevenueCat] API Key configured:", !!apiKey);
+        console.log("[RevenueCat] API Key prefix:", apiKey ? apiKey.substring(0, 10) + "..." : "NOT SET");
+        console.log("[RevenueCat] Entitlement ID:", ENTITLEMENT_ID);
+
         // Validate API key
         if (!isValidApiKey(apiKey)) {
           console.warn(
@@ -163,11 +170,9 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
         // Use DEBUG log level in development, INFO in production
         Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.INFO);
 
-        console.log("[RevenueCat] Initializing with key:", apiKey.substring(0, 10) + "...");
-        console.log("[RevenueCat] Platform:", Platform.OS);
-        console.log("[RevenueCat] Entitlement ID:", ENTITLEMENT_ID);
-
+        console.log("[RevenueCat] Configuring SDK with key:", apiKey.substring(0, 10) + "...");
         await Purchases.configure({ apiKey });
+        console.log("[RevenueCat] SDK configured successfully");
         setIsConfigured(true);
 
         // Listen for real-time subscription changes (e.g., purchase from another device)
@@ -188,6 +193,7 @@ export function SubscriptionProvider({ children }: SubscriptionProviderProps) {
         await checkSubscription();
       } catch (error) {
         console.error("[RevenueCat] Failed to initialize:", error);
+        console.error("[RevenueCat] Error details:", JSON.stringify(error, null, 2));
         setIsConfigured(false);
       } finally {
         setLoading(false);
